@@ -1,4 +1,4 @@
-include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
 
 # Model section 33 (liveness and timers) and SPEC 19.29.7.1 (automatic
 # parent-liveness polling), as Mikhail restated on 2026-09-14: the child polls
@@ -7,10 +7,21 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # mechanism. Both sides keep their own expectation and deadline state; a
 # timeout means lack of the expected communication, not proof of death.
 #
-# Host-driven and deterministic: the runtime's logical clock (set_now) and
-# the executor's cadence entry (live_check) are called from the host, which
-# holds the root's turn; children's turns run on the host's sequential
-# mapping (run_child_turn). No OS thread, no wall clock.
+# Deterministic on the runtime's logical clock (set_now) and the executor's
+# cadence entry (live_check), both called from the host, which runs R0's own
+# turns. Stage M: no Message steps another. Each child is mapped onto its own
+# context by its parent's own turn (P's through run_entry_turn on the host
+# thread, R0's through root_turn) and runs every turn on its own worker; once a
+# worker exists the host no longer acts as P outside a turn, so P's sends,
+# receives, creations and stops run as P's own turns. Every child turn stages
+# one report to S, the test's sink (R0's child, never bound), as its last send:
+# the host reads a child turn's effects once that report is in S's mailbox,
+# in yield rounds. What a close request left is recorded on the child's own
+# lane when its closing turn starts. A mapped child takes a runnable input at
+# once, so no order between two publications is asserted (6f's ruling on
+# section 3); "a closing child's turn consumes the input it had" is stated on
+# X, which receives an input and its stop in one publication before its map
+# point, when it has no thread.
 
 int: checks 0
 int: failures 0
@@ -25,7 +36,38 @@ end: check
 
 int: observed_kind -1
 int: observed_number 0
-unsigned: observed_from 0U
+int: g_root_observed_kind 0
+
+# S, the report sink, and the record of the last closing turn's start.
+unsigned: g_sink 0U
+unsigned: g_close_who 0U
+int: g_close_state -1
+int: g_close_inbox -1
+
+# On the child's own lane, before anything else in its turn: a closing
+# Message records its state and its inbox as the close request left them.
+fn: record_close_entry (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    m: lmx_msg_turn_self(rt)
+    if: m != 0 && m\addr = who && m\closing != 0
+        g_close_who: who
+        g_close_state: m\state
+        g_close_inbox: lmx_msg_mail_inbox_n(m)
+    ---
+    return: 0
+
+# The turn's report to S, staged last, published by the turn's end-turn.
+fn: report (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsgEnv env
+    int: st
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: c.LMX_MSG_NOMEM
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: (cast: (int) who)
+    st: lmx_msg_send(rt, who, g_sink, env)
+    c.free((cast: (@: void) env))
+    return: st
 
 # A child's turn: take the input, ask the parent whether it is alive, end.
 # With nothing to receive (the closing turn after a close request) the turn
@@ -35,12 +77,15 @@ fn: turn_child_query (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     int: st
     if: ctx != 0
         return: 1
+    record_close_entry(rt, who)
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: got = 0
         return: 1
     st: lmx_msg_recv(rt, who, got)
     if: st = c.LMX_MSG_EMPTY
         c.free((cast: (@: void) got))
+        if: report(rt, who) != c.LMX_MSG_STAGED
+            return: 4
         return: lmx_msg_end_turn(rt, who, 1)
     if: st != c.LMX_MSG_OK
         return: 2
@@ -53,6 +98,8 @@ fn: turn_child_query (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     st: lmx_msg_live_query(rt, who)
     if: st != c.LMX_MSG_STAGED && st != c.LMX_MSG_OK
         return: 3
+    if: report(rt, who) != c.LMX_MSG_STAGED
+        return: 4
     return: lmx_msg_end_turn(rt, who, 1)
 
 # A child's turn that receives the parent's answer and hands it to the
@@ -62,12 +109,15 @@ fn: turn_child_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     int: st
     if: ctx != 0
         return: 1
+    record_close_entry(rt, who)
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: got = 0
         return: 1
     st: lmx_msg_recv(rt, who, got)
     if: st = c.LMX_MSG_EMPTY
         c.free((cast: (@: void) got))
+        if: report(rt, who) != c.LMX_MSG_STAGED
+            return: 4
         return: lmx_msg_end_turn(rt, who, 1)
     if: st != c.LMX_MSG_OK
         return: 2
@@ -78,6 +128,8 @@ fn: turn_child_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     c.free((cast: (@: void) got))
     if: st != c.LMX_MSG_OK
         return: 3
+    if: report(rt, who) != c.LMX_MSG_STAGED
+        return: 4
     return: lmx_msg_end_turn(rt, who, 1)
 
 # Stage 5 (d1): R0's turn that takes a child's query and answers it; the
@@ -94,8 +146,7 @@ fn: turn_root_answer (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     if: st != c.LMX_MSG_OK
         c.free((cast: (@: void) got))
         return: 2
-    observed_kind: got\kind
-    observed_number: got\number
+    g_root_observed_kind: got\kind
     st: lmx_msg_live_handle(rt, who, got)
     lmx_msg_env_release(got)
     c.free((cast: (@: void) got))
@@ -110,65 +161,176 @@ fn: turn_child_plain (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     int: st
     if: ctx != 0
         return: 1
+    record_close_entry(rt, who)
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: got = 0
         return: 1
     st: lmx_msg_recv(rt, who, got)
     if: st = c.LMX_MSG_EMPTY
         c.free((cast: (@: void) got))
+        if: report(rt, who) != c.LMX_MSG_STAGED
+            return: 4
         return: lmx_msg_end_turn(rt, who, 1)
     if: st != c.LMX_MSG_OK
         return: 2
     observed_kind: got\kind
+    observed_number: got\number
     lmx_msg_env_release(got)
     c.free((cast: (@: void) got))
+    if: report(rt, who) != c.LMX_MSG_STAGED
+        return: 4
     return: lmx_msg_end_turn(rt, who, 1)
 
-# Stage 5 (d): a parent's turn that steps the one child named in its cell.
-# ctx is the test's cell: [0] the child's address, written before the
-# root_turn; [1] the step's status, written here. The same text in every
-# migrated test.
-fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+uchar: g_ini 1
+unsigned: g_f 0U
+int: g_f_create_st -1
+
+# Q's turn: on its input it creates its child F; its closing turn only ends.
+fn: turn_q_create_f (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 1
+    if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
+        lmx_msg_env_release(got)
+        g_f_create_st: lmx_msg_create(rt, who, 6U, @ g_ini, 1U, @ g_f)
+    ---
+    c.free((cast: (@: void) got))
+    if: report(rt, who) != c.LMX_MSG_STAGED
+        return: 4
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# What P's own turns work on, handed over by the host before each turn.
+unsigned: g_to 0U
+@: LmxMsgEnv g_env 0
+@: LmxMsgEnv g_in 0
+int: g_in_kind -1
+int: g_in_number 0
+unsigned: g_in_reply_to 0U
+int: g_st1 -1
+int: g_st2 -1
+int: g_st3 -1
+int: g_end_st -1
+unsigned: g_d 0U
+unsigned: g_e 0U
+unsigned: g_x 0U
+unsigned: g_q 0U
+unsigned: g_z 0U
+
+# P's own turn, one act per op, then P's end-turn publishes what it staged.
+#   2 receive one input and drop it      3 send g_env to g_to
+#   4 create D and E                     5 receive one input and hand it to
+#   6 stop g_to                            the liveness protocol
+#   7 create X, send it one input, stop it (one publication)
+#   8 create Q and send it one input     10 map g_to onto its own context
+fn: turn_p_script (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned op
+    @: LmxMsgEnv env
+    if: ctx = 0
+        return: 1
+    op: (cast: (@: unsigned) ctx)
+    g_st1: -1
+    g_st2: -1
+    g_st3: -1
+    if: op[0] = 2U
+        g_st1: lmx_msg_recv(rt, who, g_in)
+        if: g_st1 = c.LMX_MSG_OK
+            lmx_msg_env_release(g_in)
+        ---
+    ---
+    if: op[0] = 3U
+        g_st1: lmx_msg_send(rt, who, g_to, g_env)
+    ---
+    if: op[0] = 4U
+        g_st1: lmx_msg_create(rt, who, 3U, @ g_ini, 1U, @ g_d)
+        g_st2: lmx_msg_create(rt, who, 4U, @ g_ini, 1U, @ g_e)
+    ---
+    if: op[0] = 5U
+        g_st1: lmx_msg_recv(rt, who, g_in)
+        if: g_st1 = c.LMX_MSG_OK
+            g_in_kind: g_in\kind
+            g_in_number: g_in\number
+            g_in_reply_to: g_in\reply_to
+            g_st2: lmx_msg_live_handle(rt, who, g_in)
+            lmx_msg_env_release(g_in)
+        ---
+    ---
+    if: op[0] = 6U
+        g_st1: lmx_msg_stop(rt, who, g_to)
+    ---
+    if: op[0] = 7U || op[0] = 8U
+        env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+        if: env = 0
+            return: 1
+        env\kind: c.LMX_MSG_KIND_NUMBER
+        if: op[0] = 7U
+            env\id: 9U
+            env\number: 9
+            g_st1: lmx_msg_create(rt, who, 9U, @ g_ini, 1U, @ g_x)
+            if: g_st1 = c.LMX_MSG_OK
+                g_st2: lmx_msg_send(rt, who, g_x, env)
+                g_st3: lmx_msg_stop(rt, who, g_x)
+            ---
+        ---
+        if: op[0] = 8U
+            env\id: 8U
+            env\number: 1
+            g_st1: lmx_msg_create(rt, who, 5U, @ g_ini, 1U, @ g_q)
+            if: g_st1 = c.LMX_MSG_OK
+                g_st2: lmx_msg_send(rt, who, g_q, env)
+            ---
+        ---
+        c.free((cast: (@: void) env))
+    ---
+    if: op[0] = 10U
+        g_st1: lmx_msg_map_child(rt, who, g_to)
+    ---
+    g_end_st: lmx_msg_end_turn(rt, who, 1)
+    return: g_end_st
+
+[]: unsigned p_op 1
+
+# One of P's own turns on the host thread; returns run_entry_turn's status.
+fn: p_turn (@: LmxMsgRuntime rt; unsigned: p; unsigned: op) int
+    p_op[0]: op
+    return: lmx_msg_run_entry_turn(rt, p, turn_p_script, (cast: (@: void) p_op))
+
+# R0's own turn that creates Z as R0's child.
+fn: turn_root_create_z (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    g_st1: lmx_msg_create(rt, who, 7U, @ g_ini, 1U, @ g_z)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# R0's own turn maps its child; ctx is the cell, [0] the child, [1] the status.
+fn: turn_root_map (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     @: unsigned cell
     if: ctx = 0
         return: 1
     cell: (cast: (@: unsigned) ctx)
-    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    cell[1]: (cast: (unsigned) lmx_msg_map_child(rt, who, cell[0]))
     return: lmx_msg_end_turn(rt, who, 1)
 
-# Stage 5 (d): steps run from R0's turn. step_in_root steps an R0 child;
-# step_from_root steps a child through its parent's turn, the parent bound by
-# main only around the step (the host acts as P's turn otherwise). Each
-# returns root_turn's status, else the first level's that is not OK, else the
-# stepped child's.
-[]: unsigned step_cell_top 2
-[]: unsigned step_cell_leaf 2
+[]: unsigned root_cell 2
 
-fn: step_in_root (@: LmxMsgRuntime rt; unsigned: child) int
+fn: root_maps (@: LmxMsgRuntime rt; unsigned: child) int
     int: st
-    step_cell_top[0]: child
-    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
-    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
+    root_cell[0]: child
+    root_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_root_map, (cast: (@: void) root_cell))
     if: st != c.LMX_MSG_OK
         return: st
-    return: (cast: (int) step_cell_top[1])
+    return: (cast: (int) root_cell[1])
 
-fn: step_from_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
-    int: st
-    step_cell_top[0]: parent
-    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
-    step_cell_leaf[0]: child
-    step_cell_leaf[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
-    st: lmx_msg_exec_bind(rt, parent, turn_step_child, (cast: (@: void) step_cell_leaf), c.LMX_MSG_AFFINITY_ANY)
-    if: st != c.LMX_MSG_OK
-        return: st
-    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
-    lmx_msg_exec_unbind(rt, parent)
-    if: st != c.LMX_MSG_OK
-        return: st
-    if: (cast: (int) step_cell_top[1]) != c.LMX_MSG_OK
-        return: (cast: (int) step_cell_top[1])
-    return: (cast: (int) step_cell_leaf[1])
+# Yield rounds until S holds n reports; prints what it is reading first.
+fn: wait_reports (@: LmxMsgRuntime rt; int: n; const: @(char what)) int
+    c.printf("reading: %s (report %d in S's mailbox)\n", what, n)
+    while: lmx_msg_inbox_n(rt, g_sink) < n
+        c.SwitchToThread()
+    ---
+    return: lmx_msg_inbox_n(rt, g_sink)
 
 fn: main () int
     @: LmxMsgRuntime rt
@@ -176,27 +338,35 @@ fn: main () int
     @: LmxMsg cm
     @: LmxMsg dm
     @: LmxMsg em
+    @: LmxMsg xm
+    @: LmxMsg zm
     @: LmxMsgEnv env
     @: LmxMsgEnv got
     unsigned: p 0U
     unsigned: c1 0U
     unsigned: d 0U
     unsigned: e 0U
+    unsigned: x 0U
     unsigned: q 0U
     unsigned: f 0U
     unsigned: z 0U
-    @: LmxMsg zm
+    unsigned: s 0U
     uchar: ini 1
-    int: pst
+    int: st
     int: n
+    int: k 0
 
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: env = 0 || got = 0
         return: 2
+    g_env: env
+    g_in: got
     rt: lmx_msg_runtime_new()
     check(rt != 0 && lmx_msg_set_now(rt, 1000U) = c.LMX_MSG_OK, "runtime with a logical clock at 1000")
     check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P, created without a parent (R0's child)")
+    check(lmx_msg_create(rt, 0U, 20U, @ ini, 1U, @ s) = c.LMX_MSG_OK, "S, the test's report sink: R0's child, never bound")
+    g_sink: s
     check(lmx_msg_live_query(rt, lmx_msg_root_addr(rt)) = c.LMX_MSG_INVALID, "R0 has no parent to poll")
     check(lmx_msg_create(rt, p, 2U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "child C created and published")
     pm: lmx_msg_find(rt, p)
@@ -205,111 +375,164 @@ fn: main () int
         return: 2
 
     # --- 1. The child polls the parent, not the other way round.
-    check(lmx_msg_exec_bind(rt, c1, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C launched on the host's mapping")
+    check(lmx_msg_exec_bind(rt, c1, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C bound")
     env\id: 1U
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: 5
     env\reply_to: p
     check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, c1) = 1, "P gives C one input")
     check(lmx_msg_inbox_n(rt, p) = 0, "P's turn sent no probe of its own")
-    pst: step_from_root(rt, p, c1)
-    check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_NUMBER && observed_number = 5, "C's turn ran on its input")
+    g_to: c1
+    check(p_turn(rt, p, 10U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK, "P's own turn maps C onto its own context")
+    k: k + 1
+    wait_reports(rt, k, "C's turn on its input")
+    check(observed_kind = c.LMX_MSG_KIND_NUMBER && observed_number = 5, "C's turn ran on its input")
     check(lmx_msg_inbox_n(rt, p) = 1 && lmx_msg_inbox_n(rt, c1) = 0, "C's end-turn published exactly one liveness query to P")
     check(cm\live_query_id != 0U && cm\live_query_at = 1000U, "C keeps its own expectation: the outstanding query and when it was made")
-    check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && got\kind = c.LMX_MSG_KIND_PROGRESS && got\number = c.LMX_MSG_PROF_LIVE_Q && got\reply_to = c1, "P reads the query as an ordinary Message of the liveness profile")
-    check(lmx_msg_live_handle(rt, p, got) = c.LMX_MSG_STAGED, "P answers within its own turn")
-    lmx_msg_env_release(got)
+    check(lmx_msg_exec_bind(rt, c1, turn_child_handle, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C's next turn handles answers: rebound before P answers")
+    check(p_turn(rt, p, 5U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK && g_in_kind = c.LMX_MSG_KIND_PROGRESS && g_in_number = c.LMX_MSG_PROF_LIVE_Q && g_in_reply_to = c1, "P reads the query as an ordinary Message of the liveness profile")
+    check(g_st2 = c.LMX_MSG_STAGED, "P answers within its own turn")
     check(cm\child_heard_at = 1000U, "P records when it last heard from C")
-    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, c1) = 1, "P's end-turn publishes the answer to C")
-    check(lmx_msg_exec_unbind(rt, c1) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, c1, turn_child_handle, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C's next turn handles answers")
-    pst: step_from_root(rt, p, c1)
-    check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_PROGRESS && observed_number = c.LMX_MSG_PROF_LIVE_R, "C received the answer")
+    check(g_end_st = c.LMX_MSG_OK, "P's end-turn publishes the answer to C")
+    k: k + 1
+    wait_reports(rt, k, "C's turn on P's answer")
+    check(observed_kind = c.LMX_MSG_KIND_PROGRESS && observed_number = c.LMX_MSG_PROF_LIVE_R, "C received the answer")
     check(cm\live_query_id = 0U && lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_RUNNING && cm\closing = 0, "the answer clears C's expectation; C keeps running")
 
     # --- 2. The parent goes silent: the child closes itself.
     check(lmx_msg_set_now(rt, 2000U) = c.LMX_MSG_OK, "clock 2000")
-    check(lmx_msg_exec_unbind(rt, c1) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, c1, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C will query again")
+    check(lmx_msg_exec_bind(rt, c1, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C will query again")
     env\id: 2U
-    check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P gives C a second input")
-    pst: step_from_root(rt, p, c1)
-    check((pst = c.LMX_MSG_OK || pst = 1) && cm\live_query_id != 0U && cm\live_query_at = 2000U && lmx_msg_inbox_n(rt, p) = 1, "C queried P again at 2000")
+    g_to: c1
+    check(p_turn(rt, p, 3U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_STAGED, "P gives C a second input")
+    k: k + 1
+    wait_reports(rt, k, "C's query at 2000")
+    check(cm\live_query_id != 0U && cm\live_query_at = 2000U && lmx_msg_inbox_n(rt, p) = 1, "C queried P again at 2000")
     # P never runs its turn; nothing is delivered to C.
     check(lmx_msg_set_now(rt, 2004U) = c.LMX_MSG_OK && lmx_msg_live_check(rt, c1, 2004U, 5U) = 0 && cm\closing = 0, "within its own deadline C still waits")
     check(lmx_msg_set_now(rt, 2010U) = c.LMX_MSG_OK && lmx_msg_live_check(rt, c1, 2010U, 5U) = 1 && cm\closing != 0, "past its deadline C requests its own orderly close")
-    check(lmx_msg_inbox_n(rt, c1) = 0 && lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING && lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_RUNNING, "no stop came from P; C is closing, not stopped, until its own end-turn")
-    # C is bound, so its closing turn is run by its executor (here the host's
-    # sequential mapping), not by the sweep that exits unbound idle closers.
-    pst: step_from_root(rt, p, c1)
-    check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_STOPPED && lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING, "C stopped itself at its own end-turn; P is untouched")
+    # C is bound and mapped, so its closing turn runs on its own worker, not by
+    # the sweep that exits unbound idle closers. What the request left is read
+    # on C's lane when that turn starts.
+    k: k + 1
+    wait_reports(rt, k, "C's closing turn")
+    check(g_close_who = c1 && g_close_state = c.LMX_MSG_STATE_RUNNING && g_close_inbox = 0 && lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING, "no stop came from P; C was closing, not stopped, when its closing turn started")
+    check(lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_STOPPED && lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING, "C stopped itself at its own end-turn; P is untouched")
     check(lmx_msg_inbox_n(rt, p) = 1, "C's unanswered query is still P's to read or drop; a timeout proves nothing about P")
 
     # --- 3. The parent's symmetric observation of a silent child, and the
     # explicit stop from above: both cooperative, both at the child's end-turn.
-    check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK, "P drains the stale query")
-    lmx_msg_env_release(got)
+    check(p_turn(rt, p, 2U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK, "P drains the stale query")
     check(lmx_msg_set_now(rt, 3000U) = c.LMX_MSG_OK, "clock 3000")
-    check(lmx_msg_create(rt, p, 3U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_create(rt, p, 4U, @ ini, 1U, @ e) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "children D and E created and published at 3000")
+    check(p_turn(rt, p, 4U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK && g_st2 = c.LMX_MSG_OK, "children D and E created and published at 3000")
+    d: g_d
+    e: g_e
     dm: lmx_msg_find(rt, d)
     em: lmx_msg_find(rt, e)
     if: dm = 0 || em = 0
         return: 2
-    check(lmx_msg_exec_bind(rt, d, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, e, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "D and E launched")
+    check(lmx_msg_exec_bind(rt, d, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, e, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "D and E bound")
     check(dm\child_heard_at = 3000U && em\child_heard_at = 3000U, "P's expectation of each child starts at the child's publication")
     env\id: 3U
-    check(lmx_msg_send(rt, p, d, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "input for D published")
-    pst: step_from_root(rt, p, d)
-    check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_inbox_n(rt, p) = 1, "D queried P at 3000")
-    check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && lmx_msg_live_handle(rt, p, got) = c.LMX_MSG_STAGED && dm\child_heard_at = 3000U, "P heard D at 3000")
-    lmx_msg_env_release(got)
-    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P answers D")
+    g_to: d
+    check(p_turn(rt, p, 3U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_STAGED, "input for D published")
+    check(p_turn(rt, p, 10U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK, "P's own turn maps D onto its own context")
+    k: k + 1
+    wait_reports(rt, k, "D's query at 3000")
+    check(lmx_msg_inbox_n(rt, p) = 1, "D queried P at 3000")
+    check(p_turn(rt, p, 5U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK && g_st2 = c.LMX_MSG_STAGED && dm\child_heard_at = 3000U, "P heard D at 3000")
+    check(g_end_st = c.LMX_MSG_OK, "P answers D")
+    # A mapped child takes a runnable input at once: D consumes P's answer in
+    # an ordinary turn (6f's ruling on section 3).
+    k: k + 1
+    wait_reports(rt, k, "D's turn on P's answer")
+    check(observed_kind = c.LMX_MSG_KIND_PROGRESS && lmx_msg_state(rt, d) = c.LMX_MSG_STATE_RUNNING, "D's turn took P's answer at once and D keeps running")
     # E reports at 3080; D stays silent.
     check(lmx_msg_set_now(rt, 3080U) = c.LMX_MSG_OK, "clock 3080")
     env\id: 4U
-    check(lmx_msg_send(rt, p, e, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "input for E published")
-    pst: step_from_root(rt, p, e)
-    check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_inbox_n(rt, p) = 1, "E queried P at 3080")
-    check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && lmx_msg_live_handle(rt, p, got) = c.LMX_MSG_STAGED && em\child_heard_at = 3080U && dm\child_heard_at = 3000U, "P heard E at 3080; D's last word is still 3000")
-    lmx_msg_env_release(got)
-    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P answers E")
+    g_to: e
+    check(p_turn(rt, p, 3U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_STAGED, "input for E published")
+    check(p_turn(rt, p, 10U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK, "P's own turn maps E onto its own context")
+    k: k + 1
+    wait_reports(rt, k, "E's query at 3080")
+    check(lmx_msg_inbox_n(rt, p) = 1, "E queried P at 3080")
+    check(p_turn(rt, p, 5U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK && g_st2 = c.LMX_MSG_STAGED && em\child_heard_at = 3080U && dm\child_heard_at = 3000U, "P heard E at 3080; D's last word is still 3000")
+    check(g_end_st = c.LMX_MSG_OK, "P answers E")
+    k: k + 1
+    wait_reports(rt, k, "E's turn on P's answer")
+    check(observed_kind = c.LMX_MSG_KIND_PROGRESS && lmx_msg_state(rt, e) = c.LMX_MSG_STATE_RUNNING, "E's turn took P's answer at once and E keeps running")
     check(lmx_msg_set_now(rt, 3100U) = c.LMX_MSG_OK, "clock 3100: D silent for 100, E for 20")
     n: lmx_msg_live_check(rt, p, 3100U, 50U)
     check(n = 1 && dm\closing != 0 && em\closing = 0, "P, observing its direct children under its own timeout policy, requests D's orderly close and leaves E alone")
-    check(lmx_msg_state(rt, d) = c.LMX_MSG_STATE_RUNNING, "D is closing, not stopped: a request, honored at its end-turn")
-    pst: step_from_root(rt, p, d)
-    check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_PROGRESS && lmx_msg_state(rt, d) = c.LMX_MSG_STATE_STOPPED, "D's next turn still consumes P's answer, then stops at its end-turn")
+    k: k + 1
+    wait_reports(rt, k, "D's closing turn")
+    check(g_close_who = d && g_close_state = c.LMX_MSG_STATE_RUNNING, "D was closing, not stopped, when its closing turn started: a request, honored at its end-turn")
+    check(lmx_msg_state(rt, d) = c.LMX_MSG_STATE_STOPPED, "D stopped at its end-turn")
     # Explicit stop from above: E, which was not closing.
-    check(lmx_msg_stop(rt, p, e) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P explicitly stops E (the second mechanism)")
-    check(em\closing != 0 && lmx_msg_inbox_n(rt, e) = 1 && lmx_msg_state(rt, e) = c.LMX_MSG_STATE_RUNNING, "the stop set E's closing flag and is not handler-visible work; P's answer still waits in E's inbox")
-    pst: step_from_root(rt, p, e)
-    check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_PROGRESS, "E finished its current turn on the input it had")
+    g_to: e
+    check(p_turn(rt, p, 6U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_STAGED, "P explicitly stops E (the second mechanism)")
+    k: k + 1
+    wait_reports(rt, k, "E's closing turn")
+    check(g_close_who = e && g_close_state = c.LMX_MSG_STATE_RUNNING && g_close_inbox = 0, "the stop set E's closing flag and is not handler-visible work: E's closing turn started RUNNING with nothing in its inbox")
     check(lmx_msg_state(rt, e) = c.LMX_MSG_STATE_STOPPED, "E stopped at its end-turn, not inside the turn")
+    # A closing child's turn consumes the input it had. X receives an input and
+    # its stop in one publication before its map point: with no thread, both
+    # are admitted before X runs, so its first turn is its closing turn.
+    # Pump admits one envelope per lock hold (lmx_msg_pump): a mapped child may take a turn between two envelopes of one publication, and a stop landing first makes the later input GONE.
+    check(p_turn(rt, p, 7U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK && g_st2 = c.LMX_MSG_STAGED && g_st3 = c.LMX_MSG_STAGED, "P creates X and publishes one input and X's stop in the same end-turn")
+    x: g_x
+    xm: lmx_msg_find(rt, x)
+    check(xm != 0 && xm\closing != 0 && lmx_msg_inbox_n(rt, x) = 1 && lmx_msg_state(rt, x) = c.LMX_MSG_STATE_RUNNING, "X, not yet mapped, holds the input and its closing flag")
+    check(lmx_msg_exec_bind(rt, x, turn_child_plain, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "X bound")
+    g_to: x
+    check(p_turn(rt, p, 10U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK, "P's own turn maps X onto its own context")
+    k: k + 1
+    wait_reports(rt, k, "X's closing turn")
+    check(g_close_who = x && g_close_state = c.LMX_MSG_STATE_RUNNING && g_close_inbox = 1, "X's first turn is its closing turn and starts with the input it had")
+    check(observed_kind = c.LMX_MSG_KIND_NUMBER && observed_number = 9, "X's closing turn consumed the input it had")
+    check(lmx_msg_state(rt, x) = c.LMX_MSG_STATE_STOPPED, "X stopped at that turn's end-turn")
 
     # --- 4. A stopped parent: its children converge by the poll/drive sweep.
-    check(lmx_msg_create(rt, p, 5U, @ ini, 1U, @ q) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "Q created")
-    check(lmx_msg_create(rt, q, 6U, @ ini, 1U, @ f) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, q, 1) = c.LMX_MSG_OK, "Q's child F created and published")
-    check(lmx_msg_stop(rt, p, q) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_drive(rt, 3200U, 50U) = c.LMX_MSG_OK, "P stops Q; Q exits")
+    check(p_turn(rt, p, 8U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK && g_st2 = c.LMX_MSG_STAGED, "Q created by P with one input")
+    q: g_q
+    check(lmx_msg_exec_bind(rt, q, turn_q_create_f, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "Q bound")
+    g_to: q
+    check(p_turn(rt, p, 10U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK, "P's own turn maps Q onto its own context")
+    k: k + 1
+    wait_reports(rt, k, "Q's turn creating F")
+    f: g_f
+    check(g_f_create_st = c.LMX_MSG_OK && f != 0U, "Q's child F created and published")
+    g_to: q
+    check(p_turn(rt, p, 6U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_STAGED, "P stops Q")
+    k: k + 1
+    wait_reports(rt, k, "Q's closing turn")
     check(lmx_msg_state(rt, q) = c.LMX_MSG_STATE_STOPPED, "Q stopped")
     check(lmx_msg_drive(rt, 3200U, 50U) = c.LMX_MSG_OK && lmx_msg_state(rt, f) = c.LMX_MSG_STATE_STOPPED, "F, whose parent is gone, converges to its own close by the sweep")
     check(lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING, "the root runs on")
 
     # --- 5. Stage 5 (d1): a Message created without a parent is R0's child and
     # polls R0; R0 answers in its own turn (lmx_msg_root_turn), not in drive.
-    check(lmx_msg_create(rt, 0U, 7U, @ ini, 1U, @ z) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, z, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "Z, created without a parent, is R0's child and launched on the host's mapping")
+    check(lmx_msg_root_turn(rt, turn_root_create_z, 0) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, g_z, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "Z, created by R0's own turn, is R0's child and bound")
+    z: g_z
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: 1
     check(lmx_msg_host_post(rt, z, env) = c.LMX_MSG_STAGED && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "Z is given an input")
-    pst: step_in_root(rt, z)
+    check(root_maps(rt, z) = c.LMX_MSG_OK, "R0's own turn maps Z onto its own context")
+    k: k + 1
+    wait_reports(rt, k, "Z's query")
     zm: lmx_msg_find(rt, z)
-    check((pst = c.LMX_MSG_OK || pst = 1) && zm != 0 && zm\live_query_id != 0U, "Z's turn polls its parent R0: a query is outstanding")
+    check(zm != 0 && zm\live_query_id != 0U, "Z's turn polls its parent R0: a query is outstanding")
     check(lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 1, "the query reaches R0's mailbox")
-    observed_kind: 0
-    pst: lmx_msg_root_turn(rt, turn_root_answer, 0)
-    check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_PROGRESS && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 0, "R0's own turn takes the query and answers it")
-    check(lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, z) = 1 && lmx_msg_exec_bind(rt, z, turn_child_handle, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "R0's answer reaches Z, rebound to take it")
-    observed_kind: 0
-    pst: step_in_root(rt, z)
-    check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_PROGRESS && zm\live_query_id = 0U, "Z's next turn handles R0's answer and its query is cleared")
+    check(lmx_msg_exec_bind(rt, z, turn_child_handle, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "Z rebound to take R0's answer before R0 answers")
+    g_root_observed_kind: 0
+    st: lmx_msg_root_turn(rt, turn_root_answer, 0)
+    check((st = c.LMX_MSG_OK || st = 1) && g_root_observed_kind = c.LMX_MSG_KIND_PROGRESS && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 0, "R0's own turn takes the query and answers it")
+    k: k + 1
+    wait_reports(rt, k, "Z's turn on R0's answer")
+    check(observed_kind = c.LMX_MSG_KIND_PROGRESS && zm\live_query_id = 0U, "Z's next turn handles R0's answer and its query is cleared")
 
+    # exec_stop's own rounds read the worker count until every worker has left.
+    lmx_msg_exec_stop(rt)
     lmx_msg_runtime_delete(rt)
     c.free((cast: (@: void) env))
     c.free((cast: (@: void) got))
