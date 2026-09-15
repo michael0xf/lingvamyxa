@@ -5337,3 +5337,8 @@ is guarded at drive's entry, its S4_SITES row becomes "nothing (guarded
 at lmx_msg_drive's require_owner)", and S4's code list is the two
 guards, lmx_msg_exec_bind and emergency_cancel, with b5's two checks as
 their red-first acceptance; measured red after the lead's landings.
+The S4 correction recorded in the design at d6/lock-removal c6fee6f1
+(checked). run_l2trans green on the fix aa156868 (exit 0 in 297 s,
+"l2trans gen2 ok"; red at d8f758e6); the run_port_parser baseline at
+d8f758e6 running; then land_fix_then_d2.sh lands the fix and D2 with
+the union base.
