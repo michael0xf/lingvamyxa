@@ -5784,3 +5784,21 @@ red 85953500 (28/7/4/14), green ddab10a0 (0/0/0/0), falsifier 1.
 Landing next: land_s5.sh onto 3e6fc02a, the union base plus lmx_cancel,
 the allowlist lmx_message.h/.lm1/.lm2 and lmx_message_exec.c/.h; the
 probe never folded in.
+b5's S5 review landed on sonnet/s5-review dcf8a9c7 off ddab10a0 (checked
+by the coordinator): all four S5-pending sites resolved: the retire
+queue deleted outright (fields, both functions, all nine call sites);
+root_seq deleted (path[0] the constant 1U); next_addr's increment moved
+to lmx_msg_addr_take's __atomic_fetch_add_4 (exec.c 471), the sole
+remaining plain write runtime_new's pre-publication init (lm1 863, no
+concurrent reader possible); both root-list walks gone because rt->root
+is now a single pointer, not a next_sibling chain, which also removed
+three unnamed root-list walks (lmx_msg_find, lmx_msg_poll,
+drive_walk_list's inline check); no new lock primitive (the only new
+lock/unlock text is drive_walk_roots reusing its existing pair around a
+pin-and-drive rewrite); slots/n and transport remain by S6's and Y's
+scope. Flag: nworkers (LmxMsgExec) is still a cross-Message count
+outside the two named exceptions, M's fate per the S5 lists and
+untouched by this landing, not an S5 gap; the coordinator routes it to
+the lead's S6 section (its row DEL at S6 with the worker pool's
+bookkeeping). Falsifier: every "gone" name returns zero grep hits on
+the post-landing tree.
