@@ -2949,3 +2949,23 @@ create_id and find_create at 0, run_port_message plain and -LaneCheck PASS
 run_gates 32 of 32 in 510 s. Machine order: 0c's S3 re-cut slot, b5's
 CMake configure-only check on sonnet/stage-o 010271f7 (local), the lead's
 probe (a) at 7200294b, then (b).
+0c: RUNNER_HAZARDS row (l) pushed as claude-0c/hazards-bat-exit 760adb3d on
+88934463 (the cmd exit-in-for-body trap with its three replicas: 0, 1, 1).
+The seed branch drafted as local 4a08a0dc on e5da89f5 (9 files, parsing
+clean): run_seed's gen0 = gcc of the committed lm1/build/l1trans.lm1.c,
+checked by integer_add, published with l1trans.sources.txt (SHA256 of
+l1src/l1trans.lm1 and of the C), no lm2, trans.lm0 or oldchain; run_gen's
+gen1 as gen0's translation with records for gen1-3, gen1 == gen2 and gen2
+== gen3 kept, new: gen2's C equal to the committed C by blob id; run_smoke's
+lm2 timestamp check replaced by the record check at run time, its gen0
+skip removed; run_c_array, run_define and run_ifdef's root gen0 branches
+were old expected diagnostics ("c.array missing contents", "define receiver
+expects macro name as first atom", "end target does not match close
+target"), deleted so gen0 meets gen2's stricter "empty colon Frame is not
+allowed"; run_parser and run_legacy_p0 read the goldens, a missing golden
+red naming the file; stg's gate.ps1 without the SEED mechanism and
+$seedLimited (-37 lines). Still on the machine: the goldens generated once,
+the red-first runs, the cold chain from the root with root lm2 and the
+dead files aside. Ruled: red-first measured now, green on the first base
+containing (b), the landing with the lead's buildCore and refresh after
+(b).
