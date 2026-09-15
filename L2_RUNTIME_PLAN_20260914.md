@@ -5143,3 +5143,16 @@ asserting an address lookup or addr-shaped API S2 deletes or retypes, or
 pinning a numeric side effect of addresses (addr values, slot indices,
 sequence numbers, lookup counts), the numeric grep explicit this time;
 counts at the top; b5's S2 lookups file and the design cited.
+S2's tripwire counts after M (the lead, 2026-09-15), on d6/lock-s2-red-oneroot
+c8f9cb50 (fc8e9d6e plus b3d16381's counter with the path prefix
+stripped): the executor selftest's reference.exe from run_port_message,
+run twice directly with LMX_LOOKUP_COUNT=1: "lookup walks: C1=112 C2=1
+turn_other=38 host=2419258" and host=2452523 the second time; C1, C2
+and turn_other stable, host varying with main's polling loops as at the
+red; run_port_message parity PASS with the counter built in, 0 report
+lines without the variable. Against the red on b3d16381: C1 1812 to
+112, C2 2 to 1, turn_other 426 to 38, M's deletions of the parent's
+steps and the scheduler step accounting for the drop; the remaining
+112 + 1 walks are S2's threading list, S2's code after D2. Both S2's
+numbers and M's landing go into the design; main 8ea36474 carries the
+log line's merge.
