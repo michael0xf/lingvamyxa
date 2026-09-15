@@ -3447,3 +3447,14 @@ failure). Corrected on main in spec section 2 (gloss), 19.28.R2.2 and
 model 31 with his sentence verbatim; the lead corrects the same phrase in
 KERNEL, S3, Y3 and the FIELDS comments (1e355676 carries the closing
 sentence and the M line; the next hash carries this).
+The lead's 23cda3c0 (d6/lock-removal, supersedes 1e355676), checked on the
+branch: "finished L3 Thread reads" 0 in design and table; Mikhail's
+correction quoted verbatim in KERNEL; KERNEL and S3 read "an ended L3
+Thread reads !running; success && !running is the end by success; success
+stays 0 when running became 0 without user code setting it (a stop or a
+failure)"; the FIELDS success comment says the same; categories 16/36/47.
+(c) landing run so far, on 64c4af01 (land_c.sh): stg gate.ps1 "gate: all
+green" (520 s); root buildCore, run_seed, run_gen green; root run_legacy_p0
+"corpus ok n=131, oracle=goldens/printTree.lm0"; pin installed;
+run_self_build PASS 8 of 8; run_slice_equal PASS 16 of 16 and 8 of 8; the
+33 gates running; the pin announcement follows at READY TO PUSH.
