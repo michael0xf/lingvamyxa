@@ -21,7 +21,7 @@ prototype:
     fn: __real_lmx_array_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
     fn: __real_lmx_msg_runtime_new () @: LmxMsgRuntime
     fn: __real_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
-    fn: __real_lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
+    fn: __real_lmx_msg_turn_self (@: LmxMsgRuntime rt) @: LmxMsg
     fn: __real_lmx_msg_set_graph (@: LmxMsg msg; @: Lmx unit) void
     fn: __real_lmx_msg_runtime_delete (@: LmxMsgRuntime rt) void
     fn: __real_malloc (size_t: n) @: void
@@ -81,10 +81,12 @@ fn: __wrap_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; const: @(uch
     creates: creates + 1
     return: result
 
-fn: __wrap_lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
+# S2: the generated turn reads its own record (lmx_msg_turn_self), so mode 3
+# fails that read instead of the address lookup it replaced.
+fn: __wrap_lmx_msg_turn_self (@: LmxMsgRuntime rt) @: LmxMsg
     if: test_mode = 3
         return: 0
-    return: c.__real_lmx_msg_find(rt, who)
+    return: c.__real_lmx_msg_turn_self(rt)
 
 sub: __wrap_lmx_msg_set_graph (@: LmxMsg msg; @: Lmx unit)
     check(news = 1 && creates = 1 && binds = 0 && deletes = 0, "binding occurs during live process entry")
