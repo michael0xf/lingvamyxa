@@ -305,6 +305,13 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       - 1 is a turn unbinding a Message that is not its child: lmx_msg_exec_unbind <- turn_map_sibling, the
         exec selftest's refusal case. The address form keeps the lookup, so the refusal can be reached.
       So no C1/C2 site remains, and the rest is S4's sends plus two address-form calls outside the caller's family.
+      On 05c50f8b itself (ws2code):
+      - run_port_message plain parity PASS (102 methods);
+      - run_l2trans "l2trans gen2 ok" in 277 s;
+      - run_l2_message_root exit 0 in 46 s, "Historical catalog audit PASS (144 inputs)". Every mode 0-48 proves
+        itself, the retargeted mode 3 included;
+      - tracked tree clean after the runs.
+      Handed to the coordinator for the green re-measure on d6/lock-s2 05c50f8b.
       What the green then measures: no walk of the runtime's tree from a turn's C1/C2 site. A scan of the caller's
       own child list for a child address is not a lookup the counter hooks, and it is the design's "parent's child
       pointer"; stated here so that nobody reads the green as more than that.
