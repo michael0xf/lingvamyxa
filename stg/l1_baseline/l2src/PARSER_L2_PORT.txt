@@ -574,15 +574,21 @@ e) field-parsing state machine -- l2src/parser_field_parse_port.lm2
    36/36 goldens identical, both drivers (stage e_lifecycle), cold.
    Falsifier: p0_field_parse_loop_stack_new forced to return 0
    unconditionally (simulated allocation failure) -- measured 71
-   mismatches across 36 goldens x 2 drivers (not the full 72, a
-   near-total shape matching d1/d2's own allocation-failure
-   falsifiers). Which single golden×driver combination didn't
-   diverge was not re-verified this run (the per-golden output was
-   truncated by an over-narrow `Select-Object -Last 20` before I
-   could diff it, and the confirmation rebuild overwrote the
-   falsifier run's own output files before I caught this) -- not
-   claiming it's the same exception as d1/d2's without having
-   actually checked. Reverted, clean diff, 36/36
+   mismatches across 36 goldens x 2 drivers (not the full 72). Rerun
+   with full output captured (d6, 2026-09-14 -- the first attempt's
+   per-golden detail was lost to an over-narrow `Select-Object -Last
+   20` before it could be diffed, then overwritten by the revert-
+   confirmation rebuild): every one of the 36 goldens appears at
+   least once in the mismatch list; exactly one, invalid_triple_
+   unclosed, appears only once instead of twice -- "meta EXIT
+   MISMATCH invalid_triple_unclosed: ref=1 port=0" is the sole line
+   for it, meaning its dump-driver comparison did NOT diverge. Same
+   golden and same driver as d1/d2's own exception: this
+   already-malformed fixture's dump-driver path converges to the
+   same (empty/error) output on both Ref and Port regardless of
+   whether the field-parse loop stack ever gets created, while the
+   meta driver's own exit-code check is stricter and does catch the
+   difference. Reverted, clean diff, 36/36
    restored, also cold.
 
 Remaining stages (e2's plan)
