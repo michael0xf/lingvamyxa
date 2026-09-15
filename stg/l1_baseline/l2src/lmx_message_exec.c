@@ -393,17 +393,19 @@ int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who) {
     return LMX_MSG_OK;
 }
 
+/* Stage 5 (e): the clock is R0's management state, read from R0's policy record
+ * (a late read changes nothing); the logical clock once lmx_msg_set_now set it. */
 unsigned lmx_msg_now(LmxMsgRuntime *rt) {
     if (rt == 0) {
         return 0U;
     }
-    if (rt->clock_test != 0) {
-        return rt->clock;
+    if (lmx_root_record_clock_test(rt->root_record) != 0) {
+        return lmx_root_record_clock(rt->root_record);
     }
 #if defined(_WIN32)
     return GetTickCount();
 #else
-    return rt->clock;
+    return lmx_root_record_clock(rt->root_record);
 #endif
 }
 
@@ -4014,15 +4016,31 @@ int lmx_msg_set_orphan_until(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned until) 
     return LMX_MSG_OK;
 }
 
-/* Decision 17 (spec 19.29.8): the runtime's failed-orphan retention policy. */
+/* Decision 17 (spec 19.29.8): the runtime's failed-orphan retention policy.
+ * Stage 5 (e): it is R0's management state, written only on R0's lane (R0's own
+ * turn, or until (f) the host outside any turn); refused, nothing is written. */
 int lmx_msg_set_orphan_retain(LmxMsgRuntime *rt, unsigned retain) {
-    if (rt == 0) {
+    int st;
+    if (rt == 0 || rt->root == 0) {
         return LMX_MSG_INVALID;
     }
+    if (lmx_msg_exec_holding_turn(rt, rt->root->addr) == 0
+        && (lmx_msg_host_is_owner(rt) == 0 || lmx_msg_exec_holding_any(rt) != 0)) {
+        return LMX_MSG_INVALID;
+    }
+    /* Created at the first set on R0's lane, as a parent's scheduler record is at
+     * its first step: runtime_new cannot call the generated unit, whose library
+     * open creates a runtime of its own. */
+    if (rt->root_record == 0) {
+        rt->root_record = lmx_root_record_new(rt->root);
+        if (rt->root_record == 0) {
+            return LMX_MSG_NOMEM;
+        }
+    }
     lmx_msg_exec_lock(rt);
-    rt->orphan_retain = retain;
+    st = lmx_root_record_set_orphan_retain(rt->root_record, retain);
     lmx_msg_exec_unlock(rt);
-    return LMX_MSG_OK;
+    return st;
 }
 
 int lmx_msg_orphan_expired(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now) {
