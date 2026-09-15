@@ -1138,6 +1138,33 @@ S4. The family tree and the mapping written only on the owner's lane (L2, L3), t
       the host outside any turn (INVALID). Its acceptance is run_s4_guard_emergency_cancel, red now and green with
       the guard. The exec_bind check stays in the Exec suite as a green check that the guard holds. S4_SITES site 5
       becomes "nothing (guarded at mapping_authority_locked)". S4's code is small enough to follow S2 directly.
+    S4 in the (a) format (after S2 landed; integration 952d8e31, 2026-09-15):
+    - Site list: b5's LOCK_REMOVAL_S4_SITES.txt at 108e340a (sonnet/s4-sites). Of its 12 sites, 11 need nothing:
+      create_prepare, child_link, child_chain_remove, handoff_supervision, end_turn's two loops,
+      live_handle's child_heard_at write, orphan_children (reached only through lmx_msg_drive, whose
+      require_owner already refuses a foreign thread), exec_bind_mode (guarded at mapping_authority_locked),
+      map_child, the three marks (adopt, dispose, reclaim) and endp_retain/release. One needs a guard:
+      lmx_msg_emergency_cancel (lmx_message_exec.c:439 at 952d8e31). There are no edges and no moves.
+    - Code (b5's ticket, sonnet/s4-guard off 952d8e31): emergency_cancel refuses, with LMX_MSG_INVALID, a
+      caller that is neither the host outside any turn nor the holder of the turn of the target's parent,
+      walking up through settled ancestors per 19.29.6. That is mapping_authority_locked's contract
+      (lmx_message_exec.c:1689), the one exec_bind and exec_unbind already use. The guard sits after the lookup of
+      who and before running_store and closing, and mapping_authority_locked needs a static prototype above
+      emergency_cancel. Also in this change: the ruled cancel_spin_host edit, where cancel_after_settle's
+      spawned-thread cancel (line 157, after Sleep(20)) moves onto the host outside any turn or P's own turn. No
+      lock, wait or signal is added.
+    - Red: b5's run_s4_guard_emergency_cancel (cancel_spin_host.c, re-cut onto 952d8e31 with the five-argument
+      create) calls emergency_cancel from a spawned thread that is neither and expects INVALID. Measured red on
+      d8f758e6 (the call returns 0); b5 measures it again on the re-cut base before the code.
+    - Green: the same check passes with the guard. run_s4_guard_exec_bind stays green as the guard-holds check
+      for exec_bind. Every existing emergency_cancel call site (29 at d8f758e6 by b5's count, across the exec
+      selftest, cancel_spin_host, lmx_message_selftest and the model tests) keeps its result, because each stands
+      for one of the two callers the guard lets through. The S4 run shows this; it is not assumed.
+    - Falsifier: the guard's condition inverted on a scratch commit, so that it admits the foreign lane and
+      refuses the host outside any turn and the parent's turn. run_s4_guard_emergency_cancel goes red again, and
+      the existing call sites that stand for the two legitimate callers go red too; the run names them.
+    - Landing: land_base2.sh on b5's branch when green (the union base plus lmx_cancel, since cancel_spin_host
+      changes; the landing branch named per merge).
 
 S5. The runtime-level lists (L5). Waits on 5.1.
     rt->slots, rt->n, the retire queue, the reap queue, rt->transport and e->ui_lane each either go or become a cell in
