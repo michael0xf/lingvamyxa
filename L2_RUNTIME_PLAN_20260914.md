@@ -1778,3 +1778,14 @@ fail's inbox redirect); flagged for the design: KIND_DEAD is created but
 never consumed by a kind check in this file, and KIND_GRAPH is detected by
 node.delivered rather than its kind tag, so a replacement keyed on kind
 must check what reads them above this file.
+b5's next ticket (2026-09-15, in the order's scope, its own domain): the
+vendored host ingress V0 in mixa_manager/vendor/lmx_msg_host_ingress_v0
+carries the host lock again (3 host_lock calls, 2 EnterCriticalSection, 3
+pthread_mutex_lock, 6 pthread_cond_ in the census) and cannot stay under "no
+locks in the project at all except the message collection's own"; b5
+inventories it as mixa_manager/HOST_INGRESS_V0_INVENTORY.txt on
+sonnet/mixa-ingress-inventory off c067bed9 (every mixa_manager caller by
+file and line, the harnesses that build it, what the runtime's own
+admission into R0's mailbox gives each caller instead or "silent", the
+copy's lock count against the census); the deletion is its own commit
+after the lead's stage on the host forms names it.
