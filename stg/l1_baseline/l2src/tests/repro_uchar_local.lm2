@@ -1,0 +1,30 @@
+predef: "l2src/tests/repro_uchar_local.h.lm1"
+
+# Repro for lingvamyxa-ba (d6), 2026-09-15: `uchar` (typedef unsigned
+# char uchar, l1src/p0.h:54 / l1src/p0.h.lm1:51: `type: uchar unsigned
+# char`) is not recognized as a scalar LOCAL variable's own declared
+# type -- l2trans error "unsupported body, frame=uchar". `@: uchar`
+# (a POINTER to uchar, e.g. LmP0Stack's own `hard` field) already
+# works fine elsewhere in this port (l2src/parser_stack_stream_port.
+# lm2:155). Only the bare scalar local form is refused. Found while
+# porting l1src/parser.lm1:1712-1728's three tiny char-classifying
+# predicates (lm_p0_is_bare_identifier_start/_rest, lm_p0_is_hex_
+# digit -- parser-l2 Stage e Slice 4), each of which does exactly
+# `uchar: value; value: (cast: uchar c)` before calling c.isalpha/
+# isalnum/isxdigit -- the standard C idiom for avoiding signed-char
+# UB in <ctype.h> calls. Not safely reformulatable with `unsigned:`
+# instead (a plain int cast sign-extends a negative char before
+# reinterpreting, giving values outside 0-255 for any byte with the
+# top bit set, e.g. UTF-8 continuation bytes -- a real behavior
+# change, not just a spelling one), so no stopgap applied here; this
+# blocks e4's first three functions until fixed.
+
+fn: probe_uchar_local (char: c) int
+    uchar: value
+    value: (cast: uchar c)
+    return: (c.isalpha(value) != 0)
+end: probe_uchar_local
+
+fn: main () int
+    return: 0
+end: main
