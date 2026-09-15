@@ -325,6 +325,10 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       - run_port_parser, run_mixa, run_ingress_harness and run_lmx -Suite Cancel ok.
       Tag selfbuild/31c851d4 and log commit 952d8e31 are on d6/lock-s2-landing-31c851d4.
       integration/main-absorbs-core is 952d8e31.
+      e9's cold record on 952d8e31 (worktree wt0c_landed_952d8e31, no build/ before):
+      - run_self_build PASS 8 of 8 in 19 s; tag selfbuild/952d8e31 (tag object 9b1882f8);
+      - gate.ps1 exit 0 in 291 s, "gate: all green", 27 of 27 steps;
+      - the log line claude-0c/selfbuild-log-952d8e31 c9ac4dda, fast-forwarded into integration.
       What the green then measures: no walk of the runtime's tree from a turn's C1/C2 site. A scan of the caller's
       own child list for a child address is not a lookup the counter hooks, and it is the design's "parent's child
       pointer"; stated here so that nobody reads the green as more than that.
