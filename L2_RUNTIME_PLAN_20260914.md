@@ -4516,3 +4516,29 @@ build/l1trans/gen2. b5's inventories consolidated on sonnet/inventories
 fc8ce769 off 80101431 (the ten files at l2src/<name>, blob ids equal to
 the old branches' tips, spot-checked by the coordinator on S2 and M),
 the one branch for the lead to merge; the old ten stay as history.
+ONE ROOT LANDED, the lead's report (2026-09-15): integration
+b4e1296d..80101431 = merge f5f50954 (d6/one-root-selfbuild 27edf717) +
+"SELF-BUILD OK f5f50954: fixed point 8 of 8, pin 0B3D85B3" (80101431).
+Allowlist by status R 598, D 631, M 85, A 1 (l2src/SELF_BUILD_LOG.txt);
+stg/l1_baseline tracked 0. Runs on the merge: root
+buildCore/run_seed/run_gen; gate.ps1 "all green" 298 s (gen2 run_lmx
+passed on the quiet machine); run_legacy_p0 n=131; run_self_build 8 of
+8; p0_tree_contract n=36; cmake configure; run_gates -L2MessageRoot
+GREEN 33 of 33 in 544 s; run_l2trans ok; run_port_parser ok;
+run_port_message -LaneCheck PASS; run_mixa ok. Marks: the log's
+5cee1426 and f5f50954 lines; tags selfbuild/5cee1426 and
+selfbuild/f5f50954; branch d6/one-root-selfbuild-landing. Pin: gen2 and
+gen3 re-installed after gate.ps1/run_gen, 0B3D85B3 = l2src/L1_PIN.txt
+after the gates. Main: d72dd35f = 66d8fb9f + 80101431, one file-location
+conflict resolved (LOCK_REMOVAL_SPEC_MAP.txt now at l2src/), 0 non-doc
+files differ from integration, 80101431 an ancestor of origin/main; the
+"bare space" test files at tests/l1/bare space/ with the same blobs.
+FIELDS cross-check applied on d6/lock-removal 3c3b91be (nworkers S4 by
+the lead; slots/n L3T of R0; reap_head DEL done S3; 113 rows, 16 kernel,
+40 functionality, 57 DEL). Next: integration merged into
+d6/lock-removal so the design and tables move to l2src/; then M on
+d6/m-sequential off 80101431. The M acceptance re-cut by the
+coordinator onto 80101431 at fable/m-acceptance-oneroot 199dab84 (the
+same two edits at l2src/lmx_message_exec.[ch]); its red is measured
+after e9's cold gate record frees the machine; M's section cites
+199dab84, not 03fc0f65. e9's install_pin 4afe4ff5 rides the next landing.
