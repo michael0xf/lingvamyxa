@@ -3076,3 +3076,19 @@ untouched (a CRLF .stdout byte-identical from the commit, text unset); the
 two local drafts folded into one commit by commit-tree with a guarded
 update-ref, no reset, rebase or force. The cold green on the first base
 with (b), with root lm2 and the dead lm1/build files aside.
+(b) run 1 at 7200294b: the translator's fixed point green (T0 from the
+committed a978175a; pass 1 changing 4 of 8, passes 2 and 3 changing 0, all
+eight fixed, the other tools compiling; the changed set exactly own,
+parser, l1trans and printTree with every blob equal to 0c's independent
+fixed point, 5cb4f9a3, 649b093a, 7ccb37c0, 64c0c4e1); red only on an
+environment gap: root tests/l1/run_gen.ps1 at "gen2 parser accept failed"
+because run_parser.ps1:46 needs build/lm0/printTree.lm0.exe, the old
+chain's untracked oracle absent in a fresh worktree and not built by the
+root's buildCore.lm0.bat (probe E never reached this step, smoke failing
+first). Nothing committed. Fix: regen_root.sh and land_b.sh copy the
+pinned oracle from the main checkout's build/lm0 (sha256 8FA2A403..., 505210
+bytes, the binary the goldens came from) before run_gen, until 0c's
+goldens replace it; the rerun going, with a baseline of root buildCore
+plus run_gen on the unchanged 7200294b beside it to confirm the gap
+predates (b). Read-only: b5's da7d61f1 trial-merges onto 7200294b with 0
+conflicts (171 clean deletions).
