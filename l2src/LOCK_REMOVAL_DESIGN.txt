@@ -277,6 +277,14 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       - without the variable: 0 report lines.
       The remaining C2 is the generated l2_program_turn's own lookup. Its emitter moves to lmx_msg_turn_self next,
       together with the mode 3 retarget.
+      Green by d6 (2026-09-15, d6/lock-s2 05c50f8b = ab04de0e plus the C2 emitter and mode 3 retarget; scratch
+      merge 121f4b87 = 05c50f8b + c8f9cb50, never pushed):
+      - run_port_message with the counter built in: parity PASS in 52 s. run_port_message builds l2trans from this
+        tree's l2trans.lm1, so the generated unit carries the new emitter;
+      - reference.exe twice with LMX_LOOKUP_COUNT=1: "lookup walks: C1=0 C2=0 turn_other=17 host=2476568", then
+        "... host=2395973".
+      turn_other (38 at red, 17 now) is not 0; its attribution to call sites follows before the coordinator's
+      re-measure.
       What the green then measures: no walk of the runtime's tree from a turn's C1/C2 site. A scan of the caller's
       own child list for a child address is not a lookup the counter hooks, and it is the design's "parent's child
       pointer"; stated here so that nobody reads the green as more than that.
