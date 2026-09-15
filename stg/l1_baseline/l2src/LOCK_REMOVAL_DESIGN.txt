@@ -350,6 +350,27 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
         mail nor work the coordinator's yield line) instead of a wait on h->wake (its callers: lmx_message_host_selftest.c
         133/238, lmx_message_selftest.lm1 642/646, mixa_manager/tests/mixa_ingress_host_harness.c 242/277 keep the
         call). The vendored snapshot mixa_manager/vendor/lmx_msg_host_ingress_v0 is not touched by S3.
+    As coded (d6/s3-no-wake; each point adds no lock, no wait on a primitive and no signal, so it is recorded here
+    rather than put to Mikhail):
+    - R3: only the kick's collection goes (its calloc, retains, unlock window and NOMEM path). start_contexts still
+      maps each bound, unmapped record and marks it ready, in one exec lock hold (ctx_visit_start_map); a UI-mapped
+      record's readiness is its request admitted into the UI lane's mailbox, as in lmx_msg_exec_ready.
+    - R4: LmxMsgBindWait is {worker_on, retired, rec}. The thread handle is closed at launch, so neither it nor
+      owner_tid is kept.
+    - R5: ownership of the record: while worker_on is 1 the thread owns it; a retire (unbind, UI affinity) sets
+      retired and rec = 0 and frees it only when worker_on is 0. The worker's round head, in the same lock hold,
+      clears worker_on, takes down the count and frees a retired record as it leaves its loop.
+    - R6: the launch runs in one hold of the existing exec lock (its row is S6): worker_on is set and the pack is
+      complete before the thread exists. LmxMsgCtxPack keeps rt, addr and the worker record, which the thread frees.
+    - R7, corrected: the stop does not return at once. runtime_delete frees the Messages after lmx_msg_exec_stop,
+      and a worker still in its loop would read them. The stop writes stopping, then the host's rounds read the
+      worker count until it is 0 (SwitchToThread / sched_yield between reads; no primitive, no join).
+    - R8: one context_worker for Win32 and pthreads. Round head checks (stopping, retired, UI), then
+      lmx_msg_live_check under the Message's TLS identity when live_wait_th is set, then the checks again,
+      take_this / run_one, and the yield after a round with neither mail nor work.
+    - Selftest: the launch-gate and both stale-launch cases (unbind interleaved with a launch outside the lock, and
+      the generation that guarded it) and the kick-calloc case are deleted with their mechanisms; the start case
+      now checks that start_contexts maps the bound child.
     Red and green: red on record at 74146146 (-LaneCheck exit 1 at ctx_visit_wake). After R1-R9 merged with
     74146146: -LaneCheck exit 0 (no LANE WAKE FAIL at any of the 11 sites; the oracle's markers have nothing left to
     mark), the plain run_port_message parity PASS, the executor selftest's stop/unbind/launch tests and the host
