@@ -5709,3 +5709,16 @@ sonnet/s6-rebase: the functions S3, M, S2 and D2 deleted dropped, every
 line number renewed, the counts per stage re-tallied (S3 and M rows
 "done, landed"), the rows the lead's S5 (e75263d7) deletes marked "S5,
 pending", so the S6 section reads the true remaining lock sites.
+S4 LANDED (the lead, 2026-09-15; checked by the coordinator on origin):
+merge 0990c451 (sonnet/s4-guard 97fb41fd onto c9ac4dda, 3 M files);
+integration/main-absorbs-core 3e6fc02a (the SELF-BUILD OK line); the
+union base plus lmx_cancel green on the merge: self-build PASS 8 of 8,
+gates GREEN 31 of 31 in 497 s, port_message plain and -LaneCheck PASS
+(102 methods), run_l2trans ok in 272 s, run_port_parser ok, run_mixa
+ok, the ingress harness ok, lmx_cancel ok; tag selfbuild/0990c451 and
+the log commit on sonnet/s4-guard-landing-0990c451. Five stages of the
+lock half are in (S3, M, D2, S2, S4). Next: main; S5's green (3e6fc02a
+merged into d6/lock-s5, both touching exec.c near emergency_cancel;
+then s5_green.sh with 85953500 and 165 UAF runs); the machine stays the
+lead's until S5's tip is handed over; e9's gate record on 3e6fc02a
+after that; b5's S6 census re-base (doc-only) starts now at 3e6fc02a.
