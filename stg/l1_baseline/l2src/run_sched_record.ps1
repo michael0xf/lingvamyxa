@@ -91,6 +91,11 @@ foreach ($source in $sources) {
     Step "compile_$stem" (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $source) + ' -o ' + (Q $obj)) $glog) $glog
     $objs += $obj
 }
+# Stage 5 (e): the runtime reads R0's policy record (l2src/lmx_root_record.lm2),
+# so the link needs every other runtime unit too; the unit under test is built
+# below from -SourcePath and excluded here, so the link holds one copy of it.
+. (Join-Path $PSScriptRoot 'l2units_build.ps1')
+$objs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $support 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags -Exclude @('lmx_sched_record'))
 $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 
 # 2. The translator from this checkout and the unit it emits.

@@ -9,10 +9,12 @@ include: "l2src/lmx.h" "l2src/lmx_message.h"
 # Stage 5 step (e) (accepted by 6f, 2026-09-14): the runtime's policy cells are
 # R0's own management state (19.28.R2.2: "ordinary Structure data, to be
 # implemented in L2"; one arena, one lane, one writer). The record is Structure
-# data in R0's arena, retained by R0 as a root, created by runtime_new right
-# after R0 and the UI lane, and written only on R0's lane (R0's turn, or until
-# (f) the host outside any turn): lmx_msg_set_now and lmx_msg_set_orphan_retain
-# check that lane before they store. Layout, three slots:
+# data in R0's arena, retained by R0 as a root, created lazily on R0's lane at
+# the first successful set_now or set_orphan_retain, never on runtime_new's path
+# (a runtime unit's open creates a runtime of its own), and written only on
+# R0's lane (R0's turn, or until (f) the host outside any turn):
+# lmx_msg_set_now and lmx_msg_set_orphan_retain check that lane before they
+# create or store. Layout, three slots:
 #   R.child[0]  clock: an unsigned cell, the logical time lmx_msg_now reports
 #               while clock_test is set
 #   R.child[1]  clock_test: an int cell, nonzero once the clock was set
