@@ -3,6 +3,12 @@
 The rule (design 997de734): a property of the sequential mapping itself (round-robin order, the cursor, the UI take)
 is deleted; a property of the child (its close, its settle, its mail, its collection) moves onto the child's own
 thread through map_child.
+The rule for every conversion (the coordinator, 2026-09-15, recorded in the plan): a converted test states its
+property through Messages, turns and flag reads, never through a wait. No cell a turn blocks on, no holding a turn
+inside its body until the test releases it: that is a semaphore-shaped handoff, outside the Message frame for a core
+test. An ordering claim between two lanes is not made; what one lane has done is observed by reading the other
+Message's flags (running, success, handoff_safe) at the moment the acting call returns, and a later effect is read on
+later rounds.
 
 Each test's step uses, and a first guess to be confirmed by reading every check label before M's commit:
 - lmx_model_ui_lane_3d_selftest: exec_ui_step 12 checks of serving order ("readiness order, not family order",
@@ -28,9 +34,10 @@ Each test's step uses, and a first guess to be confirmed by reading every check 
   "C5 ran its closing turn as a failed orphan: handoff-safe, re-rooted under R0, still held"). Child properties:
   convert. Ordering point: the check at 242 ("C4 has not yet run its closing turn") and "R releases P4 at once, with
   C4 still to run its closing turn" hold today because nothing runs C4 until the host steps it. On its own thread
-  C4 is woken by its closing flag, so the test must hold C4 inside its turn body until a go cell flips (the
-  runtime_close_5f pattern, an order-free atomic cell). Otherwise the property is restated as "the release does not
-  wait for C4". g_step / turn_root_step (57-65, 270-274): R0's turn stepping R so that R0's settle runs. The
+  C4 is woken by its closing flag. DECIDED (the coordinator): the property is restated as the spec's own, "the
+  release does not wait for C4" (a close never joins a thread or waits for a child's closing turn), observed by flag
+  reads when R's release returns (C4's running still 1 and success 0), with no ordering claim between the two lanes;
+  C4's close afterwards is read from its flags on later rounds. g_step / turn_root_step (57-65, 270-274): R0's turn stepping R so that R0's settle runs. The
   property "R0's settle never takes a failed orphan" stays, moved into R0's own turn calling its settle directly,
   with no child step.
 - lmx_model_family_close_32: step_from_root(p, c1) at 140 and 152 runs C's ordinary turn ("C's ordinary turn had an
@@ -53,9 +60,8 @@ Each test's step uses, and a first guess to be confirmed by reading every check 
   chain. The chain of steps is the mapping and goes. The handoff checks after it convert to top, mid and leaf on
   their own threads, each turn triggered by its own input.
 Frame for every conversion (Mikhail, 2026-09-15, relayed by the coordinator): a test states its property through a
-Message in a mailbox and the recipient's turn, not through executor internals, and without semaphore-shaped
-rendezvous. Where a conversion above says "hold C inside its turn until a go cell flips" (family_release_17), that
-shape is in question under this frame and goes to him before M's commit.
+Message in a mailbox and the recipient's turn, not through executor internals, and without semaphore-shaped handoffs.
+family_release_17's ordering point is decided above by restatement (flag reads, no wait).
 - lmx_msg_send_local_selftest: run_child_turn helper plus sched_step (111), the parent's scheduler step. The
   sched_step checks are mapping properties and go; the send/admission checks convert.
 - lmx_sched_record_selftest: sched_step at 73 and the cursor. The scheduler record's cursor is the mapping: the test
