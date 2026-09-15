@@ -12030,7 +12030,7 @@ return: 0
 fn: l2_emit_library_wrappers () int
     int: i 0
     int: j
-    if: c.fputs("\n@: LmxMsgRuntime l2_library_runtime 0\n@: LmxMsg l2_library_message 0\n@: Lmx l2_library_unit 0\n\nfn: l2_library_open () int\n    unsigned: process_addr 0U\n    int: process_result 1\n    if: l2_library_runtime != 0\n        return: 0\n    l2_library_runtime: c.lmx_msg_runtime_new()\n    if: l2_library_runtime = 0\n        return: 1\n    if: c.lmx_msg_create(l2_library_runtime, 0U, 1U, 0, 0U, @ process_addr) != c.LMX_MSG_OK\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        return: 1\n    l2_library_message: c.lmx_msg_find(l2_library_runtime, process_addr)\n    if: l2_library_message = 0 || c.lmx_msg_run_entry_turn(l2_library_runtime, process_addr, l2_program_turn, (cast: (@: void) @ process_result)) != c.LMX_MSG_OK || process_result != 0\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        l2_library_message: 0\n        return: 1\n    l2_library_unit: c.lmx_msg_graph(l2_library_message)\n    if: l2_library_unit = 0\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        l2_library_message: 0\n        return: 1\n    return: 0\n\n", l2_out) < 0
+    if: c.fputs("\n@: LmxMsgRuntime l2_library_runtime 0\n@: LmxMsg l2_library_message 0\n@: Lmx l2_library_unit 0\n\nfn: l2_library_open () int\n    unsigned: process_addr 0U\n    int: process_result 1\n    if: l2_library_runtime != 0\n        return: 0\n    l2_library_runtime: c.lmx_msg_runtime_new()\n    if: l2_library_runtime = 0\n        return: 1\n    if: c.lmx_msg_create(l2_library_runtime, 0U, 0, 0U, @ process_addr) != c.LMX_MSG_OK\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        return: 1\n    l2_library_message: c.lmx_msg_find(l2_library_runtime, process_addr)\n    if: l2_library_message = 0 || c.lmx_msg_run_entry_turn(l2_library_runtime, process_addr, l2_program_turn, (cast: (@: void) @ process_result)) != c.LMX_MSG_OK || process_result != 0\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        l2_library_message: 0\n        return: 1\n    l2_library_unit: c.lmx_msg_graph(l2_library_message)\n    if: l2_library_unit = 0\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        l2_library_message: 0\n        return: 1\n    return: 0\n\n", l2_out) < 0
         return: 1
     while: i < l2_m_n
         if: c.fputs("external:\n", l2_out) < 0
@@ -14770,7 +14770,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_entry_n != 0 && c.fputs("        c.array: [3]: @: void process_ctx\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
-        if: c.fputs("        if: process_runtime = 0\n            return: 1\n        if: c.lmx_msg_create(process_runtime, 0U, 1U, 0, 0U, @ process_addr) = c.LMX_MSG_OK\n", l2_out) < 0
+        if: c.fputs("        if: process_runtime = 0\n            return: 1\n        if: c.lmx_msg_create(process_runtime, 0U, 0, 0U, @ process_addr) = c.LMX_MSG_OK\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_entry_n = 0 && c.fputs("            if: c.lmx_msg_run_entry_turn(process_runtime, process_addr, l2_program_turn, (cast: (@: void) @ process_result)) != c.LMX_MSG_OK\n", l2_out) < 0

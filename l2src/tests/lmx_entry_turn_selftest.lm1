@@ -82,7 +82,7 @@ fn: main () int
     if: rt = 0
         return: 2
     check(rt\n = 1 && c.lmx_msg_find(rt, 1U) != 0 && c.lmx_msg_find(rt, 2U) = 0, "M: the runtime creates R0 alone, no UI lane: one slot")
-    check(c.lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ a) = c.LMX_MSG_OK, "A, a parent-0 Message, created")
+    check(c.lmx_msg_create(rt, 0U, @ ini, 1U, @ a) = c.LMX_MSG_OK, "A, a parent-0 Message, created")
     am: c.lmx_msg_find(rt, a)
     if: am = 0
         return: 2
@@ -98,12 +98,12 @@ fn: main () int
     check(c.lmx_msg_exec_is_bound(rt, a) = 0, "the bootstrap unbinds A")
 
     # --- 3. The bootstrap's refusals.
-    check(c.lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ b) = c.LMX_MSG_OK && c.lmx_msg_exec_bind(rt, b, turn_nothing, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "B created and bound")
+    check(c.lmx_msg_create(rt, 0U, @ ini, 1U, @ b) = c.LMX_MSG_OK && c.lmx_msg_exec_bind(rt, b, turn_nothing, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "B created and bound")
     check(c.lmx_msg_run_entry_turn(rt, b, c.l2_program_turn, (cast: (@: void) @ result)) = c.LMX_MSG_INVALID, "the bootstrap refuses a bound address")
     check(c.lmx_msg_exec_unbind(rt, b) = c.LMX_MSG_OK && c.lmx_msg_graph(c.lmx_msg_find(rt, b)) = 0, "B unbound, its entry never ran")
-    check(c.lmx_msg_create(rt, a, 3U, @ ini, 1U, @ ch) = c.LMX_MSG_OK, "C, A's child, created")
+    check(c.lmx_msg_create(rt, a, @ ini, 1U, @ ch) = c.LMX_MSG_OK, "C, A's child, created")
     check(c.lmx_msg_run_entry_turn(rt, ch, c.l2_program_turn, (cast: (@: void) @ result)) = c.LMX_MSG_INVALID, "the bootstrap refuses a Message deeper than R0's children")
-    check(c.lmx_msg_create(rt, 0U, 4U, @ ini, 1U, @ d) = c.LMX_MSG_OK && c.lmx_msg_create(rt, 0U, 5U, @ ini, 1U, @ e) = c.LMX_MSG_OK, "D and E created")
+    check(c.lmx_msg_create(rt, 0U, @ ini, 1U, @ d) = c.LMX_MSG_OK && c.lmx_msg_create(rt, 0U, @ ini, 1U, @ e) = c.LMX_MSG_OK, "D and E created")
     nested_target: e
     check(c.lmx_msg_run_entry_turn(rt, d, turn_nested_entry, (cast: (@: void) @ nested_result)) = c.LMX_MSG_OK, "D's turn ran")
     check(nested_status = c.LMX_MSG_INVALID && nested_result = -1 && c.lmx_msg_graph(c.lmx_msg_find(rt, e)) = 0, "the bootstrap refuses from inside a turn of the same runtime")
@@ -119,7 +119,7 @@ fn: main () int
     rt2: c.lmx_msg_runtime_new()
     if: rt2 = 0
         return: 2
-    check(c.lmx_msg_create(rt2, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the second runtime's root, created")
+    check(c.lmx_msg_create(rt2, 0U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the second runtime's root, created")
     check(c.lmx_msg_run_entry_turn(rt2, r, turn_open_library, 0) = c.LMX_MSG_OK && library_value = 42, "a library opened from inside a turn still opens")
     c.lmx_msg_runtime_delete(rt2)
 

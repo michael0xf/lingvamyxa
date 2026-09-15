@@ -1527,9 +1527,9 @@ run_lmx.ps1, Lingvamyxa_spec.txt 19.29.7.1
 
 Create/send/stop/end_turn/pump/recv/fail/poll/set_now/drive.
 Transport-owned copy; admission enqueues inbox; recv materializes
-at turn entry. Dedup (recipient, sender, id). Create key
-(parent, create_id). KIND_STOP is internal close control (not
-enqueued). KIND_CANCELLED is ordinary result data and does not
+at turn entry. Dedup (recipient, sender, id). Create takes no
+retry key (D1/D2, 2026-09-15: removed). KIND_STOP is internal
+close control (not enqueued). KIND_CANCELLED is ordinary result data and does not
 close the recipient. Normal closing end_turn requests children
 close (flag only, not STOPPED, child outbox kept). Poll is the
 abrupt-parent fallback (`who` is the child; 0 walks non-roots).

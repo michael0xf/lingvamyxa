@@ -203,7 +203,7 @@ fn: turn_p_receive (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 fn: turn_p_create_b (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     if: ctx != 0
         return: 1
-    g_create_st: lmx_msg_create_graph(rt, who, 3U, g_root, g_pm\ranges, lmx_msg_eternal_ranges(g_pm), lmx_msg_method_ranges(g_pm), @ g_ini, 1U, @ g_b)
+    g_create_st: lmx_msg_create_graph(rt, who, g_root, g_pm\ranges, lmx_msg_eternal_ranges(g_pm), lmx_msg_method_ranges(g_pm), @ g_ini, 1U, @ g_b)
     if: g_create_st = c.LMX_MSG_OK
         g_send_st: lmx_msg_send(rt, who, g_b, g_env)
     ---
@@ -261,7 +261,7 @@ fn: main () int
     # --- P: the first Message of this runtime, running from creation (the host
     # owner acts as its turn). Its graph is the template T.
     rt: lmx_msg_runtime_new()
-    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created as the first Message")
+    check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created as the first Message")
     if: rt = 0 || p = 0U
         return: 2
     pm: lmx_msg_find(rt, p)
@@ -291,7 +291,7 @@ fn: main () int
     p_method_before: lmx_msg_method_ranges(pm)
 
     # --- In its turn P creates A from T. A is an unpublished reservation.
-    st: lmx_msg_create_graph(rt, p, 2U, root, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ a)
+    st: lmx_msg_create_graph(rt, p, root, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ a)
     am: lmx_msg_find(rt, a)
     check(st = c.LMX_MSG_OK && am != 0 && am != pm, "P creates A from T in its turn")
     if: am = 0

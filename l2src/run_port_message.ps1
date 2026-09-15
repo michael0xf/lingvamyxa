@@ -243,7 +243,7 @@ foreach ($r in $redirects) {
     if ($genText -notmatch ('(?m)^    (?:fn|sub): ' + [regex]::Escape($r.unit) + ' \(')) { throw "the public wrapper is missing: $($r.unit)" }
 }
 foreach ($sig in @(
-    'fn: msg_create \(@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; const: @\(uchar init\); size_t: n; @: LmxMsgAddr out\) int',
+    'fn: msg_create \(@: LmxMsgRuntime rt; LmxMsgAddr: parent; const: @\(uchar init\); size_t: n; @: LmxMsgAddr out\) int',
     'fn: msg_send \(@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @\(LmxMsgEnv env\)\) int',
     'fn: msg_end_turn \(@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success\) int',
     'fn: msg_recv \(@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out\) int',
@@ -333,10 +333,10 @@ int main(int argc, char **argv) {
        opens the library. */
     rt = lmx_msg_runtime_new();
     if (rt == 0) { fprintf(stderr, "warm-up: runtime_new\n"); return 90; }
-    if (lmx_msg_create(rt, 0U, 7U, init, 4U, &a) != LMX_MSG_OK || a == 0) { fprintf(stderr, "warm-up: create\n"); return 91; }
+    if (lmx_msg_create(rt, 0U, init, 4U, &a) != LMX_MSG_OK || a == 0) { fprintf(stderr, "warm-up: create\n"); return 91; }
     if (lmx_msg_find(rt, a) == 0 || lmx_msg_state(rt, a) != LMX_MSG_STATE_RUNNING) { fprintf(stderr, "warm-up: find/state\n"); return 92; }
     if (lmx_msg_child_n(rt, a) != 0 || lmx_msg_path_n(rt, a) != 2 || lmx_msg_inbox_n(rt, a) != 0) { fprintf(stderr, "warm-up: queries\n"); return 93; }
-    if (lmx_msg_create(rt, 0U, 7U, init, 4U, &a) != LMX_MSG_OK) { fprintf(stderr, "warm-up: create again\n"); return 94; }
+    if (lmx_msg_create(rt, 0U, init, 4U, &a) != LMX_MSG_OK) { fprintf(stderr, "warm-up: create again\n"); return 94; }
     if (lmx_msg_find(rt, 999U) != 0 || lmx_msg_state(rt, 999U) != -1) { fprintf(stderr, "warm-up: unknown address\n"); return 95; }
     lmx_msg_runtime_delete(rt);
     fprintf(stderr, "warm-up ok\n");
