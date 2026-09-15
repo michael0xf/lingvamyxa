@@ -547,9 +547,11 @@ fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     while: fam != 0
         f: lmx_msg_find_tree(fam, addr)
         if: f != 0
+            c.lmx_msg_test_on_walk(rt, f)
             return: f
         fam: fam\next_sibling
     ---
+    c.lmx_msg_test_on_walk(rt, 0)
 return: 0
 
 fn: lmx_msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @: LmxMsg

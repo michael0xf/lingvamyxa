@@ -305,6 +305,40 @@ void lmx_msg_history_test_free(void *p) {
 }
 #endif
 
+#if defined(LMX_MSG_EXEC_TEST)
+/* Lock removal S2 (design d6/lock-removal 8f20d183): every walk that resolves an
+ * address through the family tree is counted by the thread that made it. C1: a
+ * turn walking to its own direct child (the parent holds that pointer); C2: a
+ * turn walking to itself (the lane holds its own record); turn_other: any other
+ * walk inside a turn (sends, liveness, not found); host: outside any turn (R0's
+ * management and the embedder's queries). LMX_LOOKUP_COUNT prints the counts at
+ * exit; run_port_message never sets it, so parity is unchanged. */
+static long test_walk_c1;
+static long test_walk_c2;
+static long test_walk_turn_other;
+static long test_walk_host;
+static int test_walk_report_armed;
+
+void lmx_msg_test_on_walk(LmxMsgRuntime *rt, LmxMsg *found) {
+    LmxMsg *turn = lmx_turn_msg;
+    if (turn == 0 || turn->owner_rt != rt) {
+        __sync_fetch_and_add(&test_walk_host, 1);
+    } else if (found != 0 && found == turn) {
+        __sync_fetch_and_add(&test_walk_c2, 1);
+    } else if (found != 0 && found->parent_msg == turn) {
+        __sync_fetch_and_add(&test_walk_c1, 1);
+    } else {
+        __sync_fetch_and_add(&test_walk_turn_other, 1);
+    }
+}
+
+static void test_walk_report(void) {
+    fprintf(stderr, "lookup walks: C1=%ld C2=%ld turn_other=%ld host=%ld\n",
+        test_walk_c1, test_walk_c2, test_walk_turn_other, test_walk_host);
+    fflush(stderr);
+}
+#endif
+
 int lmx_msg_poll_abort(void) {
     LmxTurnRoot *r = lmx_turn_root;
     if (r != 0 && r->ready != 0) {
@@ -1232,6 +1266,10 @@ int lmx_msg_exec_attach(LmxMsgRuntime *rt) {
 #if defined(LMX_MSG_EXEC_TEST)
     lmx_msg_test_lane_check = getenv("LMX_LANE_CHECK") != 0;
     e->test_boot_tid = lmx_tid();
+    if (test_walk_report_armed == 0 && getenv("LMX_LOOKUP_COUNT") != 0) {
+        test_walk_report_armed = 1;
+        atexit(test_walk_report);
+    }
 #endif
 #if defined(_WIN32)
     InitializeCriticalSection(&e->lock);
@@ -1876,6 +1914,7 @@ static LmxMsg *msg_find_any_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     m = rt->root;
     while (m != 0) {
         if (m->addr == addr) {
+            lmx_msg_test_on_walk(rt, m);
             return m;
         }
         if (m->first_child != 0) {
@@ -1889,6 +1928,7 @@ static LmxMsg *msg_find_any_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
             m = m->next_sibling;
         }
     }
+    lmx_msg_test_on_walk(rt, 0);
     return 0;
 }
 

@@ -9,7 +9,10 @@ void lmx_msg_test_release_tree(LmxMsgRuntime *rt, LmxMsg *m);
 void lmx_msg_test_lane_write(LmxMsgRuntime *rt, LmxMsg *owner, const char *site);
 void lmx_msg_test_unbind_refused(LmxMsgRuntime *rt, LmxMsg *m, int st, const char *site);
 extern int lmx_msg_test_lane_check;
+/* Lock removal S2: counts an address-resolution walk by who made it. */
+void lmx_msg_test_on_walk(LmxMsgRuntime *rt, LmxMsg *found);
 #else
+#define lmx_msg_test_on_walk(r, f) ((void)0)
 #define lmx_msg_test_on_admit(d, f) ((void)0)
 #define lmx_msg_test_release_tree(r, m) ((void)0)
 #define lmx_msg_test_lane_write(r, o, s) ((void)0)
