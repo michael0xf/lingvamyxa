@@ -2896,3 +2896,22 @@ no contradiction), MessageApi re-measured on the branch, land_d1
 relaunched on 88934463 after 57's slot and the lead's stg-buildcore
 measure. Lesson restated: a branch measure runs every runner that builds
 the changed file, MessageApi included.
+0c's two rows measured cold on 88934463 (runner only, uncommitted, the tree
+unchanged): run_self_build (root base), exit 1 in 8 s, "fixed point 8 of 8
+(pass 3 == pass 2), committed generated C 4 of 8 equal to the fixed point",
+stale at the root own.lm1.c, parser.lm1.c and printTree.lm1.c (each first
+different at line 143) and l1trans.lm1.c (a978175a against 7ccb37c0, line
+6428); the committed translator regenerating 4 of 8 unchanged, reported
+and not decisive. run_slice_equal, exit 1 in 4 s, "sources 14 of 17 equal
+to the root, generated C 4 of 8 equal to its regeneration": the root-only
+.pyc, l1trans.lm1 (c35f8991 against 1dbf2303), p0.h (79510c54 against
+d60cfcf7); stg's own, parser and printTree .lm1.c equal to the root's
+fixed point, stg's l1trans.lm1.c (90b22204) against its regeneration
+(a69ab468). Both rows go green only through the lead's (b) and the
+refresh, and join the defaults with those landings. The S3 oracle re-cut
+to "no wake site exists" is written in wt0c_s3o on a66d1226, uncommitted
+(34 insertions, 103 deletions; one helper lmx_msg_test_wake_site before
+all eleven signals: ctx_visit_wake, wake_addr_locked, bind_reap_push,
+join_bind_worker, launch, launch_gate_go, launch_gate_refuse,
+stop_retire_walk, stop_event in exec.c; host_wake and host_shutdown in
+lmx_message_host.c), its red and green runs waiting for the next slot.
