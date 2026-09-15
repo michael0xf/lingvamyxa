@@ -4015,3 +4015,11 @@ capture-then-release ordering matches structurally); nothing exercised
 under concurrency. So Y1 takes the old emission shape (enter/leave with
 the cleanup unwinding) and supplies the runtime monitor: reentrant, on
 the mailbox object, Java-style, as Mikhail ruled.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only, for the ONE ROOT
+landing: ONE_ROOT_MIXA_EDITS.txt on sonnet/one-root-mixa: at c063fd00
+every line in mixa_manager outside vendor/ naming stg/l1_baseline or
+climbing to it (the 74 .ps1 runners, tests/l1_gaps/run.sh, the 4 .lm2
+and mixa_backend.h comments), file:line, current text, replacement with
+the root-relative path, grouped by the variable or helper carrying the
+path where one exists; any runner that copies or builds under stg
+flagged.
