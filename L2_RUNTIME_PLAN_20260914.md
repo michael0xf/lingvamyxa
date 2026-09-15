@@ -3771,3 +3771,15 @@ until each branch merges integration; its window scripts build fresh
 trees on current bases. Its verify-only land_seed.sh c063fd00 waits for
 the lead's machine slot after the S3 measurement and landing; then the
 pin re-installed and the filled plan entry.
+S3 MEASURE OK (the lead, 2026-09-15) on d6/s3-no-wake c41089f3 (measure_s3.sh,
+fresh worktree at 74146146, pin 0B3D85B3): red at 74146146, -LaneCheck
+exit 1 "LANE WAKE FAIL site=ctx_visit_wake owner=3" (14 s), plain parity
+PASS; green on 74146146 + c41089f3 (merge 8adcabe7), -LaneCheck exit 0
+with 0 LANE WAKE FAIL lines (53 s), plain parity PASS (54 s), tracked tree
+clean; falsifier, one line lmx_msg_test_wake_site("stop_event") put back
+in lmx_msg_exec_stop (acac8e30), -LaneCheck exit 1 "LANE WAKE FAIL
+site=stop_event owner=0", so the oracle is still armed on the green tree.
+Landing: land_s3.sh c063fd00 c41089f3 (allowlist the 8 exec/host/message
+files; port_message twice, run_lmx -Suite Message, run_model_scenario36,
+the 33 gates; push only if all green and the tip unmoved); then "landed",
+e9's slot, then the ONE ROOT section.
