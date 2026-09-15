@@ -3458,3 +3458,20 @@ green" (520 s); root buildCore, run_seed, run_gen green; root run_legacy_p0
 "corpus ok n=131, oracle=goldens/printTree.lm0"; pin installed;
 run_self_build PASS 8 of 8; run_slice_equal PASS 16 of 16 and 8 of 8; the
 33 gates running; the pin announcement follows at READY TO PUSH.
+PIN ANNOUNCED (the lead, 2026-09-15, before the push of (c) on its merge
+64c4af01, d6/slice-refresh 991c006f onto 79871822): new L1 pin
+0B3D85B36E72A5935CA43D76B71B8CBBB060AF041CBB6FAE805796595810B2A2 (298308
+bytes; stg gen3 built from the fixed point CBC779B1..., gen2 C == gen3 C);
+binary C:\Nyasha_Planet\lingvamyxa\build\pin_<hash>\l1trans.exe; rollback
+build\pin_722AC86E\l1trans.exe; install by copying into each worktree's
+stg\l1_baseline\build\l1trans\gen2\l1trans.exe and checking SHA-256 == the
+pin before the next pinned run; after the push L1_PIN.txt says 0B3D85B3 and
+L1_PIN_SOURCE.txt ties it to root l1trans.lm1.c 7ccb37c0. Measured on
+64c4af01: stg gate.ps1 "gate: all green" (520 s, gen0 half included); root
+buildCore/run_seed/run_gen green; root run_legacy_p0 "corpus ok n=131,
+oracle=goldens/printTree.lm0"; run_self_build PASS 8 of 8; run_slice_equal
+PASS 16 of 16 and 8 of 8; run_gates -L2MessageRoot GREEN 33 of 33 (562 s);
+run_l2trans "l2trans gen2 ok"; run_port_parser ok. The coordinator checked
+the binary's SHA-256 against the pin (equal, 298308 bytes) and installed
+it in the coordinator's worktrees with a stg gen2 directory, re-hashing
+each copy (exec-3a and review-3d 0B3D85B3, and the rest of build/fable).
