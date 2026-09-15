@@ -4758,3 +4758,17 @@ parent-schedule and prebind cases assert the parent's scheduler step
 (FIFO through sched_step), mapping properties that go, while the
 send/admission checks convert; the lead takes the exec selftest and
 cancel_spin_host.
+b5's D2 pass and the M_FIELDS correction landed on sonnet/inventories-2
+f3a4d236 at 00b04751 (checked by the coordinator): the M_FIELDS runtime_new
+flag now reads the decided "core creates no UI lane; mixa builds it as
+an ordinary child of R0 through map_child"; LOCK_REMOVAL_D2_SITES.txt
+counts 490 create_id-parameter sites: l2src core and selftests 397 (h
+3, lm1 9, lm2 10, exec_selftest.c 295, host_selftest.c 3, selftest.lm1
+77), tests/ 91 across 25 files (the __wrap_/__real_ ld-wrap pair in
+l2_message_root_driver.lm1 included), mixa_manager 2 real calls (plus 3
+doc-only mentions, one also naming the old stg path); every actual call
+passes a non-zero value except two passing a variable id
+(l2_c_scanners_parse_driver.lm1:657, the l2_message_root_driver.lm1:80
+wrap pass-through). D2 is therefore mostly mechanical (the parameter
+dropped from 3 declarations and every call), the two wrap sites to be
+read by the lead. b5 moves to sonnet/m-tests-send on 793c267f.
