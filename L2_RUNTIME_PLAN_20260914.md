@@ -6016,3 +6016,13 @@ unbound_held gone, the host lock gone, set_orphan_until resolved as
 ruled), as LOCK_REMOVAL_S6_1_REVIEW.txt on sonnet/s6-1-review. S6-1's
 code is go for the lead off 11f581e0; the machine is free for its
 builds.
+e9's isolation plan gains its stop condition (claude-0c/archive-hang
+b919895a; checked): the first hang in any stage ends the isolation
+(captured, killed, reported); a stage moves to the next only when clean
+after its full repetitions; a ref moved during a stage voids it and
+stops the isolation naming the ref; the coordinator's word stops it;
+budget A about 5 min, B 10, C 20, D 5, hard stop at 60 min reported as
+incomplete; each outcome mapped to a hypothesis (a hang first in A is
+H1, only in B H2, only in C the runner's surroundings, only in D H3,
+all clean "not reproduced" with the chance figures, H4 read from the
+capture). e9 now on claude-0c/archive-timeout off 11f581e0.
