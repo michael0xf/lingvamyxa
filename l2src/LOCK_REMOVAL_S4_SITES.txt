@@ -6,17 +6,28 @@ must do at each site (sonnet/s4-sites, 2026-09-15, doc-only, no machine).
 
 --- Counts
 
-nothing: 9 (create_prepare, child_link, child_chain_remove, handoff_
+nothing: 10 (create_prepare, child_link, child_chain_remove, handoff_
   supervision, end_turn's committed/tracked walk, live_handle's child_
-  heard_at write, map_child, adopt_mark/dispose_mark/reclaim_mark,
-  endp_retain/release)
-guard: 3 (orphan_children -- reached only through the reclaim_orphan/
-  orphan_sweep chain, which has no caller-identity check anywhere in it;
-  exec_bind_mode, whose public entry lmx_msg_exec_bind has none either;
-  emergency_cancel, as already ruled)
+  heard_at write, orphan_children -- see the 2026-09-15 update below,
+  map_child, adopt_mark/dispose_mark/reclaim_mark, endp_retain/release)
+guard: 2 (exec_bind_mode, whose public entry lmx_msg_exec_bind has no
+  caller-identity check; emergency_cancel, as already ruled)
 edge: 0
 move: 0
 Total: 12, matching the original census's own site count exactly.
+
+Update (2026-09-15, 6f relaying the coordinator, on sonnet/s4-guard-
+checks a3576110's own finding): orphan_children's entry below originally
+called for a guard. Checked directly for the red-first ticket: orphan_
+children has no public entry of its own; its only path is lmx_msg_drive
+(the sole caller of reclaim_orphan, the sole caller of orphan_children),
+and lmx_msg_drive already refuses a call from any thread but its own
+attaching one (lmx_message.lm1:2264-2265, lmx_msg_require_owner plus
+!holding_any) -- there is no violation a black-box call can reach, so by
+Mikhail's rule (a check the spec does not require is not added) no guard
+is added here. Site 3's own entry is left below exactly as first
+written, for the record of what was found and why the determination
+changed; only the counts above and this note reflect the ruling.
 
 Method: each site re-located by function name (all still exist; none
 renamed except reclaim_orphan's own inline re-rooting walk, factored out
@@ -72,12 +83,14 @@ field row / category: LmxMsg.first_child | h:146 | PAR | S4 (parent's own
   field); a sibling's own next_sibling | h:148 | PAR | S4
 action: nothing for this function itself -- it has no guard of its own by
   design and never has; the two paths that reach it without a caller-
-  identity check (child_unlink's one call site, orphan_children) are
-  covered by fixing the root: child_unlink's own single caller sits
+  identity check (child_unlink's one call site, orphan_children) are both
+  already closed at their own root: child_unlink's own single caller sits
   inside the same settle/dispose family already checked at sites 9-10,
-  and orphan_children's guard (site 5) closes its path too. Named here so
-  the falsifier finds the write under this function's own name, not
-  folded silently into site 5's count.
+  and orphan_children's path is already refused by lmx_msg_drive's own
+  require_owner guard (site 5's corrected entry below), not by a guard
+  added at or under orphan_children itself. Named here so the falsifier
+  finds the write under this function's own name, not folded silently
+  into site 5's count.
 
 site: lmx_msg_handoff_supervision
 file:line now: lmx_message.lm1:681-725, the writes at 717-722 (was
@@ -110,13 +123,18 @@ writer: whichever thread runs the sweep -- read directly this time, not
 field row / category: LmxMsg.parent | h:120 | L3T | S4; LmxMsg.orphan |
   h:193 | L3T of R0 | proposed | S5 (a later-stage field; the cross-lane
   write question here is independent of when the field itself goes)
-action: guard. Add the same two-branch check this file uses everywhere
-  else (holding R0's own turn, since orphans are R0's children per
-  1646's own comment, or the host outside any turn) to lmx_msg_orphan_
-  sweep's own entry -- the single caller of reclaim_orphan, so one guard
-  there closes orphan_children's path too and, per site 10 below, also
-  closes adopt_mark/dispose_mark/reclaim_mark's third (unguarded) call
-  path.
+action: nothing (guarded at lmx_msg_drive's require_owner). Corrected
+  2026-09-15: orphan_children's function body has no caller-identity
+  check of its own, as first written below, but it has no public entry
+  of its own either -- its only path is lmx_msg_drive (the sole caller
+  of reclaim_orphan, the sole caller of orphan_children), and drive
+  already refuses any thread but its own attaching one (lmx_message.
+  lm1:2264-2265, lmx_msg_require_owner plus !holding_any). A black-box
+  call cannot reach a violation here, so by Mikhail's rule (a check the
+  spec does not require is not added) no guard is added. This also
+  settles site 10 below: its third call path (through reclaim_orphan)
+  needed no separate guard either, and now needs none for the same
+  reason, not because a guard elsewhere would have covered it.
 
 --- 4. End-turn's writes onto its own children
 
@@ -203,8 +221,10 @@ action: nothing for the two named, checked entry points (dispose_child,
   original census's looser "settle_child itself gated" description: the
   gate is one level up, at settle_child's two real callers, not on
   settle_child); the third path (via reclaim_orphan) needs no separate
-  guard here once site 5's own guard lands on orphan_sweep, since that
-  is the only caller of the whole reclaim_orphan chain.
+  guard here either, corrected 2026-09-15: not because a guard lands on
+  orphan_sweep (none does, see site 5's corrected entry), but because
+  lmx_msg_drive -- the only caller of the whole reclaim_orphan chain --
+  already refuses any thread but its own attaching one.
 
 --- 7. The fourth clause, unaffected
 
