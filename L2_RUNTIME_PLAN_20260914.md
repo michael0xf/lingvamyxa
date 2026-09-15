@@ -3486,3 +3486,22 @@ verify run over the landed hash. Until then land_c.sh's run on 64c4af01
 (stg gate whole, root route, run_legacy_p0, run_self_build 8 of 8,
 run_slice_equal 16 of 16 and 8 of 8, 33 gates) is the record of (c) and of
 the seed row alike; 57's verify-only run is a re-measurement, not a gate.
+(c) LANDED (the lead, 2026-09-15): 64c4af01 on integration/main-absorbs-core
+(79871822..64c4af01; the coordinator's ls-remote agrees), the merge of
+d6/slice-refresh 991c006f carrying 0c's seed a30ed131, d6/stg-buildcore
+e5da89f5, the refresh, stg lm1/build at the fixed point, the pin and the
+four documents. Measured on the merge before the push: stg gate.ps1 all
+green (520 s), gen2 C == c_fixed_point, root buildCore/run_seed/run_gen,
+root run_legacy_p0 ok n=131 against the goldens, pin installed and
+hash-checked, run_self_build 8 of 8, run_slice_equal 16 of 16 and 8 of 8,
+run_gates -L2MessageRoot 33 of 33 (562 s), run_l2trans gen2 ok,
+run_port_parser ok; the push guards re-checked HEAD, the origin tip, a
+clean tree, L1_PIN.txt and both binary hashes. L1 pin 0B3D85B3... in force;
+rollback build\pin_722AC86E. Ruling: stage O (sonnet/stage-o 6eb6729a)
+lands on 64c4af01 now with land_o.sh as its verify (stg gate.ps1, the
+root chain, run_legacy_p0, run_self_build, run_slice_equal,
+run_p0_tree_contract, a CMake configure, the 33 gates, run_l2trans,
+run_port_parser, and the allowlist checked by status: one add, .gitignore
+and CMakeLists.txt modified, deletions only in lm2/, stg lm2/, the three
+dead lm1/build files and tests/ outside tests/l1); it does not wait for
+0c's return, whose verify-only run stays a re-measurement.
