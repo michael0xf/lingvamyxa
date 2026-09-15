@@ -679,8 +679,7 @@ end: msg_child_unlink
 # The child keeps its arena, mailbox, turn, record, path (its genesis) and its
 # ready flag (decision 18). Its parent capability (parent_msg and the address
 # parent) and its liveness window move to the new parent, all under the exec
-# lock (3b-9). A handed-over child is no create result of the new parent, so its
-# create_id is cleared. Addresses are the bootstrap's capabilities: "the new
+# lock (3b-9). Addresses are the bootstrap's capabilities: "the new
 # parent is live in the same runtime" is the check until 19.28.R2.
 fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsgAddr: child; LmxMsgAddr: new_parent) int
     @: LmxMsg p
@@ -721,7 +720,6 @@ fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsg
     msg_child_chain_remove(p, ch)
     msg_child_link(q, ch)
     ch\parent: q\addr
-    ch\create_id: 0U
     ch\child_heard_at: c.lmx_msg_now(rt)
     ch\live_query_id: 0U
     ch\live_query_pend_id: 0U
@@ -804,27 +802,6 @@ fn: msg_exec_take_addr (@: LmxMsgRuntime rt) unsigned
     c.lmx_msg_exec_flush_retire(rt)
     return: a
 end: msg_exec_take_addr
-
-fn: msg_find_create (@: LmxMsgRuntime rt; @: LmxMsg p; unsigned: create_id) @: LmxMsg
-    @: LmxMsg ch
-    if: rt = 0 || create_id = 0U
-        return: 0
-    if: p = 0
-        ch: rt\root
-        while: ch != 0
-            if: ch\create_id = create_id && ch\state != c.LMX_MSG_STATE_RELEASED
-                return: ch
-            ch: ch\next_sibling
-        ---
-        return: 0
-    ch: p\first_child
-    while: ch != 0
-        if: ch\create_id = create_id && ch\state != c.LMX_MSG_STATE_RELEASED
-            return: ch
-        ch: ch\next_sibling
-    ---
-    return: 0
-end: msg_find_create
 
 fn: msg_done_has (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
     int: i 0
@@ -1140,7 +1117,6 @@ fn: msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; @: LmxMsg p) int
 end: msg_assign_path
 
 fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
-    @: LmxMsg m
     @: LmxMsg slot
     @: LmxMsg ch
     @: LmxMsg p 0
@@ -1179,11 +1155,6 @@ fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: creat
             return: c.LMX_MSG_INVALID
         ---
     ---
-    m: msg_find_create(rt, p, create_id)
-    if: m != 0
-        \out: m\addr
-        c.lmx_msg_exec_unlock(rt)
-        return: c.LMX_MSG_OK
     initp: msg_copy_bytes(init, n)
     if: n != 0U && initp = 0
         c.lmx_msg_exec_unlock(rt)
@@ -1248,7 +1219,6 @@ fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: creat
     if: top != 0
         slot\parent: p\addr
     ---
-    slot\create_id: create_id
     slot\state: c.LMX_MSG_STATE_INACTIVE
     slot\committed: 0
     if: parent = 0U
@@ -1581,7 +1551,7 @@ end: msg_first_settled_child
 # Decision 17 with spec 19.29.6 (iii) and stage-5 clarification (iv): a child
 # of x still running when x is settled is re-rooted under R0 as an orphan,
 # closing by the chain. Its genesis (path, arena, mailbox, record, ready flag)
-# stays; its supervision (parent_msg, parent, create_id) goes to R0. x is
+# stays; its supervision (parent_msg, parent) goes to R0. x is
 # settled, so the lane that settles it writes x's family cells.
 sub: msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
     @: LmxMsg g
@@ -1597,7 +1567,6 @@ sub: msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
         else:
             msg_child_chain_remove(x, g)
             g\parent: rt\root\addr
-            g\create_id: 0U
             g\orphan: 1
             msg_child_link(rt\root, g)
             wake: 0

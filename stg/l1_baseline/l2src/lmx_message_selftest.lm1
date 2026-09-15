@@ -516,7 +516,6 @@ fn: main () int
     unsigned: c2 0U
     unsigned: g1 0U
     unsigned: c10 0U
-    unsigned: retr 0U
     unsigned: stale_p 0U
     unsigned: retried_p 0U
     int: k
@@ -562,14 +561,6 @@ fn: main () int
         st: lmx_msg_path_seg(rt2, c10, 2, @ seg)
         if: seg != 10U
             c.printf("multi-digit segment not 10\n")
-            fail: fail + 1
-        st: lmx_msg_create(rt2, p0, 2U, payload, 4U, @ retr)
-        if: retr != c2
-            c.printf("idempotent create changed sibling\n")
-            fail: fail + 1
-        st: lmx_msg_path_seg(rt2, retr, 2, @ seg)
-        if: seg != 2U
-            c.printf("idempotent create changed path\n")
             fail: fail + 1
         if: lmx_msg_path_seg(rt2, g1, 4, @ seg) != c.LMX_MSG_INVALID
             c.printf("path_seg accepted past depth\n")
