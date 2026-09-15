@@ -2245,3 +2245,13 @@ the Message's input and closing flags, and a Message failing with input
 still in its inbox would expose a miscount in the oracle itself. The
 generated-C regeneration gate and the lm2 chain's fixed point are planned
 rows awaiting O0's runner and base.
+S2's red measured on d6/lock-s2-red b3d16381 (the counter in the test build
+only; parity unchanged): reference.exe twice with LMX_LOOKUP_COUNT=1, both
+"lmx_message_exec ok", "lookup walks: C1=1812 C2=2 turn_other=426
+host=327729" and "... host=305125" (host varying with the selftest's
+address-polling wait loops from main; turn_other stable at 426; without the
+variable no report line). C1 and C2 stable and nonzero are the red. Since
+stage M removes run_child_turn and sched_step, which account for part of
+C1, S2's threading waits for M and its green is measured after M on the C1
+sites that remain. The machine is 57's (quiet on d7f3b569); the lead reads
+for O1's design with no builds.
