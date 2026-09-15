@@ -5722,3 +5722,16 @@ merged into d6/lock-s5, both touching exec.c near emergency_cancel;
 then s5_green.sh with 85953500 and 165 UAF runs); the machine stays the
 lead's until S5's tip is handed over; e9's gate record on 3e6fc02a
 after that; b5's S6 census re-base (doc-only) starts now at 3e6fc02a.
+S5's first green attempt red at compile (the lead, 2026-09-15, his miss):
+d6/lock-s5 47a22942 (e75263d7 plus a plain merge of 3e6fc02a) printed
+the probe 0/0/0/0 but run_port_message exited 1 at
+compile_lmx_message_exec, "implicit declaration of function
+'__atomic_fetch_add_n'" (gcc has generic load_n/store_n but fetch_add
+only as sized builtins; the helper was committed unbuilt). Fix
+2f137863: __atomic_fetch_add_4 on the unsigned next_addr plus a
+file-scope typedef failing the compile unless the field is 4 bytes
+(not __sync_fetch_and_add, since the probe excludes only __atomic_
+lines); exec.c syntax-checked with the port_message headers, 0
+warnings. s5_green.sh re-running on 2f137863 with 85953500 and 165 UAF
+runs; then the falsifier (release_slot's root-list unlink put back in
+lm1, root_list_loops >= 1); then the tip to the coordinator.
