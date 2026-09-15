@@ -869,8 +869,8 @@ A1-A3. The arena (19.29.2), after S6 or interleaved where a stage touches the sa
     A1. The Message's control record (LmxMsg, today calloc in slot_new 418) becomes a Structure in its own arena,
         created on the launching parent's lane; lmx_sched_record and lmx_root_record already follow that pattern.
     A2. The arena's bookkeeping (LmxOwnedRange and LmxMsgBlock records, calloc at 652/690/737/780/3633/3698) and the
-        Message's own arrays (path, init, roots) are allocated from that arena; done_from/done_id/done_n/done_cap are
-        DEL (Q2, deleted at Y3), not arena arrays.
+        Message's own arrays (path, init, roots) are allocated from that arena; the delivery-history arrays are DEL
+        (Q2, deleted at Y3), not arena arrays.
     A3. An admitted copy's arena (5.4). Mailbox entries (LmxMsgCopy) follow his answer.
     - Red for each: the balance test's two-cycle live count (ld --wrap) with the record's allocation counted as
       heap. It is red while any such record comes from malloc, and green once the arena's blocks are the only heap
