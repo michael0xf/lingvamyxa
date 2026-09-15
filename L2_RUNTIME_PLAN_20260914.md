@@ -6384,3 +6384,30 @@ order: the transport move onto R0's mailbox monitor with the hold-order
 check, the exec lock across lm1, lm2, exec.c, exec.h, the executor
 selftest and the 19.29.6 fixture (the last two rewritten), the probe
 at -Part 1 and the union base on the merge, then the tip.
+S6-1, one selftest case with no conversion (the lead, 2026-09-15): "release_slot
+changes the family tree under the exec lock" (exec_selftest.c about
+2936-3005, helpers release_tree_hook and release_tree_reader at 445-500)
+asserts that a foreign reader thread waiting on the exec lock inside
+the hook's window gets in only after the chain is whole
+(g_rel_reader_in_window 0; the walked chain consistent); with the lock
+gone there is nothing to wait on, and a foreign thread walking a
+parent's first_child/next_sibling chain while the parent's lane unlinks
+a child is the cross-lane read the one-writer rule forbids (spec
+11543-11553: the family chain is the parent's own cells), so the case
+tests the mechanism the stage removes. Ruling (coordinator): option 1,
+narrow it: the same runtime and end_turn(p, 0), the assertions on the
+host's own thread after it returns (the chain whole, c1 absent, count
+1, lmx_msg_find(rtt, tc1) = 0); the hook and the reader thread go; the
+loss (the interleaving claim) written in S6-1's section as replaced
+by the rule itself, not carried to Mikhail (a test of a removed
+mechanism, no model question). Also done and measured: the hold-order
+check in run_port_message.ps1 (9d98a9d3), proven able to fail first
+(dropping post_dead's single unlock turned the gate red naming the
+method); the deletion of the 191 + 191 + 20 lock lines from lm1, lm2
+and the 19.29.6 fixture leaves zero empty L1 blocks (an instrumented
+dry run whose matched + kept = total, after a first miscount the lead
+did not trust); the 19.29.6 fixture rewritten off the lock (M0's cells
+written only in its own turn; A and B each with their own
+arrived/saw/turns cell, reading only the other's), unbuilt. Next: the
+mechanical deletion in lm1, lm2, exec.c and exec.h, the three easy
+selftest sites, the probe and the union base.
