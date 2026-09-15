@@ -2078,3 +2078,21 @@ no second handle; Q2 follows, admission wakes through the platform queue,
 no separate primitive; both implementation within his words, not spec.
 Next for b5: fold the answers, the acceptance red-first on e88dab64, then
 the L2 code in mixa_manager's gate, merging through the lead.
+Stage O designed on Mikhail's (b) at d6/lock-removal c6293c68 (his sentence
+verbatim; facts from b5's 19a95a26): O1, trans_l1_statement.lm2 stops
+emitting the message-thread boilerplate, red first on the fixtures' pinned
+texts, green with the emission grep at 0 and the texts updated in the same
+commit; O2, what remains of own.lm2's runtime moves to L1 with the comment
+"the Message mechanism is temporarily not used here", its locks and
+condition variables gone, a part that cannot run without a lock stopping
+the stage as a lock-needing bug; O3, the deletions (the REST admit and
+provider path, parser.lm2's registry component, the 13 C tests and the
+module-only fixtures, the buildCore steps, CMake's refresh_own_lm1), each
+test named; proof the grep at 0 for lm_mutex_, lm_condition_,
+lm_native_mutex_, lm_native_condition_ and lm_message_thread_ and the lm2
+chain green. Approved 2026-09-15; owner b5 (sonnet/stage-o off e88dab64,
+one commit per step), landing the lead's with the allowlist lm2/,
+stg/l1_baseline/lm2/, tests/ and CMakeLists.txt, nothing in l2src; order
+for b5: O1-O3 before the UI-lane scheduler's code. lane_oracle's first
+landing run stopped on the lead's own allowlist check (sort's locale
+ordering), fixed with LC_ALL=C and relaunched.
