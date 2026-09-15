@@ -32,7 +32,8 @@ include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exe
 #
 # Spelling differences from the oracle, none behavioural:
 # - Internal calls target the unit's own methods, including the oracle's
-#   twelve self-calls of lmx_msg_exec_ready through c..
+#   eight self-calls of lmx_msg_exec_ready and four of lmx_msg_exec_ready_msg
+#   through c. (S2 moved end_turn's four child calls to the record form).
 # - LMX functions of the predef'd modules (visit, liveness, blocks, ranges,
 #   path storage, graph copy install, chars) are called by their own names;
 #   C functions of exec.c / host.c and the test hooks go through c.; C
@@ -768,11 +769,9 @@ fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsg
     return: c.LMX_MSG_OK
 end: msg_handoff_supervision
 
-fn: msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
-    @: LmxMsg m
-    if: rt = 0 || addr = 0U
-        return: 0
-    m: msg_self_or_find(rt, addr)
+# S2: the record form. A caller that holds the Message (end_turn's walk over
+# its own children) passes it; nothing resolves an address.
+fn: msg_exec_is_runnable_msg_locked (@: LmxMsg m) int
     if: m = 0
         return: 0
     if: m\state = c.LMX_MSG_STATE_STOPPED || m\state = c.LMX_MSG_STATE_DEAD || m\state = c.LMX_MSG_STATE_RELEASED
@@ -784,7 +783,23 @@ fn: msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
         return: 1
     ---
     return: 0
+end: msg_exec_is_runnable_msg_locked
+
+fn: msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
+    if: rt = 0 || addr = 0U
+        return: 0
+    return: msg_exec_is_runnable_msg_locked(msg_self_or_find(rt, addr))
 end: msg_exec_is_runnable_locked
+
+fn: msg_exec_is_runnable_msg (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    int: r
+    if: rt = 0 || m = 0
+        return: 0
+    c.lmx_msg_exec_lock(rt)
+    r: msg_exec_is_runnable_msg_locked(m)
+    c.lmx_msg_exec_unlock(rt)
+    return: r
+end: msg_exec_is_runnable_msg
 
 fn: msg_exec_is_runnable (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
     int: r
@@ -814,6 +829,15 @@ sub: msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
     # S3 (no wake): admission into the mailbox is all; the owner looks into it in its own round.
     c.lmx_msg_exec_unlock(rt)
 end: msg_exec_ready
+
+# S2: the record form of exec_ready, for a caller that holds the Message.
+sub: msg_exec_ready_msg (@: LmxMsgRuntime rt; @: LmxMsg m)
+    if: rt = 0 || m = 0
+        return
+    c.lmx_msg_exec_lock(rt)
+    m\ready: 1
+    c.lmx_msg_exec_unlock(rt)
+end: msg_exec_ready_msg
 
 fn: msg_done_has (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
     int: i 0
@@ -1481,7 +1505,7 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     # The unbind is the settling lane's write of the parent's mapping cell
     # (19.28.R2.2 (2), 19.29.6), so it cannot be refused here; a TEST tripwire
     # makes a wrong-lane release loud under the lane check.
-    ust: c.lmx_msg_exec_unbind(rt, m\addr)
+    ust: c.lmx_msg_exec_unbind_msg(rt, m)
     c.lmx_msg_test_unbind_refused(rt, m, ust, "release_slot")
     # Stage 3b-9: every family-tree reader holds the exec lock, so the tree
     # changes under it. Unbind stays outside: it joins reaps on the host.
@@ -1603,21 +1627,38 @@ fn: msg_orphan_deadline (@: LmxMsgRuntime rt; unsigned: now) unsigned
     return: d
 end: msg_orphan_deadline
 
-fn: msg_settle_child (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: LmxMsg child) int
+# S2: a child address named in its parent's own turn resolves on that parent's
+# child list; a caller without that turn (the host) resolves through the tree.
+fn: msg_child_of_caller (@: LmxMsgRuntime rt; LmxMsgAddr: parent; LmxMsgAddr: child) @: LmxMsg
     @: LmxMsg p
+    @: LmxMsg ch
+    p: c.lmx_msg_turn_self(rt)
+    if: p = 0 || p\addr != parent
+        return: msg_self_or_find(rt, child)
+    ch: p\first_child
+    while: ch != 0
+        if: ch\addr = child
+            return: ch
+        ch: ch\next_sibling
+    ---
+    return: 0
+end: msg_child_of_caller
+
+# S2: the settle by records. p is the parent's own record (its turn's, or the
+# child being disposed in the recursion), so no address is resolved inside.
+fn: msg_settle_child_msg (@: LmxMsgRuntime rt; @: LmxMsg p; @: LmxMsg child) int
     @: LmxMsg g
     int: ok
     int: failed
     int: st
     c.lmx_msg_exec_lock(rt)
-    p: msg_self_or_find(rt, parent)
     ok: p != 0 && child\parent_msg = p && p\disposed = 0 && child\disposed = 0 && child\native_users = 0 && c.lmx_msg_running_load(child) = 0 && child\handoff_ready != 0
     c.lmx_msg_exec_unlock(rt)
     if: ok = 0
         return: c.LMX_MSG_INVALID
     g: msg_first_settled_child(rt, child)
     while: g != 0
-        st: msg_settle_child(rt, child\addr, g)
+        st: msg_settle_child_msg(rt, child, g)
         if: st != c.LMX_MSG_OK
             return: st
         g: msg_first_settled_child(rt, child)
@@ -1627,14 +1668,23 @@ fn: msg_settle_child (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: LmxMsg child) 
     failed: c.lmx_msg_success_load(child) = 0 && (child\init != 0 || child\blocks != 0 || child\ranges != 0)
     c.lmx_msg_exec_unlock(rt)
     if: failed != 0
-        st: c.lmx_msg_exec_adopt_mark(rt, parent, child\addr)
+        st: c.lmx_msg_exec_adopt_mark_msg(rt, p, child)
     else:
-        st: c.lmx_msg_exec_dispose_mark(rt, parent, child\addr)
+        st: c.lmx_msg_exec_dispose_mark_msg(rt, p, child)
     ---
     if: st != c.LMX_MSG_OK
         return: st
     msg_release_slot(rt, child)
     return: c.LMX_MSG_OK
+end: msg_settle_child_msg
+
+# The address form: the parent is found once, and the settle runs on records.
+fn: msg_settle_child (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: LmxMsg child) int
+    @: LmxMsg p
+    c.lmx_msg_exec_lock(rt)
+    p: msg_self_or_find(rt, parent)
+    c.lmx_msg_exec_unlock(rt)
+    return: msg_settle_child_msg(rt, p, child)
 end: msg_settle_child
 
 # The parent releases a direct child: the child is settled (a failed arena is
@@ -1650,7 +1700,7 @@ fn: msg_dispose_child (@: LmxMsgRuntime rt; LmxMsgAddr: parent; LmxMsgAddr: chil
         ---
     ---
     c.lmx_msg_exec_lock(rt)
-    m: msg_self_or_find(rt, child)
+    m: msg_child_of_caller(rt, parent, child)
     c.lmx_msg_exec_unlock(rt)
     if: m = 0
         return: c.LMX_MSG_INVALID
@@ -1670,7 +1720,7 @@ fn: msg_adopt_failed (@: LmxMsgRuntime rt; LmxMsgAddr: parent; LmxMsgAddr: child
         ---
     ---
     c.lmx_msg_exec_lock(rt)
-    m: msg_self_or_find(rt, child)
+    m: msg_child_of_caller(rt, parent, child)
     ok: m != 0 && c.lmx_msg_success_load(m) = 0 && (m\init != 0 || m\blocks != 0 || m\ranges != 0)
     c.lmx_msg_exec_unlock(rt)
     if: ok = 0
@@ -1687,7 +1737,7 @@ fn: msg_reclaim_orphan (@: LmxMsgRuntime rt; @: LmxMsg m) int
     int: st
     g: msg_first_settled_child(rt, m)
     while: g != 0
-        st: msg_settle_child(rt, m\addr, g)
+        st: msg_settle_child_msg(rt, m, g)
         if: st != c.LMX_MSG_OK
             return: st
         ---
@@ -1759,7 +1809,7 @@ sub: msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
     while: ch != 0
         if: ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED && ch\state != c.LMX_MSG_STATE_STOPPED
             ch\closing: 1
-            msg_exec_ready(rt, ch\addr)
+            msg_exec_ready_msg(rt, ch)
         ---
         ch: ch\next_sibling
     ---
@@ -1828,7 +1878,7 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
             ch: m\first_child
             while: ch != 0
                 c.lmx_msg_running_store(ch, 0)
-                msg_exec_ready(rt, ch\addr)
+                msg_exec_ready_msg(rt, ch)
                 ch: ch\next_sibling
             ---
             msg_request_children_close(rt, who)
@@ -1844,8 +1894,8 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
                 ch\committed: 1
                 ch\child_heard_at: c.lmx_msg_now(rt)
             ---
-            if: msg_exec_is_runnable(rt, ch\addr) != 0
-                msg_exec_ready(rt, ch\addr)
+            if: msg_exec_is_runnable_msg(rt, ch) != 0
+                msg_exec_ready_msg(rt, ch)
             ---
         ---
         ch: ch\next_sibling
@@ -1875,7 +1925,7 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         ch: m\first_child
         while: ch != 0
             c.lmx_msg_running_store(ch, 0)
-            msg_exec_ready(rt, ch\addr)
+            msg_exec_ready_msg(rt, ch)
             ch: ch\next_sibling
         ---
         msg_request_children_close(rt, who)
@@ -1960,7 +2010,8 @@ fn: msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy entry) int
     msg_q_push(@ dest\inbox, @ dest\inbox_tail, put)
     c.lmx_msg_mail_unlock(dest)
     c.lmx_msg_test_on_admit(dest_addr, put)
-    msg_exec_ready(rt, dest_addr)
+    # S2: dest is pinned until the release below; ready it by its record.
+    msg_exec_ready_msg(rt, dest)
     c.lmx_msg_endp_release(dest)
     return: c.LMX_MSG_OK
 end: msg_admit_one

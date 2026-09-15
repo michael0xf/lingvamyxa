@@ -116,6 +116,9 @@ typedef struct LmxMsgExec {
 static void bind_wait_retire_locked(LmxMsgBindWait *w);
 static void exec_yield(void);
 static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr);
+static int launch_ctx_thread_rec(LmxMsgRuntime *rt, LmxMsg *m);
+static LmxMsg *caller_msg_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
+static LmxMsg *child_of_locked(LmxMsg *p, LmxMsgAddr child);
 #if defined(_WIN32)
 static DWORD WINAPI context_worker(void *arg);
 #endif
@@ -1713,7 +1716,7 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    m = msg_at_addr(rt, addr);
+    m = caller_msg_locked(rt, addr);
     if (m == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
@@ -1739,13 +1742,13 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
         need = launch != 0 && e->contexts_live != 0 && bind_has_worker(rec) == 0;
         lmx_msg_exec_unlock(rt);
         if (need != 0) {
-            st = launch_ctx_thread(rt, addr);
+            st = launch_ctx_thread_rec(rt, m);
             if (st != LMX_MSG_OK) {
                 return st;
             }
         }
         if (kick != 0) {
-            lmx_msg_exec_ready(rt, addr);
+            lmx_msg_exec_ready_msg(rt, m);
         }
         return LMX_MSG_OK;
     }
@@ -1780,10 +1783,10 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
     }
 #endif
     if (live != 0) {
-        int st = launch_ctx_thread(rt, addr);
+        int st = launch_ctx_thread_rec(rt, m);
         if (st != LMX_MSG_OK) {
             lmx_msg_exec_lock(rt);
-            rec = rec_at_addr_locked(e, addr);
+            rec = bind_rec_locked(m);
             if (rec != 0 && bind_has_worker(rec) == 0) {
                 unbind_slot_locked(e, rec);
             }
@@ -1792,7 +1795,7 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
         }
     }
     if (kick != 0) {
-        lmx_msg_exec_ready(rt, addr);
+        lmx_msg_exec_ready_msg(rt, m);
     }
     return LMX_MSG_OK;
 }
@@ -1803,6 +1806,35 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
 
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     return lmx_msg_self_or_find(rt, addr);
+}
+
+/* S2: p's direct child at child, from p's own child list. Caller holds the exec
+ * lock (the tree changes under it). */
+static LmxMsg *child_of_locked(LmxMsg *p, LmxMsgAddr child) {
+    LmxMsg *x;
+    for (x = p != 0 ? p->first_child : 0; x != 0; x = x->next_sibling) {
+        if (x->addr == child) {
+            return x;
+        }
+    }
+    return 0;
+}
+
+/* S2: an address named in a turn: the turn's own record, then its own child
+ * list; anything else (the host, an ancestor's reach) resolves as before. */
+static LmxMsg *caller_msg_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsg *self = lmx_msg_turn_self(rt);
+    LmxMsg *m;
+    if (self != 0) {
+        if (self->addr == addr) {
+            return self;
+        }
+        m = child_of_locked(self, addr);
+        if (m != 0) {
+            return m;
+        }
+    }
+    return msg_at_addr(rt, addr);
 }
 
 static void native_leave_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
@@ -1995,6 +2027,18 @@ static void *context_worker(void *arg);
  * pack complete and worker_on already set, so it waits on no gate; its handle is
  * closed (detached) at once, and it leaves on its own round checks. */
 static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    int st;
+    if (exof(rt) == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    st = launch_ctx_thread_rec(rt, msg_find_any_locked(rt, addr));
+    lmx_msg_exec_unlock(rt);
+    return st;
+}
+
+/* S2: the launch for a caller that holds the Message (map_child, exec_bind). */
+static int launch_ctx_thread_rec(LmxMsgRuntime *rt, LmxMsg *m) {
     LmxMsgExec *e = exof(rt);
     LmxMsgCtxPack *pack;
     LmxMsgExecBind *r;
@@ -2016,7 +2060,7 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         }
     }
 #endif
-    r = rec_at_addr_locked(e, addr);
+    r = bind_rec_locked(m);
     if (r == 0 || e->stopping != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
@@ -2039,7 +2083,7 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         return LMX_MSG_NOMEM;
     }
     pack->rt = rt;
-    pack->addr = addr;
+    pack->addr = m->addr;
     pack->wait = r->wait;
     r->wait->worker_on = 1;
     e->nworkers += 1;
@@ -2437,6 +2481,31 @@ int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     return LMX_MSG_OK;
 }
 
+/* S2: exec_unbind for a caller that holds the Message (release_slot, while m is
+ * still in its family): m's own record, no address resolved. */
+int lmx_msg_exec_unbind_msg(LmxMsgRuntime *rt, LmxMsg *m) {
+    LmxMsgExec *e = exof(rt);
+    LmxMsgExecBind *r;
+    if (e == 0 || m == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    if (mapping_authority_locked(rt, m) == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    r = bind_rec_locked(m);
+    if (r == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_OK;
+    }
+    lmx_msg_test_lane_write(rt, m->parent_msg, "unbind:record");
+    unbind_slot_locked(e, r);
+    lmx_msg_exec_unlock(rt);
+    lmx_msg_exec_flush_retire(rt);
+    return LMX_MSG_OK;
+}
+
 /* M: the bootstrap's one turn of a bound, unmapped Message on this thread (claim
  * its record, run, release). No Message's turn runs another Message's turn: the
  * only caller is run_entry_turn, on the host thread outside any turn, which has
@@ -2534,7 +2603,8 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
     }
     lmx_msg_exec_lock(rt);
     p = msg_at_addr(rt, parent);
-    c = msg_at_addr(rt, child);
+    /* S2: the child from the parent's own child list. */
+    c = child_of_locked(p, child);
     if (p == 0 || c == 0 || c->parent_msg != p) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
@@ -2552,7 +2622,7 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
         }
         c->mapped = 1;
         /* S3 (R6): the launch runs inside this lock hold. */
-        st = launch_ctx_thread(rt, child);
+        st = launch_ctx_thread_rec(rt, c);
         if (st != LMX_MSG_OK) {
             c->mapped = 0;
         }
@@ -2584,15 +2654,29 @@ static int lifecycle_authority(LmxMsgRuntime *rt, LmxMsgAddr who) {
 /* Decision 17 with spec 19.29.8: the C half of settling a failed direct child,
  * called by lmx_msg_settle_child after it checked authority and the child's own
  * settled children were settled into it. On refusal nothing has moved. */
+static int adopt_mark_pc(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c);
+
 int lmx_msg_exec_adopt_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
-    LmxMsg *p;
-    LmxMsg *c;
+    int st;
     if (rt == 0) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    p = lmx_msg_self_or_find(rt, parent);
-    c = lmx_msg_self_or_find(rt, child);
+    st = adopt_mark_pc(rt, lmx_msg_self_or_find(rt, parent), lmx_msg_self_or_find(rt, child));
+    lmx_msg_exec_unlock(rt);
+    return st;
+}
+
+/* S2: adopt_mark for a caller that holds both records (settle_child). */
+int lmx_msg_exec_adopt_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c) {
+    if (rt == 0) {
+        return LMX_MSG_INVALID;
+    }
+    return adopt_mark_pc(rt, p, c);
+}
+
+static int adopt_mark_pc(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c) {
+    lmx_msg_exec_lock(rt);
     if (p == 0 || c == 0 || c->parent_msg != p || p->disposed != 0 || c->disposed != 0
         || c->native_users != 0 || lmx_msg_success_load(c) != 0
         || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0) {
@@ -2834,15 +2918,29 @@ int lmx_msg_deliver_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
 /* Decision 17 with spec 19.29.8: the C half of settling a direct child whose
  * storage is reclaimed (a successful history, or nothing to adopt), called by
  * lmx_msg_settle_child after it checked authority. */
+static int dispose_mark_pc(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c);
+
 int lmx_msg_exec_dispose_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
-    LmxMsg *p;
-    LmxMsg *c;
+    int st;
     if (rt == 0) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    p = lmx_msg_self_or_find(rt, parent);
-    c = lmx_msg_self_or_find(rt, child);
+    st = dispose_mark_pc(rt, lmx_msg_self_or_find(rt, parent), lmx_msg_self_or_find(rt, child));
+    lmx_msg_exec_unlock(rt);
+    return st;
+}
+
+/* S2: dispose_mark for a caller that holds both records (settle_child). */
+int lmx_msg_exec_dispose_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c) {
+    if (rt == 0) {
+        return LMX_MSG_INVALID;
+    }
+    return dispose_mark_pc(rt, p, c);
+}
+
+static int dispose_mark_pc(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c) {
+    lmx_msg_exec_lock(rt);
     if (p == 0 || c == 0 || c->parent_msg != p || p->disposed != 0 || c->native_users != 0
         || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0 || c->disposed != 0) {
         lmx_msg_exec_unlock(rt);

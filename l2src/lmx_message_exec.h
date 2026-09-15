@@ -31,6 +31,8 @@ LmxMsg *lmx_msg_slot_new(void);
 int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity);
 int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr);
+/* S2: unbind by the Message's own record, for a caller that holds it. */
+int lmx_msg_exec_unbind_msg(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt);
 int lmx_msg_exec_contexts_live(LmxMsgRuntime *rt);
 int lmx_msg_exec_stop(LmxMsgRuntime *rt);
@@ -45,10 +47,17 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_last_status(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_is_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_is_runnable_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
+/* S2: record forms, for a caller that already holds the Message. */
+int lmx_msg_exec_is_runnable_msg(LmxMsgRuntime *rt, LmxMsg *m);
+int lmx_msg_exec_is_runnable_msg_locked(LmxMsg *m);
+void lmx_msg_exec_ready_msg(LmxMsgRuntime *rt, LmxMsg *m);
 void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt);
 int lmx_msg_exec_msg_bound(LmxMsg *m);
 int lmx_msg_exec_adopt_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_exec_dispose_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
+/* S2: the marks by records, for a caller that holds parent and child. */
+int lmx_msg_exec_adopt_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c);
+int lmx_msg_exec_dispose_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c);
 int lmx_msg_exec_reclaim_mark(LmxMsgRuntime *rt, LmxMsg *m);
 /* D1 allocation walk of rt->slots. */
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt);
