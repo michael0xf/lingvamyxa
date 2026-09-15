@@ -6008,3 +6008,11 @@ fixture cannot reach it that way, the function stays as a test hook
 guarded like drive (require_owner and !holding_any), the lead reading
 the fixture and choosing; either way one writer lane and no
 contradiction remains.
+Standing ticket to b5 (the coordinator, 2026-09-15): when S6-1's tip is
+handed over, review its diff against 11f581e0 with the pre-read (every
+DELETE row's hold gone, no hold left whose row was not DELETE, the
+atomics on nworkers/contexts_live/stopping/stopped/no_retire,
+unbound_held gone, the host lock gone, set_orphan_until resolved as
+ruled), as LOCK_REMOVAL_S6_1_REVIEW.txt on sonnet/s6-1-review. S6-1's
+code is go for the lead off 11f581e0; the machine is free for its
+builds.
