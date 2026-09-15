@@ -247,6 +247,30 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       Once the emitted turn reads lmx_msg_turn_self, mode 3 injects nothing and goes red. S2 therefore retargets the
       mode 3 wrap onto lmx_msg_turn_self and adds that symbol to run_l2_message_root.ps1:530's wrap list. Both
       files are in S2's allowlist, and the case is added to e9's list.
+    - Threading plan (d6, 2026-09-15; read at integration 1bdbfca0, not yet coded; S2's code starts after D2 lands).
+      Every C1 site has the same shape: the caller already holds the child's LmxMsg and passes its addr, and the
+      callee finds it again.
+      - end_turn and request_children_close walk m\first_child and call exec_is_runnable(rt, ch\addr) and
+        exec_ready(rt, ch\addr). Each callee does lmx_msg_self_or_find again: the 48 + 24 walks.
+        Plan: record forms lmx_msg_exec_is_runnable_msg_locked(rt, m) and lmx_msg_exec_ready_msg(rt, m). The
+        address forms stay as thin wrappers for host and test callers.
+      - map_child finds p and c with msg_at_addr, then launch_ctx_thread(rt, child) finds the record again
+        (rec_at_addr_locked): 12 + 11 walks.
+        Plan: p is the turn's own record (lmx_msg_turn_self, already checked by holding_turn), c is found on
+        p\first_child, and the launch takes c (launch_ctx_thread_msg).
+      - exec_bind_mode finds m with msg_at_addr (5), then launches by addr (4) and kicks by addr.
+        Plan: m is found on the calling turn's own child list when a turn is held (its own record if addr is the
+        turn itself). With no turn (the host, whose walks the counter classes as host), the lookup stays. The
+        launch and the kick take m.
+      - lmx_msg_exec_unbind finds m with msg_at_addr and the record again with rec_at_addr_locked (4 walks,
+        release_slot from end_turn and settle_child, whose callers hold ch).
+        Plan: an unbind_msg_locked(e, m) form that reads bind_rec_locked(m); release_slot passes ch.
+      - lmx_msg_exec_dispose_mark finds p and c with lmx_msg_self_or_find (2), and dispose_child and settle_child
+        (1 each) likewise.
+        Plan: p is the turn's own record, c comes from p's child list, and the chain passes c down.
+      What the green then measures: no walk of the runtime's tree from a turn's C1/C2 site. A scan of the caller's
+      own child list for a child address is not a lookup the counter hooks, and it is the design's "parent's child
+      pointer"; stated here so that nobody reads the green as more than that.
 
 S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and every wake-matching rule above.
     Mikhail, verbatim (relayed by the coordinator): "тупейший вложенный synchronized по локу на чтение и запись как в
