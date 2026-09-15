@@ -5861,3 +5861,16 @@ step is bounded by the gates' 1200 s until run_candidate_c_scanners.ps1
 gets its own 120 s, a repo edit left to e9's isolation result;
 landings use land_base3.sh from now. The coordinator's own monitor
 watches the integration tip and the gate logs' mtimes every minute.
+S5 LANDED (the lead, 2026-09-15; checked by the coordinator on origin:
+integration 8eeb094f, the tag peels to 7985e2a2, no root_seq in the core
+sources): merge 7985e2a2 (d6/lock-s5 1f5b0c82 onto 3e6fc02a, 6 M); the
+union base plus lmx_cancel green on the merge: self-build PASS 8 of 8,
+gates GREEN 31 of 31 in 540 s (c_scanners included, no hang), port_message
+plain and -LaneCheck PASS (102 methods), run_l2trans ok in 279 s,
+run_port_parser ok, run_mixa ok, the ingress harness ok, lmx_cancel ok;
+tag selfbuild/7985e2a2 and the log commit on d6/lock-s5-landing-7985e2a2;
+the probe not folded in. Six stages of the lock half are in (S3, M,
+D2, S2, S4, S5): the runtime keeps no cross-Message list but slots/n
+(S6) and transport (Y). Next: main; S6's section on b5's re-based
+census 0783c86b and the S6 pre-read; e9's gate record on 8eeb094f; the
+machine is free.
