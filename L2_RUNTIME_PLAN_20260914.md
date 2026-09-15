@@ -4730,3 +4730,11 @@ names itself in the log; (2) pre-existing go cells in a test M converts
 (orphan_mapped_17's g_go holding C inside its turn, and the like) go in
 the same commit, the property restated by flag reads as in
 family_release_17.
+Conversion tickets pre-issued (the coordinator, 2026-09-15), to start at
+the lead's core commit on d6/m-sequential: b5, sonnet/m-tests-send (the
+send_local, family_handoff and adopt_unrooted tests, run_msg_send_local
+and run_msg_family_handoff as the measure); e9, claude-0c/m-tests-scenario
+(the scenario36 set of seven, run_model_scenario36 as the measure), both
+under the two loop rulings and the go-cell rule, each pushing a branch
+for the lead to merge, each falsified by a grep for Sleep(, GetTickCount,
+WaitForSingleObject and g_go giving 0 on the converted tests.
