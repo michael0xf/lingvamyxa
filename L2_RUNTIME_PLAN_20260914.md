@@ -6157,3 +6157,31 @@ unbound branch, exec_unbound_close's impersonation and unbound_held go.
 (a) is mechanical after this: the dry run found 0 empty L1 blocks from
 deleting the 197+197+20 lock lines; the committed parts (b, c,
 set_orphan_until, the archive timeout) stand.
+Mikhail (2026-09-15, verbatim): "а какой исполнитель владеет Message с остановленным родителем — не называет" -- в спеке написано что ребенок опрашивает родителя и если родитель не доступен ил  остановлен -- закрывается сам So the coordinator's "owning
+executor" ruling above is withdrawn: the spec answers it (the child
+liveness poll, 13147-13161: each non-root Message periodically checks
+its parent and, if the parent is absent, DEAD, STOPPED, RELEASED or
+sustained-nonresponsive, requests its own orderly close; and the
+normal parent close requests the children's close at the parent's
+end_turn). The owner of a Message under a stopped parent is the
+Message itself, on its own lane. Consequences for S6-1 (no lock, wait
+or signal; the lead's design): "an idle nonexecuting committed child"
+is not a model state: a committed child is launched (mapped, its loop
+running) at its commit or by its parent's supervision step in the
+parent's own rounds, and from then on it polls its parent and closes
+itself when the parent is stopped or gone, requesting its own
+children's close at its end_turn (the cascade, each level on its own
+lane: H is asked only by G1's close, G1 closes itself after P's stop);
+a child not yet launched is its creator's data, released or settled by
+the creator's lane at the creator's close (a failed or closing parent
+turn releases its uncommitted and unlaunched children); the
+emergency-cancelled unbound child of R0 is R0's data, settled in R0's
+turn. So no executor closes another Message's idle descendants: drive's
+unbound branch, exec_unbound_close's impersonation and unbound_held go
+with nothing in their place but the children's own polls and the
+creator's settle; the four fixtures convert to one of the two worlds
+they test (launched children closing themselves by the poll cascade,
+or unlaunched children settled with their parent), the property "C did
+not reach its grandchild H" holding in the launched world by
+construction. Lesson (coordinator): the gap was not in the spec; I
+ruled before re-reading the liveness poll section.
