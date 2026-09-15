@@ -677,6 +677,19 @@ D. create_id and create-retry idempotence deleted (X), with S1's dead-code kind.
       argument fewer), so the gate that builds it is red.
     - d6 merges b5's branch when green and lands D2 with the S-landing pattern (self-build tag and log, the gates,
       port_message plain and -LaneCheck, run_l2trans, run_mixa).
+    - First landing attempt, RED, not pushed (2026-09-15): land_base.sh with the union base plus lmx_cancel,
+      sonnet/d2-create-id 29f58f76 merged as d5343746 onto 1bdbfca0.
+      Green on the merge: run_self_build 8 of 8 (tag selfbuild/d5343746, log ed00470d on
+      sonnet/d2-create-id-landing, both pushed by the self-build rule), gates 31 of 31 in 549 s, run_port_message
+      plain and -LaneCheck PASS, run_l2trans, run_port_parser, run_lmx -Suite Cancel.
+      Red: run_mixa and run_ingress_harness, both at gcc: "too few arguments to function 'lmx_msg_create'" at
+      mixa_ingress_host_harness.c:223 and :228.
+      Cause: the harness builds only against the vendored v0 seam (mixa_manager/vendor/lmx_msg_host_ingress_v0:
+      lmx_message.h, .lm1, _host.c, _host.h, sha256-pinned in MANIFEST.txt and checked by the runner). v0 keeps
+      create_id, and D2's harness edit followed live l2src.
+      Fix (asked of b5): revert only the harness hunk. SPEC_DIGEST's edit stays, and the vendor copy is untouched.
+      The per-stage set this document named above would have caught it only through run_mixa; the ingress harness
+      is in the union base.
 
 O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced by the one core (X).
     Mikhail, verbatim (2026-09-15), to its real extent: "3- да, удаляйте целиком".
