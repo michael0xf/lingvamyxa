@@ -3132,3 +3132,29 @@ Interlocked refcount primitives (no per-site order-free showing claimed),
 m->mail (493/522) the one kept; (b)'s measured result recorded there
 (the fixed point, the four blobs, branch 8cd61352, the pinned-oracle note).
 land_b running.
+(c) needs an L1 pin promotion (the lead, read at 7200294b): L1_PIN.txt holds
+722AC86E, the SHA-256 of stg/l1_baseline/build/l1trans/gen2/l1trans.exe,
+built from stg's fixed-point C 25DC4758; the 21 core runners and the 52
+mixa runners throw on a mismatch before building; the refresh makes stg's
+gen2 C the root's fixed point CBC779B1, so the gen2 binary changes and,
+gcc being non-reproducible here, the new pin is whatever the refresh build
+produces; until it sits at gen2 and L1_PIN.txt names it, every pinned
+runner in every worktree throws. Approved plan, §18's procedure: the
+refresh run builds gen1-gen3 from the refreshed stg l1src, requires gen2 C
+equal to gen3 C, takes the gen3 binary as the candidate; L1_PIN.txt := its
+hash in the same commit as the sources, plus a second line naming the
+source fixed point it was built from (the committed root l1trans.lm1.c's
+blob 7ccb37c0 and the C fixed point CBC779B1), the byte hash being the
+distribution key only; the landing installs the candidate at wti's stg
+gen2 and the root gen3, hash-checked, keeps 722AC86E at
+build/pin_722AC86E/ for rollback, runs the full gate on the new pin
+(run_gates -L2MessageRoot 33 of 33, run_l2trans, run_port_parser,
+run_self_build 8/8, run_slice_equal PASS, stg gate.ps1, the root tests/l1
+chain, run_legacy_p0) and updates the documents naming 722AC86E as current
+(CORE_LEAD_INSTRUCTION §4.4 ru/en, FABLE_5_1_CORE_HANDOFF, model §41),
+dated evidence kept. Decision: the distributed binary lives at the main
+checkout's build/pin_<hash>/l1trans.exe (ignored), the hash in
+L1_PIN.txt; each session copies it into its worktrees' stg gen2 and checks
+the hash before its next run. Sequencing: all four sessions told right
+before the landing's push and again after it; nothing of (c) before (b)
+lands and 0c's cold green passes.
