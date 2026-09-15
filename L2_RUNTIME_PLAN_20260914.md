@@ -6366,3 +6366,21 @@ and the cell only catches a violation. The lead checks the fixtures'
 cases against that scope and names any with both lanes. Next: build
 port_message and the Message suite, the transport move onto R0's
 monitor, then the lock. R0P noted for after S6-2's section.
+S6-1 scope checked (the lead, 2026-09-15): in every fixture case with a
+live parent that parent is itself unbound, so its lane is the host and
+drive runs on the same thread (close-path: pc is R0's child, never
+bound, uc the only exec_bind, and uc being bound the maintenance's
+rec_at_addr check hands it back to its own context; exec selftest 7458:
+g unbound under an unbound live P; family_close_32 and
+family_release_17: the children unbound before drive under a stopped
+parent, the maintaining lane's scope; liveness_33: F unbound under a
+stopped Q): no case with two lanes on one child, none the scope leaves
+untouched; the division is real in the design and divides nothing in
+today's code, so the cell is defence, not the ordering; written in
+S6-1's section with the fixture evidence. Green on the rewritten close:
+run_port_message parity PASS with 103 methods (the new
+lmx_msg_maintenance_close_ok), run_lmx -Suite Message ok. Next in
+order: the transport move onto R0's mailbox monitor with the hold-order
+check, the exec lock across lm1, lm2, exec.c, exec.h, the executor
+selftest and the 19.29.6 fixture (the last two rewritten), the probe
+at -Part 1 and the union base on the merge, then the tip.
