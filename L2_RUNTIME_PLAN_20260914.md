@@ -2710,3 +2710,27 @@ trans.lm0 and the archives), green cold in a fresh worktree with root lm2
 and the dead files aside. This is the runner half of (c), 0c's; the lead
 keeps stg's buildCore.lm0.bat rewrite and the slice refresh; both land
 together after (b) through the lead, then b5's branch.
+(c)'s two points from the lead's reading, ruled 2026-09-15 (Mikhail may
+overrule): (1) gen0 becomes the previous binary (gcc on the committed
+lm1/build/l1trans.lm1.c), run_seed builds it, the gen0/gen2 double pass
+stays, gate.ps1's $seedLimited empties, the gen0 skips in the eleven
+tests/l1 runners (smoke 186/352, ifdef 109, expr 96, define 110, c_array
+98, parser 49, control 89) go, the gate kept; 0c's, allowlist tests/l1/
+run_*.ps1 and gate.ps1. (2) the parser oracle: run_parser.ps1:17 and
+run_legacy_p0.ps1:15 compare L1's printTree against
+build/lm0/printTree.lm0.exe, the old chain's binary; ruled (b), committed
+goldens generated once from that exe while it exists, with the generating
+command and the oracle's provenance in the goldens' README, the runners
+comparing against the goldens, red-first, a later disagreement a
+question and never a silent regeneration ((a) a pinned binary rejected,
+gcc not reproducible; (c) a self-comparison rejected); 0c's, the same
+branch as the seed, landing with the lead's buildCore rewrite after (b).
+Mikhail's question on the mailbox monitor (2026-09-15, verbatim): "\"notify
+при admission, wait при take\" -- а кого нотифицировать-то внутри одного
+потока? Он же не выйдет \"проверить почту\"" (whom to notify inside one
+thread? it will not come out to check the mail); answered by the
+coordinator, awaiting his word: notify wakes the mailbox's owner thread
+sleeping in wait() inside take between its turns, the sender being another
+OS thread under the same monitor, Java's producer/consumer queue in its
+simplest form; a self-send notifies nobody, harmlessly; no other wake in
+the project.
