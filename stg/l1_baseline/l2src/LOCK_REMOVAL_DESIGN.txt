@@ -243,6 +243,36 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
       event and condition-variable families are "to go" in S3 (no wake, wait or notify) and the host forms' stage.
       The __atomic_ loads and stores of running and success in exec.c and lmx.h stay: they are Mikhail's order-free
       atomics, the single-writer flags of 2.1 (3).
+    S3 in the (a) format. Order confirmed by the coordinator (2026-09-15): S3, M, D2, S2, S4-S6, Y, A. The lead
+    designs and codes the 11 sites; acceptance is the coordinator's: fable/s3-acceptance 74146146 (c063fd00 plus 0c's
+    oracle 022b1136 merged clean, 3 files +34), cited and never folded into S3's branch. Red on record (exec-3a, with
+    the pin): run_port_message -LaneCheck exit 1 in 13 s, "LANE WAKE FAIL site=ctx_visit_wake owner=3"; the plain
+    run exit 0 in 52 s, parity PASS, 101 methods redirected. Green: S3's branch merged with 74146146 gives
+    -LaneCheck exit 0 and the plain run still passes, both measured cold before "landed". Field evidence: b5's
+    sonnet/s3-fields bb71e769 (LOCK_REMOVAL_S3_FIELDS.txt), rows in LOCK_REMOVAL_FIELDS.txt.
+    Measured facts (read at integration c063fd00; exec.c, exec.h and host.c unchanged since 7200294b; the oracle
+    merges onto c063fd00 with 0 changed-in-both):
+    F1. The 11 sites (bb71e769, lines at 79871822 = c063fd00 for these files): ctx_visit_wake exec.c 1442-1449;
+        wake_addr_locked 1467-1477 (with the address walk rec_at_addr_locked); bind_reap_push 2119-2131;
+        join_bind_worker 2228-2252 (signal, then bind_wait_join); launch, launch_gate_go and launch_gate_refuse in
+        launch_ctx_thread 2879-3005 (2992-2996, 2997, 2965-2984); stop_retire_walk 3373-3382; stop_event 3418-3420
+        (SetEvent(e->stop_ev), Win32 only); host_wake host.c 148-168; host_shutdown host.c 170-192. Every field they
+        touch has a row: the BindWait wait primitive, gen/slot/launch_n, retired, the reap list and ExecBind.wait/
+        launching are DEL (S3); ExecBind.affinity/gone go with M; LmxMsgCtxPack goes whole; host_sync with S6.
+    F2. The wait that the wakes serve: context_worker (exec.c 3071-3132) takes a turn when take_this succeeds
+        (3091), else blocks at 3117 in WaitForMultipleObjects(2, {e->stop_ev, mine->wait_ev}, to) with to = INFINITE,
+        or 20 ms when the Message has live_wait_th, which drives lmx_msg_live_check (3126). The other waits:
+        the launch gate pack_gate_wait (3058) and the unbind join bind_wait_join (2097-2117, WaitForSingleObject /
+        pthread_join); the host drive's wait on h->wake (host.c). The pthread twin of context_worker starts at 3135
+        and is not built on this machine.
+    F3. What goes without question under the rulings: every signal at the 11 sites, the wait primitive and its
+        generation bookkeeping, the launch gate (a launch does not wait for its thread), the unbind join and reap
+        list (the thread frees itself), and the stop event.
+    OPEN (put to Mikhail by the lead through the coordinator, 2026-09-15; nothing of S3 is coded until the answer):
+        with no wait on any primitive, an owner thread (and the host drive) whose mailbox is empty goes straight
+        back to looking at it, one CPU core per L3 Thread while it has no mail. Options put: (a) pure spin; (b) a
+        scheduler yield between empty rounds (SwitchToThread / sched_yield: no object, no signal); (c) a fixed sleep
+        tick between empty rounds (no object, no signal, a timed pause bounding mail latency by the tick).
 
 M. The sequential mapping removed (X), after S3 and before S4.
     Mikhail on 5.5, verbatim (2026-09-15): "мы же обсудили миллион раз. Закрытие родителя это авария. _Каждый ребенок
