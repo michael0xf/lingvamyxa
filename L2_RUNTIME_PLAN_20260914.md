@@ -5678,3 +5678,28 @@ thread through run_entry_turn and so holding C's parent's turn, which
 mapping_authority_locked admits; the host reads C's flags in yield
 rounds after p's turn returns; "spin-nested cancel not fired" becomes
 that read. The lead lands nothing until b5 reports green.
+S4 green on b5's branch (2026-09-15): sonnet/s4-guard 97fb41fd
+(952d8e31..97fb41fd, 6 commits; checked by the coordinator: Sleep( 0 in
+cancel_spin_host.c, was 1). Pass lines: run_lmx -Suite Cancel ok,
+-Suite Exec ok, run_model_scenario36 "core tests PASS, 10 suites, two
+runs each agree" (family_release_17, orphan_mapped_17, scenario36
+among them), run_port_message plain and -LaneCheck parity PASS (102
+methods). Falsifier: the guard's condition inverted on a scratch
+commit, the S4 check alone (the full Cancel suite hangs under an
+inverted guard, since run_map/run_nested cancel their own spin
+through it) prints "S4 guard check FAILED: returned 0, want
+LMX_MSG_INVALID=2"; reverted, Cancel green again. Divergence from the
+coordinator's shape, accepted: the host outside any turn issues
+emergency_cancel(rt, c) after polling c's hit flag (run_map's proven
+check_aftermath pattern, expect_parent_live=1), while p's turn only
+receives its mail and maps c, then returns; p's own turn cancelling
+would have needed a wait inside a turn handler for c's spin to start
+(a pre-spin cancel would race c's worker), which the rule forbids;
+the writer is lawful and the guard is exercised. A real hang found and
+fixed on the way: spin_boot's exec_bind never launched a worker there
+(the file never calls exec_start_contexts, contexts_live 0), only
+map_child's unconditional launch does, so turn_parent_spin now maps c
+explicitly; diagnosed by gdb thread backtraces on the hung process.
+S4's acceptance record: red a3576110 (emergency_cancel from a spawned
+thread returned 0), green 97fb41fd, falsifier the inverted condition.
+The lead lands 97fb41fd with land_base2.sh onto c9ac4dda.
