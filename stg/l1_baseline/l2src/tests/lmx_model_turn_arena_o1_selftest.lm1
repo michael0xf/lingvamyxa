@@ -9,6 +9,9 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # collection (lmx_msg_arena_collect, which only takes blocks with a range) leaves it,
 # and the Message's release frees it: the two-cycle balance (ld --wrap live count
 # after the second runtime_delete equal to the first) shows nothing is left behind.
+# So the blocks are counted after the turns, not inside them and not through a root.
+# Classifying turn-arena blocks for reachability collection (19.29.4) belongs to the
+# design's later arena stage (A2), not to O1.
 # Written before the code (2026-09-15) on integration d7f3b569, where
 # lmx_msg_turn_new_zero, lmx_msg_turn_copy_bytes and lmx_msg_turn_current do not
 # exist: the test does not link, which is its red.
