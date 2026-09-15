@@ -4660,3 +4660,12 @@ through map_child"; (2) the D2 pass, l2src/LOCK_REMOVAL_D2_SITES.txt:
 every declaration, definition and call still carrying a create_id (or
 retry id) parameter in l2src and mixa_manager outside vendor/, counts per
 file, callers passing a non-zero value flagged.
+M progress (the lead, 2026-09-15; checked by the coordinator: d6/lock-removal
+e8495e61 names the functions behind the AFFINITY_UI branch list,
+context_worker's head and ctx_visit_first_launchable among them;
+8479fdab queued for M's landing). In wtm exec.c and exec.h are cut: the
+UI lane, ui_step, take_ready, run_child_turn, route_locked, map_queued,
+ui_nrequests and bind_aff gone with ExecBind.affinity; bind refuses any
+affinity but ANY; the only turn a runtime call starts on a foreign lane
+is run_entry_turn's bootstrap. Next lm1/lm2, lmx_message.h and the
+tests; nothing built or measured yet.
