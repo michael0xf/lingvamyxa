@@ -992,7 +992,12 @@ fn: lmx_msg_host_drain (@: LmxMsgRuntime rt) int
         c.lmx_msg_mail_inbox_take_ingress(root, @ n)
         c.lmx_msg_endp_release(root)
     ---
-    c.lmx_msg_exec_lock(rt)
+    # S6 (a): the transport is R0's own relay hop (root's inbox -> here -> pump ->
+    # the real destination's inbox), so it is ordered under R0's mailbox monitor --
+    # the one cross-lane synchronization the model permits, SPEC 11551 -- and not
+    # under any runtime-wide lock. The inbox take above is entered and left before
+    # this loop, so the two holds are sequential, never nested.
+    c.lmx_msg_mail_lock(root)
     while: n != 0
         nxt: n\next
         n\next: 0
@@ -1001,12 +1006,13 @@ fn: lmx_msg_host_drain (@: LmxMsgRuntime rt) int
         lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)
         n: nxt
     ---
-    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_unlock(root)
 return: lmx_msg_pump(rt)
 
 sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     @: LmxMsg m
     @: LmxMsg nxt
+    @: LmxMsg root
     @: LmxMsgCopy inb 0
     @: LmxMsgCopy outb 0
     if: rt = 0
@@ -1029,9 +1035,14 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
         c.lmx_msg_exec_lock(rt)
         m: nxt
     ---
+    # S6 (a): the teardown of the relay queue runs under R0's monitor too, and it
+    # runs before the slot walk below in which slot_free destroys that monitor.
+    root: lmx_msg_ingress_root(rt)
+    c.lmx_msg_mail_lock(root)
     lmx_msg_copy_free(rt\transport)
     rt\transport: 0
     rt\transport_tail: 0
+    c.lmx_msg_mail_unlock(root)
     m: rt\slots
     while: m != 0
         nxt: m\alloc_next
@@ -1747,6 +1758,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     @: LmxMsg m
     @: LmxMsg ch
     @: LmxMsg nxt
+    @: LmxMsg root
     @: LmxMsgCopy n
     @: LmxMsgCopy outb 0
     int: pinned 0
@@ -1840,12 +1852,17 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     if: pinned != 0
         c.lmx_msg_endp_release(m)
     ---
+    # S6 (a): this Message's own outbox was taken and released above under its own
+    # monitor; the relay onto R0's queue is a second, sequential hold.
+    root: lmx_msg_ingress_root(rt)
+    c.lmx_msg_mail_lock(root)
     while: outb != 0
         n: outb
         outb: n\next
         n\next: 0
         lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)
     ---
+    c.lmx_msg_mail_unlock(root)
     if: m\closing != 0
         m\state: c.LMX_MSG_STATE_STOPPED
         m\exec_live: 0
@@ -1942,23 +1959,27 @@ return: c.LMX_MSG_OK
 
 fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
     @: LmxMsgCopy n
+    @: LmxMsg root
     int: st
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         if: c.lmx_msg_exec_holding_any(rt) = 0
             return: c.LMX_MSG_INVALID
         ---
     ---
-    c.lmx_msg_exec_lock(rt)
+    # S6 (a): the take is under R0's mailbox monitor and is left before admit_one
+    # takes MAIL on the destination, so the two mailboxes are held in sequence.
+    root: lmx_msg_ingress_root(rt)
+    c.lmx_msg_mail_lock(root)
     while: rt\transport != 0
         n: lmx_msg_q_pop(@ rt\transport, @ rt\transport_tail)
-        c.lmx_msg_exec_unlock(rt)
+        c.lmx_msg_mail_unlock(root)
         st: lmx_msg_admit_one(rt, n)
         if: st = c.LMX_MSG_NOMEM
             return: st
         ---
-        c.lmx_msg_exec_lock(rt)
+        c.lmx_msg_mail_lock(root)
     ---
-    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_unlock(root)
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
@@ -2060,6 +2081,7 @@ end: lmx_msg_env_release
 
 fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
     @: LmxMsgCopy node
+    @: LmxMsg root
     if: rt = 0 || to = 0U || to = from
         return: c.LMX_MSG_OK
     if: lmx_msg_self_or_find(rt, to) = 0
@@ -2076,7 +2098,12 @@ fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; un
     node\id: correlation
     node\correlation: correlation
     node\number: (cast: (int) from)
+    # S6 (a): the caller (lmx_msg_fail) holds no mailbox monitor here, so this is
+    # R0's monitor taken and left on its own.
+    root: lmx_msg_ingress_root(rt)
+    c.lmx_msg_mail_lock(root)
     lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, node)
+    c.lmx_msg_mail_unlock(root)
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
