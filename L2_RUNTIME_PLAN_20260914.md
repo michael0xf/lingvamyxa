@@ -4542,3 +4542,11 @@ coordinator onto 80101431 at fable/m-acceptance-oneroot 199dab84 (the
 same two edits at l2src/lmx_message_exec.[ch]); its red is measured
 after e9's cold gate record frees the machine; M's section cites
 199dab84, not 03fc0f65. e9's install_pin 4afe4ff5 rides the next landing.
+Standing ticket to b5 (the coordinator, 2026-09-15), doc-only: when the
+lead's M section is pushed on d6/m-sequential, review it against
+LOCK_REMOVAL_M_FIELDS.txt and LOCK_REMOVAL_S2_LOOKUPS.txt (sites the
+section does not name, fates differing from the FIELDS rows at
+3c3b91be, any replacement needing a lock, wait or signal) as
+LOCK_REMOVAL_M_REVIEW.txt on sonnet/m-review off 80101431 at l2src/.
+The pin is installed at the new root path in the coordinator's exec-3a
+(gen2 and gen3, 0B3D85B3, L1_PIN.txt 0B3D85B3) for the M red measure.
