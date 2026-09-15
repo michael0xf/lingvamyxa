@@ -3907,3 +3907,22 @@ function at c063fd00 (the lm1 body, not the lm2 mirror); each becomes
 or is corrected to another stage (old and new named), or flagged; any
 hold protecting two different things noted as a split candidate before
 S4. Today's file: 42 proposed, 63 ruled rows.
+b5's S6 census re-verified at sonnet/s6-lock-sites 65a7ec63: all 40
+name-classified rows re-read against c063fd00 (lm1 bodies): 35 ruled, 4
+corrected (lmx_msg_run_one S4 to S6, native_users at turn entry;
+exec_start_contexts and exec_unbound_close M to S5, LmxMsgExec's own
+flags; exec_last_status M to S4, ExecBind.last_st's own row), 1 flagged;
+counts S3 10, M 17, S4 51, S5 17, Y 1, S6 5, total 101. The flag:
+lmx_msg_emergency_cancel (exec.c 439) writes LmxMsg.running via
+lmx_msg_running_store with no ownership or turn guard and no production
+callers in lm1/lm2. Coordinator's caller grep at c063fd00: none in the
+runtime, but exec_selftest.c (22 calls), lmx_message_selftest.lm1,
+tests/cancel_spin_host.c and five model selftests call it, standing for
+"R stops P", "P requests B's stop", the parent's or the host's stop
+request. Ruling: not dead and not a contradiction; it is the API of
+ownership item (3), the parent writing a child's running = 0 (Mikhail:
+"0 is the parent's stop request"), today unguarded; S4 keeps it and adds
+the guard that the writer is the child's parent's lane or the host outside
+any turn, refusing otherwise; the S4_WRITES file's "running has zero
+foreign-lane write sites" is corrected to "one, emergency_cancel, item
+(3), unguarded today"; the selftests keep their calls.
