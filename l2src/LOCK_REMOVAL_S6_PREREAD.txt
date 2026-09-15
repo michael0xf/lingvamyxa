@@ -1,0 +1,182 @@
+LOCK_REMOVAL_S6_PREREAD: one row per remaining lock site of the re-based
+census (sonnet/s6-rebase-2 dd90673b, at integration 8eeb094f, S5 landed),
+giving the exact statement(s) each hold protects, the LmxMsgExec fields it
+reads where relevant, and whether the protected data already has one
+writer lane (S3, M, S2, S4, S5 all done) -- so the hold is deleted with
+the lock at S6 -- or not, a contradiction to stop on (sonnet/s6-preread,
+2026-09-15, doc-only, no builds -- e9 has the machine).
+
+Method: every row of dd90673b re-read directly against 8eeb094f. For rows
+whose own protects/basis text already names an explicit caller-identity
+guard (require_turn, require_owner, holding_turn, mapping_authority_
+locked, lifecycle_authority, a self-only fast path, or a named single
+caller under one of those), the guard is cited and the verdict is DELETE
+-- not re-derived, since that guard was itself established and verified
+in LOCK_REMOVAL_S4_WRITES.txt, the M/S3/S5 field files, or this session's
+own S4/S5 work. For rows without an explicit guard already on record,
+the function's own body was read fresh this pass (not assumed); nine such
+rows are named below with what was actually found. One genuine gap
+surfaced this way: lmx_msg_set_orphan_until.
+
+--- Counts (82 rows)
+
+DELETE WITH THE LOCK: 80
+CONTRADICTION (flagged, not a clean delete): 1 -- lmx_msg_set_orphan_until
+(80 + 1 + the 1 remaining row, lmx_msg_pump, counted under neither verdict
+-- see the note near the end of this file -- accounts for all 82.)
+  (exec.c:3011): no caller-identity guard of its own, and no production
+  caller at all (its one caller is a test fixture, lmx_message_exec_
+  selftest.c:3852); the FIELD it writes, m->orphan_until, has a second,
+  real production writer -- lmx_msg_orphan_sweep (lm1:1670-1671) -- which
+  IS single-lane (guarded one level up, at its sole caller lmx_msg_drive's
+  own require_owner+!holding_any check, per LOCK_REMOVAL_S4_SITES.txt
+  108e340a). set_orphan_until itself is the gap: if S6 deletes the lock
+  around this pair on the strength of orphan_sweep's own guard, set_
+  orphan_until becomes a genuinely unsynchronized write against orphan_
+  sweep's, with nothing stopping a future production caller from racing
+  it. Not found by name-matching the field to an already-ruled row --
+  found by reading set_orphan_until's own body, which has no guard at
+  all, then tracing every caller of it by grep (one hit, a test). Fix
+  before S6: either guard set_orphan_until the same way as its neighbor
+  lmx_msg_set_orphan_retain (holding R0's own turn, or the host) since
+  m->orphan_until's own FIELDS.txt row already ties it to R0-adjacent
+  orphan handling, or delete set_orphan_until itself as a dead test-only
+  entry point and let the selftest call something else -- a design call
+  for the stage, not made here.
+
+LmxMsgExec fields read across all rows below: nworkers (read nowhere in
+  production outside the executor's own launch/reap bookkeeping, already
+  M/S3-owned, no row here reads it independently); contexts_live (read/
+  written by lmx_msg_exec_start_contexts, lmx_msg_exec_stop, and exec_
+  bind_mode's own launch decision); stopping/stopped (lmx_msg_exec_start_
+  contexts, lmx_msg_exec_stop); the bind table (rec_at_addr_locked/bind_
+  rec_locked-reached LmxMsgExecBind entries: bind_n, bind_has_worker,
+  msg_bound, is_bound, exec_bind_mode, unbind, drop_binds, map_child,
+  run_entry_turn, last_status) -- named per row below where they apply,
+  not repeated in every row's own line.
+
+--- lmx_message_exec.c
+
+line | function | protects | exec fields read | verdict
+443 | lmx_msg_emergency_cancel | LmxMsg.running, m->closing | -- | DELETE (mapping_authority_locked, sonnet/s4-guard 97fb41fd)
+889 | drive_walk_list | a parent's child-list snapshot | -- | DELETE (reached only through lmx_msg_drive's own require_owner+!holding_any chain, via drive_walk_children/drive_walk_roots)
+977 | lmx_msg_drive_walk_roots | rt->root, pinned across an unlock/relock window | -- | DELETE (same chain as drive_walk_list; its own comment: "the exec lock is held on entry and on return", set by its sole caller lmx_msg_drive)
+1037 | lmx_msg_test_stage | src/dest lookup, state read, dest retain | -- | DELETE (test-only staging helper, single-threaded test use)
+1190 | lmx_msg_endp_try_retire | inbox/outbox emptiness, parent_msg | -- | DELETE (proceeds only once m->state==RELEASED and m->refs==0, a terminal state reached under the disposal family's own already-guarded writers; read fresh this pass, no identity guard of its own but none needed once terminal)
+1475 | lmx_msg_exec_test_set_fail_ctx | e->test_fail_ctx | test_fail_ctx | DELETE (test-only field, single-threaded test use)
+1485 | lmx_msg_exec_test_set_fail_adopt_block | e->test_fail_adopt_block | test_fail_adopt_block | DELETE (test-only field, single-threaded test use)
+1501 | lmx_msg_exec_bind_n | the bind table's own count | bind table | DELETE (a read over M's own single-lane-per-binding table)
+1513 | lmx_msg_exec_bind_has_worker | rec->wait->worker | bind table | DELETE (read only)
+1585 | lmx_msg_exec_msg_bound | bind-table membership via m->owner_rt | bind table | DELETE (read only)
+1688 | exec_bind_mode | the bind table plus m->turn/.turn_ctx | contexts_live, bind table | DELETE (mapping_authority_locked, read fresh this session on sonnet/s4-sites)
+1824 | native_leave_addr | m->native_users, m->handoff_ready | -- | DELETE (the leaving lane's own bookkeeping, its own row's long-established basis)
+1845 | requeue_if_runnable | self_or_find lookup, m->ready via lmx_msg_exec_ready | -- | DELETE (static, called only from run_one's own taking-lane context; read fresh this pass -- no identity guard of its own, none needed, single caller)
+1857 | run_one | m->native_users += 1 at turn entry | -- | DELETE (the taking lane's own record, about to run its own turn)
+2013 | launch_ctx_thread | the bind table, rec->wait | bind table | DELETE (S3-fields site)
+2153 | context_worker (Win32) | its own bind record | bind table | DELETE (each worker owns exactly its own record)
+2155 | context_worker (pthread) | same | bind table | DELETE (same)
+2210 | lmx_msg_exec_start_contexts | e->contexts_live, .stopping, .stopped | contexts_live, stopping, stopped | DELETE (read fresh this pass: `if (lmx_msg_host_is_owner(rt) == 0) return LMX_MSG_INVALID;` -- host-only, explicit)
+2247 | lmx_msg_exec_last_status | r->last_st | bind table | DELETE (read only)
+2263 | lmx_msg_exec_is_bound | bind-table membership | bind table | DELETE (read only)
+2275 | lmx_msg_exec_unbound_close | e->unbound_held | contexts_live (indirectly, via end_turn), unbound_held | DELETE (read fresh this pass: same `lmx_msg_host_is_owner(rt) == 0` guard as start_contexts, explicit)
+2353 | lmx_msg_exec_stop | bind table teardown, e->stopping | stopping, stopped, contexts_live, bind table | DELETE (S3-fields site, the shutdown lane's own act)
+2400 | lmx_msg_exec_drop_binds | the bind table, rec->msg->mapped = 0 | bind table | DELETE (called only from exec_stop's own shutdown context)
+2438 | lmx_msg_exec_unbind | mapping_authority_locked(rt,m), bind-table removal | bind table | DELETE (explicit guard)
+2534 | lmx_msg_run_entry_turn | bootstrap bind plus turn entry | bind table | DELETE (the bootstrap fallback: host-owner, no workers, no contexts live -- single lane by construction, pre-worker-start)
+2570 | lmx_msg_map_child | the bind table plus m->mapped | bind table | DELETE (holding parent's turn, M's own established guard)
+2638 | lmx_msg_exec_adopt_mark | m->disposed | -- | DELETE (guarded one level up, at settle_child's two real callers, dispose_child and adopt_failed, both already guarded)
+2721 | lmx_msg_adopted_n | m->blocks, count | -- | DELETE (post-settle read, ownership already transferred to the parent)
+2738 | lmx_msg_adopted_base | m->blocks, one entry | -- | DELETE (same post-settle access as adopted_n)
+2767 | lmx_msg_transfer_adopted | the settle-writes transfer itself | -- | DELETE (lifecycle_authority(rt, to), explicit)
+2803 | transfer_graph_locked_api | same, for the graph-transfer path | -- | DELETE (same lifecycle_authority guard)
+2902 | lmx_msg_exec_dispose_mark | m->disposed | -- | DELETE (same as adopt_mark, guarded one level up)
+2941 | lmx_msg_exec_reclaim_mark | m->disposed | -- | DELETE (same)
+2957 | lmx_msg_parent_settle | the settle-writes orchestration | -- | DELETE (guarded at its own two real callers, same chain as adopt_mark)
+3011 | lmx_msg_set_orphan_until | m->orphan_until | -- | CONTRADICTION -- see the Counts section above, the one flagged row
+3027 | lmx_msg_set_orphan_retain | rt->root_record | -- | DELETE (explicit: holding R0's own turn, or the host, read fresh this pass at exec.c:3032-3034)
+3051 | lmx_msg_orphan_expired | m->orphan_until/.native_users/.handoff_ready, p->state | -- | DELETE (read only, no field written)
+
+--- lmx_message.lm1
+
+line | function | protects | exec fields read | verdict
+673 | lmx_msg_handoff_supervision | supervision-handoff fields | -- | DELETE (old_parent's lane or the host, explicit two-branch guard)
+747 | lmx_msg_exec_is_runnable | a Message's state/inbox for scheduling eligibility | -- | DELETE (read only)
+760 | lmx_msg_exec_ready | m->ready | -- | DELETE (S3-owned field, wrapped here)
+901 | lmx_msg_host_post | rt->root lookup, refs pin | -- | DELETE (read/pin only; the admission itself is Y's own mailbox concern, not this row's write)
+963 | lmx_msg_host_drain | rt->root lookup | -- | DELETE (read only)
+994 | lmx_msg_runtime_delete | rt->slots/.root/.transport teardown | -- | DELETE (host-only teardown, lmx_msg_host_is_owner guard)
+1076 | lmx_msg_create_prepare | rt->slots/.n/.root linkage; the new child's own fields | -- | DELETE (require_owner for parent=0, require_turn for parent!=0, explicit two-branch guard; slot\addr now lmx_msg_addr_take, its own atomic row, not this lock's concern any more)
+1207 | lmx_msg_send | src lookup, state checks | -- | DELETE (src's own lane, established)
+1268 | lmx_msg_send_graph | same | -- | DELETE (same)
+1326 | lmx_msg_send_owned | same | -- | DELETE (same)
+1410 | lmx_msg_release_slot | family-tree unlink, slot teardown | -- | DELETE (the disposal family's own already-guarded callers)
+1466 | lmx_msg_first_settled_child | reads ch\handoff_ready/.native_users/.disposed/.orphan, running_load(ch) | -- | DELETE (read only; every field read here has an already-established single writer per S4)
+1486 | lmx_msg_orphan_children | re-rooting a failed parent's children | -- | DELETE (reached only through lmx_msg_drive's own guard, per sonnet/s4-sites 108e340a)
+1581 | lmx_msg_settle_child | the settle writes | -- | DELETE (guarded at its own two real callers)
+1591 | lmx_msg_dispose_child | settle orchestration | -- | DELETE (holding_turn(parent)-or-host-owner, explicit)
+1609 | lmx_msg_adopt_failed | m\init/.blocks/.ranges/success, then settle_child | -- | DELETE (same shape, explicit)
+1655 | lmx_msg_orphan_sweep | m\orphan_until (R0 acting as orphans' parent) | -- | DELETE (no guard of its own; relies on its sole caller lmx_msg_drive's own require_owner+!holding_any, per sonnet/s4-sites 108e340a -- this is the same finding that flags set_orphan_until above, but here the real writer IS already covered)
+1712 | lmx_msg_end_turn | a Message's own end-turn writes plus its children's | -- | DELETE (require_turn(who), explicit)
+1830 | lmx_msg_admit_one | destination lookup | -- | DELETE (read only; the inbox push itself is Y's own MAIL use)
+1909 | lmx_msg_pump | rt->transport pop | -- | NOT S6's TO DELETE -- see the note below, not folded into either count
+1930 | lmx_msg_recv | own-record lookup | -- | DELETE (self, own inbox take is Y's own MAIL use)
+2048 | lmx_msg_fail | state teardown, post_dead relay | -- | DELETE (established S4/Y site)
+2170 | lmx_msg_poll | rt->root (the one root) or a family, via poll_mark/poll_kids | -- | DELETE (require_owner, explicit)
+2190 | lmx_msg_set_now | rt->root_record via lmx_root_record_set_clock | -- | DELETE (holding R0's own turn, or the host, explicit)
+2221 | lmx_msg_drive_one | a candidate's inbox-empty check | -- | DELETE (read fresh this pass: no guard of its own, reached only through the same lmx_msg_drive chain as drive_walk_list/roots)
+2275 | lmx_msg_drive | orchestrates set_now/poll/orphan_sweep/drive_walk_roots/pump | -- | DELETE (require_owner+!holding_any, explicit -- the guard drive_walk_list/roots/one and orphan_sweep all lean on)
+2303 | lmx_msg_state | m\state | -- | DELETE (self-fast-path else require_owner)
+2322 | lmx_msg_inbox_n | a runtime-wide lookup of `who` | -- | DELETE (the count itself is MAIL-only, Y's own concern)
+2346 | lmx_msg_path_n | m\path_n | -- | DELETE (same self-fast-path/require_owner shape)
+2365 | lmx_msg_path_seg | m\path[i] | -- | DELETE (same)
+2389 | lmx_msg_child_n | m\first_child/.next_sibling, count | -- | DELETE (same)
+2418 | lmx_msg_child_at | m\first_child/.next_sibling, index i | -- | DELETE (same)
+2458 | lmx_msg_init_copy | m\init/.init_n/.parent | -- | DELETE (same)
+2506 | lmx_msg_live_query | m\live_seq/.live_query_pend_id/.live_query_pend_at | -- | DELETE (require_turn(who), explicit)
+2576 | lmx_msg_live_handle | a parent's liveness-reply processing | -- | DELETE (require_turn, established)
+2663 | lmx_msg_live_check | ch\mapped/.tracked/.committed/.state/.child_heard_at, m\closing/ch\closing | -- | DELETE (holding who's turn, or the host, explicit)
+2737 | lmx_msg_live_test_set_seq | m\live_seq | -- | DELETE (require_owner, test hook)
+2750 | lmx_msg_live_test_set_wait_th | m\live_wait_th | -- | DELETE (same shape)
+2763 | lmx_msg_complete | success_store(m,1), m\closing | -- | DELETE (holding who's turn, or the host, explicit)
+2783 | lmx_msg_tracked | m\tracked | -- | DELETE (self_or_find, read only)
+2797 | lmx_msg_endp_refs | m->refs | -- | DELETE (getter over an atomic field, own Interlocked row below)
+2811 | lmx_msg_send_cap | src\state, dest\owner_rt | -- | DELETE (require_turn(from), same shape as send)
+
+--- lmx_message_host.c
+
+901 (lmx_message.lm1, the only caller) | lmx_msg_host_post, via lmx_msg_host_lock/unlock | h->shutting_down | -- | DELETE (LmxMsgRuntime.host_sync itself is DEL at S6; the admission-attempt guard goes with it)
+
+--- Other Interlocked primitives
+
+lmx_msg_endp_retain / lmx_msg_endp_release | LmxMsg.refs, atomic CAS | -- | DELETE (the spec's own fourth clause, "reference counts" -- an order-free atomic that needs no lock removed around it, already lock-free)
+lmx_msg_addr_take | LmxMsgRuntime.next_addr, __atomic_fetch_add_4 | -- | DELETE (same shape as refs -- already lock-free, S5's own new site, nothing for S6 to remove)
+
+--- Note on lmx_msg_pump (the one row this document does not count either way)
+
+lmx_msg_pump's own exec_lock, around rt->transport's pop, is deliberately
+NOT resolved to DELETE or CONTRADICTION here. transport/transport_tail's
+fate is S5/Y3 (LOCK_REMOVAL_S5_LISTS.txt), not S6: host_post admits into
+this queue from potentially many concurrent external callers (unlike
+every DELETE row above, whose writer is a single already-established
+lane), and pump drains it. Per Mikhail's own standing rule (no locks
+except the mailbox collection), this lock's own future is to become part
+of -- or be subsumed by -- the mailbox's own synchronized structure once
+Y's own design lands ("admissions become direct admissions into R0's own
+mailbox," per LOCK_REMOVAL_S5_LISTS.txt's own words), not to be deleted
+outright at S6 alongside the executor lock's other sites. Counting it
+under DELETE would misstate what happens to it; counting it as a
+CONTRADICTION would wrongly imply a gap in today's ownership work, when
+the real situation is that it is out of S6's own scope by design. Left
+named, not counted, so the two counts above stay accurate for what they
+actually claim.
+
+--- Falsifier
+Each row's file:line above re-checked directly against 8eeb094f to
+contain lmx_msg_exec_lock (or, for the host-lock and Interlocked rows,
+the named primitive) -- verified by grep, matching dd90673b's own
+falsifier for the same line numbers, not re-asserted here. The nine
+rows read fresh this pass for their own guard (endp_try_retire, requeue_
+if_runnable, exec_start_contexts, exec_unbound_close, set_orphan_until,
+set_orphan_retain, drive_one, orphan_sweep, first_settled_child) were
+opened and read in full, not inferred from their names or their
+neighbors' shapes.
