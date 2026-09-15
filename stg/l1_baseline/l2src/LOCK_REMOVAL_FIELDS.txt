@@ -42,6 +42,9 @@ Thread's or its parent's arena, or deletion):
   PAR    Structure data in the parent's arena (its child references, their paths, the settle write)
   MBOX   the L3 Thread's mailbox: the synchronized collection of Messages and its monitor
   DEL    deleted, with the ruling or stage that removes it
+Category of each row (LOCK_REMOVAL_DESIGN, KERNEL; Mikhail: L1 is for building the kernel): a row whose owner starts
+with MSG (including "MSG.root, inside") or MBOX is kernel; a row whose owner starts with L3T or PAR is functionality
+written on the kernel in the generated shape; a row whose owner starts with DEL is deleted. Every row is exactly one.
 Basis: "ruled" names the source (map 5.7, census 2.6, a Mikhail quote in the design); "proposed" is the lead's reading
 and waits for the coordinator. A proposed line is not a claim.
 
@@ -136,7 +139,7 @@ LmxMsgRuntime.root_record | h:227 | R0's policy record, already Structure data i
 LmxMsgBindWait.wait_ev / .cv / .sig | c:36,39,40 | the wait primitive | DEL | ruled (map 5.7; S3) | S3
 LmxMsgBindWait.worker / .worker_on | c:37,41,42 | the worker thread handle | L3T (L1 data of the L3 Thread's code, like any other) | ruled (Mikhail struck the "native primitives" sentence: the L3 Thread too is written in L1, then L2, then L3, "а причем тут вообще Си?") | M/S3
 LmxMsgBindWait.gen, .slot, .launch_n | c:44,46,47 | wait generations and launch gate | DEL | ruled (map 5.7; S3 launch wake goes) | S3
-LmxMsgBindWait.retired | c:45 | a generation's stop flag, polled by the worker loop (exec.c 3063, 3078, 3156, 3170; set at 2123 join_bind_worker, 2241 stop_retire_walk, 3376 stop) | DEL; its stop role is MSG running = 0 written by the parent, read by the owner's loop each round | ruled (coordinator, confirming b5 FLAG-1; with M there are no generations to retire) | M/S3
+LmxMsgBindWait.retired | c:45 | a generation's stop flag, polled by the worker loop (exec.c 3063, 3078, 3156, 3170; set at 2123 join_bind_worker, 2241 stop_retire_walk, 3376 stop) | DEL; the owner's loop leaves when MSG success becomes 1 (user code), and MSG running = 0 is the parent's stop request that user code sees | ruled (coordinator, confirming b5 FLAG-1; with M there are no generations to retire; Mikhail: the loop ends on success==1) | M/S3
 LmxMsgBindWait.reaping, .on_reap, .reap_next | c:48,49,51 | the reap list | DEL (each thread frees itself; no join) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | S3/S5
 LmxMsgBindWait.owner_tid | c:50 | the owning thread's id | L3T (L1 data of the L3 Thread's code) | ruled (Mikhail struck the "native primitives" sentence) | S3
 LmxMsgBindWait.rec | c:54 | back link to the bind record | DEL | ruled (map 5.7) | S3

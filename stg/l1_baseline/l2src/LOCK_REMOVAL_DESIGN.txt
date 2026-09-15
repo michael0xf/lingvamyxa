@@ -102,6 +102,30 @@ HELD 2026-09-15 under Mikhail's standing rule, a contradiction sent through the 
     SUPERSEDED the same day by Mikhail's "no notify" ruling (S3 below): there is no wake to match against admissions.
     The measurements above stay as the record of where the wake sites are; the oracle becomes "no wake site".
 
+KERNEL. What L1 is for (Mikhail, spec section 2 line 1078 and model section 2, main 1b2708bf), verbatim: "Вы
+    пытаетесь писать на Си, а на Си (L1) надо просто пилить ядро _на котором_ уже пилить дальнейший функционал самого
+    ядра. Это как я бы попросил на goto имитировать все циклы, а вы бы заменили задание на "написать примеры while и
+    for"  -- совершенно разне задачи".
+    The design's first item is therefore the kernel in L1, and it has exactly these parts:
+    - Lmx, the graph and its Structures;
+    - LmxMsg { running; success; handoff_safe; Lmx *root }, the four-field Message record;
+    - one arena per Message, reached from its root;
+    - the mailbox as the synchronized collection of Messages, the one lock;
+    - the thread with its loop over turns: each round a look into its mailbox and a turn when there is a Message,
+      never blocking; the loop runs while success is 0 and leaves when success becomes 1, written by user code
+      (Mikhail: "цикл в L3 Thread очеивдно прерывается по success==1"). running = 0 is the parent's stop request,
+      which user code sees; it is not the loop's exit.
+    Of the 99 rows of LOCK_REMOVAL_FIELDS.txt, 16 are kernel:
+    - 4 MSG: running, success, handoff_ready as handoff_safe, graph as root;
+    - 7 arena rows inside root: init, init_n, blocks, ranges, eternal_ranges, method_ranges, roots;
+    - 5 mailbox rows: inbox, inbox_tail, mail (the mailbox's monitor, the one lock: a kernel row), and the runtime's
+      transport and transport_tail as admissions into R0's mailbox.
+    36 rows (26 L3T, 10 PAR) are functionality to be written on that kernel in the generated shape (a function with
+    arguments, hidden arguments and the graph node). They are listed as such, not carried as C fields. That includes
+    the thread handle and thread id rows: the thread and its loop are kernel code, their data is L3T. The other 47
+    rows are deleted.
+    Stages S2-S6, M, Y and A stay as the lock removal that reduces today's C to that kernel.
+
 FIELDS. Every stage names its fields' owners (coordinator, 2026-09-15; map section 5.7, main 8c3d06bc). Mikhail,
     verbatim: "Почему вам не хватает typedef struct LmxMsg { volatile ... running = 1; volatile ... success = 0; struct
     LmxRoot *root; } ????", and of LmxMsgBindWait, LmxMsgExecBind, LmxMsgRuntime, LmxMsgEnv and LmxMsgCopy: "Это все на
@@ -174,9 +198,12 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
     Between turns, confirmed by Mikhail, verbatim: "никакого success у многих фоновых задач вообще нет, то есть это
     не может быть правилом ядра \"в ящике ничего нет поэтому ухожу\"" and "иначе не реализуешь цикл бесконечный --
     он тупо не будет проверять почту!!!". Final for S3 and Y (spec 19.28.R2.2, model sections 30 and 31):
-    - the owner thread runs an infinite loop; each round it does its self-maintenance (the liveness queries to its
-      parent, its timers) and looks into its mailbox under synchronized, and runs a turn when there is a Message;
-    - it never blocks on any primitive and never exits for lack of mail; it ends only when user code ends it;
+    - the owner thread runs its loop over turns while success is 0; each round it does its self-maintenance (the
+      liveness queries to its parent, its timers) and looks into its mailbox under synchronized, and runs a turn when
+      there is a Message;
+    - it never blocks on any primitive and never exits for lack of mail; it leaves the loop when success becomes 1,
+      written by user code (Mikhail, correction 2026-09-15: "цикл в L3 Thread очеивдно прерывается по success==1");
+      running = 0 is the parent's stop request, which user code sees, not the loop's exit;
     - no wake, no wait, no notify anywhere. Going, with nothing in their place: run_one's wake-all,
       exec_start_map_kick, the launch wake, and the three worker-lifecycle signals (bind_wait_retire, the unbind
       join, stop's retire walk), since no worker ever waits.
@@ -546,7 +573,8 @@ Y. The mailbox's one synchronization as a Java monitor through the synchronized 
         - Red: a hook test (two threads, a counter under synchronized, reentrant entry from the owner) that does not
           link before the hook exists.
     Y3. The mailbox in L2: inbox and outbox reads and writes under synchronized on the mailbox object, nothing else.
-        It replaces m->mail and the lmx_msg_mail_* C functions. The owner thread's infinite loop (S3) looks into the
+        It replaces m->mail and the lmx_msg_mail_* C functions. The owner thread's loop (S3), running while success
+        is 0 and leaving when user code sets it to 1, looks into the
         mailbox under synchronized each round and runs a turn when there is a Message; it never blocks and never
         exits for lack of mail.
         - Red: S3's no-wake oracle red today. Green: the oracle green with the bind waits' events and conditions,
