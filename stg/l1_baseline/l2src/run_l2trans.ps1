@@ -30,13 +30,7 @@ function Resolve-L2Path([string]$Path) {
     if ([System.IO.Path]::IsPathRooted($Path)) { return $Path }
     return (Join-Path (Get-Location) $Path)
 }
-# The printTree parity stage and run_candidate_indent compare against the STG
-# gen2 printTree; a fresh worktree has none. -BuildOnly (run_l2_message_root)
-# never reaches them.
-$stgPrintTree = "build\l1trans\gen2\printTree.exe"
-if (-not $BuildOnly -and -not (Test-Path -LiteralPath $stgPrintTree)) {
-    throw "missing $stgPrintTree; build it with the L1 parser acceptance: `$env:L1_GEN='gen2'; powershell -File tests\l1\run_parser.ps1 (the gen2 step of tests\l1\run_gen.ps1)"
-}
+# run_candidate_indent builds the STG gen2 printTree it compares against in the run.
 
 $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",

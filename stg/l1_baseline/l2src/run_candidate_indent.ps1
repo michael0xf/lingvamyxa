@@ -441,13 +441,21 @@ $probeText = [System.IO.File]::ReadAllText((Resolve-L2Path $probeOut)).Replace("
 if ($probeText -notmatch '^parse=0 indent_hits=[1-9][0-9]* layout_hits=[1-9][0-9]* registry_hits=[1-9][0-9]* cquoted_hits=[1-9][0-9]* pystr_hits=[1-9][0-9]* physical_hits=[1-9][0-9]* deeper_hits=[1-9][0-9]* trailer_hits=[1-9][0-9]*$') { throw "parse_bytes did not reach all L2 parser helpers: $probeText" }
 
 $candHash = (Get-FileHash -Algorithm SHA256 (Resolve-L2Path $candExe)).Hash
-$stgPt = "build\l1trans\gen2\printTree.exe"
-if (-not (Test-Path -LiteralPath $stgPt)) { throw "missing STG gen2 printTree $stgPt" }
+# The STG gen2 printTree is built here, from l1src\printTree.lm1 with the pinned gen2 translator and the
+# gcc line of tests\l1\run_parser.ps1: a printTree.exe accepted by presence could come from any tree
+# (l2src/RUNNER_HAZARDS.txt (a)). The translator is checked against L1_PIN.txt, not taken from -l1trans.
+$stgL1trans = "build\l1trans\gen2\l1trans.exe"
+$stgPin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()
+if ((Get-FileHash -Algorithm SHA256 (Resolve-L2Path $stgL1trans)).Hash -ne $stgPin) { throw "the gen2 l1trans for the STG printTree does not match L1_PIN.txt" }
+$stgDir = Join-Path $out "stg_printTree"
+New-Item -ItemType Directory -Force -Path (Resolve-L2Path $stgDir) | Out-Null
+$stgC = Join-Path $stgDir "printTree.c"
+$stgPt = Join-Path $stgDir "printTree.exe"
+cmd /c "`"$(Resolve-L2Path $stgL1trans)`" l1src\printTree.lm1 `"$(Resolve-L2Path $stgC)`" > `"$(Resolve-L2Path (Join-Path $log 'stg_printTree.translate.log'))`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "translating l1src\printTree.lm1 for the STG printTree failed" }
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o `"$(Resolve-L2Path $stgPt)`" `"$(Resolve-L2Path $stgC)`" > `"$(Resolve-L2Path (Join-Path $log 'stg_printTree.gcc.log'))`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "gcc for the STG printTree failed" }
 $stgHash = (Get-FileHash -Algorithm SHA256 (Resolve-L2Path $stgPt)).Hash
-$lm0 = (Resolve-L2Path "..\..\build\lm0\printTree.lm0.exe")
-if (-not (Test-Path -LiteralPath $lm0)) { $lm0 = "C:\Nyasha_Planet\lingvamyxa\build\lm0\printTree.lm0.exe" }
-$lm0Hash = "missing"
-if (Test-Path -LiteralPath $lm0) { $lm0Hash = (Get-FileHash -Algorithm SHA256 $lm0).Hash }
 
 $pinnedRev = "620db8612c32569c8dd507cca135d5d076144e9f"
 $pinnedWant = "CB564AD6FF52F35E918FFBAE6A6E2E166147DADCAAE445F9D5A2526A77801EF3"
@@ -455,7 +463,7 @@ $pinnedExe = "C:\Nyasha_Planet\lingvamyxa_old_worked_version\build\p0_tree_contr
 if (-not (Test-Path -LiteralPath $pinnedExe)) { throw "missing pinned 620 parser $pinnedExe" }
 $pinnedHash = (Get-FileHash -Algorithm SHA256 $pinnedExe).Hash
 if ($pinnedHash -ne $pinnedWant) { throw "pinned 620 printTree hash $pinnedHash want $pinnedWant" }
-if ($lm0Hash -eq $pinnedWant) { throw "build/lm0/printTree.lm0.exe unexpectedly equals pinned 620 hash; do not treat it as the oracle by convenience" }
+
 
 $expectReject = @{
     "C_nested_short" = @{ Exit = 1; Diag = "P0 parse error 13 at 2:5: source level increase must be one step" }
@@ -552,9 +560,7 @@ $id = Join-Path $out "candidate_indent_id.txt"
     "candidate_sha256=$candHash"
     "stg_printTree=$stgPt"
     "stg_printTree_sha256=$stgHash"
-    "lm0_printTree=$lm0"
-    "lm0_printTree_sha256=$lm0Hash"
-    "lm0_note=checkout dump client; not the pinned 620db86 oracle"
+    "stg_printTree_built_by=build\l1trans\gen2\l1trans.exe (L1_PIN.txt) l1src\printTree.lm1"
     "pinned_rev=$pinnedRev"
     "pinned_exe=$pinnedExe"
     "pinned_sha256=$pinnedHash"
