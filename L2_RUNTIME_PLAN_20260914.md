@@ -4127,3 +4127,18 @@ reads the deleted stg lm2), is D with that reason; the allowlist gains
 both. RUNNER_HAZARDS' stg lines are dated survey rows and stay. Next:
 3/3 the current instructions (CORE_LEAD ru/en, the model), then the red
 measure and land_oneroot.sh after e9's "done".
+Seed row re-measured by e9 (0c) over c063fd00 (2026-09-15), land_seed.sh
+in its "already contained, checks only, no push" branch: stg gate.ps1
+whole "gate: all green" in 309 s, all 27 steps ok, the gen0 half with no
+SEED exemptions (run_seed 3 s, run_gen 72 s, the twelve suites, l2
+run_lmx 36 s) and the gen2 half ok; root buildCore 4 s, run_seed 3 s,
+run_gen 64 s "gen1/gen2/gen3 accept ok"; root run_legacy_p0 269 s
+"legacy P0 corpus ok n=131 old119=119 added=12 extra_l1=3 accept=93
+reject=38 oracle=goldens/printTree.lm0 root=gen2 stg=gen2";
+run_slice_equal "sources 16 of 16 equal to the root, generated C 8 of 8
+equal to its regeneration"; run_self_build "fixed point 8 of 8 (pass 3
+== pass 2), committed generated C 8 of 8 equal to the fixed point";
+script exit 0, landing worktree removed, nothing pushed (integration
+still b4e1296d at that time; the seed branch still a30ed131); the pin
+copy in wt0c_fix3 still 0B3D85B3. The seed row of the self-build half
+is closed. The machine is free for ONE ROOT's heavy runs.
