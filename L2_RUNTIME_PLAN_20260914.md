@@ -4496,3 +4496,12 @@ site by site by S3's wake and launch-retry deletions (7200294b against
 b4e1296d). Two false positives caught by reading (a comment naming
 msg_at_addr in endp_try_retire; a multi-line signature and two lm1 sub:
 blocks merged by a naive boundary tracker).
+Ticket to b5 (the coordinator, 2026-09-15), git only, to start at the
+lead's "landed": one branch sonnet/inventories off the landed integration
+tip carrying its ten files (S3 fields, M, Y sites, S4 writes, S6 lock
+sites, A allocs, S5 lists, crosscheck, S2 lookups, Y1 old-sync) at
+l2src/<name>, byte-identical to each old branch's tip, pushed; the lead
+merges the one branch; the old branches stay as history. The
+coordinator's own fable/m-acceptance 03fc0f65 is re-cut onto the landed
+tip the same way (the oracle's two edits at l2src/lmx_message_exec.[ch])
+and re-measured red there.
