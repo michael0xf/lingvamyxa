@@ -212,12 +212,31 @@ O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced 
         rest_lmx_http_client.lm1.c and rest_lmx_http_server.lm1.c with it, rebuild and regenerate once more. Both
         outputs must equal the kept files (the fixed point). A red here is a chain bug found before O, fixed
         red-first (not lock-related), or a contradiction if it needs a decision.
-    O1. The core's turn arena (A1 brought forward; core lane, the lead): LmxMsg owns an LmOwnArena, created in
-        create_prepare, destroyed at release, and reached through an accessor for the current turn's Message
-        (lmx_message.lm1 and lm2 mirrored; per rule (c) new state goes in L1/L2, and C only reads the thread-local
-        turn identity). Red: a test that allocates in two Messages' turns expects distinct arenas and every block
-        freed at each release (two-cycle balance). Today there is no such arena, so it is red by construction and
-        compiles red on the missing accessor.
+    O1. The core's turn arena (A1 brought forward; core lane, the lead). Facts read on cf326822 before writing:
+        the core already has the Message's arena as 19.29.2 describes it. LmxMsg\blocks is a list of LmxMsgBlock
+        {base, n, class, dispose, next}, owner-local bookkeeping with no synchronization (lmx_msg_blocks.h.lm1), and
+        LmxMsg\ranges holds the registered domains. The owned constructors allocate into that pair
+        (lmx_value_allocate_owned, lmx_value_owned.lm1:7, pushes one block and one range through
+        lmx_msg_storage_move_all). Settle moves the pair into the parent (adopt_mark, handoff_move_locked), and
+        lmx_msg_slot_free disposes it (exec.c 1045-1085). LmOwnArena in l1src/own.lm1 is a different, older
+        allocator. The core does not link it (its units use the narrow adapter l2_foreign_alloc.lm1), so O1 does
+        not use it. What is missing is only a way into the current turn Message's arena without a runtime handle:
+        lmx_msg_turn_self needs rt, and the lm2 chain's emitted code has none.
+        The addition:
+        - C, a native primitive per rule (c): LmxMsg *lmx_msg_turn_current(void), which reads the thread's turn
+          identity (lmx_turn_msg, the T class). No new state, no lock.
+        - L1 in lmx_message.lm1 and its lm2 mirror, one commit: fn lmx_msg_turn_new_zero (size_t: size) @: void
+          allocates size zeroed bytes as one LmxMsgBlock (class 0, dispose 0) pushed onto the turn Message's
+          blocks, and fn lmx_msg_turn_copy_bytes (const: @(char source); size_t: length) @: char. Both return 0
+          outside a turn, and on refusal nothing is pushed. The writer is the Message's own lane (M, 2.1 (1)).
+        - Freed by what already frees the Message's arena: slot free at its release, or the parent's settle write
+          when adopted. End-turn collection of unreachable blocks (19.29.4) is not part of O1.
+        - Red first: a model test, run by run_model_scenario36, where two Messages each allocate in their own turn
+          (A on a context worker, B on R0's turn) expects each allocation in its own Message's blocks list and none
+          in the other's, 0 returned outside any turn, and the two-cycle balance (ld --wrap live count after the
+          second runtime_delete equal to the first). It is red today by construction: the test does not link,
+          since lmx_msg_turn_new_zero and lmx_msg_turn_current do not exist. After the addition, falsify: push the
+          block onto the parent's list instead, and the "own list" check goes red.
     F4. The self-build drivers today. stg/l1_baseline/gate.ps1 runs buildCore.lm0.bat (gate.ps1 102). buildCore.lm0.sh
         compiles lm1/build/l1trans.lm1.c (its line 44), which is the L1 chain. The lm2 chain (trans.lm2,
         trans_l1_statement.lm2 → lm1/build/trans.lm1.c) is regenerated only by CMake's trans.lm0 and its refresh_*
