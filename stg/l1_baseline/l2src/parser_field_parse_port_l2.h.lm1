@@ -47,7 +47,28 @@ include: "l1src/p0.lm1.h"
 # same unit). lm_p0_scan_compact_atom_piece's entry stays -- it and
 # its own callees (lm_p0_is_bare_identifier_start/_rest, lm_p0_is_
 # hex_digit, lm_p0_scan_number_token) are e4b, blocked on the uchar
-# gap's fix.
+# gap's fix. Committed on its own side branch, sonnet/parser-l2-e4a
+# (off sonnet/parser-l2's tip at af150cd6), per d6: e4a lands after
+# e3, not before.
+#
+# Slice e5, lm_p0_parse_fields_until_with_layout (the ~460-line main
+# continuation-passing loop) adds one L1-primitive entry (lm_own_ptr_
+# stack_pop, l1src/own.lm1:129, same shape as the existing lm_own_
+# ptr_stack_push), five cross-unit entries for functions already
+# ported into other units (p0_free_node, Stage c's parser_alloc_
+# port.lm2; p0_index_is_line_start, Stage b's parser_scan_port.lm2;
+# p0_stream_event_new, p0_stream_event_delete, p0_is_short_form_
+# separator -- p0_is_short_form_separator is Stage a's parser_text_
+# port.lm2, the other two are Stage d's parser_stack_stream_port.lm2),
+# and two new still-oracle-native entries: lm_p0_scan_raw_comment_
+# block, lm_p0_scan_block_string_event (both reach lm_p0_record_mix_
+# mark's own disabled-block-comment machinery, out of this port's
+# scope -- see the capstone note). No new dependency on e4b: e5 calls
+# p0_append_compact_atom_pieces (e2, already in-unit), which itself
+# still calls lm_p0_scan_compact_atom_piece via its own oracle-native
+# prototype above -- e5 never calls scan_compact_atom_piece or any of
+# e4b's blocked predicates directly. child_indent_stack (a bare
+# LmP0IndentStack local) needs the IndentStack-foreign translator.
 
 prototype:
     fn: lm_own_new_zero (size_t: size) @: void
@@ -75,4 +96,12 @@ prototype:
     fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: start; @: size_t out_end) int
     fn: lm_p0_consume_brace_mark (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
     fn: lm_p0_skip_brace_mark (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
+    fn: lm_own_ptr_stack_pop (@: LmOwnPtrStack stack) @: void
+    sub: p0_free_node (@: LmP0Node nd)
+    fn: p0_index_is_line_start (const: @(char text); size_t: index) int
+    fn: p0_stream_event_new () @: LmP0StreamEvent
+    sub: p0_stream_event_delete (@: LmP0StreamEvent event)
+    fn: p0_is_short_form_separator (char: value) int
+    fn: lm_p0_scan_raw_comment_block (@: LmP0Document document; const: @(char source); size_t: length; size_t: line_start; size_t: line; @: size_t next_offset; @: size_t next_line) int
+    fn: lm_p0_scan_block_string_event (@: LmP0Document document; const: @(char source); size_t: length; size_t: line_start; size_t: line; @: LmP0StreamEvent event; @: size_t next_offset; @: size_t next_line) int
 end: prototype
