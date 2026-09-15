@@ -1060,8 +1060,7 @@ same day):
 Everything else is not Message and is, in the end, written in LMX as the
 inside of a Message (its Structure data in its own arena): an L3 Thread's
 record adds its mailbox (the one synchronized collection of Messages) and
-its scheduler and maintenance state as such data; the C keeps only the
-native primitives (the thread, the mailbox's monitor).
+its scheduler and maintenance state as such data.
 Mikhail, 2026-09-15, verbatim, on that inside: "и транслируется в LMX как внутренность Message." -- то есть записывается в "struct Lmx *root; " , и на L1 нужно сделать имитацию (то есть не имитацию а код вкоторый L2 и L3 будут разворачиваться) and, correcting
 himself the same minute: "то есть записывается в "struct Lmx *root;"" это уже на L2 там лежит код который с этими Message и работает. А на L1 просто тот код который _будет порождаться_. (that inside is written into what
 `root` reaches; on L2 that is where the code working with these Messages
@@ -1070,7 +1069,17 @@ shape of that code: "В точности как имитируется L2 на �
 with arguments, hidden arguments and the graph node). Hence, verbatim:
 "Поэтому структура Message как данные остается и на Си -- в точности как стуктура Lmx" (therefore the Message structure as data stays in C as well,
 exactly like the Lmx structure): the record above is a C data type beside
-Lmx, not something later rewritten in LMX.
+Lmx, not something later rewritten in LMX. And on a sentence of the
+coordinator's that stood here, "the C keeps only the native primitives (the
+thread, the mailbox's monitor)", verbatim: "the C keeps only the native primitives (the thread, the mailbox's monitor)»" -- это для L3 Thread? Он тоже пишется на L1,переноситс на L2 и остаток на L3. Разумеется на L2 остается низкий уровень, а причем тут вообще Си? Ты же не пишешьв Си на ассемблере встаквки "потому что надо компилировать". Удаляй (is that about the L3
+Thread? it too is written in L1, moved to L2 and the remainder to L3; of
+course the low level stays on L2, but what has C to do with it; you do not
+write assembler insertions in C "because it has to compile"; delete it).
+And on what L1 is for, verbatim: "Вы пытаетесь писать на Си, а на Си (L1) надо просто пилить ядро _на котором_ уже пилить дальнейший функционал самого ядра. Это как я бы попросил на goto имитировать все циклы, а вы бы заменили задание на "написать примеры while и for"  -- совершенно разне задачи" (you are trying to write in
+C, while in C, that is L1, one simply builds the kernel on which the further
+functionality of the kernel itself is then built; as if I asked you to
+imitate all loops with goto and you replaced the task with "write examples
+of while and for": entirely different tasks).
 
 `node` is the Structure's lexical parent. Merge and Message creation copy the
 complete used graph with the same traversal, including lexical node chains to
@@ -11522,10 +11531,7 @@ Clarification (2026-09-14, Mikhail): one arena, one lane, one writer. A
 Message's scheduler and management state is written only on that Message's
 own lane; no other thread writes into a Message's data, and this holds for
 the C runtime exactly as for L2, because it is not a property of the graph
-system but of the Message. A child's readiness is the child's own control
-flag (written like any control flag: at admission by the sender, cleared by
-the child; a late read changes nothing), which the parent's scheduler step
-reads for its direct children when it chooses a turn. A parent therefore
+system but of the Message. A parent therefore
 keeps no list that another thread appends to: a child pushing itself into
 its parent's ready list from the child's thread, and a UI thread writing
 into many parents' lists, are implementation errors of the L1 prototype and
@@ -11535,7 +11541,7 @@ admission lock is the one cross-lane synchronization the model permits
 (19.29.6).
 Ownership of cells, for the rule "written only on the owner's lane"
 (2026-09-14): (1) a Message owns its arena, its scheduler record and cursor,
-the clearing of its ready flag, its mailbox except admission, its native
+its mailbox except admission, its native
 users and handoff-safe marks, its success, and its own running clear at
 end_turn; its lane is whichever thread holds its turn, so a host-driven turn
 is that Message's lane. (2) The parent owns the supervision cells about its
@@ -11549,15 +11555,18 @@ is the parent's write, or the host's for an orphan; clarified 2026-09-14), the f
 supervision handoff), and the settle writes (the storage moved into the
 parent, the child's graph and init at settle). (3) Control flags are single
 cells with one designated cross-lane writer, by the flags' philosophy: the
-parent writes a child's running=0 and closing (stop); the sender writes the
-destination's ready at admission; the lane that takes a Message's turn (its
-own worker, the host mapping, or its parent's lane in the sequential
-mapping of 19.28.R2.2) is that Message's lane for the take and clears its
-ready flag; a late read changes nothing.
+parent writes a child's running=0 and closing (stop).
 What is removed by this rule: a parent's ready lists and context lists
 appended by a child's, a sender's or a UI thread's lane; a child unlinking
 itself from its parent's list; the parent's step reads its children's own
 cells instead.
+Mikhail, 2026-09-15, on the child's readiness flag this paragraph used to
+name (written by the sender at admission, read by the parent's step),
+verbatim: "готовность ребёнка его собственным" --готовность к чему?! Удаляй (readiness for what? delete it): the flag and its
+sentences are removed above; a Message's mail is what its own loop finds in
+its mailbox. The same day, on a delivery history the L1 runtime kept
+(the last ids per sender, dropping repeats), verbatim: "ящик помнил последние id от каждого отправителя и отбрасывал повторы («не более одного раза»)." -- какая-то выдумка. Удаляй все. (some
+invention; delete it all): no such mechanism in the core.
 
 Clarification (2026-09-15, Mikhail, verbatim): "Там не должно быть общих
 блокировок. У очереди писем только своя внутренняя блокировка коллекции,

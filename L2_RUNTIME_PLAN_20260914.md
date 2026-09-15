@@ -3278,3 +3278,37 @@ needs (c). Landing order: (c) now (the lead; L1 pin promotion announced
 before and after the push), then the seed re-measured cold on the stg
 side over (c)'s result (stg gate.ps1, root run_legacy_p0, run_slice_equal
 17 of 17 and 8 of 8) and landed by 57, then b5's da7d61f1.
+Mikhail (2026-09-15, verbatim) on the three items put to him: on the
+delivery history (done_from/done_id/done_n/done_cap, the at-most-once
+filter): "ящик помнил последние id от каждого отправителя и отбрасывал повторы («не более одного раза»)." -- какая-то выдумка. Удаляй все. So Q2 is DEL, the four fields and the mechanism, with
+no replacement. On the ready flag and the 2026-09-14 sentence naming it:
+"готовность ребёнка его собственным" --готовность к чему?! Удаляй So ready is DEL; the readiness sentence, the "clearing of its
+ready flag" in ownership item (1) and the ready clauses of item (3) are
+removed from 19.28.R2.2 and from the model's parallel paragraph; the
+"What is removed by this rule" sentence stays. On the coordinator's
+section-2 sentence "the C keeps only the native primitives (the thread,
+the mailbox's monitor)": "the C keeps only the native primitives (the thread, the mailbox's monitor)»" -- это для L3 Thread? Он тоже пишется на L1,переноситс на L2 и остаток на L3. Разумеется на L2 остается низкий уровень, а причем тут вообще Си? Ты же не пишешьв Си на ассемблере встаквки "потому что надо компилировать". Удаляй So that clause is removed from spec
+section 2 and model section 2, his explanation entered verbatim in both;
+the L3 Thread, like everything, is written in L1, moved to L2 and the
+remainder to L3, and no "native C part" is a design category (the field
+table's "L3T native" rows are L1 data of the L3 Thread's code like any
+other, not a kept C layer). Both HELD rows of the field table close as DEL.
+Order correction (the lead, 2026-09-15): d6/slice-refresh is built by merging
+79871822 into 0c's a30ed131, which already contains d6/stg-buildcore
+e5da89f5, so landing (c) lands the seed branch and the buildCore rewrite in
+the same merge; the lead's land_c.sh runs on that merge stg gate.ps1
+whole, root run_seed/run_gen, root run_legacy_p0, the pin install,
+run_gates -L2MessageRoot 33 of 33, run_l2trans and run_port_parser. 57's
+step after it is a cold re-measure of the stg side over the landed hash as
+verification only (land_seed.sh's "already contained" branch: the lm2
+moves, root route before run_legacy_p0, run_slice_equal 17 of 17 and 8 of
+8, run_self_build 8 of 8; no merge, no push), the record of the seed row;
+then b5's da7d61f1 re-checked on (c)'s tip. Code pushes go to
+integration/main-absorbs-core and reach main by the lead's merge; only the
+docs go to main directly.
+Mikhail (2026-09-15, verbatim, on what L1 is for): "Вы пытаетесь писать на Си, а на Си (L1) надо просто пилить ядро _на котором_ уже пилить дальнейший функционал самого ядра. Это как я бы попросил на goto имитировать все циклы, а вы бы заменили задание на "написать примеры while и for"  -- совершенно разне задачи" Read by the
+coordinator: the L1 (C) work is the kernel only, on which the rest of the
+core's functionality is then written; the field table's L3T and PAR rows
+are therefore not things to port one by one but functionality to write on
+the kernel, and the design names the kernel first. Entered verbatim in
+spec section 2 and the model's section 2.
