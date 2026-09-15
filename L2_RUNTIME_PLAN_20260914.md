@@ -5054,3 +5054,26 @@ pre_allocations=2) and two stale comments; measured before the commit:
 run_lmx -Suite Message ok, run_port_msg_path_storage parity PASS 541
 checks 0 failures. The full 31 gates running on it with the pin
 hash-checked; the coordinator's acceptance runs follow the result.
+The 1016 s gate run explained (e9, 2026-09-15; claude-0c/gate-time 54e9e303,
+l2src/GATE_TIME_1016.txt; checked by the coordinator): it was the
+lead's land_b_8cd61352 gates.log, "gates GREEN: 32 of 32 in 1016s", HEAD
+79871822, pin 722AC86E, 04:52:26-05:09:22, the 32-gate default set (the
+33-gate -L2MessageRoot runs took 532-562 s); against land_d1_17b4d5e1
+(510 s at 7200294b) and land_gates32_ad3fc6b8 (520 s), same set and pin,
+with both runs' per-gate logs surviving: the three largest deltas
+graph_abi 150 vs 69, send_local 58 vs 26, family_handoff 57 vs 26; no
+single gate accounts for it, every translating and compiling gate took
+about 2.2 times as long (the 18 port runners together +266 s, 504 s in
+all), lane_oracle 6 s faster, scenario36 +13 s; the same work in both
+(identical verdict lines, 5055/476 against 5029/476 build and evidence
+files, pin_matches_L1_PIN=True in both, no single cold compile, no
+wait; inside send_local core.zip to the first translated module 13 s
+against 7 s); the slowdown began about 04:53 and lasted past 05:09;
+nothing else visible in that window in the 139 chain outputs, no
+regen_root relaunch, no file written under C:\Nyasha_Planet outside the
+chain, none in the sessions' temp directories: CPU contention the logs
+do not name. The 06:18 A45828C5 run was RED at lane_oracle after 0 s on
+a pin mismatch and re-run green at 06:31 in 532 s. Falsifier: each
+gate log's write time minus the previous one reproduces the chain's
+per-gate seconds in both runs (1015 + 1 s overhead; 511 s). Closed as
+environmental; the plan's open item on it is closed.
