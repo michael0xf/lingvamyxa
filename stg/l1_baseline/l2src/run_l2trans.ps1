@@ -55,7 +55,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 139 -or $digest -ne '05E9A37329BDB49B763F2B1E59CB8B1BC25BD68190730638CB53BA0C1A7CD51D') {
+if ($cases.Count -ne 140 -or $digest -ne '3F6879665696FABDA08C28A9DB8452F431E0626DF20C2DB157638ACF57C98F18') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2314,6 +2314,13 @@ if ($sizeofArgL1.IndexOf("c.sizeof(c.wchar_t)") -lt 0 -or $sizeofArgL1 -match 'c
 Invoke-Leaf "l2src\tests\unit_byvalue_foreign.lm2" "unit_byvalue_foreign" 0 "byvalue"
 $byvalueL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_byvalue_foreign.lm1")))
 if ($byvalueL1 -notmatch '; LmP0NodeKind: l2_p\d+_0\) LmP0NodeKind' -or $byvalueL1 -notmatch '; LmP0FrameFlags: l2_p\d+_0\) LmP0FrameFlags' -or $byvalueL1 -match 'c\.LmP0FrameFlags' -or $byvalueL1 -notmatch 'LmP0NodeKind: l2_t\d+' -or $byvalueL1 -notmatch 'LmP0FrameFlags: l2_t\d+') { throw "unit_byvalue_foreign did not spell the by-value foreign types as written" }
+# A foreign int alias as a local's declared type (5e's repro, parser-l2 Stage d
+# slice 5): `LmP0TrailerRole: trailer_role` translates as an int own local.
+$aliasLocalHeader = "lm1\build\l2src\tests\repro_foreign_int_alias_local.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $aliasLocalHeader) | Out-Null
+& $outputL1trans "l2src\tests\repro_foreign_int_alias_local.h.lm1" $aliasLocalHeader
+if ($LASTEXITCODE -ne 0) { throw "repro_foreign_int_alias_local header translation failed" }
+Invoke-Leaf "l2src\tests\repro_foreign_int_alias_local.lm2" "repro_foreign_int_alias_local" 0 "probe_foreign_int_alias_local"
 # LmP0Document is a foreign pointer type like LmP0Frame (Stage B step 3): its
 # fields resolve as a formal and as a local.
 Invoke-Leaf "l2src\tests\unit_p0_document_field.lm2" "unit_p0_document_field" 0 "doc_field"
