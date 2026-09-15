@@ -1084,7 +1084,22 @@ prototype, largest first.
    C's thread frees its own state and ends on its own" over the same
    check; the balance read once the live count is stable for 200 ms, 3 s
    cap), remeasured on 402b2919: 45 checks, 4 failures, the same two red
-   lines; (f) builds on f79320de.
+   lines; (f) builds on f79320de. Held 2026-09-15: Mikhail questions
+   why R0 should wait for a child's settle at all ("what for?"; the
+   executor frees its own memory; each L3 Thread has its own scheduler and
+   GC; no shared locks, only the mail queue's own collection lock), which
+   would make R0's close its own closing end_turn with no wait after it
+   and contradict 995ff339's "settled children are reclaimed by the chain,
+   and only then the root's own storage and the runtime go" and the
+   acceptance's ordering line; the coordinator's reading put to him
+   through the lead: R0 waits for no other L3 Thread, but the Messages
+   without a thread of their own belong to R0's scheduler, which settles
+   them before R0's thread frees what is R0's, and today's shared executor
+   state (lock, TLS, slot table behind rt) is freed by the last thread
+   that leaves it, by a count; if confirmed, the acceptance drops the
+   ordering line, waits for C's own done flag before reading its reason,
+   keeps the stable-window balance as the property itself, and the spec
+   sentence is rewritten under his name. No code until his answer.
    The (f) design (d6/stage5f-design 18f9ba54, STAGE5F_DESIGN.txt on
    ffeb1094; measured on 402b2919: no closing turn runs in today's delete,
    the chain exists as request_children_close, settle_child, parent_settle,
