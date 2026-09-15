@@ -2228,3 +2228,11 @@ lead's O1), the UI-lane scheduler paused at its red acceptance
 (3d341969) until stage M needs it; the lead on O1 and the lock-removal
 stages; 0c on the oracles, the lane and wake gates and the self-build's
 fixed-point gate; nothing else is worked on.
+S1 landed on integration as d7f3b569 (aef95e1c merged into d66a4ec1;
+adopt_push gone from exec.c): run_port_message -LaneCheck parity PASS in
+54 s with no LANE WRITE FAIL, send_local 146/0, family_handoff 63/0,
+scenario36 core tests PASS, run_gates 11 of 11 in 210 s. S2's red is
+measuring on d6/lock-s2-red (reference.exe twice with LMX_LOOKUP_COUNT=1);
+then 57's quiet window on d7f3b569; then O1 (the turn Message's arena, the
+red test written against lmx_message.lm1/lm2 and own.lm1's LmOwnArena) in
+the lead's lane.
