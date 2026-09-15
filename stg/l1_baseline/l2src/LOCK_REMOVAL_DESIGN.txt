@@ -122,6 +122,48 @@ M. The sequential mapping removed (X), after S3 and before S4.
     mapping instead of being threaded. S4 no longer has a host arm or a UI take to decide, and C3/C4 are decided on
     own-thread children only. S5's ui_lane becomes R0's child L3 Thread on the UI thread, not an executor pointer.
 
+D. create_id and create-retry idempotence deleted (X), with S1's dead-code kind.
+    Mikhail, verbatim (2026-09-15), to "why is create_id needed at all": "зачем вообще этот create id сейчас нужен?
+    Снимайте все что не нужно"; to the question whether the retry clause of 19.29.7.1 goes: "2 -- убирайте". The
+    coordinator removes the clause from the spec and the model. In code: LmxMsg\create_id, the (parent, create_id)
+    retry lookup (lmx_msg_find_create), the tombstone rule and their bookkeeping (lmx_message.h 7, lm1 and lm2 18
+    each, the executor selftest 4, lmx_entry_turn_selftest 1). LMX_MSG_UI_LANE_ID goes with stage M's UI lane.
+    - Red: none for a deletion. The proof is the grep at 0 for create_id and find_create in the tree, and every
+      runner that builds lmx_message green. Each deleted test check is named in the commit with the property it
+      checked (create retry returns the same child, tombstone refuses the freed handle).
+
+O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced by the one core (X).
+    Mikhail, verbatim (2026-09-15), to its real extent: "3- да, удаляйте целиком".
+    Inventory, the stage's first line: who builds and uses it, by grep on cf326822.
+    - lm2/own.lm2 (and its stg/l1_baseline/lm2 copy): the externals lm_message_thread_* (43: runtime_new/delete,
+      pool_new/pump/delete/request_stop, new/start/join/destroy, send_lmx, begin_turn/end_turn, component_*,
+      bind_route, runtime_admit_lmx, set_rest_lmx_provider, ...), lm_host_thread_* (4), lm_thread_provider (1),
+      lm_mutex_* (4), lm_condition_* (5), and the lm_native_* mutex, condition and thread wrappers of every
+      platform branch; its record types (runtime route_mutex, pool mutex/work_ready, thread state_mutex/
+      stopped_condition).
+    - lm2/own_abi.lm2: 41 declarations.
+    - lm2/buildCore.lmx (both copies): the generated PowerShell and sh steps building
+      trans_message_thread_pool_single, trans_message_thread_mailbox_single and the C tests
+      tests/message_thread_{root_drain,application_exit,rest_lmx_provider,rest_lmx_ingress,pool_native,
+      mailbox_native}.c, each in a single-provider and a native form (buildCore.lmx 362, 493-540, 799, 852-870 and on).
+    - CMakeLists.txt: the lm_thread_provider interface target (86-104) and its link at 406.
+    - tests: trans_message_thread_{pool_single,mailbox_single,arena_isolation,arena_registry,component_registry,
+      diagnostic_invoke_boundary,loop}.lm2, trans_thread_provider_single.lm2, tests/thread_provider_native.c, and
+      whatever the grep of lm_message_thread_ finds in lm2 sources (the rest_lmx providers first). That list is
+      finished at the stage's start, by grep over the whole tree, before any deletion.
+    - Red: none for a deletion. The proof, as the coordinator ruled: grep at 0 across the tree for lm_mutex_,
+      lm_condition_, lm_native_mutex_, lm_native_condition_ and lm_message_thread_, and the builds that consumed
+      own.lm2 (buildCore's core build, CMake) green without them. Each deleted test is named with the property it
+      checked.
+
+S5 on 5.1, answered (Mikhail "1 - -да" to the coordinator's wording): there is no root list (R0 is the one root,
+    its children an ordinary child list in R0's arena); there is no walk at deletion (the close is R0's own closing
+    end-turn); the slot list goes without replacement; the retire queue goes (a closed child's storage is its
+    parent's settle write); a lane's own queue is that Message's mailbox. S5 no longer waits.
+    5.6, answered ("давай так"): a capability is the target's mailbox handle; a closing Message's mailbox settles
+    into its parent with the rest of its storage; a late send lands in the parent's mailbox and is refused there on
+    the parent's lane with a status to the sender; no holder count. S4's C3/C4 no longer wait.
+
 S4. The family tree and the mapping written only on the owner's lane (L2, L3), then read without the lock.
     Each tree cell and mapping cell has one writer by decision 18's ownership list (1)-(3), Mikhail's own
     clarification: the parent for its child chain and the mapping, the Message itself for its own cells. A cell with
