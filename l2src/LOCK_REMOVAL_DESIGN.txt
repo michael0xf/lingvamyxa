@@ -312,6 +312,11 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
         itself, the retargeted mode 3 included;
       - tracked tree clean after the runs.
       Handed to the coordinator for the green re-measure on d6/lock-s2 05c50f8b.
+      Acceptance record complete (the coordinator, 2026-09-15): 05c50f8b merged locally with c8f9cb50 (parents
+      checked). run_port_message plain parity PASS in 48 s (102 methods). reference.exe twice with
+      LMX_LOOKUP_COUNT=1 gives "C1=0 C2=0 turn_other=17" (host 2890528 / 2807356), with 0 report lines without the
+      variable. Red c8f9cb50, green 05c50f8b, falsifier C1=48; turn_other attributed as above. Landing:
+      land_s2.sh (land_base2.sh, the union base plus lmx_cancel; the counter is never folded in).
       What the green then measures: no walk of the runtime's tree from a turn's C1/C2 site. A scan of the caller's
       own child list for a child address is not a lookup the counter hooks, and it is the design's "parent's child
       pointer"; stated here so that nobody reads the green as more than that.
