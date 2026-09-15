@@ -3158,3 +3158,14 @@ L1_PIN.txt; each session copies it into its worktrees' stg gen2 and checks
 the hash before its next run. Sequencing: all four sessions told right
 before the landing's push and again after it; nothing of (c) before (b)
 lands and 0c's cold green passes.
+The pin's source tie corrected (the lead, measured at 7200294b): a second
+line in L1_PIN.txt would break every whole-file reader (mixa_manager's
+lib_l2_runtime_support.ps1 17-19 requires the trimmed file to be exactly 64
+hex characters, so all 52 mixa runners would throw; run_port_parser.ps1:38
+reads every line trimmed into an array; 21 other readers take the first
+line only). Ruled (A): L1_PIN.txt stays one line, the byte hash as the
+distribution key; the source tie goes in stg/l1_baseline/l2src/
+L1_PIN_SOURCE.txt in the same commit (root_l1trans_lm1_c=<blob>,
+c_fixed_point=<hash>, built_by=refresh <hash>, the date), checked later by
+0c's self-build row against the committed root l1trans.lm1.c's blob; no
+reader changes.
