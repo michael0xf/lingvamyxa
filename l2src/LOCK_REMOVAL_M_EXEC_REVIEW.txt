@@ -1,0 +1,134 @@
+LOCK_REMOVAL_M_EXEC_REVIEW: the lead's exec_selftest.c diff (793c267f ->
+d6/m-sequential 219b2672, "M: the executor selftest gives each child its
+turn on its own context") checked against LOCK_REMOVAL_EXEC_SELFTEST_GATES.txt
+(sonnet/exec-gates, same branch, 2026-09-15, doc-only).
+
+--- Headline finding: the naive check fails, precisely, and the reason is
+    mine, not his
+
+The ticket's own question -- are the blocks he converted my 4 M blocks,
+and does no block outside them lose or gain a gate -- has a clear answer:
+no. He touched 29 of my 49 gated blocks, not 4. The other 25 are blocks
+LOCK_REMOVAL_EXEC_SELFTEST_GATES.txt tagged S6 by keyword density (they
+scored higher on exec_stop/start_contexts/last_status/cleanup terms than
+on AFFINITY_UI/ui_step/map_child), but their own gates were every one of
+them a Sleep-and-GetTickCount poll for a bound child's turn to finish --
+exactly M's own territory, just not caught by that scoring rule. This is
+a correction to that file's stage column for 25 rows, not a defect in his
+diff: every one of the 132 gate-pattern lines his diff removes is
+accounted for below, none added (checked, not assumed -- see Falsifier),
+and the one kind genuinely outside M's own reach, exec_lock, is 5/5
+unchanged.
+
+--- Counts
+
+Blocks he touched: 29 of 49 gated (59%). Of these: 4 match
+LOCK_REMOVAL_EXEC_SELFTEST_GATES.txt's own M tag exactly (1699-1707,
+1741-1751, 2029-2112, 6924-6991 -- their own gates go from 12 total
+[Sleep 2, event 1, GetTickCount 9] to 0, confirmed by reading the diff's
+new-file line ranges directly, not inferred). The other 25 were tagged S6
+in that file; listed below. 0 blocks lost or gained a gate that were not
+in this touched set (every one of the 132 removed gate-pattern lines maps
+to one of these 29 blocks, the pre-main() helper functions, or 3 lines of
+connective code between blocks -- see Falsifier's per-bucket accounting).
+Per-kind, whole file: Sleep 65->26 (-39), event 96->84 (-12), go-cell
+86->82 (-4), GetTickCount 127->50 (-77), exec_lock 5->5 (0). Added: 0 real
+gates (1 false-positive match, a comment reading "M: no go cell", not
+counted).
+Per-kind, split by where the removal falls: the 4 M-tagged blocks account
+for Sleep 2, event 1, GetTickCount 9 (0 go, 0 exec_lock); the 25
+re-tagged blocks account for Sleep 34, event 6, go-cell 2, GetTickCount
+62; the pre-main() helper functions (turn_busy/turn_ui/turn_mass support
+code, not "in main" so not one of the 49 blocks' own) account for Sleep
+3, event 2, go-cell 2, GetTickCount 6; 3 more event-pattern lines sit in
+the connective CreateEvent calls just before the first block's own
+runtime_new (already noted in LOCK_REMOVAL_EXEC_SELFTEST_GATES.txt as
+outside any block's range). Each kind's four buckets sum to that kind's
+whole-file delta exactly: Sleep 2+34+3+0=39, event 1+6+2+3=12, go-cell
+0+2+2+0=4, GetTickCount 9+62+6+0=77 -- the full reconciliation, with the
+whole-file deltas themselves, is in the Falsifier below.
+
+--- The 25 re-tagged blocks (were S6, their own gates say M)
+
+1671-1689  host_post                    event@1681, GetTickCount@1689
+1708-1740  slow start (continued)       GetTickCount x2, Sleep, GetTickCount, Sleep
+1984-2028  omit-end start               GetTickCount x2, Sleep, event
+2113-2177  close-path start             GetTickCount x2, Sleep
+2714-2789  spawn start                  GetTickCount x2, Sleep, event x2
+2862-2930  ctx fail retry start         GetTickCount x2, Sleep, GetTickCount x2, Sleep
+2931-2999  (unnamed)                    GetTickCount x2, Sleep
+3063-3121  (unnamed)                    go, event x2, go, GetTickCount x2, Sleep, go, event
+3122-3203  race start                   event, GetTickCount x4, Sleep, event x2
+3204-3262  mix family                   GetTickCount x2, Sleep, GetTickCount x2, Sleep
+3263-3343  map fail expected NOMEM      GetTickCount x2, Sleep, GetTickCount x2, Sleep
+3344-3410  (unnamed)                    GetTickCount x2, Sleep, GetTickCount x2, Sleep
+3411-3468  (unnamed)                    GetTickCount x2, Sleep x2, GetTickCount x2, Sleep
+3748-3805  orphan mapped create         GetTickCount x2, Sleep, go x2, GetTickCount x2, Sleep
+4055-4120  (unnamed)                    GetTickCount x2, Sleep x2
+4121-4182  (unnamed)                    GetTickCount x2, Sleep x2
+4183-4288  (unnamed)                    GetTickCount x2, Sleep
+6464-6510  exec_stop retry start        GetTickCount x2, Sleep x2
+6768-6814  exec wait                    GetTickCount x2, Sleep
+6815-6861  exec map-ready start         GetTickCount x2, Sleep
+6862-6923  exec map-isol start          GetTickCount x2, Sleep
+7835-7916  exec wait (map-reparent)     GetTickCount x2, Sleep
+7955-8019  exec wait-grow start         GetTickCount x2, Sleep
+8113-8172  exec wait-grow (cont.)       GetTickCount x2, Sleep
+8198-8269  exec wait-grow (cont.)       GetTickCount x2, Sleep, GetTickCount x2, Sleep
+
+Every one of these is the same shape: bind a child, start_contexts, then a
+GetTickCount-deadline while-loop with a Sleep(N) poll for the child's own
+`.done`/last_status flag -- the exact pattern LOCK_REMOVAL_M_EXEC_REVIEW's
+own earlier ticket (sonnet/m-tests-send, 76ad060d) replaced with real
+per-thread execution and a kernel-flag read. That the lead's diff removes
+every one of them, and adds no replacement gate anywhere, is the expected
+shape of "each child gets its own context now, immediately" -- there is
+nothing left to poll for.
+
+--- Blocks unaffected (24 of 49 gated, plus all 76 ungated): unchanged
+
+The remaining 24 gated blocks (and the 76 ungated ones) have zero removed
+gate-pattern lines in the diff (verified: every one of the diff's 132
+removed gate lines maps to the 29 touched blocks, the pre-main() helpers,
+or 3 connective lines -- none to any other block). exec_lock is the clean
+confirmation: 5 sites before, 5 after, 0 touched -- the one kind that is
+genuinely S6's own future territory, not M's, is untouched by this diff,
+exactly as the stage order (S3, M, D2, S2, S4-S6, Y, A) says it should be.
+
+--- Falsifier
+
+The ticket's own falsifier, run literally against just the 4 originally-
+tagged M blocks, FAILS for four of five kinds -- stated plainly since a
+failing falsifier that surfaces a real, fully-explained gap is the
+falsifier working, not a reason to reword it after the fact:
+  Sleep:        (26 - 0) vs (65 - 2)  = 26 vs 63,  off by 37
+  event:        (84 - 0) vs (96 - 1)  = 84 vs 95,  off by 11
+  go-cell:      (82 - 0) vs (86 - 0)  = 82 vs 86,  off by 4
+  GetTickCount: (50 - 0) vs (127 - 9) = 50 vs 118, off by 68
+  exec_lock:    (5 - 0)  vs (5 - 0)   = 5 vs 5,    exact
+(new-tip counts for the 4 M blocks are 0 for every kind: read directly
+from the diff's own new-file line ranges -- old:1674-1769->new:1464-1476,
+old:2014-2113->new:1718-1728, old:6839-6996->new:5808-5829 -- each
+checked with the same five-pattern grep used throughout, 0 hits in all
+three.)
+Corrected falsifier, against all four buckets that make up the whole-file
+delta (the 4 M-tagged blocks, the 25 re-tagged blocks, the pre-main()
+helper functions, and 3 connective event lines outside any block) instead
+of just the 4 M-tagged blocks alone:
+  Sleep:        2 (M) + 34 (25 blocks) + 3 (pre-main) + 0 (connective) = 39,
+                matches 65-26=39 exactly
+  event:        1 (M) + 6 (25 blocks) + 2 (pre-main) + 3 (connective) = 12,
+                matches 96-84=12 exactly
+  go-cell:      0 (M) + 2 (25 blocks) + 2 (pre-main) + 0 (connective) = 4,
+                matches 86-82=4 exactly
+  GetTickCount: 9 (M) + 62 (25 blocks) + 6 (pre-main) + 0 (connective) = 77,
+                matches 127-50=77 exactly
+  exec_lock:    0 + 0 + 0 + 0 = 0, matches 5-5=0 exactly
+Every kind reconciles exactly once all 29 touched blocks (not 4) are the
+basis, verified against the diff's own removed-line count (132, split
+into these four buckets by direct line-number lookup against
+LOCK_REMOVAL_EXEC_SELFTEST_GATES.txt's own 125 block ranges) and its
+near-zero added count (0 real, 1 false-positive comment match reading
+"M: no go cell"), both counted directly from `diff -u
+793c267f:l2src/lmx_message_exec_selftest.c 219b2672:l2src/
+lmx_message_exec_selftest.c` output, not estimated.
