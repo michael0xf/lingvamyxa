@@ -3257,3 +3257,24 @@ Mikhail (2026-09-15, verbatim, the fourth sentence): "Поэтому струк�
 four-field LmxMsg is a C data type beside Lmx for good, the native record
 the generated code operates on; only its inside (what root reaches) is
 written in LMX. Entered verbatim in spec section 2 and the model's section 2.
+57's cold measurement of the seed branch (a30ed131 merged onto the (b)
+landing 79871822 without conflict; root lm2/ and the three dead lm1/build
+files moved aside; no printTree.lm0.exe anywhere in the tree): root
+buildCore ok (8 s); root run_seed "l1trans gen0 seed ok" (6 s); root
+run_gen "gen1/gen2/gen3 accept ok" (110 s, so the new gen2-equals-committed
+check holds); all 12 root tests/l1 suites green on gen0 and gen2 (24 of
+24), run_parser against the goldens ok on both; run_self_build "fixed
+point 8 of 8 (pass 3 == pass 2), committed generated C 8 of 8 equal".
+Three reds, all on the stg side and all from stg's still-old tests/l1:
+stg gate.ps1 (run_seed wants trans.lm0, the 12 gen0 steps then miss
+gen0/l1trans.exe, run_gen and gen2 run_parser miss printTree.lm0.exe;
+gen2's other 11 steps ok); root run_legacy_p0 (misses stg's gen2
+printTree.exe, unbuilt because of the first); run_slice_equal 14 of 17
+sources, 4 of 8 generated, the refresh's own list. Falsifier run: root
+run_parser green with no printTree.lm0.exe present, and "missing golden
+directory" with the goldens absent (red-first on 4a08a0dc). Ruling: the
+seed's green is the root route plus the self-build row; its stg side
+needs (c). Landing order: (c) now (the lead; L1 pin promotion announced
+before and after the push), then the seed re-measured cold on the stg
+side over (c)'s result (stg gate.ps1, root run_legacy_p0, run_slice_equal
+17 of 17 and 8 of 8) and landed by 57, then b5's da7d61f1.
