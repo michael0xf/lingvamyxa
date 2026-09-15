@@ -4949,3 +4949,35 @@ red-first check (a remap after unbind gets a worker; fails before,
 passes after), inside M's landing or right after at the lead's choice,
 consistent with ownership item (2)'s rebind authority; mapped's own
 row (DEL) stands for the later stage.
+e9's M conversions done (2026-09-15): claude-0c/m-tests-scenario 0dfccada,
+14 commits on 793c267f (checked by the coordinator: the wait grep 0 on
+all seven): root_record_5e 22/0, root_ingress_5b 11/0, scenario36 51/0,
+family_close_32 26/0, family_release_17 58/0, orphan_mapped_17 19/0,
+liveness_33 76/0; five cold run_model_scenario36 runs of the default
+set: four "core tests PASS, all ten, two runs each agree", one red only
+at lmx_model_turn_arena_o1_selftest, the last test, not converted,
+which fails 8 of 30 direct runs at 793c267f and 0 of 30 at 72b814d6
+(before M): an M regression, sent to the lead with the suspected cause
+(cycle() calls runtime_delete with A's context worker alive and reads
+the live count before that worker frees its BindWait at loop exit).
+Two test races found and fixed on the way, both "read the very flag":
+(a) family_release_17 and orphan_mapped_17 waited for STOPPED before R's
+release, but settle_child needs handoff-ready with native_users 0,
+which run_one sets after that end-turn, so a release in the window
+returned INVALID and R0's map was refused; the loops now read STOPPED
+and handoff-ready; (b) liveness_33 rebound a mapped child while run_one
+still held its record, the bind refused; each rebind now waits for
+native_users 0. All seven write unbuffered stdout; three concurrent
+copies ran 45 times per test with no hang or FAIL. Removed: the
+GetTickCount/Sleep loops (root_record_5e 2, root_ingress_5b 2,
+orphan_mapped_17 5, one inside C's turn), the cells g_entered, g_go and
+g_worker_done's exec_lock guards, exec_lock around every test cell, the
+workers loops before exec_stop, turn_step_child, step_in_root,
+step_from_root/2, map_child_in_root and turn_root_step with their cells.
+Ruling on the turn_arena_o1 regression (coordinator): the test's
+balance read races the worker's own free after runtime_delete (S3 R5,
+the thread frees its own state), a test-shape issue under M, not a core
+defect, provided nothing touches freed memory: the test reads the live
+count in yield rounds until it equals the expected balance, bounded by
+the runner's timeout, in M's landing; the lead confirms by reading that
+the worker's late free touches only the worker's own BindWait.
