@@ -3544,3 +3544,20 @@ evidence and the host.c pair (host_wake, host_shutdown) as b5's sub-ticket
 if the lead wants it; the coordinator owns the acceptance: 0c's oracle
 claude-0c/s3-wake-oracle 022b1136 measured red on c063fd00 first, then
 green after S3, in the coordinator's exec-3a worktree.
+Integration merged into main (the lead, 2026-09-15): 8b3397e4 = main 21d586d8
++ integration c063fd00, in a fresh detached worktree, no conflict markers;
+checked by the coordinator: c063fd00 is an ancestor of origin/main and no
+non-doc file differs between c063fd00 and origin/main, so main's code tree
+is integration's measured tree.
+S3 acceptance, red measured (the coordinator, 2026-09-15): branch
+fable/s3-acceptance 74146146, pushed, = c063fd00 with 0c's oracle 022b1136
+merged clean (3 files, 34 insertions: lmx_msg_test_wake_site before each
+of the 11 signals to a lane thread, armed by LMX_LANE_CHECK=1 in the
+LMX_MSG_EXEC_TEST build). In exec-3a with the pin 0B3D85B3 installed:
+run_port_message -LaneCheck exit 1 in 13 s, "LANE WAKE FAIL
+site=ctx_visit_wake owner=3: a lane thread was signalled; an owner loops
+over its mailbox and waits on nothing (S3)"; run_port_message plain exit 0
+in 52 s, "lmx_message parity PASS ... 101 methods redirected". Green
+criterion for S3: on the S3 branch merged with 74146146, run_port_message
+-LaneCheck exits 0 (0 sites signalled) and the plain run still passes; the
+lane_oracle gate in run_gates is the same check.
