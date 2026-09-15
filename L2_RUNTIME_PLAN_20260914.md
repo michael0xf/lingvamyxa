@@ -990,6 +990,25 @@ prototype, largest first.
    release-17 51/0, run_port_msg_path_storage 541/0 (pin 3), entry_turn
    24, run_lmx, run_l2trans, run_l2_message_root 140 inputs; no clock,
    clock_test or orphan_retain runtime field left (a tripwired regex).
+   The landing's field tripwire matched rt\clock only: tests/lmx_msg_slots_
+   selftest.lm1 L59 wrote other\clock: 97U as the sentinel for L76's
+   "unrelated owner unchanged" memcmp, and neither slots runner is a
+   run_gates default, so run_port_msg_slots and the L1 run_msg_slots both
+   compiled red unnoticed (found 2026-09-15 by 0c's step-2 cold run of the
+   32-gate default set on 9ad7e6bf: 26 green before it, the 5 skipped ones
+   green separately). Fixed by d6/slots-sentinel c57634f1 off 402b2919
+   (other\root_seq: 97U; measured red at 402b2919 on both slots runners,
+   278/0 green on both after; lmx_msg_slots reads neither root nor
+   root_seq, so the sentinel's job is a non-zero byte a zeroing write would
+   flip, and its falsifier is slots_n zeroing its argument's root_seq, that
+   memcmp red). Rulings (2026-09-15): the grep for a deleted runtime field
+   names the field on any receiver, not rt alone (the lead's tree grep,
+   tripwired with non-rt receivers); run_msg_slots stays opt-in, since the
+   parity runner's reference build compiles the same test against the L1
+   module, so the step-2 default set is 32 with run_port_msg_slots among
+   them (falsifier: without it the run reports 31). Lands after
+   IndentStack and sizeof in the lead's chain; 0c's step-2 time is
+   measured cold on that integration.
    Step (f) scope given to the lead (2026-09-14, design to follow in the (a)
    format after (e) lands): runtime_delete becomes R0's close, the
    decision-17 chain from R0 down (its whole subtree released, running
@@ -1053,7 +1072,20 @@ with its name, never a pass; launches through cmd /c with $LASTEXITCODE where
 a runner spends its time in launches; a pin of the runtime's own bookkeeping
 (a pre-test allocation or free count) moves with the runtime commit that
 moves it, never silently. Fix order: the reuse sites, then the default set
-with its measured time, then the launches.
+with its measured time, then the launches. Added 2026-09-15: the tripwire for
+a deleted runtime field greps the field on any receiver, not rt alone (the
+slots sentinel other\clock survived (e)'s landing, see item 5 (e)); and
+run_port_parser's link lines go through a gcc response file per link, written
+by Invoke-Gcc itself beside the stage's objects and kept as evidence, because
+cmd.exe refuses a line of 8192 chars (measured by 0c: 8152 runs, 8192 fails
+before gcc starts; e_appenders' dumplink is 7048 chars with 99 -D redirects,
+so the limit sits near 121 entries and e4b, e5, e6, f and g are still to
+come). A generated #define header was rejected: a second source of truth for
+the redirects, seen after the unit's own includes where -D applies before its
+first line, the order Stage d's oracle-named headers rely on. 0c's runner
+change, landed via the lead before e4b, red first with a permanent padding
+stage whose inline line exceeds 8192 chars (red with "The command line is too
+long." before, green after, kept as the guard at one gcc call).
 
 Translator repairs driven by the parser port's Stage e (2026-09-14/15, the
 lead, each a leaf in run_l2trans's historical set with its pin, red on the
