@@ -1206,6 +1206,14 @@ S4. The family tree and the mapping written only on the owner's lane (L2, L3), t
       - Falsifier: the inverted condition, run against the S4 check alone (the full Cancel suite hangs under an
         inverted guard).
       Landing: land_base2.sh of 97fb41fd onto c9ac4dda (union base plus lmx_cancel).
+    - LANDED 2026-09-15: merge 0990c451 (3 M) on c9ac4dda. On the merge:
+      - run_self_build PASS 8 of 8;
+      - gates GREEN 31 of 31 in 497 s;
+      - run_port_message plain and -LaneCheck parity PASS (102 methods, no LANE FAIL line);
+      - run_l2trans ok in 272 s;
+      - run_port_parser, run_mixa, run_ingress_harness and run_lmx -Suite Cancel ok.
+      Tag selfbuild/0990c451 and log commit 3e6fc02a are on sonnet/s4-guard-landing-0990c451.
+      integration/main-absorbs-core is 3e6fc02a.
 
 S5. The runtime-level lists (L5). Waits on 5.1.
     rt->slots, rt->n, the retire queue, the reap queue, rt->transport and e->ui_lane each either go or become a cell in
