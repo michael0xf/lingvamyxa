@@ -2136,3 +2136,23 @@ generated C as the gitignore's exceptions, the chain measured to build
 itself on the new emission; O2/O3, the imitation deleted whole as he first
 said; the first measured fact of the rewrite is what the lm2 chain's
 emitted program needs from the core that l2trans's emission does not give.
+Mikhail (2026-09-15): "C:\Nyasha_Planet\lingvamyxa_old_worked_version -- вот
+этот проект собирает себя сам из своих исходников" (this project builds
+itself from its own sources). Read there as the reference for stage O's
+bootstrap order: .gitignore keeps the exceptions for the generated C of the
+core and the translator (lm1/build/{buildCore,finalize,make,own,parser,
+rest_lmx_http_client,rest_lmx_http_server,trans}.lm1.c, committed);
+buildCore.lm0.sh compiles exactly those files into build/lm0 (libparser and
+libown archives, trans, make, finalize, buildCore: "built build/lm0
+bootstrap tools"), the previous binary; the lm0 tools then translate the
+lm2 sources into new C that regenerates the same committed files, and a
+self-build is green when the chain built from the regenerated C reproduces
+it (the fixed point). The current repo keeps the script's shape with
+l1trans.lm1.c in place of parser/own/trans (exceptions adding
+l1trans.lm1.c, printTree.lm1.c and l1src/p0.lm1.h); the lm2 chain is
+translated by CMakeLists.txt and stg/l1_baseline/gate.ps1. So O1's red is
+the committed generated C carrying the boilerplate and its green is the
+emission changed, the chain translated by the lm0 tools from the old C, the
+regenerated C committed as the exceptions and a second self-build
+reproducing it byte for byte; O2/O3 the deletions whole. Given to the lead
+for the rewrite; b5 holds O and writes the scheduler's acceptance.
