@@ -5121,3 +5121,18 @@ branch b3d16381 predates ONE ROOT (four files under stg/l1_baseline), so
 it is re-cut with the prefix stripped onto fc8e9d6e as
 d6/lock-s2-red-oneroot; C1/C2 measured with LMX_LOOKUP_COUNT=1 after
 e9's cold gate record, the numbers into S2's section.
+e9's cold gate record on the M tip (2026-09-15; checked by the coordinator:
+selfbuild/fc8e9d6e peels to fc8e9d6e, integration now d8f758e6):
+after_landed_gate.sh fc8e9d6e exit 0 in a cold worktree (L1_PIN.txt
+0B3D85B3, 0 tracked under the old baseline directory, no build/ before);
+gate.ps1 "gate: all green" in 324 s, 27 of 27 (buildCore 4 s, run_seed 3
+s, run_gen 72 s, 12 of 12 on gen0 and gen2, l2 run_lmx 45 s and 35 s);
+run_self_build first, PASS 8 of 8 in 14 s; tag selfbuild/fc8e9d6e
+pushed at 12:37:46; the log commit claude-0c/selfbuild-log-fc8e9d6e
+aade30b8 (8 to 9 lines) merged by the lead into integration as
+d8f758e6. Pins installed with integration's l2src/install_pin.ps1
+(8479fdab's blob be215434), exit 0 in every tree (wt0c_oneroot and
+wt0c_oneroot_gate 0B3D85B3 before and after; wt0c_landed_fc8e9d6e
+8E92FEFA/8F902D9B after its gate run to 0B3D85B3); the spare
+wt0c_runners removed, worktrees back to three. The machine is the
+lead's for S2's measure, then b5's D2 builds.
