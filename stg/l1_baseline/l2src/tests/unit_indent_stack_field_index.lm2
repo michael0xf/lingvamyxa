@@ -1,0 +1,24 @@
+# LmP0IndentStack is a foreign pointer type (INDENT_STACK_FOREIGN_DESIGN, 5e's repro
+# 23e2dbb7): `stack\columns[idx]: value` on a formal is admitted and reads back,
+# and a local of the type allocates through the explicit cast.
+fn: store_and_read (@: LmP0IndentStack stack; size_t: idx; size_t: value) size_t
+    stack\columns[idx]: value
+    return: stack\columns[idx]
+end: store_and_read
+fn: probe () int
+    @: LmP0IndentStack stack
+    stack: (cast: (@: LmP0IndentStack) lm_own_new_zero(c.sizeof(c.LmP0IndentStack)))
+    if: stack = 0
+        return: 1
+    stack\columns: (cast: (@: size_t) lm_own_new_zero(4U * c.sizeof(c.size_t)))
+    if: stack\columns = 0
+        return: 2
+    if: store_and_read(stack, 2U, 7U) != 7U
+        return: 3
+    if: stack\columns[2] != 7U
+        return: 4
+    return: 5
+end: probe
+fn: main () int
+    return: probe()
+end: main

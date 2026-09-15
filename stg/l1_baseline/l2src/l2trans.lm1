@@ -6061,15 +6061,6 @@ fn: l2_raw_path (const: @(char pd); size_t: pn; int: mi; @: int out_j; @: int ou
             if: pn - sl - 1U = 6U && c.memcmp(pd + sl + 1U, "length", 6U) = 0
                 \out_fld: 1
                 return: 0
-            if: pn - sl - 1U = 7U && c.memcmp(pd + sl + 1U, "columns", 7U) = 0
-                \out_fld: 2
-                return: 0
-            if: pn - sl - 1U = 5U && c.memcmp(pd + sl + 1U, "count", 5U) = 0
-                \out_fld: 3
-                return: 0
-            if: pn - sl - 1U = 8U && c.memcmp(pd + sl + 1U, "capacity", 8U) = 0
-                \out_fld: 4
-                return: 0
             return: 2
         j: j + 1
     if: mi < 0
@@ -6090,15 +6081,6 @@ fn: l2_raw_path (const: @(char pd); size_t: pn; int: mi; @: int out_j; @: int ou
                 return: 0
             if: pn - sl - 1U = 6U && c.memcmp(pd + sl + 1U, "length", 6U) = 0
                 \out_fld: 1
-                return: 0
-            if: pn - sl - 1U = 7U && c.memcmp(pd + sl + 1U, "columns", 7U) = 0
-                \out_fld: 2
-                return: 0
-            if: pn - sl - 1U = 5U && c.memcmp(pd + sl + 1U, "count", 5U) = 0
-                \out_fld: 3
-                return: 0
-            if: pn - sl - 1U = 8U && c.memcmp(pd + sl + 1U, "capacity", 8U) = 0
-                \out_fld: 4
                 return: 0
             return: 2
         j: j + 1
@@ -6121,7 +6103,7 @@ fn: l2_pointer_depth (int: ty) int
     int: fi
     if: ty >= 1000 && ty < 2000
         ty: ty - 1000
-    if: ty = 3 || ty = 9 || ty = 11 || ty = 12 || ty = 13 || ty = 16 || ty = 21 || ty = 23 || ty = 25 || ty = 26 || ty = 27 || ty = 29 || ty = 31 || ty = 38
+    if: ty = 3 || ty = 9 || ty = 11 || ty = 12 || ty = 16 || ty = 21 || ty = 23 || ty = 25 || ty = 26 || ty = 27 || ty = 29 || ty = 31 || ty = 38
         return: 1
     if: ty = 17 || ty = 18 || ty = 19 || ty = 20 || ty = 24 || ty = 39
         return: 2
@@ -8029,9 +8011,6 @@ fn: l2_slot_decl_ty (const: @(LmP0Node stmt)) int
         return: 5
     if: l2_text_eq(f\value\as\atom, "size_t")
         return: 9
-    if: l2_text_eq(f\value\as\atom, "LmP0IndentStack")
-        l2_need_p0: 1
-        return: 14
 return: 0
 
 fn: l2_slot_find (int: mi; const: @(LmP0Text t)) int
@@ -9486,11 +9465,10 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
         # its fields resolve on the foreign field path. It still needs p0.
         if: l2_text_eq(f\value\as\atom, "LmP0Document")
             l2_need_p0: 1
+        # LmP0IndentStack is a foreign pointer type the same way
+        # (INDENT_STACK_FOREIGN_DESIGN); it still needs p0.
         if: l2_text_eq(f\value\as\atom, "LmP0IndentStack")
             l2_need_p0: 1
-            \out_ty: 14
-            \out_name: g\value\as\atom
-            return: 0
         if: l2_text_eq(f\value\as\atom, "void")
             \out_ty: 16
             \out_name: g\value\as\atom
@@ -9544,7 +9522,7 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             return: l2_error(path, node, "out of memory")
         \out_name: g\value\as\atom
         return: 0
-    if: l2_text_eq(f\value\as\atom, "char") = 0 && l2_text_eq(f\value\as\atom, "LmP0Text") = 0 && l2_text_eq(f\value\as\atom, "L2ImmutQuery") = 0 && l2_text_eq(f\value\as\atom, "LmP0IndentStack") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgRuntime") = 0 && l2_text_eq(f\value\as\atom, "LmxMsg") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgCopy") = 0
+    if: l2_text_eq(f\value\as\atom, "char") = 0 && l2_text_eq(f\value\as\atom, "LmP0Text") = 0 && l2_text_eq(f\value\as\atom, "L2ImmutQuery") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgRuntime") = 0 && l2_text_eq(f\value\as\atom, "LmxMsg") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgCopy") = 0
         \out_ty: l2_foreign_intern(f\value\as\atom, 1, 1)
         if: \out_ty < 100
             return: l2_error(path, node, "out of memory")
@@ -9566,9 +9544,6 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
     if: l2_text_eq(f\value\as\atom, "L2ImmutQuery")
         \out_ty: 6
         l2_need_query: 1
-    if: l2_text_eq(f\value\as\atom, "LmP0IndentStack")
-        \out_ty: 15
-        l2_need_p0: 1
     \out_name: g\value\as\atom
 return: 0
 
@@ -9745,9 +9720,8 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
             l2_m_ret[l2_m_n]: 5
             l2_need_p0: 1
         if: l2_text_eq(rty\as\atom, "LmP0IndentStack")
-            l2_m_ret[l2_m_n]: 13
             l2_need_p0: 1
-        if: l2_text_eq(rty\as\atom, "char") = 0 && l2_text_eq(rty\as\atom, "void") = 0 && l2_text_eq(rty\as\atom, "LmP0Text") = 0 && l2_text_eq(rty\as\atom, "LmP0IndentStack") = 0
+        if: l2_text_eq(rty\as\atom, "char") = 0 && l2_text_eq(rty\as\atom, "void") = 0 && l2_text_eq(rty\as\atom, "LmP0Text") = 0
             l2_m_ret[l2_m_n]: l2_foreign_intern(rty\as\atom, 1, 0)
             if: l2_m_ret[l2_m_n] < 100
                 return: l2_error(path, fn_node, "out of memory")
@@ -10422,11 +10396,11 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             return: l2_error(path, stmt, "invalid raw dereference")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 2
             return: l2_error(path, stmt, "unknown foreign field")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < l2_m_arity[mi] && (l2_ft(mi, rj) = 4 || l2_ft(mi, rj) = 6 || l2_ft(mi, rj) = 15)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < l2_m_arity[mi] && (l2_ft(mi, rj) = 4 || l2_ft(mi, rj) = 6)
             return: l2_error(path, stmt, "const write")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < l2_m_arity[mi] && l2_ft(mi, rj) != 5 && l2_ft(mi, rj) != 7 && l2_ft(mi, rj) != 14 && l2_ft(mi, rj) < 100
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < l2_m_arity[mi] && l2_ft(mi, rj) != 5 && l2_ft(mi, rj) != 7 && l2_ft(mi, rj) < 100
             return: l2_error(path, stmt, "unsupported body")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= l2_m_arity[mi] && rj < l2_m_arity[mi] + l2_m_sn[mi] && l2_st[l2_slot_off(mi, rj - l2_m_arity[mi])] != 5 && l2_st[l2_slot_off(mi, rj - l2_m_arity[mi])] != 14 && l2_st[l2_slot_off(mi, rj - l2_m_arity[mi])] < 100
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= l2_m_arity[mi] && rj < l2_m_arity[mi] + l2_m_sn[mi] && l2_st[l2_slot_off(mi, rj - l2_m_arity[mi])] != 5 && l2_st[l2_slot_off(mi, rj - l2_m_arity[mi])] < 100
             return: l2_error(path, stmt, "unknown foreign field")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && ix != 0 && pd != 0 && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || (l2_own_find(mi, stmt\as\frame\head) < 0 && l2_slot_find(mi, stmt\as\frame\head) < 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_slash_for(mi, stmt\as\frame\head) < 0 && l2_find_method(stmt\as\frame\head) < 0 && l2_param_find(mi, stmt\as\frame\head) < 0 && raw != 0 && l2_is_known(stmt\as\frame\head) = 0 && l2_is_path_head(stmt\as\frame\head) = 0))
             if: stmt\as\frame\head != 0 && stmt\as\frame\head\data != 0 && stmt\as\frame\head\length < 256U && l2_seg_count(stmt\as\frame\head\data, stmt\as\frame\head\length) > 1
@@ -11146,11 +11120,6 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             if: c.sprintf(dest, "c.sizeof(c.LmP0Text)") < 0
                 return: 1
             return: 0
-        if: l2_text_eq(a0\value\as\atom, "LmP0IndentStack") || l2_text_eq(a0\value\as\atom, "c.LmP0IndentStack")
-            l2_need_p0: 1
-            if: c.sprintf(dest, "c.sizeof(c.LmP0IndentStack)") < 0
-                return: 1
-            return: 0
         if: l2_text_eq(a0\value\as\atom, "size_t") || l2_text_eq(a0\value\as\atom, "c.size_t")
             if: c.sprintf(dest, "c.sizeof(c.size_t)") < 0
                 return: 1
@@ -11179,11 +11148,9 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             return: 1
         t: l2_tn
         l2_tn: l2_tn + 1
-        if: c.strstr(s0, "IndentStack") != 0 && c.fprintf(l2_out, "%s@: LmP0IndentStack l2_t%d\n%sl2_t%d: (cast: (@: LmP0IndentStack) lm_own_new_zero(%s))\n", ind, t, ind, t, s0) < 0
+        if: c.strstr(s0, "size_t") != 0 && c.fprintf(l2_out, "%s@: size_t l2_t%d\n%sl2_t%d: (cast: (@: size_t) lm_own_new_zero(%s))\n", ind, t, ind, t, s0) < 0
             return: 1
-        if: c.strstr(s0, "IndentStack") = 0 && c.strstr(s0, "size_t") != 0 && c.fprintf(l2_out, "%s@: size_t l2_t%d\n%sl2_t%d: (cast: (@: size_t) lm_own_new_zero(%s))\n", ind, t, ind, t, s0) < 0
-            return: 1
-        if: c.strstr(s0, "IndentStack") = 0 && c.strstr(s0, "size_t") = 0 && c.fprintf(l2_out, "%s@: LmP0Text l2_t%d\n%sl2_t%d: (cast: (@: LmP0Text) lm_own_new_zero(%s))\n", ind, t, ind, t, s0) < 0
+        if: c.strstr(s0, "size_t") = 0 && c.fprintf(l2_out, "%s@: LmP0Text l2_t%d\n%sl2_t%d: (cast: (@: LmP0Text) lm_own_new_zero(%s))\n", ind, t, ind, t, s0) < 0
             return: 1
         return: l2_tok_temp(t, dest)
     if: idx < 0 && l2_text_eq(call\head, "lm_own_copy_bytes")
@@ -11416,9 +11383,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 10 && c.fprintf(l2_out, "%sLmP0TrailerRole: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
-    if: l2_m_ret[idx] = 13 && c.fprintf(l2_out, "%s@: LmP0IndentStack l2_t%d\n", ind, t) < 0
-        return: l2_prep_drop(acts, hides)
-    if: l2_ret_uns(idx) = 0 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 13 && l2_m_ret[idx] != 16 && l2_m_ret[idx] != 32 && l2_m_ret[idx] != 35 && l2_m_ret[idx] < 100 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
+    if: l2_ret_uns(idx) = 0 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 16 && l2_m_ret[idx] != 32 && l2_m_ret[idx] != 35 && l2_m_ret[idx] < 100 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_throws[idx] != 0 && c.fprintf(l2_out, "%sint: l2_ts%d 0\n%s@: Lmx l2_te%d 0\n", ind, t, ind, t) < 0
         return: l2_prep_drop(acts, hides)
@@ -11799,12 +11764,6 @@ fn: l2_emit_sig (int: mi) int
             return: 1
         if: l2_ft(mi, j) = 12 && c.fprintf(l2_out, "; @: char l2_p%d_%d", mi, j) < 0
             return: 1
-        if: l2_ft(mi, j) = 13 && c.fprintf(l2_out, "; @: LmP0Document l2_p%d_%d", mi, j) < 0
-            return: 1
-        if: l2_ft(mi, j) = 14 && c.fprintf(l2_out, "; @: LmP0IndentStack l2_p%d_%d", mi, j) < 0
-            return: 1
-        if: l2_ft(mi, j) = 15 && c.fprintf(l2_out, "; const: @(LmP0IndentStack l2_p%d_%d)", mi, j) < 0
-            return: 1
         if: l2_ft(mi, j) = 16 && c.fprintf(l2_out, "; @: void l2_p%d_%d", mi, j) < 0
             return: 1
         if: l2_ft(mi, j) = 17 && c.fprintf(l2_out, "; @@: char l2_p%d_%d", mi, j) < 0
@@ -11899,9 +11858,7 @@ fn: l2_emit_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 10 && c.fputs(") LmP0TrailerRole", l2_out) < 0
         return: 1
-    if: l2_m_ret[mi] = 13 && c.fputs(") @: LmP0IndentStack", l2_out) < 0
-        return: 1
-    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 16 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
+    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 16 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
         return: 1
 return: 0
 
@@ -11978,23 +11935,17 @@ fn: l2_emit_public_sig (int: mi) int
             return: 1
         if: ty = 10 && c.fprintf(l2_out, "%sLmP0TrailerRole: ", sep) < 0
             return: 1
-        if: ty = 13 && c.fprintf(l2_out, "%s@: LmP0Document ", sep) < 0
-            return: 1
-        if: ty = 14 && c.fprintf(l2_out, "%s@: LmP0IndentStack ", sep) < 0
-            return: 1
-        if: ty = 15 && c.fprintf(l2_out, "%sconst: @(LmP0IndentStack ", sep) < 0
-            return: 1
         if: ty >= 100
             if: l2_emit_foreign_named(l2_out, ty, sep, l2_fn(mi, j)) != 0
                 return: 1
             ---
         else:
-            if: ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 4 && ty != 5 && ty != 6 && ty != 7 && ty != 9 && ty != 10 && ty != 11 && ty != 12 && ty != 13 && ty != 14 && ty != 15 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20 && ty != 24 && ty != 25 && ty != 26 && ty != 27 && ty != 28 && ty != 29 && ty != 30 && ty != 31 && ty != 34 && ty != 36 && ty != 38 && ty != 39
+            if: ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 4 && ty != 5 && ty != 6 && ty != 7 && ty != 9 && ty != 10 && ty != 11 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20 && ty != 24 && ty != 25 && ty != 26 && ty != 27 && ty != 28 && ty != 29 && ty != 30 && ty != 31 && ty != 34 && ty != 36 && ty != 38 && ty != 39
                 c.fprintf(c.stderr, "l2trans: a library signature cannot spell formal type %d\n", ty)
                 return: 1
             if: l2_write_text(l2_out, l2_fn(mi, j)) != 0
                 return: 1
-            if: (ty = 3 || ty = 4 || ty = 6 || ty = 15 || ty = 28 || ty = 29 || ty = 30) && c.fputs(")", l2_out) < 0
+            if: (ty = 3 || ty = 4 || ty = 6 || ty = 28 || ty = 29 || ty = 30) && c.fputs(")", l2_out) < 0
                 return: 1
         ---
         j: j + 1
@@ -12023,9 +11974,7 @@ fn: l2_emit_public_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 10 && c.fputs(") LmP0TrailerRole", l2_out) < 0
         return: 1
-    if: l2_m_ret[mi] = 13 && c.fputs(") @: LmP0IndentStack", l2_out) < 0
-        return: 1
-    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 16 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
+    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 16 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
         return: 1
 return: 0
 
@@ -12748,8 +12697,6 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             return: 2
         if: lty = 11 && c.fprintf(l2_out, "%s@: int ", ind) < 0
             return: 2
-        if: lty = 13 && c.fprintf(l2_out, "%s@: LmP0Document ", ind) < 0
-            return: 2
         if: lty = 16 && c.fprintf(l2_out, "%s@: void ", ind) < 0
             return: 2
         if: lty = 23 && c.fprintf(l2_out, "%s@: FILE ", ind) < 0
@@ -12770,7 +12717,7 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             return: 2
         if: lty = 39 && c.fprintf(l2_out, "%s@@: ulong ", ind) < 0
             return: 2
-        if: lty != 9 && lty != 11 && lty != 12 && lty != 13 && lty != 16 && lty != 17 && lty != 18 && lty != 19 && lty != 20 && lty != 23 && lty != 24 && lty != 25 && lty != 38 && lty != 39
+        if: lty != 9 && lty != 11 && lty != 12 && lty != 16 && lty != 17 && lty != 18 && lty != 19 && lty != 20 && lty != 23 && lty != 24 && lty != 25 && lty != 38 && lty != 39
             return: 2
         if: l2_write_text(l2_out, lnm) != 0
             return: 2
@@ -13893,12 +13840,6 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body, fr\flags) = 0 && raw = 0 && rf = 1 && rj >= l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_s%d_%d\\length: %s\n", ind, mi, rj - l2_m_arity[mi], l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body, fr\flags) = 0 && raw = 0 && rf = 2 && rj < l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_p%d_%d\\columns: %s\n", ind, mi, rj, l2_tok) < 0
-            return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body, fr\flags) = 0 && raw = 0 && rf = 3 && rj < l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_p%d_%d\\count: %s\n", ind, mi, rj, l2_tok) < 0
-            return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body, fr\flags) = 0 && raw = 0 && rf = 4 && rj < l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_p%d_%d\\capacity: %s\n", ind, mi, rj, l2_tok) < 0
-            return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body, fr\flags) = 0 && raw = 0 && rf = 5 && rj < l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_p%d_%d\\%.*s: %s\n", ind, mi, rj, (cast: (int) (fr\head\length - l2_fn(mi, rj)\length - 1U)), fr\head\data + l2_fn(mi, rj)\length + 1U, l2_tok) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body, fr\flags) = 0 && raw = 0 && rf = 5 && rj >= l2_m_arity[mi] + l2_m_sn[mi] && c.fprintf(l2_out, "%s%.*s: %s\n", ind, (cast: (int) fr\head\length), fr\head\data, l2_tok) < 0
@@ -14275,9 +14216,6 @@ fn: l2_emit_unit (const: @(char out_path)) int
                 c.fclose(l2_out)
                 return: 1
             if: l2_st[l2_slot_off(i, k)] = 9 && c.fprintf(l2_out, "    @: size_t l2_s%d_%d 0\n", i, k) < 0
-                c.fclose(l2_out)
-                return: 1
-            if: l2_st[l2_slot_off(i, k)] = 14 && c.fprintf(l2_out, "    @: LmP0IndentStack l2_s%d_%d 0\n", i, k) < 0
                 c.fclose(l2_out)
                 return: 1
             k: k + 1

@@ -71,7 +71,7 @@ $ev = [ordered]@{
     fixturesPassed = 0
     fixturesFailed = 0
 }
-$owned = @('l2src/lmx.h', 'l2src/lmx_branch_owned.h.lm1', 'l2src/lmx_branch_owned.lm1',
+$owned = @('l2src/lmx.h', 'l2src/l2_foreign_alloc.lm1', 'l2src/lmx_branch_owned.h.lm1', 'l2src/lmx_branch_owned.lm1',
     'l2src/lmx_value_owned.h.lm1', 'l2src/lmx_value_owned.lm1', 'l2src/lmx_chars_owned.lm1',
     'l2src/lmx_array_owned.lm1', 'l2src/l2trans.lm1', 'l2src/tests/lmx_graph_abi_selftest.lm1',
     'l2src/lmx_graph_copy_owned.h.lm1', 'l2src/lmx_graph_copy_owned.lm1', 'l2src/tests/lmx_graph_copy_selftest.lm1',
@@ -140,6 +140,15 @@ try {
     . l2src/l2units_build.ps1
     $objs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $run 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags)
     $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
+    # A fixture that allocates through lm_own_* links the translator runners' own
+    # allocator: the object and the rule are run_l2trans's (Get-L2ForeignAllocObject,
+    # Invoke-Gcc), so one rule decides the link in both runners.
+    $faSource = Join-Path $supportDir 'l2_foreign_alloc.c'
+    $faObj = Join-Path $supportDir 'l2_foreign_alloc.o'
+    Stage 'module_l2_foreign_alloc' (Invoke-Native ((Q $outputL1trans) + ' l2src/l2_foreign_alloc.lm1 ' + (Q $faSource)) (Join-Path $run 'module_l2_foreign_alloc.log')) (Join-Path $run 'module_l2_foreign_alloc.log')
+    Stage 'compile_l2_foreign_alloc' (Invoke-Native ("gcc $cflags -I lm1/build -c " + (Q $faSource) + ' -o ' + (Q $faObj)) (Join-Path $run 'l2_foreign_alloc.gcc.log')) (Join-Path $run 'l2_foreign_alloc.gcc.log')
+    $faLinked = 0
+    $faMentions = 0
 
     # 1. Direct selftest.
     $selfSrc = 'l2src/tests/lmx_graph_abi_selftest.lm1'
@@ -808,6 +817,8 @@ try {
                 if ($includeText.IndexOf('l1src/p0.lm1.h') -ge 0) { $flags += ' -I lm1/build' }
                 $support = 'l2src/lmx_poll_stub.c'
                 if ($includeText.Contains('"l2src/lmx_message.h"')) { $support = $objList; $flags += ' -I ' + (Q $hdrs) }
+                if ($includeText.IndexOf('lm_own_') -ge 0) { $faMentions++ }
+                if ($includeText -match '\blm_own_(new_zero|resize|copy_bytes|delete)\s*\(' -and $includeText -notmatch '\blm_own_new_zero\s*\([^;{)]*\)\s*\{') { $support += ' ' + (Q $faObj); $faLinked++ }
                 $code = Invoke-Native ("gcc $flags " + (Q $cpath) + ' ' + $support + ' -o ' + (Q $exe)) (Join-Path $out ($case.stem + '.gcc.log'))
                 if ($code -ne 0) { throw "gcc exit $code" }
                 $stdoutPath = Join-Path $out ($case.stem + '.stdout.txt')
@@ -940,8 +951,10 @@ try {
             Write-Host "OK negative $($neg.name)"
         }
     }
+    $ev.foreignAllocLinked = $faLinked
+    $ev.foreignAllocMentions = $faMentions
     Save-Evidence 'PASS'
-    Write-Host "graph ABI runner PASS: selftest '$($ev.selftest.stdout)', copy selftest '$($ev.copySelftest.stdout)', pointer Array selftest '$($ev.pointerArraySelftest.stdout)', merge selftest '$($ev.mergeSelftest.stdout)', fixtures $($ev.fixturesPassed)/$($ev.fixturesPassed + $ev.fixturesFailed), support warnings $supportWarnings; evidence $run"
+    Write-Host "graph ABI runner PASS: selftest '$($ev.selftest.stdout)', copy selftest '$($ev.copySelftest.stdout)', pointer Array selftest '$($ev.pointerArraySelftest.stdout)', merge selftest '$($ev.mergeSelftest.stdout)', fixtures $($ev.fixturesPassed)/$($ev.fixturesPassed + $ev.fixturesFailed), support warnings $supportWarnings, foreign-alloc object linked into $faLinked fixtures of $faMentions whose C contains lm_own_; evidence $run"
     exit 0
 } catch {
     $ev.error = "$_"
