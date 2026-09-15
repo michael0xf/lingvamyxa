@@ -934,6 +934,28 @@ prototype, largest first.
    deleted name left in code; run_gates 11 of 11, parity 100 methods,
    entry_turn 24, run_lmx, run_l2trans, run_l2_message_root green). 3c-2b's
    remaining C in the parent's step is gone with it.
+   Step (e) as designed by the lead and accepted (2026-09-14; measured on
+   the host-pick tree: the runtime-level policy cells host setters write
+   are rt->clock with clock_test (set_now, host_is_owner alone, 16 callers
+   in main) and rt->orphan_retain (set_orphan_retain, no check, 2 callers),
+   read by lmx_msg_now and lmx_msg_orphan_deadline; no runtime liveness
+   deadline cell exists, the poll takes its threshold as an argument):
+   a new runtime unit lmx_root_record.lm2 with three cells (clock,
+   clock_test, orphan_retain) as owned cells in R0's arena rooted there,
+   accessors shaped like lmx_sched_record, created in runtime_new after R0
+   and the UI child (OOM fails the runtime; run_port_msg_path_storage's
+   pre-test pin moves 3 to 4 with the cause named); set_now and
+   set_orphan_retain keep their names and refuse unless R0's lane holds
+   (holding_turn(R0), or the host outside any turn while the bootstrap is
+   the host), nothing written on refusal; the readers go through the
+   record; the three LmxMsgRuntime fields go; clock_test stays a cell (a
+   clock of 0 meaning "real" would be one number with two meanings);
+   lm1 and lm2 mirrored where lm1 changes. Acceptance written first:
+   fable/stage5e-acceptance 980ebc3a, tests/lmx_model_root_record_5e_
+   selftest.lm1, "15 checks, 5 failures" on 4a92659b (red on the
+   child-turn refusals, the worker's set_orphan_retain and the
+   unchanged-clock lines; the cells' location lines added by the lead with
+   the accessors).
 
 ## 4. Acceptance
 
