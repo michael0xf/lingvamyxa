@@ -1459,3 +1459,33 @@ settling children before the root's storage and the runtime go, the UI child
 closed without a handler, the root's mailbox refusing admissions, the
 bootstrap thread as the root's lane, the strict lifecycle form, the retained
 orphan reclaimed at the root's close, and the 19.29.8 cross-reference).
+Docs rule (Mikhail, 2026-09-15, verbatim, on decision 18's ownership clause
+(5), spec 11529-11530 and the model's section 29 (5)): "1) попробуй определить
+кто и когда сделал это уточнение 2) удаляй это уточнение немедленно 3)
+дополняй все доки, но только согласованными со мной инструкциями, после
+дополнения пушай и коммить" (find out who made that clarification and when;
+delete it immediately; add to all docs only instructions agreed with me,
+then commit and push). The answer: 0c875197, 2026-09-14 10:10, the review
+chat (the coordinator's session) wrote items (1)-(5) as consequences of his
+one-arena-one-lane-one-writer clarification; (1)-(3) restate his words, (4)
+and (5) were the coordinator's own sentences and never his. (5) is deleted
+(657ce3f9, 07ad3679); item (4) and the coordinator's consequences in the
+stage-5 (f) paragraph of the spec and the model stay until Mikhail answers
+the lead's question about them, the coordinator's view being that they too
+should go, leaving his sentences alone. His question to the coordinator,
+"from which of my words did you conclude that a shared lock is needed?",
+answered the same hour: from none; the coordinator wrote the L1 prototype's
+state (the root list, the slot list and the retire queue under the
+executor's lock) into the spec as an exception to his rule, which his rule
+excludes, and item (4) is of the same nature. From now on the spec and the model take only his
+sentences, verbatim with the date; every consequence the coordinator or the
+lead derives lives in this plan or a design file as a question with options
+until he agrees. The coordinator's spec-and-model map for the lock removal
+(l2src/LOCK_REMOVAL_SPEC_MAP.txt) is written under this rule: the spec quoted
+by sentence and line, today's state outside any arena by struct and
+allocation call, and five questions for him (the owners of the root list,
+the slot list, the retire queue and a lane's own queue; whether reference
+counts and wait signals survive as primitives; the model's section 30 on
+execution tables; which arena holds an admitted copy; whether R0's scheduler
+steps its threadless children before R0's thread ends), each with a proposed
+answer and an alternative, none of them in the spec.
