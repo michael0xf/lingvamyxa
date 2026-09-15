@@ -611,9 +611,18 @@ e) field-parsing state machine -- l2src/parser_field_parse_port.lm2
    driver) -- D_utf8_inline, D_utf8_vertical, invalid_eq_unclosed,
    invalid_triple_unclosed. The two invalid_* fixtures fail parsing
    before reaching any atom-slice appending, same shape as e1/d1/d2's
-   own exceptions; the two D_utf8 fixtures' own content apparently
-   never routes through this specific function (not yet traced
-   further -- a fact about those fixtures' shape, not a port gap).
+   own exceptions. Traced (d6, 2026-09-14): D_utf8_inline/_vertical
+   are both `L1: utf8: === raw text ===` fenced block-string bodies,
+   containing no field-level atoms at all -- their sole content is a
+   single BLOCK_STRING stream event, created by p0_stream_apply_item_
+   event's own LM_P0_STREAM_EVENT_BLOCK_STRING branch (Stage d,
+   l2src/parser_stack_stream_port.lm2, already ported and falsified
+   in d5), which builds the atom node directly via p0_new_node +
+   lm_p0_document_register_lazy_text and never calls append_atom_
+   slice at all -- append_atom_slice is field-parsing-only, for atoms
+   that appear as fields inside a structure's own field list, which
+   these two fixtures never have. Not a coverage gap in e2; a fact
+   about the fixtures' shape, now measured rather than assumed.
    Reverted, clean diff, 36/36 restored, also cold.
 
 Remaining stages (e2's plan)
