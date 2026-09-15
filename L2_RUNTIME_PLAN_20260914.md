@@ -978,6 +978,18 @@ prototype, largest first.
    called by lmx_message left "undefined reference to lmx_root_record_*";
    Build-L2RuntimeUnits gains -Exclude and run_sched_record passes its own
    unit (one copy of each unit in the link).
+   (e) landed 2026-09-14: d6/stage5e 275b50f9 (the acceptance merge,
+   6cb55982, the fix-up) merged as f59a79c7 over c0d743b3 (5e's Stage e
+   slices 1 and 2). Measured on 275b50f9: the acceptance 22/0 with the
+   location lines; the root_attach falsifier "22 checks, 5 failures" (the
+   RETAIN-root line, the post-collection line and its read-back among
+   them); the lane falsifier "22 checks, 6 failures" (both setters from
+   the child's turn and from the worker's, the clock twice); run_gates 11
+   of 11. On the merge: run_gates 11 of 11, parity 100 methods with no
+   library-open failure, scenario36's ten with root_record_5e 22/0 and
+   release-17 51/0, run_port_msg_path_storage 541/0 (pin 3), entry_turn
+   24, run_lmx, run_l2trans, run_l2_message_root 140 inputs; no clock,
+   clock_test or orphan_retain runtime field left (a tripwired regex).
    Step (f) scope given to the lead (2026-09-14, design to follow in the (a)
    format after (e) lands): runtime_delete becomes R0's close, the
    decision-17 chain from R0 down (its whole subtree released, running
