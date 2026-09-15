@@ -1008,7 +1008,9 @@ prototype, largest first.
    module, so the step-2 default set is 32 with run_port_msg_slots among
    them (falsifier: without it the run reports 31). Lands after
    IndentStack and sizeof in the lead's chain; 0c's step-2 time is
-   measured cold on that integration.
+   measured cold on that integration. Landed as 1542217d over 95042370
+   (slots parity PASS 278/0 on both runs, O0 slots 278/0, run_gates 11 of
+   11 in 352 s); 0c's step 2 measures on 1542217d.
    Step (f) scope given to the lead (2026-09-14, design to follow in the (a)
    format after (e) lands): runtime_delete becomes R0's close, the
    decision-17 chain from R0 down (its whole subtree released, running
@@ -1219,7 +1221,9 @@ the foreign allocator by run_l2trans's exact rule; measured on the merge:
 retired greps 0/0/0 tripwired against 19/9/3, run_gates 11 of 11 in 367 s,
 graph_abi cold PASS with the linked count at least 1, l2trans ok,
 message_root 142 inputs, port_parser cold ok); `c.sizeof(name[0])` renaming the leading identifier of a formal or
-slot and keeping the index, pin 143; the lm_own_resize, lm_own_copy_bytes and
+slot and keeping the index, pin 143, landed as 95042370 over fb58feb6
+(run_gates 11 of 11 in 379 s, graph ABI 63/0 with 75 failure positions
+exercised, l2trans ok, message_root 143 inputs, port_parser cold ok); the lm_own_resize, lm_own_copy_bytes and
 lm_own_delete paths splitting actuals with l2_expr_span instead of one field
 per actual, which had silently truncated an unparenthesized length (latent in
 landed code, hit by the oracle's usual spelling at the first port; the
@@ -1276,7 +1280,13 @@ to 345 with argument lists near 310, nothing over 512, so e5 needs 147 and
 148 both; the stages' line ranges are in PARSER_L2_PORT.txt since
 sonnet/parser-l2 b4a8de83, with an unassigned list (the registry family,
 the trailer-role/scanning family, the capstone, the external API surface)
-and e3 corrected into two clusters, 366-408 and 2081-2481; the leaf set adds a 2218-character condition and a 300-character
+and e3 corrected into two clusters, 366-408 and 2081-2481; found on
+c1dc9886 (g accepted): run_port_parser's $Stages carries neither f nor g on
+any branch, so their "clean" was translate plus compile only; b5 wires
+f_postprocess and g_validate, red-first for g without 80b0a77b, with one
+mutation per stage proving the goldens reach the ported functions, or
+reports that they do not (the validate family's only outer caller, oracle
+1690, sits in unported disabled-block code); the leaf set adds a 2218-character condition and a 300-character
 identifier probe measured today first: locals are unbounded, two
 300-character names distinct with no truncation, so nothing to fix there;
 method names and formal names are capped at 62 by three explicit bounds,
