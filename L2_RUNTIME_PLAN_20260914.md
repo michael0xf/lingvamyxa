@@ -5136,3 +5136,10 @@ wt0c_oneroot_gate 0B3D85B3 before and after; wt0c_landed_fc8e9d6e
 8E92FEFA/8F902D9B after its gate run to 0B3D85B3); the spare
 wt0c_runners removed, worktrees back to three. The machine is the
 lead's for S2's measure, then b5's D2 builds.
+Ticket to e9 (the coordinator, 2026-09-15), doc-only: the gate impact list
+for S2, l2src/S2_GATE_IMPACT.txt on claude-0c/s2-gate-impact off d8f758e6:
+for each of the 30 default gates plus l2_message_root, unaffected,
+asserting an address lookup or addr-shaped API S2 deletes or retypes, or
+pinning a numeric side effect of addresses (addr values, slot indices,
+sequence numbers, lookup counts), the numeric grep explicit this time;
+counts at the top; b5's S2 lookups file and the design cited.
