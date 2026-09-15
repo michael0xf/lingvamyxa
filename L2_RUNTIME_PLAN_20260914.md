@@ -2118,3 +2118,21 @@ run_gates 11 of 11 in 203 s with the row "lane_oracle PASS 54s". S1
 send_local, family_handoff, scenario36 and run_gates; then S2's red
 measure; then 57's window for the 32-gate default set and S3 on the S1
 merge hash.
+Stage O's premise corrected by Mikhail (2026-09-15, verbatim, on "its
+programs build without an arena until the core is there"): "самосборка
+подразумевает что код собирает себя сам, у нас нет стадии \"до появления
+ядра\". Эта стадия появляется только при миграции на другую платформу и для
+этого в gitignore есть несколько исключений для сгенерированных Си ядра,
+иначе у нас всегда есть предыдущий бинарник" (self-hosting means the code
+builds itself; there is no stage "before the core appears"; that stage
+exists only when migrating to another platform, for which the gitignore
+keeps exceptions for the core's generated C; otherwise there is always the
+previous binary). So O as designed stops (b5 held, nothing committed) and
+the lead rewrites it: O1, the lm2 translator's emission switches from
+own.lm2's imitation to the core, the shape l2trans already emits (the entry
+as R0's turn, allocations from the Message's arena, the core through c.),
+the self-build through the previous translator binary with the core's
+generated C as the gitignore's exceptions, the chain measured to build
+itself on the new emission; O2/O3, the imitation deleted whole as he first
+said; the first measured fact of the rewrite is what the lm2 chain's
+emitted program needs from the core that l2trans's emission does not give.
