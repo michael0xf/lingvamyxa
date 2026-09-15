@@ -4653,3 +4653,10 @@ own M_FIELDS file (that creating the UI lane is not itself M's to
 remove), accurate when written; the S2 file's Q class (exec_take_ui_locked)
 is resolved by M's deletion of that site. The lead adds the two function
 names to the section's site list.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only, on sonnet/inventories-2
+off 00b04751: (1) correct its M_FIELDS claim on the UI lane to the decided
+"the core creates no UI lane; mixa builds it as an ordinary child of R0
+through map_child"; (2) the D2 pass, l2src/LOCK_REMOVAL_D2_SITES.txt:
+every declaration, definition and call still carrying a create_id (or
+retry id) parameter in l2src and mixa_manager outside vendor/, counts per
+file, callers passing a non-zero value flagged.
