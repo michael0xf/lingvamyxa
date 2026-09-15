@@ -22,23 +22,16 @@ Rulings for the conversions (the coordinator, 2026-09-15, after the core commit 
    loop, and the stage whose subject the block is: S2, S4, S5, S6 or Y); each later stage's note converts its own
    blocks under rulings 1 and 2, so the file's wait count goes down by stage and reaches 0 at S6. Falsified by: the
    debt list's block count plus M's converted blocks equals the count of blocks with a gate at 793c267f.
-   The list is b5's, cited and not copied: l2src/LOCK_REMOVAL_EXEC_SELFTEST_GATES.txt (sonnet/exec-gates d4887106,
-   merged into d6/m-sequential c161e218): 125 blocks at 793c267f, 49 gated. Against M's selftest commit 219b2672
-   (scratchpad gate_debt.py: a block is converted when every gate line of b5's range is removed by the diff):
-   - Converted, 26: b5's 4 M blocks (slow start, the worker-to-UI drain poll, cpu-busy, map-fair) and 22 b5 labelled
-     S6 whose loops M converted because each gives a child its turn on its own context or reads a mapped child:
-     host_post, the first scenario's completion wait, close-path, ctx fail retry, 2931-2999, race start, mix family,
-     map fail, 3344-3410 (child timer), 3411-3468 (real clock), orphan mapped, 4055-4120 (cancel idle), 4121-4182
-     (complete idle), 4183-4288 (m0), exec_stop retry, the retry cluster 6768-6814, map-ready, map-isol,
-     map-reparent, wait-grow 7955-8019, 8113-8172 and 8198-8269.
-   - Debt, 23, each keeping every gate of its own, with b5's labels: S6 15 (omit-end, ctx serial, spawn start,
-     2790-2861, 3063-3121, rollback, exec wait idle root_turn, fail rt, err-after, ctx family setup, 3000-3062,
-     ctx_unbound_record, wait-grow 8020-8112, 8427-8473, exec wait idle start), Y 6 (drive-mail, live-cascade, the
-     mail-gate clusters 6992-7118, 7159-7257, 7421-7485, 7486-7546), S4 2 (release-tree, handoff). 13 of them sit
-     next to an M hunk; every gate the diff removed inside their ranges belongs to the neighbouring M scenario
-     (cpu-busy's CreateEvent at 2028 and 3121, rebind_ui's loop at 2737-2739), checked line by line
-     (gate_partial.py). live-cascade lost only its UI participant; its gates are Y's.
-   26 + 23 = 49.
+   The list is b5's, cited and not copied: l2src/LOCK_REMOVAL_EXEC_SELFTEST_GATES.txt, current at sonnet/exec-gates
+   30e1bff4 (first cut d4887106 at 793c267f: 125 blocks, 49 gated), with b5's review of M's selftest conversion
+   219b2672 in l2src/LOCK_REMOVAL_M_EXEC_REVIEW.txt on the same branch: M converted 29 gated blocks, every removed
+   gate M-shaped (a bind, start_contexts, a deadline poll for a child's own turn), 0 gates added, all 132 removed
+   lines accounted for, exec_lock 5 of 5 untouched; 25 of the 29 b5 had tagged S6 by its keyword rule and re-tags.
+   The debt after M is 20 blocks: S4 2, Y 6, S6 12. live-cascade lost only its UI participant; its gates are Y's.
+   d6's own count against the first cut's line ranges (scratchpad gate_debt.py) read 26 and 23, because a range
+   that splits a converted scenario keeps part of its gates in the neighbouring range (checked per line with
+   gate_partial.py: cpu-busy's CreateEvent at 2028 and 3121, rebind_ui's loop at 2737-2739); b5's per-gate review
+   is the count of record. 29 + 20 = 49.
 Split (accepted): d6 the core, lmx_message_exec_selftest.c and tests/cancel_spin_host.c, the runners and the landing;
 b5 the send_local, family_handoff and adopt_unrooted tests; e9 the run_model_scenario36 set (liveness_33,
 family_close_32, family_release_17, orphan_mapped_17, scenario36, root_ingress_5b, root_record_5e), whose rt\n pins
