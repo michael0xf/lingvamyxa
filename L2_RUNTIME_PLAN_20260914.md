@@ -2274,3 +2274,16 @@ machine. O2's order corrected by the coordinator from "0 outside a turn":
 O2.1 the main scaffold becomes R0's entry turn with allocations still on
 the heap, O2.2 the allocations onto the turn arena, O2.3 the REST C, each a
 full self-build.
+Two rulings on O (2026-09-15): O2.1 keeps every step with an arena, the
+lead's alternative ruled in (the entry moves to R0's turn and inside it the
+old thread object is created only as the arena holder for
+lm_own_arena_new_zero, no mailbox and no turn loop used; O2.2 switches the
+allocations to lmx_msg_turn_new_zero / _copy_bytes and drops the object),
+the heap variant out by "без арены Message не имеет смысла". O1 keeps the
+two-cycle balance: run_model_scenario36.ps1 on integration has no --wrap
+support (that hook is f79320de's on the unlanded fable/stage5f-acceptance),
+so the runner hunk is cherry-picked into d6/o1-turn-arena as its own commit
+ahead of O1's red test, which is the hook's first user on integration and
+proves it by linking; O1's allowlist gains that runner file; the list
+checks (adopted_base in its own Message's blocks only, adopted_n rising by
+one per allocation, 0 outside a turn) stay beside the balance.
