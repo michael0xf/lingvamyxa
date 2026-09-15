@@ -200,6 +200,13 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       C1, C2 and turn_other are stable. host varies with the selftest's polling loops from main. Parity is unchanged
       with the counter built in, and there are no report lines without the variable. The threading comes after
       stage M, because run_child_turn and sched_step are part of C1 and are deleted, not threaded.
+    - Measured after M (2026-09-15, d6/lock-s2-red-oneroot c8f9cb50 = fc8e9d6e plus b3d16381's counter with the
+      path prefix stripped, executor selftest's reference.exe from run_port_message, twice with
+      LMX_LOOKUP_COUNT=1): "lookup walks: C1=112 C2=1 turn_other=38 host=2419258", then "... host=2452523". C1, C2
+      and turn_other are stable, host varies with main's polling loops; run_port_message parity PASS with the counter
+      built in, 0 report lines without the variable. M took C1 from 1812 to 112 and C2 from 2 to 1 by deleting the
+      parent's steps and the scheduler step; the remaining 112 + 1 walks are S2's threading list. S2's code comes
+      after D2.
 
 S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and every wake-matching rule above.
     Mikhail, verbatim (relayed by the coordinator): "тупейший вложенный synchronized по локу на чтение и запись как в
@@ -547,6 +554,9 @@ M. The sequential mapping removed (X), after S3 and before S4.
     - LANDED 2026-09-15: merge ba357d4a on 00b04751; on the merge run_self_build PASS 8 of 8 (tag selfbuild/ba357d4a,
       log commit fc8e9d6e), gates GREEN 31 of 31 in 574s, run_port_message plain and -LaneCheck parity PASS (97
       methods), run_lmx -Suite Cancel ok, run_mixa ok; integration/main-absorbs-core is fc8e9d6e.
+      e9's cold record on fc8e9d6e (worktree wt0c_landed_fc8e9d6e, no build/ before): run_self_build PASS 8 of 8 in
+      14 s, tag selfbuild/fc8e9d6e, log line aade30b8 merged as d8f758e6; gate.ps1 exit 0 in 324 s, "gate: all green",
+      27 of 27 steps. main carries it (8ea36474).
     - M keeps no Message's turn on a foreign lane. Mikhail's allowance that children may run on the parent's thread
       is not used by M; a later stage that uses it names the site first, and the coordinator re-cuts the oracle.
     - Fields (b5's survey sonnet/m-fields 18d5e3e2; every site it lists has a row in LOCK_REMOVAL_FIELDS.txt): M
