@@ -4084,3 +4084,28 @@ Pattern for every later stage's acceptance: the oracle on its own
 branch merged onto the stage's base for the red, the stage's branch
 merged with it for the green, one removed signal or write put back for
 the falsifier, all three measured cold before "landed".
+Integration merged into main after S3 (the lead, 2026-09-15): fc68274d =
+main 6f0190aa + integration b4e1296d, fresh detached worktree, no
+conflicts, 0 non-doc files differ from integration; checked by the
+coordinator (b4e1296d is an ancestor of origin/main). ONE ROOT code on
+d6/one-root (worktree wtor, off b4e1296d, local): commit 1 e68fb874 =
+599 R (the l2src tree and gate.ps1) + 630 D (everything else under
+stg/l1_baseline, and run_slice_equal); commit 2 in progress, edits only
+(mixa replacements with all 9 pattern counts matching, the 17 double
+Split-Path repo climbs and the archive sets, work dirs and climbs in
+l2src runners rewritten; next the lib and backend_win32 onto
+Add-L2RuntimeSupport, root run_legacy_p0 and run_import_capacity,
+comments, the pin source); no heavy runs until e9's "done".
+M acceptance, red measured (the coordinator, 2026-09-15): branch
+fable/m-acceptance 03fc0f65, pushed, = b4e1296d plus lmx_msg_test_map_site
+(LMX_MSG_EXEC_TEST, armed by LMX_LANE_CHECK=1), the S3 oracle's shape,
+aborting "LANE MAP FAIL site=... owner=..." before each site where a
+Message's turn is run on another Message's lane: the sequential child
+turn (child_turn_core with bootstrap == 0, site run_child_turn) and the
+UI step from R0's turn (site ui_step); the host's bootstrap entry turn
+(run_entry_turn) is the host mapping and is not marked; green is 0
+sites. In exec-3a with the pin: run_port_message -LaneCheck exit 1 in 15
+s, "LANE MAP FAIL site=ui_step owner=6"; plain exit 0 in 56 s, parity
+PASS. Green criterion for M: the M branch merged with 03fc0f65 gives
+-LaneCheck exit 0 and the plain run passes; falsifier: one site's marker
+and mapping put back turns it red.
