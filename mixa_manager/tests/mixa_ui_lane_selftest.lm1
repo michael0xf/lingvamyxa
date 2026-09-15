@@ -1,0 +1,70 @@
+include: "<stdio.h>"
+
+# UI_LANE_SCHEDULER_DESIGN.txt acceptance (red-first, no scheduler code yet).
+# Built directly: a lane and two attached Messages, no OS thread, no wait
+# primitive, no runtime stepping (map_child/sched_step or their
+# replacements) anywhere in this file. mixa_ui_lane.lm1 does not exist yet;
+# these are forward declarations of the API this test measures against, not
+# a definition -- the link is expected to fail with "undefined reference"
+# for each of the five symbols below, which is this test's red.
+prototype:
+    fn: mixa_ui_lane_new () @: void
+    sub: mixa_ui_lane_delete (@: void lane)
+    fn: mixa_ui_lane_attach (@: void lane; unsigned: id) int
+    fn: mixa_ui_lane_admit (@: void lane; unsigned: id) int
+    fn: mixa_ui_lane_take_turn (@: void lane) unsigned
+end: prototype
+
+fn: main () int
+    @: void lane
+    unsigned: first_turn
+    unsigned: second_turn
+    unsigned: third_turn
+    int: failures 0
+
+    lane: mixa_ui_lane_new()
+    if: lane = 0
+        c.printf("mixa ui lane: new failed\n")
+        return: 1
+
+    # Attach in one order (10 then 20).
+    if: mixa_ui_lane_attach(lane, 10U) != 0
+        c.printf("mixa ui lane: attach 10 failed\n")
+        failures: failures + 1
+    if: mixa_ui_lane_attach(lane, 20U) != 0
+        c.printf("mixa ui lane: attach 20 failed\n")
+        failures: failures + 1
+
+    # Admit in the OPPOSITE order (20 then 10) -- the property under test is
+    # that turns follow admission order, not attachment order.
+    if: mixa_ui_lane_admit(lane, 20U) != 0
+        c.printf("mixa ui lane: admit 20 failed\n")
+        failures: failures + 1
+    if: mixa_ui_lane_admit(lane, 10U) != 0
+        c.printf("mixa ui lane: admit 10 failed\n")
+        failures: failures + 1
+
+    first_turn: mixa_ui_lane_take_turn(lane)
+    second_turn: mixa_ui_lane_take_turn(lane)
+    third_turn: mixa_ui_lane_take_turn(lane)
+
+    # (1) turns run in admission order (20 before 10), not attachment order.
+    if: first_turn != 20U
+        c.printf("mixa ui lane: first turn = %u, want 20 (admission order, not attachment order)\n", first_turn)
+        failures: failures + 1
+    if: second_turn != 10U
+        c.printf("mixa ui lane: second turn = %u, want 10\n", second_turn)
+        failures: failures + 1
+    # (2) exactly one turn per call: a third call with nothing newly
+    # admitted finds no ready Message and returns 0.
+    if: third_turn != 0U
+        c.printf("mixa ui lane: third turn = %u, want 0 (no more admitted input; one turn per call, not a drain)\n", third_turn)
+        failures: failures + 1
+
+    mixa_ui_lane_delete(lane)
+
+    if: failures != 0
+        c.printf("mixa ui lane: %d failure(s)\n", failures)
+        return: 1
+    c.printf("mixa ui lane selftest ok\n")
+return: 0
