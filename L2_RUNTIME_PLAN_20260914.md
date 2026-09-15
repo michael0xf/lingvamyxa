@@ -2882,3 +2882,17 @@ printTree.lm1.c, before the staged tests (841, 852), and checks its exit
 code only; not a reader of the old chain's oracle, so (b) needs no L1
 change there, and no golden comparison is added to it (decision 12); the
 goldens guard run_parser and run_legacy_p0.
+D1's landing red on its merge 2c880103 (not pushed; integration stays
+88934463): the grep at 0, run_port_message plain and -LaneCheck PASS,
+scenario36 PASS, but run_lmx -Suite MessageApi red, gen2's
+lmx_message_selftest failing "retry consumed a new path segment"
+(lmx_message_selftest.lm1 146-149 still expecting a second create to
+return the same Message with path segment 1, the create-retry idempotence
+Mikhail ordered deleted; D1 removed the stored create_id and the
+"idempotent create changed sibling/path" block but missed this one, and
+the branch measure did not run MessageApi). Fix: that retry check and the
+retry create behind it deleted (a check of deleted semantics, no lock and
+no contradiction), MessageApi re-measured on the branch, land_d1
+relaunched on 88934463 after 57's slot and the lead's stg-buildcore
+measure. Lesson restated: a branch measure runs every runner that builds
+the changed file, MessageApi included.
