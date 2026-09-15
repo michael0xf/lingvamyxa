@@ -591,6 +591,31 @@ e) field-parsing state machine -- l2src/parser_field_parse_port.lm2
    difference. Reverted, clean diff, 36/36
    restored, also cold.
 
+   e2 (field appenders, 4 fns) -- l2src/parser_field_parse_port.lm2:
+   p0_append_atom_slice, p0_append_positional_skip, p0_append_
+   compact_atom_pieces, p0_parse_append_node_and_update. Turns a
+   scanned text slice into an atom/positional-skip node and appends
+   it to the structure being built. Header gains two cross-unit
+   entries (p0_new_node, Stage c's parser_alloc_port.lm2; p0_
+   position_in_slice, Stage b's parser_scan_port.lm2) and four more
+   still-oracle-native entries (lm_p0_append_field, lm_p0_document_
+   register_lazy_text, lm_p0_find_matching_bracket, lm_p0_scan_
+   compact_atom_piece -- e4, not yet ported -- and lm_p0_parse_
+   fields_until -- e6, not yet ported; p0_append_compact_atom_pieces
+   calls it for bracketed sub-fields).
+   36/36 goldens identical, both drivers (stage e_appenders), cold.
+   Falsifier: p0_append_atom_slice forced to return 0 unconditionally
+   -- measured 64 mismatches across 36 goldens x 2 drivers (verified
+   with full output captured, not truncated this time): exactly 4 of
+   the 36 goldens are completely unaffected (0 mismatches on either
+   driver) -- D_utf8_inline, D_utf8_vertical, invalid_eq_unclosed,
+   invalid_triple_unclosed. The two invalid_* fixtures fail parsing
+   before reaching any atom-slice appending, same shape as e1/d1/d2's
+   own exceptions; the two D_utf8 fixtures' own content apparently
+   never routes through this specific function (not yet traced
+   further -- a fact about those fixtures' shape, not a port gap).
+   Reverted, clean diff, 36/36 restored, also cold.
+
 Remaining stages (e2's plan)
 -----------------------------
 c) COMPLETE -- allocation, dump-printer Slices 1-4 (leaves, frame/
