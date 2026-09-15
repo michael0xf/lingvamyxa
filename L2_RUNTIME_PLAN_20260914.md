@@ -4455,3 +4455,19 @@ LOCK_REMOVAL_FIELDS.txt at f5573902: every field two files assign to
 different stages or categories, every FIELDS row no inventory names,
 every inventory item with no FIELDS row, each with which is right by
 the design's text or "the lead decides".
+b5's cross-check landed on sonnet/crosscheck f36fb2e3
+(LOCK_REMOVAL_CROSSCHECK.txt, targeted, its Method note says so; checked
+by the coordinator). Disagreements: LmxMsgExec.nworkers (the FIELDS
+table's stage against the S5 file's M: the lead decides by the design,
+the S5 reading noted); LmxMsgExec.stopping/.stopped no real conflict
+(the S6 file tags the hold's stage, FIELDS the field's fate). Text-sync
+gap: LmxMsgRuntime.slots/.n still read plain DEL in FIELDS while the
+coordinator ruled them R0's own data; the lead updates the rows. FIELDS
+rows no inventory names: the S2-tagged rows (addr, path/path_n/path_cap,
+parent_msg, two .addr rows), S2 being the lead's own stage with its
+tripwire counts (C1 1812, C2 2) and no b5 inventory; a per-function
+inventory of the address lookups is b5's next ticket. Inventory item
+with no FIELDS row: LmxMsgExec.reap_head (found by the S5 and S3 files;
+exec.c 2119-2131), to get a row beside retire_head/retire_tail, DEL,
+done with S3 at b4e1296d. The pre-landing S3 file's rows now marked
+done(S3, b4e1296d) in FIELDS are not a disagreement.
