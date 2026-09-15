@@ -1,12 +1,13 @@
 # A field of a runtime struct is spelled as written and checked by the C
 # compiler against lmx_message.h (e2, 2026-09-14: LmxMsgCopy.delivered was
-# "unknown foreign field"). LmxMsg.ui_pending exists in the header but was
-# never in the translator's per-type field list (the fixture read
-# LmxMsg.sched_queued until that unused field was deleted with the retired
-# sched_ready unit).
+# "unknown foreign field"). LmxMsg.success exists in the header and is one of
+# the L3 Thread record's own fields, which no lock-removal stage deletes (the
+# fixture read LmxMsg.sched_queued until that unused field was deleted with the
+# retired sched_ready unit, then LmxMsg.ui_pending until stage M deleted the
+# UI lane; run_l2trans was not in M's landing set).
 
 fn: queued (const: @(LmxMsg m)) int
-    if: m\ui_pending != 0
+    if: m\success != 0
         return: 1
     return: 0
 end: queued

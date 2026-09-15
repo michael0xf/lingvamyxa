@@ -195,7 +195,7 @@ fn: turn_q_create_f (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         return: 1
     if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
         lmx_msg_env_release(got)
-        g_f_create_st: lmx_msg_create(rt, who, 6U, @ g_ini, 1U, @ g_f)
+        g_f_create_st: lmx_msg_create(rt, who, @ g_ini, 1U, @ g_f)
     ---
     c.free((cast: (@: void) got))
     if: report(rt, who) != c.LMX_MSG_STAGED
@@ -244,8 +244,8 @@ fn: turn_p_script (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         g_st1: lmx_msg_send(rt, who, g_to, g_env)
     ---
     if: op[0] = 4U
-        g_st1: lmx_msg_create(rt, who, 3U, @ g_ini, 1U, @ g_d)
-        g_st2: lmx_msg_create(rt, who, 4U, @ g_ini, 1U, @ g_e)
+        g_st1: lmx_msg_create(rt, who, @ g_ini, 1U, @ g_d)
+        g_st2: lmx_msg_create(rt, who, @ g_ini, 1U, @ g_e)
     ---
     if: op[0] = 5U
         g_st1: lmx_msg_recv(rt, who, g_in)
@@ -268,7 +268,7 @@ fn: turn_p_script (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         if: op[0] = 7U
             env\id: 9U
             env\number: 9
-            g_st1: lmx_msg_create(rt, who, 9U, @ g_ini, 1U, @ g_x)
+            g_st1: lmx_msg_create(rt, who, @ g_ini, 1U, @ g_x)
             if: g_st1 = c.LMX_MSG_OK
                 g_st2: lmx_msg_send(rt, who, g_x, env)
                 g_st3: lmx_msg_stop(rt, who, g_x)
@@ -277,7 +277,7 @@ fn: turn_p_script (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         if: op[0] = 8U
             env\id: 8U
             env\number: 1
-            g_st1: lmx_msg_create(rt, who, 5U, @ g_ini, 1U, @ g_q)
+            g_st1: lmx_msg_create(rt, who, @ g_ini, 1U, @ g_q)
             if: g_st1 = c.LMX_MSG_OK
                 g_st2: lmx_msg_send(rt, who, g_q, env)
             ---
@@ -301,7 +301,7 @@ fn: p_turn (@: LmxMsgRuntime rt; unsigned: p; unsigned: op) int
 fn: turn_root_create_z (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     if: ctx != 0
         return: 1
-    g_st1: lmx_msg_create(rt, who, 7U, @ g_ini, 1U, @ g_z)
+    g_st1: lmx_msg_create(rt, who, @ g_ini, 1U, @ g_z)
     return: lmx_msg_end_turn(rt, who, 1)
 
 # R0's own turn maps its child; ctx is the cell, [0] the child, [1] the status.
@@ -366,11 +366,11 @@ fn: main () int
     g_in: got
     rt: lmx_msg_runtime_new()
     check(rt != 0 && lmx_msg_set_now(rt, 1000U) = c.LMX_MSG_OK, "runtime with a logical clock at 1000")
-    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P, created without a parent (R0's child)")
-    check(lmx_msg_create(rt, 0U, 20U, @ ini, 1U, @ s) = c.LMX_MSG_OK, "S, the test's report sink: R0's child, never bound")
+    check(lmx_msg_create(rt, 0U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P, created without a parent (R0's child)")
+    check(lmx_msg_create(rt, 0U, @ ini, 1U, @ s) = c.LMX_MSG_OK, "S, the test's report sink: R0's child, never bound")
     g_sink: s
     check(lmx_msg_live_query(rt, lmx_msg_root_addr(rt)) = c.LMX_MSG_INVALID, "R0 has no parent to poll")
-    check(lmx_msg_create(rt, p, 2U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "child C created and published")
+    check(lmx_msg_create(rt, p, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "child C created and published")
     pm: lmx_msg_find(rt, p)
     cm: lmx_msg_find(rt, c1)
     if: pm = 0 || cm = 0
