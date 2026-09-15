@@ -271,6 +271,22 @@ void lmx_msg_test_unbind_refused(LmxMsgRuntime *rt, LmxMsg *m, int st, const cha
 #define lmx_msg_test_lane_take(r, o, h, s) ((void)0)
 #endif
 
+#if defined(LMX_MSG_EXEC_TEST)
+/* S3 (Mikhail 2026-09-15): an owner thread loops forever, looks into its own
+ * mailbox each round and waits on no primitive, so nothing signals a lane thread.
+ * Under LMX_LANE_CHECK=1 every such signal aborts with its site named; green is 0
+ * sites. Called before each signal in exec.c and lmx_message_host.c. */
+void lmx_msg_test_wake_site(const char *site, unsigned owner) {
+    if (lmx_msg_test_lane_check == 0) {
+        return;
+    }
+    fprintf(stderr, "LANE WAKE FAIL site=%s owner=%u: a lane thread was signalled; an owner loops over its mailbox and waits on nothing (S3)\n",
+        site, owner);
+    fflush(stderr);
+    abort();
+}
+#endif
+
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
 int lmx_msg_test_copy_fail;
 int lmx_msg_test_copy_should_fail(void) {
@@ -475,89 +491,6 @@ int lmx_msg_tab_grow(LmxMsgRuntime *rt) {
     return 0;
 }
 
-#if defined(LMX_MSG_EXEC_TEST)
-/* S3 wake oracle (6f's rule, 2026-09-15): every take-wake of a lane is issued by
- * an admission into that lane's mailbox. Under LMX_LANE_CHECK=1 a lane whose
- * take-wakes would exceed the admissions counted into its inbox aborts with
- * "LANE WAKE FAIL site=...". Several admissions may share one wake.
- * The counts sit in the Message's mail block beside its lock and only grow. An
- * admission is counted at the unlock of the hold that appended it, so before the
- * ready that signals for it. An inbox append in a hold that no exec.c mutator
- * marked is a msg_q_push (lm2 and lm1 only append) or the UI lane's MAP append,
- * counted node by node. The wakes that retire a worker (bind_wait_retire, the
- * unbind join, stop's retire walk) ask for no take and are not checked. */
-typedef struct LmxMsgMailBlock {
-#if defined(_WIN32)
-    CRITICAL_SECTION lock;
-#else
-    pthread_mutex_t lock;
-#endif
-    unsigned depth;
-    int mutated;
-    LmxMsgCopy *tail_at_lock;
-    unsigned admits;
-    unsigned wakes;
-} LmxMsgMailBlock;
-
-static void mail_test_mutated(LmxMsg *m) {
-    ((LmxMsgMailBlock *)m->mail)->mutated = 1;
-}
-
-static void mail_test_on_lock(LmxMsg *m) {
-    LmxMsgMailBlock *b = (LmxMsgMailBlock *)m->mail;
-    b->depth += 1U;
-    if (b->depth == 1U) {
-        b->mutated = 0;
-        b->tail_at_lock = m->inbox_tail;
-    }
-}
-
-static void mail_test_on_unlock(LmxMsg *m) {
-    LmxMsgMailBlock *b = (LmxMsgMailBlock *)m->mail;
-    LmxMsgCopy *n;
-    unsigned k = 0U;
-    if (b->depth == 1U && b->mutated == 0 && m->inbox_tail != 0 && m->inbox_tail != b->tail_at_lock) {
-        n = b->tail_at_lock != 0 ? b->tail_at_lock->next : m->inbox;
-        while (n != 0) {
-            k += 1U;
-            if (n == m->inbox_tail) {
-                break;
-            }
-            n = n->next;
-        }
-        (void)__atomic_add_fetch(&b->admits, k, __ATOMIC_RELAXED);
-    }
-    b->depth -= 1U;
-}
-
-static void lmx_msg_test_lane_wake(LmxMsgExecBind *rec, const char *site) {
-    LmxMsgMailBlock *b;
-    unsigned wakes;
-    unsigned admits;
-    if (lmx_msg_test_lane_check == 0 || rec == 0 || rec->wait == 0) {
-        return;
-    }
-    if (rec->msg == 0 || rec->msg->mail == 0) {
-        fprintf(stderr, "LANE WAKE FAIL site=%s owner=%u admits=0 wakes=1: a lane woken with no mailbox (S3)\n",
-            site, (unsigned)rec->addr);
-        fflush(stderr);
-        abort();
-    }
-    b = (LmxMsgMailBlock *)rec->msg->mail;
-    wakes = __atomic_add_fetch(&b->wakes, 1U, __ATOMIC_RELAXED);
-    admits = __atomic_load_n(&b->admits, __ATOMIC_RELAXED);
-    if (wakes > admits) {
-        fprintf(stderr, "LANE WAKE FAIL site=%s owner=%u admits=%u wakes=%u: a lane woken with no admission into its mailbox (S3)\n",
-            site, (unsigned)rec->addr, admits, wakes);
-        fflush(stderr);
-        abort();
-    }
-}
-#else
-#define mail_test_mutated(m) ((void)0)
-#define lmx_msg_test_lane_wake(r, s) ((void)0)
-#endif
-
 LmxMsg *lmx_msg_slot_new(void) {
     LmxMsg *m = (LmxMsg *)calloc(1U, sizeof(LmxMsg));
     if (m == 0) {
@@ -568,22 +501,14 @@ LmxMsg *lmx_msg_slot_new(void) {
     m->success = 0;
     m->tracked = 1;
 #if defined(_WIN32)
-#if defined(LMX_MSG_EXEC_TEST)
-    m->mail = calloc(1U, sizeof(LmxMsgMailBlock));
-#else
     m->mail = calloc(1U, sizeof(CRITICAL_SECTION));
-#endif
     if (m->mail == 0) {
         free(m);
         return 0;
     }
     InitializeCriticalSection((CRITICAL_SECTION *)m->mail);
 #else
-#if defined(LMX_MSG_EXEC_TEST)
-    m->mail = calloc(1U, sizeof(LmxMsgMailBlock));
-#else
     m->mail = calloc(1U, sizeof(pthread_mutex_t));
-#endif
     if (m->mail == 0) {
         free(m);
         return 0;
@@ -622,7 +547,6 @@ void lmx_msg_mail_lock(LmxMsg *m) {
     pthread_mutex_lock((pthread_mutex_t *)m->mail);
 #endif
 #if defined(LMX_MSG_EXEC_TEST)
-    mail_test_on_lock(m);
     if (lmx_msg_test_mail_locked != 0) {
         lmx_msg_test_mail_locked(m);
     }
@@ -633,9 +557,6 @@ void lmx_msg_mail_unlock(LmxMsg *m) {
     if (m == 0 || m->mail == 0) {
         return;
     }
-#if defined(LMX_MSG_EXEC_TEST)
-    mail_test_on_unlock(m);
-#endif
 #if defined(_WIN32)
     LeaveCriticalSection((CRITICAL_SECTION *)m->mail);
 #else
@@ -693,7 +614,6 @@ LmxMsgCopy *lmx_msg_mail_inbox_pop_input(LmxMsg *m) {
         return 0;
     }
     lmx_msg_mail_lock(m);
-    mail_test_mutated(m);
     n = m->inbox;
     while (n != 0 && mail_kind_internal(n->kind) != 0) {
         prev = n;
@@ -728,7 +648,6 @@ void lmx_msg_mail_inbox_take_ingress(LmxMsg *m, LmxMsgCopy **out) {
         return;
     }
     lmx_msg_mail_lock(m);
-    mail_test_mutated(m);
     n = m->inbox;
     while (n != 0) {
         nxt = n->next;
@@ -766,7 +685,6 @@ void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out) {
         return;
     }
     lmx_msg_mail_lock(m);
-    mail_test_mutated(m);
     lmx_msg_mail_chain_take(&m->inbox, &m->inbox_tail, out);
     lmx_msg_mail_unlock(m);
 }
@@ -1075,7 +993,6 @@ void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain) {
         t = t->next;
     }
     lmx_msg_mail_lock(m);
-    mail_test_mutated(m);
     t->next = m->inbox;
     if (m->inbox_tail == 0) {
         m->inbox_tail = t;
@@ -1542,7 +1459,7 @@ static int ctx_visit_wake(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
     (void)e;
     (void)arg;
     if (rec->affinity != LMX_MSG_AFFINITY_UI) {
-        lmx_msg_test_lane_wake(rec, "ctx_visit_wake");
+        lmx_msg_test_wake_site("ctx_visit_wake", (unsigned)rec->addr);
         bind_wait_signal(rec->wait);
     }
     return 0;
@@ -1572,7 +1489,7 @@ void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     }
     r = rec_at_addr_locked(e, addr);
     if (r != 0 && r->affinity != LMX_MSG_AFFINITY_UI) {
-        lmx_msg_test_lane_wake(r, "wake_addr_locked");
+        lmx_msg_test_wake_site("wake_addr_locked", (unsigned)r->addr);
         bind_wait_signal(r->wait);
     }
 }
@@ -1689,7 +1606,6 @@ unsigned lmx_msg_exec_take_ui_locked(LmxMsgRuntime *rt) {
     lane = e->ui_lane;
     for (;;) {
         lmx_msg_mail_lock(lane);
-        mail_test_mutated(lane);
         node = lane->inbox;
         if (node != 0) {
             lane->inbox = node->next;
@@ -2229,6 +2145,7 @@ static void bind_reap_push(LmxMsgExec *e, LmxMsgBindWait *w) {
         e->reap_head = w;
         w->on_reap = 1;
     }
+    lmx_msg_test_wake_site("bind_reap_push", 0U);
     bind_wait_signal(w);
 }
 
@@ -2342,6 +2259,7 @@ static void join_bind_worker(LmxMsgRuntime *rt, LmxMsgExecBind *rec) {
     w->slot = 0;
     w->retired = 1;
     w->reaping = 1;
+    lmx_msg_test_wake_site("join_bind_worker", (unsigned)rec->addr);
     bind_wait_signal(w);
     lmx_msg_exec_unlock(rt);
     had = bind_wait_join(w);
@@ -3075,6 +2993,7 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
             r->launching = 0;
         }
         lmx_msg_exec_unlock(rt);
+        lmx_msg_test_wake_site("launch_gate_refuse", (unsigned)pack->addr);
         pack_gate_signal(pack, 2);
 #if defined(_WIN32)
         WaitForSingleObject(th, INFINITE);
@@ -3094,9 +3013,10 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     r->launching = 0;
     e->nworkers += 1;
     pack->wait = r->wait;
-    lmx_msg_test_lane_wake(r, "launch");
+    lmx_msg_test_wake_site("launch", (unsigned)r->addr);
     bind_wait_signal(r->wait);
     lmx_msg_exec_unlock(rt);
+    lmx_msg_test_wake_site("launch_gate_go", (unsigned)pack->addr);
     pack_gate_signal(pack, 1);
 #if defined(LMX_MSG_EXEC_TEST)
     if (lmx_msg_exec_test_during_launch != 0) {
@@ -3477,6 +3397,7 @@ static int ctx_visit_stop_retire_waits(LmxMsgExec *e, LmxMsgExecBind *rec, void 
     (void)arg;
     if (rec->wait != 0) {
         rec->wait->retired = 1;
+        lmx_msg_test_wake_site("stop_retire_walk", (unsigned)rec->addr);
         bind_wait_signal(rec->wait);
         bind_reap_push(e, rec->wait);
         rec->wait = 0;
@@ -3518,6 +3439,7 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     e->contexts_live = 0;
     (void)rec_walk_locked(e, ctx_visit_stop_unmap, 0);
     (void)rec_walk_locked(e, ctx_visit_stop_retire_waits, 0);
+    lmx_msg_test_wake_site("stop_event", 0U);
 #if defined(_WIN32)
     SetEvent(e->stop_ev);
 #endif

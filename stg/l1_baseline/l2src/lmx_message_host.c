@@ -2,6 +2,11 @@
  * Copy/envelope/queue policy lives in lmx_message.lm1. */
 #include "l2src/lmx_message_host.h"
 #include <stdlib.h>
+#if defined(LMX_MSG_EXEC_TEST)
+#include "l2src/lmx_message_exec.h"
+#else
+#define lmx_msg_test_wake_site(s, o) ((void)0)
+#endif
 
 #if defined(LMX_MSG_HOST_TEST)
 int lmx_msg_host_test_nomem;
@@ -156,6 +161,7 @@ int lmx_msg_host_wake(LmxMsgRuntime *rt) {
     }
 #endif
     h = (LmxMsgHostSync *)rt->host_sync;
+    lmx_msg_test_wake_site("host_wake", 0U);
 #if defined(_WIN32)
     if (SetEvent(h->wake) == 0) {
         return 1;
@@ -176,6 +182,7 @@ int lmx_msg_host_shutdown(LmxMsgRuntime *rt) {
         return LMX_MSG_INVALID;
     }
     h = (LmxMsgHostSync *)rt->host_sync;
+    lmx_msg_test_wake_site("host_shutdown", 0U);
 #if defined(_WIN32)
     EnterCriticalSection(&h->lock);
     h->shutting_down = 1;
