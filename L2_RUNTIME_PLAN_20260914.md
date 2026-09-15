@@ -5274,3 +5274,25 @@ l2_program_turn's own lookup (binds=0); S2's C2 replaces that lookup by
 lmx_msg_turn_self, so mode 3 retargets its wrap onto lmx_msg_turn_self
 and run_l2_message_root.ps1 530's wrap list names it; both in S2's
 allowlist.
+b5's S4 site table on the post-M tip landed on sonnet/s4-sites fc1e88a6
+(l2src/LOCK_REMOVAL_S4_SITES.txt off d8f758e6; checked by the
+coordinator): nothing 9, guard 3, edge 0, move 0. The three guards:
+orphan_children (reached only through the reclaim_orphan/orphan_sweep
+chain, unguarded end to end), exec_bind_mode (its public entry
+lmx_msg_exec_bind has no caller-identity check), and emergency_cancel
+(as ruled). Finding from re-reading each guard: adopt_mark,
+dispose_mark and reclaim_mark are guarded on two of their three call
+paths (dispose_child and adopt_failed, both holding_turn-or-host-owner
+gated) and share the third with orphan_children's unguarded chain, so
+one guard at orphan_sweep's own entry (its sole caller) closes both;
+map_child already does what S4 asks. Corrections: end_turn's
+committed/tracked walk is two loops at different lines; the liveness
+reply's child_heard_at write is in lmx_msg_live_handle, not end_turn.
+emergency_cancel's call sites 29 across 7 files (36 before M);
+cancel_spin_host.c's one remaining spawned-thread call (line 157) is
+the ruled host-thread-or-mail change. Ruling (coordinator): the three
+guards are S4's code list, one guard each (orphan_sweep's entry, the
+parent's lane or the host outside any turn; lmx_msg_exec_bind, the
+child's parent's lane or the host; emergency_cancel as ruled), refusing
+otherwise, with a red-first check per guard (a call from a foreign lane
+refused).
