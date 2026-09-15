@@ -5501,3 +5501,16 @@ S2's acceptance record: red c8f9cb50 (C1 112, C2 1), green 05c50f8b (C1
 0, C2 0), falsifier is_runnable by address (C1 48). Landing next:
 land_base2.sh, the union base plus lmx_cancel, the counter never folded
 in.
+S2 LANDED (the lead, 2026-09-15; checked by the coordinator on origin):
+merge 31c851d4 (d6/lock-s2 05c50f8b onto 4a0af0a7, 7 M files, no A/D);
+integration/main-absorbs-core 952d8e31 (the SELF-BUILD OK line); the
+union base plus lmx_cancel green on the merge: self-build PASS 8 of 8,
+gates GREEN 31 of 31 in 497 s, port_message plain and -LaneCheck parity
+PASS (102 methods), run_l2trans ok in 277 s, run_port_parser ok,
+run_mixa ok, the ingress harness ok, lmx_cancel ok; tag
+selfbuild/31c851d4 and the log commit on d6/lock-s2-landing-31c851d4;
+the counter c8f9cb50 not folded in. The lock half's state: S3, M, D2
+and S2 landed (no wake, wait or join; no sequential mapping or core UI
+lane; no create_id; no address lookup on the C1/C2 paths). Next: main,
+then S4 (b5's emergency_cancel guard with its checks re-cut off
+952d8e31), e9's gate record on 952d8e31 first.
