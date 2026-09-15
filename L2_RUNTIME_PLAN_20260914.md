@@ -4142,3 +4142,14 @@ script exit 0, landing worktree removed, nothing pushed (integration
 still b4e1296d at that time; the seed branch still a30ed131); the pin
 copy in wt0c_fix3 still 0B3D85B3. The seed row of the self-build half
 is closed. The machine is free for ONE ROOT's heavy runs.
+ONE ROOT 3/3 on d6/one-root 6bfefa81 (the lead, 2026-09-15; checked by the
+coordinator: l2trans.lm1:135 names no stg, tools_seed_drift.py gone, 0
+tracked under stg/l1_baseline): CORE_LEAD ru/en (13 l2src/ lines each,
+gate.ps1, build/l1trans/gen2/, the promotion paragraph naming the
+distributed pin in build/pin_<hash>/; 4 history mentions kept in each),
+the model (3 l2src/ lines, gen2, the stable-L1 row; 0 stg left), the
+l2trans.lm1:135 comment (1/1), tools_seed_drift.py deleted;
+land_oneroot.sh's allowlist gained both. Next: the red measure in a
+fresh worktree at b4e1296d (a control run_port_msg_visit with the slice
+intact, then the same runner with only the slice's l1src removed), then
+land_oneroot.sh b4e1296d d6/one-root 6bfefa81.
