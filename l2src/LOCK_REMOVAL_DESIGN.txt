@@ -1461,6 +1461,52 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       e->lock (1237/1297) and m->mail (493/522). e->lock goes with S6; m->mail is the one kept. exec.c's two
       Interlocked refcount primitives go with S6 too, unless this design shows each site order-free, named per site;
       no such showing is made here, so they go. The __atomic_ running/success flags stay (single-writer, 2.1 (3)).
+    S6 in the (a) format, draft (d6, 2026-09-15; read at integration 8eeb094f after S3, M, D2, S2, S4 and S5
+    landed; acceptance to be agreed with the coordinator before any code):
+    - Census: b5's re-base sonnet/s6-rebase 0783c86b at 3e6fc02a, 82 sites (S3 3, M 11, S4 49, S5 13, Y 1, S6 5).
+      Its 13 S5-pending rows are what S5 deleted (b5's S5 review sonnet/s5-review dcf8a9c7), and S5 added no hold,
+      so S6's census is 69 sites. b5's per-hold pre-read at 8eeb094f (the statements each hold protects, one writer
+      lane or not, the LmxMsgExec fields read) is folded in when it lands.
+    - Measured at 8eeb094f, call lines:
+      - lmx_msg_exec_lock( in lmx_message.lm1 61, lmx_message.lm2 61, lmx_message_exec.c 56 (definition included);
+      - lmx_msg_exec_unlock( in 136, 136 and 119;
+      - the host lock: lmx_msg_host_lock( in lm1 1 and lm2 1, defined in lmx_message_host.c, whose
+        h->shutting_down is also read and written under its own mutex;
+      - Interlocked outside MAIL: the two InterlockedCompareExchange on LmxMsg.refs in endp_retain/endp_release
+        (exec.c 366/392), with lmx_msg_endp_retain( called 20+20+7 times and lmx_msg_endp_release( 31+31+10;
+      - direct exec lock calls in tests: lmx_message_exec_selftest.c 10, tests/lmx_model_checks_19_29_6_selftest.lm1
+        20.
+      LmxMsgExec at 8eeb094f is lock, tls, nworkers, stopping, stopped, no_retire, contexts_live, rt, unbound_held,
+      plus test-only fields. The only lock kept is m->mail, the message collection's (exec.c 510-564, 1180).
+    - Code, proposed:
+      - (a) lmx_msg_exec_lock/unlock, e->lock and their 69 census sites go. Every hold whose statements S4 put on one
+        owner lane, or S2 made record-local, loses its lock with nothing replacing it. A hold the pre-read shows
+        with more than one writer lane stops the stage, unless its cell is an order-free single flag.
+      - (b) LmxMsgExec's shared bookkeeping: nworkers and contexts_live become order-free atomic cells or go with
+        their readers. stopping, stopped and no_retire become single atomic flags (one writer: the host's stop and
+        start). unbound_held goes with lmx_msg_exec_unbound_close's impersonation. Each is named per the pre-read.
+      - (c) the host lock: h->shutting_down becomes one atomic flag (the host writes it, admissions read it), and
+        lmx_msg_host_lock/unlock and LmxMsgHostSync's mutex go.
+      - (d) refs, endp_retain/endp_release and LmxMsgRuntime.slots/n go together: a released child is freed by its
+        parent at settle, and runtime_delete walks R0's tree instead of slots.
+    - Dependency that may stop (d): a sender resolves and pins a sibling destination on another lane
+      (lmx_msg_dest_from_src <- send/send_owned, the 14 turn_other walks S2 attributed; C3), and a child queries its
+      parent (C4). S4's section names both as depending on 5.6 (a capability after its target closes), and S4 as
+      landed added only the emergency_cancel guard. Without refs, nothing keeps that destination's record alive
+      across the unlocked window, and a reference count is not order-free state. If 5.6 is still unanswered when
+      the pre-read lands, (d) is put to Mikhail through the coordinator as a needed decision, and S6 lands (a)-(c)
+      first.
+    - Proposed acceptance (the S2/S5 pattern):
+      - Red: a probe runner on its own branch (d6/lock-s6-red off 8eeb094f) prints the counts:
+        exec_lock_calls (lines naming lmx_msg_exec_lock( or lmx_msg_exec_unlock( in lm1, lm2, exec.c, host.c and the
+        tests), exec_lock_decl (LmxMsgExec's lock field and its Initialize/Delete/Enter/Leave or pthread_mutex
+        calls), host_lock (lmx_msg_host_lock/unlock and h->lock), refs (lines naming refs, endp_retain, endp_release
+        or InterlockedCompareExchange outside m->mail), exec_fields (nworkers, contexts_live, stopping, stopped,
+        no_retire, unbound_held declared non-atomic) and runtime_lists (slots and n in LmxMsgRuntime). All are
+        nonzero today.
+      - Green: every count 0 on the S6 tip merged with the probe; the union base (land_base3.sh) plus lmx_cancel;
+        the UAF kit's 165 clean runs over the executor selftest; the model scenario36 set.
+      - Falsifier: one hold put back (a lock/unlock pair around one census site) turns exec_lock_calls >= 1.
 
 A1-A3. The arena (19.29.2), after S6 or interleaved where a stage touches the same record.
     Mikhail on 5.4, verbatim (2026-09-15): "какая копия? У нас нет никаких копий message -- выше же с тобой обсуждали.
