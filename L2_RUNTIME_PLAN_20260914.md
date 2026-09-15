@@ -3390,3 +3390,19 @@ root executes; the parent's running = 0 is the stop request that in the
 end leaves the loop; at the exit, by return or however, running is set to
 0); a finished L3 Thread reads success && !running. Entered verbatim in
 spec 19.28.R2.2 and model 31.
+Kernel paragraph with the loop's exit as Mikhail stated it: d6/lock-removal
+44168782 (the lead), checked by the coordinator on the branch: KERNEL says
+the L3 Thread is a model, so the kernel fixes no loop shape, only its exit
+conditions exist (user code sets success; running is polled while root
+executes; running = 0 from the parent is the stop request that in the end
+leaves the loop; at the exit, by return or however, running is set to 0; a
+finished L3 Thread reads success && !running); his four loop sentences
+quoted verbatim there; S3, Y3 and the retired row say the same; the FIELDS
+header's record comments use the section 2 wording. Grep on the two files
+at 44168782: "leaves when success", "runs while success", "leaving when
+user code", "not the loop's exit" 0 each; categories 16/36/47.
+b5's stage O is now sonnet/stage-o 6eb6729a: the two orphaned
+message-thread .lm2 tests (trans_invalid_thread_predef,
+trans_message_thread_source_import) deleted, tests/p0_tree_contract/
+p0_meta_dump.c restored (its earlier deletion was b5's own mistake; it is
+a live P0 contract dumper). It lands after (c), re-checked on (c)'s tip.
