@@ -4403,22 +4403,17 @@ neither falsifier result is established (no EMPTY with drain OK, and 19
 samples are not "never"); the load exposes an eighth timing assumption
 (the fast turn must overlap the slow wait's window). Next: 100 runs at
 6 busy processes; the lead stops before any fix.
-Mikhail (2026-09-15, verbatim) on the word "regeneration": "А смысл фразы "регенерация" ? Что регенерируется? L1 транслируется в себя самого? Зачем? Смысл в том чтобы L1 транслировался в Си, Си -- в бинарник компилировалось и потом бинарник транслировал опять по цепочке в Си корреткно L1 (такую схему с next и check (три этапа + тесты) ты можешь найти в пред версиях сборки). Вот эта версия считается успешной самосборкой. У вас так?" Answered by
-the coordinator from the runners at 5cee1426: "regeneration" is only the
-C the chain reproduces from the L1 sources (the eight lm1/build files)
-compared with the committed C; nothing is translated into itself;
-tests/l1/run_gen.ps1 is his scheme exactly (gen0 = gcc of the committed
-C, gen1 = gen0 translating l1src into C then gcc, gen2 likewise, gen1 C
-== gen2 C, gen2 C == the committed C by blob, gen3 = gen2 translating
-again as the check, tests on gen0 and gen2), and l2src/run_self_build.ps1
-is the same over all eight files with three passes (green: pass 3 ==
-pass 2 byte for byte, the committed C equal to that fixed point). The
-L2 stage today: l2trans is L1 translating L2 straight into C; the L2
-mirrors are translated by the gen2 l2trans and held to parity with the
-L1-built reference in run_port_message; they are not part of the
-self-build fixed point. Mikhail then, verbatim, closing it: "выще я описывал полный путь через полную компиляцию и тесты, а в этом сообщении просто пытался отгадать что регенерируется. Если есть сгенерированные L1 которые компилируются (проверено) и бинарник создаёт такой же как он сам бинарник из L1, то наверное создание из L2 такого же байт-в байт L1 равно самосборке -- это только было мое предположение что значит ваш термин "регенерация", возможно я ошибался"
-So no new requirement: the self-build criterion stands as the full path
-(translate, compile, translate again, tests); the L2 stage joins the
-fixed point when the port to L2 resumes after the lock work, with the
-same criterion (byte-identical output across passes plus the tests and
-parity). The open question in the plan above is closed.
+Terminology (2026-09-15): "regeneration" in the runners means only the C
+the chain reproduces from the L1 sources (the eight lm1/build files),
+compared byte for byte with the previous pass and with the committed C;
+tests/l1/run_gen.ps1 (gen0 = gcc of the committed C, gen1 = gen0
+translating l1src into C then gcc, gen2 likewise, gen1 C == gen2 C ==
+the committed C, gen3 = gen2 translating again as the check, tests on
+gen0 and gen2) and l2src/run_self_build.ps1 (three passes over all eight
+files, green when pass 3 == pass 2 and the committed C equals that
+fixed point) are the full path: translate, compile, translate again,
+compare, test. The L2 stage (l2trans is L1 translating L2 straight into
+C; the L2 mirrors are held to parity with the L1-built reference in
+run_port_message) is not in the fixed point today and joins it, with the
+same criterion, when the port to L2 resumes after the lock work. The
+earlier open question above (the L2 stage in the self-build) is closed.
