@@ -271,6 +271,22 @@ void lmx_msg_test_unbind_refused(LmxMsgRuntime *rt, LmxMsg *m, int st, const cha
 #define lmx_msg_test_lane_take(r, o, h, s) ((void)0)
 #endif
 
+#if defined(LMX_MSG_EXEC_TEST)
+/* S3 (Mikhail 2026-09-15): an owner thread loops forever, looks into its own
+ * mailbox each round and waits on no primitive, so nothing signals a lane thread.
+ * Under LMX_LANE_CHECK=1 every such signal aborts with its site named; green is 0
+ * sites. Called before each signal in exec.c and lmx_message_host.c. */
+void lmx_msg_test_wake_site(const char *site, unsigned owner) {
+    if (lmx_msg_test_lane_check == 0) {
+        return;
+    }
+    fprintf(stderr, "LANE WAKE FAIL site=%s owner=%u: a lane thread was signalled; an owner loops over its mailbox and waits on nothing (S3)\n",
+        site, owner);
+    fflush(stderr);
+    abort();
+}
+#endif
+
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
 int lmx_msg_test_copy_fail;
 int lmx_msg_test_copy_should_fail(void) {
@@ -1443,6 +1459,7 @@ static int ctx_visit_wake(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
     (void)e;
     (void)arg;
     if (rec->affinity != LMX_MSG_AFFINITY_UI) {
+        lmx_msg_test_wake_site("ctx_visit_wake", (unsigned)rec->addr);
         bind_wait_signal(rec->wait);
     }
     return 0;
@@ -1472,6 +1489,7 @@ void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     }
     r = rec_at_addr_locked(e, addr);
     if (r != 0 && r->affinity != LMX_MSG_AFFINITY_UI) {
+        lmx_msg_test_wake_site("wake_addr_locked", (unsigned)r->addr);
         bind_wait_signal(r->wait);
     }
 }
@@ -2127,6 +2145,7 @@ static void bind_reap_push(LmxMsgExec *e, LmxMsgBindWait *w) {
         e->reap_head = w;
         w->on_reap = 1;
     }
+    lmx_msg_test_wake_site("bind_reap_push", 0U);
     bind_wait_signal(w);
 }
 
@@ -2240,6 +2259,7 @@ static void join_bind_worker(LmxMsgRuntime *rt, LmxMsgExecBind *rec) {
     w->slot = 0;
     w->retired = 1;
     w->reaping = 1;
+    lmx_msg_test_wake_site("join_bind_worker", (unsigned)rec->addr);
     bind_wait_signal(w);
     lmx_msg_exec_unlock(rt);
     had = bind_wait_join(w);
@@ -2973,6 +2993,7 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
             r->launching = 0;
         }
         lmx_msg_exec_unlock(rt);
+        lmx_msg_test_wake_site("launch_gate_refuse", (unsigned)pack->addr);
         pack_gate_signal(pack, 2);
 #if defined(_WIN32)
         WaitForSingleObject(th, INFINITE);
@@ -2992,8 +3013,10 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     r->launching = 0;
     e->nworkers += 1;
     pack->wait = r->wait;
+    lmx_msg_test_wake_site("launch", (unsigned)r->addr);
     bind_wait_signal(r->wait);
     lmx_msg_exec_unlock(rt);
+    lmx_msg_test_wake_site("launch_gate_go", (unsigned)pack->addr);
     pack_gate_signal(pack, 1);
 #if defined(LMX_MSG_EXEC_TEST)
     if (lmx_msg_exec_test_during_launch != 0) {
@@ -3374,6 +3397,7 @@ static int ctx_visit_stop_retire_waits(LmxMsgExec *e, LmxMsgExecBind *rec, void 
     (void)arg;
     if (rec->wait != 0) {
         rec->wait->retired = 1;
+        lmx_msg_test_wake_site("stop_retire_walk", (unsigned)rec->addr);
         bind_wait_signal(rec->wait);
         bind_reap_push(e, rec->wait);
         rec->wait = 0;
@@ -3415,6 +3439,7 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     e->contexts_live = 0;
     (void)rec_walk_locked(e, ctx_visit_stop_unmap, 0);
     (void)rec_walk_locked(e, ctx_visit_stop_retire_waits, 0);
+    lmx_msg_test_wake_site("stop_event", 0U);
 #if defined(_WIN32)
     SetEvent(e->stop_ev);
 #endif
