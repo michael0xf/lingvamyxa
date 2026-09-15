@@ -4821,3 +4821,22 @@ in one publication (one end-turn of P) consuming the input in its
 closing turn, read on later rounds; no order between two publications
 asserted anywhere. family_release_17 and orphan_mapped_17 in progress
 on the map-after-release rule.
+b5's M conversions done (2026-09-15): sonnet/m-tests-send 76ad060d off
+793c267f (checked by the coordinator: parent 793c267f; the grep for
+Sleep(, GetTickCount, WaitForSingleObject and g_go 0 on the three
+tests). send_local O2/O0 checks=122 failures=0 owned_frees=1 (pin from
+146; two whole sched_step-FIFO cases removed); family_handoff O2/O0
+checks=67 failures=0 watched_frees=4 (pin from 63; four checks added for
+the real-thread reads); adopt_unrooted (UnrootedAdopt scenario) O2/O0
+checks=35 failures=0, unchanged mechanism. Removed: turn_step_child,
+step_via_root/step_via_root2 and step_in_root's run_child_turn form
+with their cells; send_scheduling_parent_turn/parent_step_status
+(sched_step polling); send_scheduled_child_turn/calls/number;
+send_parent_schedule_case and send_prebind_case whole (the parent's
+scheduler step, a mapping property). Mechanism: R0's direct children
+run synchronously via lmx_msg_run_entry_turn; deeper descendants get a
+real bind and start_contexts and take mail admitted through an
+R0-direct child's own turn; reads use lmx_msg_state STOPPED for a
+closing turn or the kernel's success flag set as the handler's last
+act, never lmx_msg_exec_holding_turn (per-thread TLS, always false to an
+observer; found by gdb on a hung first draft, fixed).
