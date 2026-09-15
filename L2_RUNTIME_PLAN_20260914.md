@@ -1078,7 +1078,13 @@ prototype, largest first.
    lane and the runtime record at the end. Falsifiers on the (f) tree: the
    join deleted before the runtime's free makes the join line red; one
    free dropped on the close path (a slot's path array) makes the balance
-   line red by that block.
+   line red by that block. Edited as f79320de after Mikhail's I1 overrule
+   (the join line relabelled "C's closing turn had ended before
+   runtime_delete returned: the close settles C only once C is settled, and
+   C's thread frees its own state and ends on its own" over the same
+   check; the balance read once the live count is stable for 200 ms, 3 s
+   cap), remeasured on 402b2919: 45 checks, 4 failures, the same two red
+   lines; (f) builds on f79320de.
    The (f) design (d6/stage5f-design 18f9ba54, STAGE5F_DESIGN.txt on
    ffeb1094; measured on 402b2919: no closing turn runs in today's delete,
    the chain exists as request_children_close, settle_child, parent_settle,
