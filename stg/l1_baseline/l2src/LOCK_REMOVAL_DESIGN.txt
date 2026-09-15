@@ -119,7 +119,8 @@ KERNEL. What L1 is for (Mikhail, spec section 2 line 1078 and model section 2, m
       stops its children too (the checks go both ways), the loop does in the end break on success == 1; the
       implementation decides only where. User code sets success. running is polled while root executes, and running = 0 written by the
       parent is its stop request, which in the end leaves the loop. At the exit, by return or however, running is set
-      to 0, so a finished L3 Thread reads success && !running. Mikhail, 2026-09-15, verbatim: "цикл в L3 Thread
+      to 0. An ended L3 Thread reads !running; success && !running is the end by success, and success stays 0 when
+      running became 0 without user code setting it (a stop or a failure). Mikhail, 2026-09-15, verbatim: "цикл в L3 Thread
       очеивдно прерывается по success==1"; "success && !running, с выходом выставляется running = 0. Просто running
       опрашивается при выполнении Lmx* root и я же не знаю как кокнретный планировщик устроен и когда выйдет. Но
       условия выхода очевидно есть!"; "то есть цикл не бесконечный -- из него есть выход хоть по return хоть как";
@@ -130,7 +131,9 @@ KERNEL. What L1 is for (Mikhail, spec section 2 line 1078 and model section 2, m
       Thread может что-то делать со своими детьми (вот это зависит отреализации так как дети могут крутиться на том
       же потоке) так как success относится к Lmx* root -- то есть к основной функциональности."; and: "Однако так
       как при остановке родителя останавливаются и дети (там в обе стороны проверки) то очеивдно что в конечном итоге
-      по success==1 ыикл прервется. От реализации зависит только в каком месте"
+      по success==1 ыикл прервется. От реализации зависит только в каком месте"; and, correcting the coordinator's
+      gloss on how an ended L3 Thread reads: ""завершённый L3 Thread читается как success && !running" -- если
+      пользовательский код не поставит success=1 то success останется 0 если running стал 0"
     Of the 99 rows of LOCK_REMOVAL_FIELDS.txt, 16 are kernel:
     - 4 MSG: running, success, handoff_ready as handoff_safe, graph as root;
     - 7 arena rows inside root: init, init_n, blocks, ranges, eternal_ranges, method_ranges, roots;
@@ -220,8 +223,9 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
       success == 1 (where the return stands is implementation; the scheduler may still do something with its
       children, which stop with their parent, so the loop in the end breaks on success == 1, per KERNEL); its exit
       conditions are the kernel's: user code sets success, running = 0 from the parent is
-      the stop request that in the end leaves the loop, and at the exit running is set to 0, so a finished L3 Thread
-      reads success && !running (Mikhail's sentences verbatim in KERNEL);
+      the stop request that in the end leaves the loop, and at the exit running is set to 0; an ended L3 Thread
+      reads !running, success && !running being the end by success (success stays 0 on a stop or a failure;
+      Mikhail's sentences verbatim in KERNEL);
     - no wake, no wait, no notify anywhere. Going, with nothing in their place: run_one's wake-all,
       exec_start_map_kick, the launch wake, and the three worker-lifecycle signals (bind_wait_retire, the unbind
       join, stop's retire walk), since no worker ever waits.
