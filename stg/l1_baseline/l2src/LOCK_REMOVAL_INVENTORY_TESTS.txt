@@ -1,0 +1,113 @@
+LOCK_REMOVAL_INVENTORY_TESTS: every test and runner site that takes LmxMsgExec's shared lock or relies on it
+(0c, 2026-09-15; Mikhail's order relayed by d6 and confirmed by 6f: "there must be no shared locks; the
+mail queue has only its own internal collection lock". Base: integration c067bed9. The two stage 5 (f)
+tests are not on c067bed9 and are listed from origin/d6/stage5f-impl ee8b80c9.)
+
+0. Counts, re-derived by grep, not from a list
+  git grep -o -E 'lmx_msg_exec_lock\(' c067bed9 -- stg/l1_baseline/l2src/tests                     19
+  git grep -o -E 'lmx_msg_exec_lock\(' c067bed9 -- stg/l1_baseline/l2src/lmx_message_exec_selftest.c  5
+  git grep -o -E '[A-Za-z0-9_]+_locked\(' c067bed9 -- stg/l1_baseline/l2src/tests                  2
+    (both in l2_and_foreign_call_own_local.lm2: lmx_msg_exec_tab_n_locked, lmx_msg_exec_tab_addr_locked)
+  the same lock grep on origin/d6/stage5f-impl, the two 5f tests                                       8
+  Every lmx_msg_exec_lock( in these files has its lmx_msg_exec_unlock( (19/19, 5/5, 8/8).
+  Section 1 has 34 lines: 19 + 5 + 2 on c067bed9, 8 on stage5f-impl. d6's 29 = 19 + 8 + 2.
+  Out of scope here (production, the other inventories): lmx_message_exec.c 77 lock / 156 unlock calls
+  and 24 *_locked functions; lmx_message.lm1 and lmx_message.lm2 202 matching lines each;
+  lmx_message_exec.h 10. No runner (.ps1) and nothing outside l2src takes the lock.
+
+1. Sites. Columns: file:line | test or runner | what the lock protects there | what replaces it in the
+   target. Replacement kinds: MAIL (a value the worker sends to its parent or the test host through the
+   mailbox), LANE (a read or write done on the owner's lane, e.g. inside R0's turn or the owner's own
+   turn), JOINED (read only after lmx_msg_exec_stop has joined every worker: no concurrency, "silent"),
+   ATOMIC (a test-only Interlocked cell, no lock: proposed where a worker and the host must meet inside
+   a turn; kept as its own kind for 6f's ruling, since it is shared state even if lock-free), NAME (no
+   concurrency; only depends on a *_locked name).
+
+  1a. lmx_model_checks_19_29_6_selftest.lm1 (run_model_scenario36)
+  tests/lmx_model_checks_19_29_6_selftest.lm1:72 | turn_writer (worker) | lmx_msg_find(rt, who): its own Message record, read from the shared table while the host and other workers change it | LANE: the turn's own Message handle given to the turn, no table read
+  tests/lmx_model_checks_19_29_6_selftest.lm1:92 | turn_writer (worker) | g_writer_sent[k] = 1, a test flag written from the worker | JOINED: read only after lmx_msg_exec_stop (L284 after L267)
+  tests/lmx_model_checks_19_29_6_selftest.lm1:107 | turn_owner (M0's worker) | the overlap detector g_owner_in_turn/g_owner_overlap, plus lmx_msg_find(rt, who) | ATOMIC for the detector (compare-exchange); LANE for the find
+  tests/lmx_model_checks_19_29_6_selftest.lm1:123 | turn_owner (M0's worker) | g_trace[], g_trace_n, g_owner_value appended by M0's turns | JOINED: one writer lane, read after stop (L271)
+  tests/lmx_model_checks_19_29_6_selftest.lm1:130 | turn_owner (M0's worker) | g_owner_in_turn--, g_owner_turns++ polled by the host's wait_until | MAIL: M0 reports each finished turn to the test host; or ATOMIC counter
+  tests/lmx_model_checks_19_29_6_selftest.lm1:150 | turn_rendezvous (A or B worker) | g_arrived++, the rendezvous both workers read inside their turns (proves two workers run at once) | ATOMIC (the meeting is inside two turns, mail cannot express "both inside now")
+  tests/lmx_model_checks_19_29_6_selftest.lm1:156 | turn_rendezvous poll | g_arrived >= 2 read by each rendezvous worker | ATOMIC read
+  tests/lmx_model_checks_19_29_6_selftest.lm1:163 | turn_rendezvous (A or B worker) | g_saw_other, g_rendezvous_turns, polled by the host | MAIL: each rendezvous turn reports done to the host; or ATOMIC
+  tests/lmx_model_checks_19_29_6_selftest.lm1:176 | wait_until (host thread) | reads g_owner_turns and g_rendezvous_turns while workers run | MAIL: the host waits on the reports above; or ATOMIC reads
+  tests/lmx_model_checks_19_29_6_selftest.lm1:271 | main after exec_stop | M0's value, its graph cell and the trace | JOINED
+
+  1b. lmx_model_orphan_mapped_17_selftest.lm1 (run_model_scenario36)
+  tests/lmx_model_orphan_mapped_17_selftest.lm1:58 | turn_orphan_fail (C's worker) | g_entered++, polled by the host | MAIL: C reports entered; or ATOMIC
+  tests/lmx_model_orphan_mapped_17_selftest.lm1:63 | turn_orphan_fail poll | go = g_go, the host's release of C's turn, read inside C's turn | ATOMIC (C waits inside its turn by design); MAIL would need a recv inside the turn
+  tests/lmx_model_orphan_mapped_17_selftest.lm1:182 | main (host) poll | entered = g_entered | MAIL or ATOMIC, as :58
+  tests/lmx_model_orphan_mapped_17_selftest.lm1:196 | main (host) | g_go = 1 | ATOMIC, as :63
+  tests/lmx_model_orphan_mapped_17_selftest.lm1:202 | main (host) poll | reads C's scheduler cells from the host while C's worker settles: cm\orphan, cm\parent_msg, lmx_msg_find(root), cm\handoff_ready, lmx_msg_running_load(cm) | LANE: the settle check runs inside R0's turn (C is R0's child after re-rooting), or the executor notifies R0 when an orphan settles (MAIL)
+
+  1c. lmx_model_root_ingress_5b_selftest.lm1 (run_model_scenario36)
+  tests/lmx_model_root_ingress_5b_selftest.lm1:70 | turn_post (D's worker) | g_posted, g_drain_status written for the host | MAIL: D reports both values; or ATOMIC
+  tests/lmx_model_root_ingress_5b_selftest.lm1:156 | main (host) poll | posted = g_posted | MAIL or ATOMIC, as :70
+
+  1d. lmx_model_root_record_5e_selftest.lm1 (run_model_scenario36)
+  tests/lmx_model_root_record_5e_selftest.lm1:69 | turn_worker_setters (D's worker) | g_worker_now, g_worker_retain, g_worker_done for the host | MAIL: D reports the two statuses; or ATOMIC
+  tests/lmx_model_root_record_5e_selftest.lm1:193 | main (host) poll | done = g_worker_done | MAIL or ATOMIC, as :69
+
+  1e. lmx_message_exec_selftest.c (run_port_message -LaneCheck, run_lmx -Suite Exec)
+  lmx_message_exec_selftest.c:492 | dest_stop_after_outbox (test hook inside an outbox transfer) | d->state = STOPPED for the destination Message, written from the sender's side | MAIL: the stop goes to the destination's parent lane as a stop request (emergency_cancel), not a field write
+  lmx_message_exec_selftest.c:542 | release_tree_reader (its own OS thread) | walks pm's child chain while release_tree runs, to prove a reader never sees a torn chain under the lock | LANE: the property changes; the chain is written and read only on pm's lane, so the reader becomes a turn on that lane and a cross-thread reader is the thing to forbid
+  lmx_message_exec_selftest.c:579 | drive_mail_overlap_helper (its own OS thread) | proves drive does not hold the exec lock across the mail close hook (the helper can take it) | silent: with no exec lock the property holds by construction; the check is deleted with the lock
+  lmx_message_exec_selftest.c:3701 | supervision handoff (host thread) | vpm->state = STOPPED written around a poll to simulate a stopped parent | LANE: stop the parent through its owner's lane (emergency_cancel from R0's turn), not a field write
+  lmx_message_exec_selftest.c:3706 | supervision handoff (host thread) | reads vcm->closing, restores vpm->state | LANE: read the child's closing on its owner's lane (a probe turn); the restore goes away with the simulated stop
+
+  1f. l2_and_foreign_call_own_local.lm2 (run_l2trans, compile-object shape check only, L2354-2358)
+  tests/l2_and_foreign_call_own_local.lm2:7 | probe_scan2 | calls lmx_msg_exec_tab_n_locked(rt) without taking the lock; the fixture is translated and compiled, never run | NAME: rename the call when the *_locked accessors go; run_l2trans's regex at L2355 names lmx_msg_exec_tab_addr_locked too
+  tests/l2_and_foreign_call_own_local.lm2:10 | probe_scan2 | calls lmx_msg_exec_tab_addr_locked(rt, i), same | NAME, as :7
+
+  1g. stage 5 (f), origin/d6/stage5f-impl ee8b80c9 (not on c067bed9; runner: see section 2)
+  tests/lmx_model_runtime_close_5f_selftest.lm1:119 | closing_of, called from P1's turn | me\closing of the caller's own Message, which the close chain writes from another lane | MAIL: the close reaches P1 as a close request in its mailbox; P1 reads its own state on its lane
+  tests/lmx_model_runtime_close_5f_selftest.lm1:174 | turn_q_fail (Q's worker) | g_q_entered++ for the host | MAIL or ATOMIC
+  tests/lmx_model_runtime_close_5f_selftest.lm1:179 | turn_q_fail poll | go = g_q_go read inside Q's turn | ATOMIC
+  tests/lmx_model_runtime_close_5f_selftest.lm1:295 | wait_entered (host) poll | g_c_entered and g_q_entered | MAIL or ATOMIC
+  tests/lmx_model_runtime_close_5f_selftest.lm1:345 | main (host) | g_q_go = 1 | ATOMIC
+  tests/lmx_model_runtime_close_5f_selftest.lm1:351 | main (host) poll | reads Q's scheduler cells (orphan, parent_msg, handoff_ready, running_load) from the host | LANE: settle check inside R0's turn, or a settle notification (MAIL)
+  tests/lmx_model_runtime_close_5f_turn_selftest.lm1:70 | turn_worker_delete (D's worker) | g_worker_st, g_worker_done for the host | MAIL or ATOMIC
+  tests/lmx_model_runtime_close_5f_turn_selftest.lm1:116 | main (host) poll | done = g_worker_done | MAIL or ATOMIC
+
+  Kinds, counted from the lines above: MAIL-or-ATOMIC 13, ATOMIC 6, LANE 6, JOINED 3, MAIL 2, NAME 2,
+  ATOMIC+LANE 1, silent 1 (34).
+  The only sites where the lock is the property under test: exec selftest :542 (torn chain) and :579 (lock
+  not held across the hook). Everything else uses the lock as a test's shared-memory channel or to read
+  another Message's cells from the host.
+
+2. Gates for each removal step
+  run_model_scenario36 compiles the four c067bed9 model tests above; run_port_message (with -LaneCheck in
+  run_gates) and run_lmx -Suite Exec compile the executor selftest; run_l2trans compiles
+  l2_and_foreign_call_own_local.lm2. The two stage 5 (f) tests run only when named: run_model_scenario36
+  -Tests lmx_model_runtime_close_5f_selftest,lmx_model_runtime_close_5f_turn_selftest. Its default -Tests
+  list (L19) does not include them, on c067bed9 or on stage5f-impl ee8b80c9, so a default run_gates does
+  not run them.
+  Per step the lead names, the order that proves writes stayed on their lanes:
+    a. run_port_message -LaneCheck (the only oracle keyed on lanes, see 3);
+    b. run_model_scenario36 (the model tests' own checks, which assert the lane refusals, e.g. root_record_5e
+       "set_now from a worker's turn refuses");
+    c. run_gates (32 defaults once step 2 lands, 11 until then), for everything the step touches.
+  A step that deletes a lock site in a test moves that line's replacement in the same commit, and the
+  test's own assertion must still fail when its replacement is removed (one mutation per kind).
+
+3. -LaneCheck as it stands (read from lmx_message_exec.c at c067bed9; see 4 for the measurement)
+  The oracle is lmx_msg_test_lane_write(rt, owner, site) (L171), armed by LMX_LANE_CHECK=1 (L1172), set
+  by run_port_message -LaneCheck (run_port_message.ps1 L203). It is compiled only with LMX_MSG_EXEC_TEST
+  (no-op macro otherwise, lmx_message_exec.h L15). It aborts with "LANE WRITE FAIL site=..." only when
+  ALL hold: the calling thread's turn Message (thread-local lmx_turn_msg) is non-zero, belongs to rt, is
+  not the owner, is not the owner's parent, and the owner is not settled (handoff_ready with no running
+  load). It is called at 14 labelled sites (take_ui x3, bind:affinity x5, take_this, stop_unmap,
+  stop_reset, unbind:record, run_child_turn, plus lmx_msg_test_unbind_refused at L199).
+  Consequences read from the code, not yet measured:
+  - It is keyed on turn identity, not on the lock, so it survives lock removal unchanged.
+  - A write made on a thread that holds no turn passes silently (turn == 0 returns at L177). take_this's
+    ready_clear (L2966) runs in context_worker before the turn starts, so that site can never fire.
+  - Only the 14 labelled sites are checked; a new unlabelled write is not.
+  So -LaneCheck proves "no write from inside the wrong turn" at 14 sites. It cannot prove "no write from
+  a thread outside any turn" without a tripwire: e.g. record the host thread at runtime_new and fail when
+  turn == 0 on any other thread.
+
+4. Measured fact: does -LaneCheck go red when one lane write is moved to another thread?
+  [measurement pending]
