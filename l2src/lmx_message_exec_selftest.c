@@ -1318,12 +1318,15 @@ static int first_scenario_done(TurnCtx *slow, TurnCtx *fast, TurnCtx *uic, MassR
     return 1;
 }
 
-/* S4 guard check (red-first, LOCK_REMOVAL_S4_SITES.txt site 5): a lane that
- * is neither the target's own parent's lane nor the host outside any turn
- * must be refused. Today lmx_msg_exec_bind (exec_bind_mode's public entry)
- * has no caller-identity check at all, so a bind from a spawned thread
- * succeeds (LMX_MSG_OK) instead of being refused (LMX_MSG_INVALID); this
- * check is red until S4's guard lands. */
+/* S4 guard-holds check (LOCK_REMOVAL_S4_SITES.txt site 5, corrected
+ * 2026-09-15): a lane that is neither the target's own parent's lane nor
+ * the host outside any turn must be refused. Written red-first against
+ * exec_bind_mode's own 1701-1715 shape checks, which have no caller-
+ * identity check of their own; measuring it on d8f758e6 found it already
+ * green, because exec_bind_mode calls mapping_authority_locked (exec.c
+ * 1686-1696), which is exactly this guard. Kept here, green, so a future
+ * change to mapping_authority_locked or its call at 1721 that drops the
+ * check is caught. */
 typedef struct S4BindGuardArg {
     LmxMsgRuntime *rt;
     LmxMsgAddr child;
@@ -1385,8 +1388,9 @@ static int run_s4_guard_exec_bind(void) {
     lmx_msg_runtime_delete(rt);
     if (got != LMX_MSG_INVALID) {
         fprintf(stderr,
-            "S4 guard check FAILED: exec_bind from neither the parent's lane nor the "
-            "host outside any turn returned %d, want LMX_MSG_INVALID=%d (no guard yet)\n",
+            "S4 guard-holds check FAILED: exec_bind from neither the parent's lane nor "
+            "the host outside any turn returned %d, want LMX_MSG_INVALID=%d "
+            "(mapping_authority_locked's own guard regressed)\n",
             got, LMX_MSG_INVALID);
         return 1;
     }
