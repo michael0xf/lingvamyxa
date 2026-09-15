@@ -3622,7 +3622,7 @@ int main(int argc, char **argv) {
 
         /* Decision 17 rule 4: a supervision handoff moves c's record, its ANY
          * ready membership, its family link and its liveness supervisor from p
-         * to q, keeps its path, clears its create_id, and the refusals hold. A
+         * to q, keeps its path, and the refusals hold. A
          * failed move may leave the lists inconsistent, so its failure path
          * returns without runtime_delete (whose drop would walk them). */
         {
@@ -3682,12 +3682,11 @@ int main(int argc, char **argv) {
                 || lmx_msg_child_n(rtv, vp) != 0 || lmx_msg_child_n(rtv, vq) != 1
                 || lmx_msg_child_at(rtv, vq, 0) != vc
                 || vcm->parent != vq || vcm->parent_msg != lmx_msg_find(rtv, vq)
-                || vcm->create_id != 0U
                 || lmx_msg_path_n(rtv, vc) != path_before || seg_after != seg_before) {
-                fprintf(stderr, "handoff move st=%d binds=%d ready=%d pn=%d qn=%d parent=%u create_id=%u path=%d/%d\n",
+                fprintf(stderr, "handoff move st=%d binds=%d ready=%d pn=%d qn=%d parent=%u path=%d/%d\n",
                     vst, n_ctx, n_map,
                     lmx_msg_child_n(rtv, vp), lmx_msg_child_n(rtv, vq),
-                    vcm != 0 ? (unsigned)vcm->parent : 0U, vcm != 0 ? vcm->create_id : 0U,
+                    vcm != 0 ? (unsigned)vcm->parent : 0U,
                     lmx_msg_path_n(rtv, vc), path_before);
                 return 1;
             }
