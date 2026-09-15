@@ -1,0 +1,268 @@
+LOCK_REMOVAL_S4_SITES: the 12 sites of LOCK_REMOVAL_S4_WRITES.txt (sonnet/
+s4-writes a5e6bb6f, at integration c063fd00, before S3 or M), re-read at
+d8f758e6 (M landed) against the lead's current LOCK_REMOVAL_FIELDS.txt
+(origin/d6/lock-removal 3833911b) and spec 19.28.R2.2, with what S4 itself
+must do at each site (sonnet/s4-sites, 2026-09-15, doc-only, no machine).
+
+--- Counts
+
+nothing: 9 (create_prepare, child_link, child_chain_remove, handoff_
+  supervision, end_turn's committed/tracked walk, live_handle's child_
+  heard_at write, map_child, adopt_mark/dispose_mark/reclaim_mark,
+  endp_retain/release)
+guard: 3 (orphan_children -- reached only through the reclaim_orphan/
+  orphan_sweep chain, which has no caller-identity check anywhere in it;
+  exec_bind_mode, whose public entry lmx_msg_exec_bind has none either;
+  emergency_cancel, as already ruled)
+edge: 0
+move: 0
+Total: 12, matching the original census's own site count exactly.
+
+Method: each site re-located by function name (all still exist; none
+renamed except reclaim_orphan's own inline re-rooting walk, factored out
+to its own function, lmx_msg_orphan_children, since the original census).
+"Writer" re-verified by reading the actual guard at the site or its call
+chain, not re-asserted from the original file: three sites the original
+census called already-guarded (via settle_child's own callers) turned
+out, on this re-read, to route through one shared, still-unguarded path
+(reclaim_orphan/orphan_sweep) for one of their three call shapes -- see
+site 5, and the corresponding note on site 10.
+
+--- 1. Message creation
+
+site: lmx_msg_create_prepare
+file:line now: lmx_message.lm1:1066-1225ish (identical range to the
+  original census; D2's own create_id removal, on a separate branch, not
+  yet landed on this tip)
+writer: the creating Message's own lane, or the host owner outside any
+  turn when parent is zero (bootstrapping R0) -- guarded at entry
+  (lmx_message.lm1:1077-1081ish, require_owner for parent=0, require_turn
+  for parent!=0)
+field row / category: LmxMsg.parent | h:120 | L3T (the parent capability)
+  | ruled | S4 (LOCK_REMOVAL_FIELDS.txt); most of the struct populated
+  here (addr, state, init/init_n, owner_rt, alloc_next, path*) has no
+  clause-two row at all, the same open question the original census
+  named
+action: nothing. The write lands before the child has any lane of its
+  own to conflict with; there is no second writer this write could race,
+  guard-or-not. The struct-population fields with no clause of their own
+  are unchanged by this re-read -- still the census's own open question,
+  not resolved by S4 and not blocking it either, since nothing here is a
+  cross-lane write in the sense clause two or three police.
+
+--- 2. Family-chain writes
+
+site: lmx_msg_child_link
+file:line now: lmx_message.lm1:626-637 (unchanged)
+writer: the parent's lane -- called from create_prepare (pre-lane, as
+  above) and from lmx_msg_handoff_supervision (guarded, site 4 below)
+field row / category: LmxMsg.parent_msg | h:145 | L3T (the parent
+  capability) | ruled | S2/S4; LmxMsg.first_child/.last_child/.next_
+  sibling | h:146-148 | PAR | ruled | S4
+action: nothing. Both callers are already covered (site 1's exemption,
+  site 4's guard).
+
+site: lmx_msg_child_chain_remove
+file:line now: lmx_message.lm1:639-661 (unchanged)
+writer: depends on caller -- lmx_msg_child_unlink (663-671, itself
+  unguarded, called only from lmx_message.lm1:1426 inside a disposal
+  path); lmx_msg_handoff_supervision (717, guarded, site 4); lmx_msg_
+  orphan_children (1505, unguarded -- site 5)
+field row / category: LmxMsg.first_child | h:146 | PAR | S4 (parent's own
+  field); a sibling's own next_sibling | h:148 | PAR | S4
+action: nothing for this function itself -- it has no guard of its own by
+  design and never has; the two paths that reach it without a caller-
+  identity check (child_unlink's one call site, orphan_children) are
+  covered by fixing the root: child_unlink's own single caller sits
+  inside the same settle/dispose family already checked at sites 9-10,
+  and orphan_children's guard (site 5) closes its path too. Named here so
+  the falsifier finds the write under this function's own name, not
+  folded silently into site 5's count.
+
+site: lmx_msg_handoff_supervision
+file:line now: lmx_message.lm1:681-725, the writes at 717-722 (was
+  704-707; +13 lines, S3's own landing shifted the file before this one)
+writer: old_parent's lane, or the host owner outside any turn -- guarded
+  at 688-691 (lmx_msg_exec_holding_turn(rt, old_parent), else host_is_
+  owner && !holding_any)
+field row / category: LmxMsg.parent | h:120 | L3T | S4; LmxMsg.child_
+  heard_at | h:187 | PAR | proposed | S4; LmxMsg.live_query_id/.live_
+  query_pend_id | h:182/184 | L3T | S4
+action: nothing. Guard confirmed present and correctly shaped (the two-
+  branch holding_turn-or-host-owner pattern used throughout this file).
+
+--- 3. Orphan re-rooting: the one genuinely unguarded chain
+
+site: lmx_msg_orphan_children (was described in the original census as
+  "lmx_msg_reclaim_orphan's walk" -- since factored into its own function)
+file:line now: lmx_message.lm1:1493-1521 (sub:), the writes at 1506-1507;
+  called from lmx_msg_reclaim_orphan (1614-1631, itself called only from
+  lmx_msg_orphan_sweep, 1638-1675, line 1668)
+writer: whichever thread runs the sweep -- read directly this time, not
+  re-asserted: orphan_children has no rt/turn identity check at all
+  (1493-1521, only null checks and the exec lock); reclaim_orphan has
+  none either (1614); orphan_sweep has none either (1638) -- the entire
+  chain from orphan_sweep's own entry down to g\parent/g\orphan's write
+  is unguarded, contradicting the original census's claim (made about
+  settle_child's callers generally, not traced through this specific
+  chain) that the writer was already "whichever thread is disposing of
+  the failed parent x", implying it was already fine
+field row / category: LmxMsg.parent | h:120 | L3T | S4; LmxMsg.orphan |
+  h:193 | L3T of R0 | proposed | S5 (a later-stage field; the cross-lane
+  write question here is independent of when the field itself goes)
+action: guard. Add the same two-branch check this file uses everywhere
+  else (holding R0's own turn, since orphans are R0's children per
+  1646's own comment, or the host outside any turn) to lmx_msg_orphan_
+  sweep's own entry -- the single caller of reclaim_orphan, so one guard
+  there closes orphan_children's path too and, per site 10 below, also
+  closes adopt_mark/dispose_mark/reclaim_mark's third (unguarded) call
+  path.
+
+--- 4. End-turn's writes onto its own children
+
+site: lmx_msg_end_turn, the committed/tracked walk
+file:line now: lmx_message.lm1:1695-1813; two separate loops, not one as
+  the original census's single line range suggested: tracked cleared at
+  1728 (runs in both the success=0 and success=1 paths), committed set
+  (with child_heard_at) at 1770-1772 (success=1 path only)
+writer: m's own lane -- end_turn itself requires the caller to hold who's
+  turn (1702, lmx_msg_require_turn)
+field row / category: LmxMsg.committed | h:122 | PAR | ruled (Q1) | S4;
+  LmxMsg.tracked | h:178 | DEL | proposed | S5; LmxMsg.child_heard_at |
+  h:187 | PAR | proposed | S4
+action: nothing. end_turn's own guard covers both loops.
+
+site: lmx_msg_live_handle, the liveness-reply write
+file:line now: lmx_message.lm1:2562-2600ish, the writes at 2592 and 2625
+  (was described as inside end_turn itself at 1809/2728/2761 in the
+  original census -- that description does not match this tip's actual
+  layout: end_turn's own child_heard_at write, above, is a different
+  mechanism (the commit-transition default) from live_handle's reply-
+  driven update; both are named here so neither is missed)
+writer: the parent handling its own child's liveness reply -- guarded
+  (2570, lmx_msg_require_turn(rt, who), who being the parent taking the
+  reply)
+field row / category: LmxMsg.child_heard_at | h:187 | PAR | proposed | S4
+action: nothing.
+
+--- 5. Bind-time and mapping
+
+site: exec_bind_mode
+file:line now: lmx_message_exec.c:1701-1800ish (was 2291-2480ish; M's own
+  deletions moved everything up by roughly 590 lines), m->turn/turn_ctx
+  writes at 1736-1737 and 1770-1771 (two branches, was one range in the
+  original census)
+writer: whichever thread calls the public lmx_msg_exec_bind (1800-1802)
+  -- read directly: neither lmx_msg_exec_bind nor exec_bind_mode itself
+  checks the caller's identity at all (1701-1715's own guard is only
+  e/addr/turn/affinity null-and-shape checks); in every production path
+  today this is the parent's own turn, but nothing enforces it
+field row / category: LmxMsg.turn | h:169 | L3T | ruled | A1; LmxMsg.
+  turn_ctx | h:170 | L3T | ruled | A1 (both an earlier stage's own field,
+  the cross-lane write question here is independent of that)
+action: guard. lmx_msg_exec_bind takes no parent parameter (only addr),
+  so the check needs the target's own parent_msg resolved first, then
+  the same holding_turn(parent)-or-host-owner shape lmx_msg_map_child
+  already uses (below) -- named as an open implementation question, not
+  answered here, since resolving addr before the lock this function
+  already takes needs its own read of the exec lock's own ordering
+  rules, out of this doc-only ticket's scope.
+
+site: lmx_msg_map_child, mapped
+file:line now: lmx_message_exec.c:2522-2565ish, c->mapped = 1 at 2553
+  (was ~3652)
+writer: the parent's own turn -- guarded (2531, lmx_msg_exec_holding_
+  turn(rt, parent), with its own comment: "mapping a child to a context
+  is its parent's act, run only from the parent's own turn")
+field row / category: LmxMsg.mapped | h:174 | DEL (each L3 Thread on its
+  own OS thread) | ruled (stage M) | M (M's own stage tag; the field's
+  eventual deletion is M/S5's business, this write's cross-lane
+  permission is S4's, and they are independent questions)
+action: nothing. Guard confirmed present, unlike exec_bind_mode above --
+  map_child is the one bind-family site that already does what S4 asks.
+
+--- 6. Settle: the parent releasing a finished or failed child
+
+site: lmx_msg_exec_adopt_mark / lmx_msg_exec_dispose_mark / lmx_msg_exec_
+  reclaim_mark
+file:line now: lmx_message_exec.c:2587-2653ish (adopt_mark, disposed at
+  2653), 2837-2857ish (dispose_mark, disposed at 2857), 2864-2875ish
+  (reclaim_mark, disposed at 2875) -- was 3707-3780/3957-3980/3984-4000
+  (M's deletions moved everything up ~1120 lines)
+writer: read directly this time -- none of the three mark functions
+  itself checks caller identity (only lmx_msg_self_or_find resolution
+  and data-precondition reads: handoff_ready, disposed, native_users).
+  They are reached two ways: through lmx_msg_settle_child (lmx_message.
+  lm1:1538, also itself unguarded) called from lmx_msg_dispose_child
+  (1574, guarded: holding_turn(parent)-or-host-owner, confirmed by direct
+  read) or lmx_msg_adopt_failed (1592, guarded, same shape, confirmed);
+  or through lmx_msg_reclaim_orphan (site 5's chain, unguarded)
+field row / category: LmxMsg.disposed | h:194 | DEL | proposed | S5
+action: nothing for the two named, checked entry points (dispose_child,
+  adopt_failed -- both guarded, confirmed by direct read, correcting the
+  original census's looser "settle_child itself gated" description: the
+  gate is one level up, at settle_child's two real callers, not on
+  settle_child); the third path (via reclaim_orphan) needs no separate
+  guard here once site 5's own guard lands on orphan_sweep, since that
+  is the only caller of the whole reclaim_orphan chain.
+
+--- 7. The fourth clause, unaffected
+
+site: lmx_msg_endp_retain / lmx_msg_endp_release
+file:line now: lmx_message_exec.c:345-375 (retain), 377-410ish (release)
+  (was 348-378/380-410ish; shifted by -3, otherwise identical)
+writer: any thread holding a reference -- atomic compare-and-exchange,
+  unchanged
+field row / category: LmxMsg.refs | h:175 | DEL | ruled (census 2.6: goes
+  with S6) | S6
+action: nothing. Spec's own fourth clause (reference counts as a cross-
+  lane primitive), outside the ticket's three answers as before; M did
+  not touch this mechanism.
+
+--- 8. running: the control-flags clause's own API
+
+site: lmx_msg_emergency_cancel
+file:line now: lmx_message_exec.c:436-452 (was 439-455; shifted by -3)
+writer: whichever thread calls it -- confirmed still unguarded (no
+  require_turn, host_is_owner or holding_turn check anywhere in the
+  function, identical in substance to the original census's finding)
+field row / category: LmxMsg.running | h:176 | MSG | ruled (map 5.7; 2.1
+  (3) order-free atomic) | kept
+action: guard, as ruled: refuse unless the caller holds the child's
+  parent's own turn, or is the host outside any turn. Call-site count
+  re-verified at this tip: 29 across 7 files (was 36 at c063fd00; M's own
+  edits to lmx_message_exec_selftest.c and the model tests removed 7):
+  lmx_message_exec_selftest.c 20 (was 22), tests/cancel_spin_host.c 2
+  (was 5), lmx_message_selftest.lm1 1, tests/lmx_model_family_release_17_
+  selftest.lm1 3, tests/lmx_model_orphan_mapped_17_selftest.lm1 1, tests/
+  lmx_model_scenario36_selftest.lm1 1, tests/lmx_msg_family_handoff_
+  selftest.lm1 1. Every one of these states in its own name or comment
+  which of the guard's two legitimate callers it stands in for, except
+  cancel_spin_host.c's remaining worker-thread call (line 157, inside
+  cancel_after_settle, a CreateThread body -- the other of its two
+  original five calls, at line 326, already runs on the host thread and
+  needs nothing).
+
+cancel_spin_host test change, already ruled: cancel_spin_host.c's
+  worker-thread cancellations become host-thread or mail -- the one
+  remaining spawned-thread call (157) moves onto the host thread (or is
+  replaced by sending a stop message instead of calling emergency_cancel
+  directly from a thread that is neither the parent's own lane nor the
+  host outside any turn), so it does not start failing the new guard's
+  own precondition on landing. Recorded as ruled, not re-decided here.
+
+--- Falsifier
+
+Each site's file:line above, re-checked directly against the tip (not
+re-asserted from the original census): sed -n '<range>p' l2src/
+lmx_message.lm1 (or lmx_message_exec.c) for each site's own range
+contains the field write named, confirmed line by line while this file
+was written -- child\parent_msg (626-637), the walk at 639-661,
+old_parent's writes at 717-722, create_prepare's own body (1066-1225),
+orphan_children's g\parent/g\orphan (1493-1521), reclaim_orphan/orphan_
+sweep's own lack of a guard (1614-1675), settle_child/dispose_child/
+adopt_failed's guard shapes (1538-1613), end_turn's two loops (1695-
+1813), live_handle's guard and write (2562-2600ish), m->turn/turn_ctx
+in exec_bind_mode (1701-1800ish), mapped in map_child (2522-2565ish),
+disposed in the three mark functions (2587-2875ish), refs in endp_
+retain/release (345-410ish), running in emergency_cancel (436-452).
