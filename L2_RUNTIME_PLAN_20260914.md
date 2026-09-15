@@ -4300,3 +4300,11 @@ left. The landing scripts (the lead's land_*.sh, e9's gate record) do
 this right after their run_self_build step; a red on any later step
 never withdraws the pushed self-build. Applies now to ONE ROOT's merge
 5cee1426, whose run_self_build passed 8 of 8 on the moved tree.
+Mikhail (2026-09-15, verbatim): "и документы проекты комиитьте ипуште каждое изменение" (and commit and push the project's
+documents on every change). Standing rule for every session: a document
+edit (spec, model, plan, the design and its tables, the maps, the
+inventories, README and instructions) is committed and pushed in the
+same minute it is made, on the branch it belongs to (the coordinator's
+docs to main directly, the lead's and b5's on their branches), never
+left uncommitted in a worktree; the lead merges the branch documents to
+main with each landing.
