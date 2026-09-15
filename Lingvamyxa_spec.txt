@@ -11524,9 +11524,7 @@ parent writes a child's running=0 and closing (stop); the sender writes the
 destination's ready at admission; the lane that takes a Message's turn (its
 own worker, the host mapping, or its parent's lane in the sequential
 mapping of 19.28.R2.2) is that Message's lane for the take and clears its
-ready flag; a late read changes nothing. (4)
-Primitives: mailbox admission under its lock, reference counts, wait
-signals.
+ready flag; a late read changes nothing.
 What is removed by this rule: a parent's ready lists and context lists
 appended by a child's, a sender's or a UI thread's lane; a child unlinking
 itself from its parent's list; the parent's step reads its children's own
@@ -12638,41 +12636,11 @@ a default, settable per runtime like the liveness deadlines. A settled
 Message (not running, handoff-safe) has no lane; the lane that settles it
 writes its cells (the endpoint step), which is how the chain's writes fit
 the one-lane rule of 19.28.R2.2.
-Deleting the runtime is the root Message's close by the same chain
-(clarified 2026-09-15, review chat, stage 5 (f); Mikhail may overrule):
-the root's direct children get their closing flags, each closing turn runs
-on its own lane (a host-run child stepped by the root's maintenance, a
-child on its own context on that context, a child with no handler closed
-by the maintenance's bookkeeping), settled children are reclaimed by the
-chain, and only then the root's own storage and the runtime go; nothing is
-freed as a slot of the runtime behind a Message's back. The root's close adds
-no path of its own: it marks its children exactly as any closing end-turn
-does, running cleared and each child made ready, then the close request, and
-each child does the same to its own children at the end of its turn (Mikhail,
-2026-09-15: "running=0 is set, and at the end of its turn the closing Message
-does the same to its children; that is all"). The close waits for no thread
-and frees no thread's state: a Message on its own context ends its closing
-turn, settles, and its thread then frees what is its own and ends; the root's
-close settles a child only once the child is settled and frees only what the
-root owns (Mikhail, 2026-09-15: "the executor frees its own memory"; "each of
-our L3 Threads has its own scheduler and garbage collector"). Once the root
-closes no adopter remains, so a failed orphan retained under the
-orphan-retention timeout is reclaimed by the root's close without waiting
-for that timeout; storage still used by native code holds the close
-instead, with no timeout (19.29.8). A child served by the UI lane whose
-request is still pending is closed without a handler and the request goes
-with the lane's mailbox, until the root's own loop carries the UI child's
-turn adapter. The close first makes the root's mailbox refuse new
-admissions, the mailbox's own state under its own lock, since outside code
-reaches the runtime only through that mailbox (iii); a post after the
-deletion returns is the embedder's use of a freed handle. Deletion is
-refused from inside any turn, the root's own included, and from any thread
-that is not the root's lane; the root's lane outside any turn is the
-bootstrap thread, so no second OS thread runs the root's maintenance
-concurrently. With this the host forms of the lifecycle calls retire: a
-child is disposed or adopted only from its parent's own turn, and creating
-the runtime and deleting it are the only two calls made on no Message's
-lane.
+On deleting the runtime, the root Message's close (Mikhail, 2026-09-15,
+verbatim): "running=0 is set, and at the end of its turn the closing Message
+does the same to its children; that is all"; "the executor frees its own
+memory"; "each of our L3 Threads has its own scheduler and garbage
+collector".
 
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire
@@ -13303,10 +13271,7 @@ ancestor scan of grandchildren, global crash manager or graph clone.
 If that parent endpoint is unavailable, retain the handoff-safe failed arena
 under a separate parent-loss/orphan-retention timeout before self-reclamation.
 This is not the parent's operation deadline for its child. Timeout never grants
-permission to free memory still used by native code. At the runtime's close the
-root's close reclaims such a retained orphan with no native users without
-waiting for the timeout, since no adopter can remain (19.29.6, stage 5 (f),
-clarified 2026-09-15). Settling is lifecycle work,
+permission to free memory still used by native code. Settling is lifecycle work,
 not a busy wait or a promise of bounded cleanup for an uninterruptible foreign
 call. Such an unresolved branch stays unreclaimed.
 
