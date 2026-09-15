@@ -4780,3 +4780,21 @@ recorded test debt: a list in LOCK_REMOVAL_STAGE_M_TESTS.txt (block, the
 gate's kind, the stage whose subject the block is: S2, S4, S5, S6 or Y),
 each later stage converting its own blocks under the same rulings, so
 the file's wait count goes down by stage and reaches 0 at S6.
+e9's M conversions, interim (2026-09-15): claude-0c/m-tests-scenario
+bccce66f on 793c267f: root_record_5e 22/0 (P's refused setters in P's own
+turn via run_entry_turn; D reports by a reply to R0, the host reads D's
+statuses once the reply is in R0's mailbox, in SwitchToThread rounds)
+and root_ingress_5b 11/0 (R maps D in R's own entry turn; D replies
+after its post and its drain); removed in each: turn_step_child and its
+cell, every GetTickCount/Sleep loop, exec_lock around the g_* cells, the
+workers loop before exec_stop. Rule applied, confirmed by the
+coordinator: a child's former step point becomes its map point at the
+same place; before it the child has no thread and the host's checks are
+deterministic; after it every read of the child's effects needs an
+edge, a Message in a mailbox or an atomic running/success load; hence
+family_release_17 maps the re-rooted C4 after R's release (a mapped
+child is runnable at once by take_this, so "running still 1 when the
+release returns" is read before the map point) and orphan_mapped_17
+maps the orphan after P's release instead of g_go; the close read on
+later rounds. Gate-time ticket parked: no build/gates directory
+survives, 139 run_gates chain outputs remain in the scratchpads.
