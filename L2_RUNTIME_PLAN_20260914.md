@@ -1946,3 +1946,11 @@ mailbox's wake); the map's 3.5 now names it, with the host lock
 LmxMsgHostSync.lock as host_sync's X. 0c's inventory section 5 is rewritten
 against Mikhail's two recorded sentences with the two production locks
 added.
+0c's inventory rewritten at claude-0c/lock-inventory aca90d74 (section 5c: the
+"not locks" kind gone, each row citing one of Mikhail's two admitting
+sentences or being a thread with no synchronization of its own; section 5d:
+every production lock in l2src on cf326822 by grep, the executor lock with
+the pthread worker's cond wait on it, the pack gate mutex, the host lock,
+the mail lock allowed; own.lm2's 132 mutex lines and own_abi.lm2's 10
+counted for stage O, not examined). Falsifier held: the file has no "not a
+lock" row.
