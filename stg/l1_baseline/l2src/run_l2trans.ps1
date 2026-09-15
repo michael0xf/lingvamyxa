@@ -46,7 +46,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 140 -or $digest -ne '3F6879665696FABDA08C28A9DB8452F431E0626DF20C2DB157638ACF57C98F18') {
+if ($cases.Count -ne 141 -or $digest -ne 'A54C65A19BE7AFAE87C4A6F4CEE468EABF571DFD718DADCF162177E3D7ED4A97') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2312,6 +2312,9 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $aliasLocalHeader)
 & $outputL1trans "l2src\tests\repro_foreign_int_alias_local.h.lm1" $aliasLocalHeader
 if ($LASTEXITCODE -ne 0) { throw "repro_foreign_int_alias_local header translation failed" }
 Invoke-Leaf "l2src\tests\repro_foreign_int_alias_local.lm2" "repro_foreign_int_alias_local" 0 "probe_foreign_int_alias_local"
+# A nested index is one actual (5e's repro 7acecbbd, parser-l2 Stage e slice 3):
+# text[index[0]] at a call's head and after a binary operator; exit 4 counts both.
+Invoke-Leaf "l2src\tests\unit_call_nested_index.lm2" "unit_call_nested_index" 4 "count_hash"
 # LmP0Document is a foreign pointer type like LmP0Frame (Stage B step 3): its
 # fields resolve as a formal and as a local.
 Invoke-Leaf "l2src\tests\unit_p0_document_field.lm2" "unit_p0_document_field" 0 "doc_field"
