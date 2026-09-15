@@ -1397,6 +1397,16 @@ S5. The runtime-level lists (L5). Waits on 5.1.
       d6's UAF 165 of 165 and the falsifier, the record is red 85953500, green ddab10a0, falsifier 1.
       Before launch, integration was 3e6fc02a, the three-dot diff was exactly 5 M core files, and the probe was not
       in the branch. Landing started with land_s5.sh ddab10a0 onto 3e6fc02a.
+    - First landing attempt, RED, not pushed (2026-09-15): merge 0be7b9e5 on 3e6fc02a.
+      Green on the merge: run_self_build 8 of 8 (tag selfbuild/0be7b9e5, log 42a1da54 on
+      d6/lock-s5-landing-0be7b9e5, pushed by the self-build rule), run_port_message plain and -LaneCheck PASS,
+      run_l2trans, run_port_parser, run_mixa, run_ingress_harness, lmx_cancel.
+      Red: gates, stopped at port_slots after 338 s (compile, exit 1).
+      Cause, d6's miss: l2src/tests/lmx_msg_slots_selftest.lm1:59 writes "other\root_seq: 97U" on its own test
+      LmxMsgRuntime, and S5 deleted that field. The reader greps were keyed on the rt\ receiver, and the probe
+      covers only the five core files. port_slots was green at 3e6fc02a.
+      Fix: drop the line; the fixture's root_seq plays no part in the slots checks. First, every receiver of the
+      removed names is grepped tree-wide and run_port_msg_slots.ps1 is run locally.
     - UAF kit for S5's green, rebuilt in scratch (never committed):
       - q_alloc.c: a poisoning quarantine allocator (0xDD, 8192 blocks, 256 MB, free-site frames, eviction and
         atexit checks, double free);
