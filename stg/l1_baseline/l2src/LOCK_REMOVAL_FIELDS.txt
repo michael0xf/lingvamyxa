@@ -1,0 +1,144 @@
+LOCK_REMOVAL_FIELDS: every field of today's LmxMsg and of the five scaffolding types, each with its owner in LMX or
+its deletion (d6, 2026-09-15). Read on integration 7200294b: lmx_message.h 89-228, lmx_message_exec.c 34-74.
+
+The target (coordinator's map section 5.7, main 8c3d06bc). Mikhail, verbatim: "Почему вам не хватает typedef struct
+LmxMsg { volatile ... running = 1; volatile ... success = 0; struct LmxRoot *root; } ????". Of the other five types:
+"ЧТО ЭТО? Это все на L1 не является корневым Message, и при портировании все алгоритмы записываются на LMX но не
+описывают Message". An L3 Thread's record "очевидно может быть сложней и содержать большее число полей так как там
+планировщик и так далее".
+Message = {running, success, root}. L3 Thread = a Message plus its mailbox (the one synchronized collection of
+Messages, the one lock) plus its scheduler and maintenance state as Structure data in its own arena. The C keeps the
+native primitives only (the thread, the mailbox's monitor).
+
+Rule for every stage (coordinator, 2026-09-15): a stage's note names, for each field it touches, its owner below or
+its deletion. A field with neither is a contradiction, and the stage stops.
+
+Owner codes:
+  MSG    the Message itself: running, success, root
+  L3T    the L3 Thread's Structure data in its own arena (scheduler, maintenance, the capability toward its parent)
+  PAR    the parent's Structure data in the parent's arena (its child references, their paths, the settle write)
+  ARENA  the arena reached from the Message's root (19.29.2: blocks, ranges, the graph's storage)
+  MBOX   the mailbox: the synchronized collection of Messages and its monitor
+  R0     R0's data in R0's arena (what R0 needs of today's runtime record)
+  NATIVE a native primitive the C keeps (the OS thread, the mailbox's monitor)
+  DEL    deleted, with the ruling or stage that removes it
+Basis: "ruled" names the source (map 5.7, census 2.6, a Mikhail quote in the design); "proposed" is the lead's reading
+and waits for the coordinator. A proposed line is not a claim.
+
+Line format: type.field | file:line | what it is today | owner | basis | stage
+
+--- LmxMsg (lmx_message.h 118-209): today's L3 Thread record
+LmxMsg.addr | h:119 | the Message's address, lookup key of the runtime-wide walk | PAR (the parent's child reference); DEL as a lookup key | proposed (no registry, spec 11455; S2 capabilities) | S2
+LmxMsg.parent | h:120 | the parent's address | L3T (the capability toward the parent for liveness, C4) | proposed | S4
+LmxMsg.state | h:121 | lifecycle state (inactive, running, stopped) | DEL (running and success carry it) | proposed; OPEN Q1 | S6
+LmxMsg.committed | h:122 | the child's creation committed by the parent's turn end | PAR (the parent's child entry, written at its turn end) | proposed; OPEN Q1 | S4
+LmxMsg.closing | h:123 | close requested | DEL (running = 0 is the close) | ruled (Mikhail: "выставляется running=0 и в конце turn ... всё") | S3/S6
+LmxMsg.init | h:124 | creation payload bytes | ARENA (the child's own arena; no copies) | proposed | A1
+LmxMsg.init_n | h:125 | its length | ARENA | proposed | A1
+LmxMsg.inbox | h:126 | head of the LmxMsgCopy inbox list | MBOX (the collection holds the Messages themselves) | ruled (map 5.7: "no copies") | Y3/A3
+LmxMsg.inbox_tail | h:127 | its tail | MBOX | ruled (map 5.7) | Y3/A3
+LmxMsg.outbox | h:128 | staged sends committed at turn end | L3T (turn-local staging of the Messages it sends); the copy list DEL | proposed | Y3/A3
+LmxMsg.outbox_tail | h:129 | its tail | L3T | proposed | Y3/A3
+LmxMsg.done_from | h:130 | delivered-envelope history (duplicate suppression) | L3T if at-most-once delivery stays, else DEL | proposed; OPEN Q2 | Y3
+LmxMsg.done_id | h:131 | same | L3T or DEL | proposed; OPEN Q2 | Y3
+LmxMsg.done_n | h:132 | same | L3T or DEL | proposed; OPEN Q2 | Y3
+LmxMsg.done_cap | h:133 | same | L3T or DEL | proposed; OPEN Q2 | Y3
+LmxMsg.exec_id | h:134 | the current turn's envelope id | DEL (the taken Message carries its own data) | proposed (map 5.7: Env goes) | A3
+LmxMsg.exec_corr | h:135 | its correlation | DEL | proposed (map 5.7) | A3
+LmxMsg.exec_from | h:136 | its sender | DEL | proposed (map 5.7) | A3
+LmxMsg.exec_reply | h:137 | its reply-to | DEL | proposed (map 5.7) | A3
+LmxMsg.exec_live | h:138 | a turn is live on this record | DEL (running and the thread's own loop) | proposed | S3
+LmxMsg.last_beat | h:139 | liveness beat | L3T (maintenance) | proposed (map 5.7: maintenance state) | S4
+LmxMsg.path | h:140 | hierarchical path segments | PAR (the parent's child reference); R0 for R0's children | proposed (map 5.7: R0's children's paths are R0's data) | S2/A1
+LmxMsg.path_n | h:141 | its length | PAR / R0 | proposed | S2/A1
+LmxMsg.path_cap | h:142 | its capacity | PAR / R0 | proposed | S2/A1
+LmxMsg.child_seq | h:143 | next child segment | PAR (this Message as a parent: its own Structure) | proposed | S4
+LmxMsg.parent_msg | h:145 | pointer to the parent record | L3T (the capability toward the parent) | proposed | S2/S4
+LmxMsg.first_child | h:146 | head of the direct-child list | PAR (this Message's own Structure as a parent) | proposed (2.1 (2)) | S4
+LmxMsg.last_child | h:147 | its tail | PAR | proposed | S4
+LmxMsg.next_sibling | h:148 | link in the parent's child list | PAR (a link of the parent's list, not of the child) | proposed | S4
+LmxMsg.ready | h:154 | readiness flag set by senders | DEL (a non-empty mailbox is the readiness; no wake) | proposed (map 5.7; S3 no wake) | S3
+LmxMsg.sched_rec | h:160 | the scheduler record, already an L2 Structure in this arena | L3T | ruled (map 5.7: scheduler state as Structure data) | done (3c-2b)
+LmxMsg.ui_pending | h:164 | a UI mapping request outstanding | DEL (the UI lane is a full L3 Thread; the sequential mapping goes) | ruled (stage M, Mikhail "ДА") | M
+LmxMsg.retire_next | h:167 | link on the runtime's retire queue | DEL (the executor frees its own memory) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | S5
+LmxMsg.retire_queued | h:168 | on that queue | DEL | ruled (same) | S5
+LmxMsg.turn | h:169 | the handler function | ARENA (the Message's method, reached from its root) | proposed | A1
+LmxMsg.turn_ctx | h:170 | the handler's context | ARENA | proposed | A1
+LmxMsg.exec_bind | h:173 | pointer to its LmxMsgExecBind | L3T or PAR (the binding as Structure data) | ruled (map 5.7) | S4/M
+LmxMsg.mapped | h:174 | bound to a worker | DEL (each L3 Thread on its own OS thread) | ruled (stage M) | M
+LmxMsg.refs | h:175 | reference count | DEL | ruled (census 2.6: goes with S6) | S6
+LmxMsg.running | h:176 | running flag, single writer | MSG | ruled (map 5.7; 2.1 (3) order-free atomic) | kept
+LmxMsg.success | h:177 | success flag, single writer | MSG | ruled (map 5.7; 2.1 (3)) | kept
+LmxMsg.tracked | h:178 | on the runtime's slot tracking | DEL (Runtime goes) | proposed (map 5.7) | S5
+LmxMsg.owner_rt | h:179 | pointer to the process-wide runtime | DEL | ruled (map 5.7: LmxMsgRuntime goes) | S5/S6
+LmxMsg.mail | h:180 | the mailbox's lock | MBOX (the monitor; the one lock kept) | ruled (census 2.6: m->mail kept; Y2) | Y2
+LmxMsg.live_wait_th | h:181 | liveness wait threshold | L3T (maintenance) | proposed | S4
+LmxMsg.live_query_id | h:182 | outstanding liveness query to the parent | L3T | proposed | S4
+LmxMsg.live_query_at | h:183 | its time | L3T | proposed | S4
+LmxMsg.live_query_pend_id | h:184 | a pending query | L3T | proposed | S4
+LmxMsg.live_query_pend_at | h:185 | its time | L3T | proposed | S4
+LmxMsg.live_seq | h:186 | liveness sequence | L3T | proposed | S4
+LmxMsg.child_heard_at | h:187 | when the parent last heard this child | PAR (the parent's record of its child) | proposed | S4
+LmxMsg.handoff_ready | h:188 | ready for the parent's settle write | PAR (the settle write) | proposed | S4/A2
+LmxMsg.native_users | h:189 | native references holding the record | DEL with S6 unless shown needed | proposed; OPEN Q3 | S6
+LmxMsg.orphan_until | h:190 | retention of a failed orphan | R0 (R0's policy record) | proposed (decision 17; map 5.7) | S5
+LmxMsg.orphan | h:193 | re-rooted at R0 | R0 | proposed | S5
+LmxMsg.disposed | h:194 | slot disposed | DEL (the executor frees its own memory) | proposed | S5
+LmxMsg.alloc_next | h:195 | link of the runtime's slot list | DEL (Runtime goes) | ruled (map 5.7) | S5
+LmxMsg.blocks | h:196 | the arena's blocks | ARENA | ruled (19.29.2; O1) | kept
+LmxMsg.ranges | h:197 | registered value ranges | ARENA | ruled (19.29.2) | kept
+LmxMsg.eternal_ranges | h:201 | classification of admitted immutable values | ARENA | ruled (19.29.2) | kept
+LmxMsg.method_ranges | h:206 | classification of shared METHOD records | ARENA | ruled (19.29.2) | kept
+LmxMsg.graph | h:207 | the Message's LMX graph | MSG (root) | proposed (map 5.7: "struct LmxRoot *root") | A1
+LmxMsg.roots | h:208 | the graph's root set | ARENA (reached from root) | proposed | A1
+
+--- LmxMsgEnv (lmx_message.h 89-98): the handler's envelope. All DEL (map 5.7: "no copies"; the taken Message is the data)
+LmxMsgEnv.id, .correlation, .reply_to, .kind, .number, .bytes, .n, .graph | h:90-97 | envelope fields | DEL | ruled (map 5.7) | A3
+
+--- LmxMsgCopy (lmx_message.h 100-116): the queued envelope copy. All DEL (map 5.7: the mailbox holds the Messages)
+LmxMsgCopy.id, .correlation, .reply_to, .from, .to, .kind, .ingress_kind, .number, .bytes, .n, .owned | h:101-112 | copied envelope data | DEL | ruled (map 5.7) | A3
+LmxMsgCopy.dest_msg, .delivered | h:113-114 | delivery bookkeeping | DEL | ruled (map 5.7) | A3
+LmxMsgCopy.next | h:115 | list link | DEL (the collection's own link, MBOX) | ruled (map 5.7) | Y3/A3
+
+--- LmxMsgRuntime (lmx_message.h 211-228): the process-wide record. Goes (map 5.7)
+LmxMsgRuntime.root | h:212 | the root list | R0 (R0's children, in R0's arena) | ruled (map 5.7) | S5
+LmxMsgRuntime.slots | h:213 | every slot | DEL | ruled (map 5.7) | S5
+LmxMsgRuntime.n | h:214 | slot count | DEL | ruled (map 5.7) | S5
+LmxMsgRuntime.transport | h:215 | host transport queue | MBOX (host posts are admissions into R0's mailbox); the queue DEL | proposed | S5/Y3
+LmxMsgRuntime.transport_tail | h:216 | its tail | same | proposed | S5/Y3
+LmxMsgRuntime.host_sync | h:217 | the host lock | DEL | ruled (census 2.6; no lock but the mailbox's) | S6
+LmxMsgRuntime.exec | h:218 | the executor pointer | DEL | ruled (map 5.7) | S5/S6
+LmxMsgRuntime.next_addr | h:219 | address counter | R0 (R0's children's addresses) | ruled (map 5.7) | S5
+LmxMsgRuntime.root_seq | h:220 | root segment counter | R0 | ruled (map 5.7) | S5
+LmxMsgRuntime.root_record | h:227 | R0's policy record, already Structure data in R0's arena | R0 | ruled (map 5.7; stage 5 (e)) | done
+
+--- LmxMsgBindWait (lmx_message_exec.c 34-55): the worker's wait object. Goes (map 5.7: no wait, no notify)
+LmxMsgBindWait.wait_ev / .cv / .sig | c:36,39,40 | the wait primitive | DEL | ruled (map 5.7; S3) | S3
+LmxMsgBindWait.worker / .worker_on | c:37,41,42 | the worker thread handle | NATIVE (the L3 Thread's OS thread, which the C keeps) | ruled (map 5.7: the C keeps the thread) | M/S3
+LmxMsgBindWait.gen, .retired, .slot, .launch_n | c:44-47 | wait generations and launch gate | DEL | ruled (map 5.7; S3 launch wake goes) | S3
+LmxMsgBindWait.reaping, .on_reap, .reap_next | c:48,49,51 | the reap list | DEL (each thread frees itself; no join) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | S3/S5
+LmxMsgBindWait.owner_tid | c:50 | the owning thread's id | NATIVE (thread identity, T) | proposed | S3
+LmxMsgBindWait.rec | c:54 | back link to the bind record | DEL | ruled (map 5.7) | S3
+
+--- LmxMsgExecBind (lmx_message_exec.c 57-74): the handler binding. Becomes the L3 Thread's or its parent's Structure data (map 5.7)
+LmxMsgExecBind.addr | c:58 | the bound Message's address | DEL (a capability, S2) | proposed | S2
+LmxMsgExecBind.turn, .ctx | c:59-60 | the handler and its context | ARENA (with LmxMsg.turn) | proposed | A1
+LmxMsgExecBind.msg | c:61 | the record pointer | DEL (the L3 Thread is the record) | proposed | S4
+LmxMsgExecBind.affinity | c:62 | mapping affinity | DEL (each L3 Thread on its own OS thread) | ruled (stage M) | M
+LmxMsgExecBind.held_by, .held | c:63-64 | a thread's claim on the binding | DEL (one thread per L3 Thread; no claim) | proposed; OPEN Q4 | M
+LmxMsgExecBind.last_st | c:65 | last turn status | L3T | proposed | S4
+LmxMsgExecBind.launching | c:66 | launch in progress | DEL (the launch gate goes with no wake) | ruled (S3 deletion list: launch_gate_go/refuse) | S3
+LmxMsgExecBind.gone | c:67 | unbound | DEL | proposed | M
+LmxMsgExecBind.wait | c:69 | its LmxMsgBindWait | DEL | ruled (map 5.7) | S3
+LmxMsgExecBind.in_table | c:73 | indexed in the executor's table | DEL (the executor's table goes) | proposed | S5
+
+--- Open questions for the coordinator (a proposed owner is written; none is claimed until confirmed)
+Q1. state and committed: today state distinguishes inactive (created, not yet committed by the parent's turn end) from
+    running and stopped. Proposed: running and success carry the Message's own lifecycle, and "committed" is the
+    parent's child entry written at the parent's turn end. Confirm, or name where "created but not committed" lives.
+Q2. done_from/done_id/done_n/done_cap: the delivered-envelope history suppresses duplicate delivery. With no copies and
+    create-retry idempotence deleted (D1), is at-most-once delivery still a rule (then L3T data), or does it go (DEL)?
+Q3. native_users: native references that keep a record alive while C code holds it. Proposed DEL with S6 with the
+    other counts; confirm that no native holder survives the port.
+Q4. held_by/held: a thread's claim on a binding exists for the sequential mapping and shared workers. With each L3
+    Thread on its own OS thread, proposed DEL; confirm.

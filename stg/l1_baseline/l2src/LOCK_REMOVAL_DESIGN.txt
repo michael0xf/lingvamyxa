@@ -101,6 +101,17 @@ HELD 2026-09-15 under Mikhail's standing rule, a contradiction sent through the 
     SUPERSEDED the same day by Mikhail's "no notify" ruling (S3 below): there is no wake to match against admissions.
     The measurements above stay as the record of where the wake sites are; the oracle becomes "no wake site".
 
+FIELDS. Every stage names its fields' owners (coordinator, 2026-09-15; map section 5.7, main 8c3d06bc). Mikhail,
+    verbatim: "Почему вам не хватает typedef struct LmxMsg { volatile ... running = 1; volatile ... success = 0; struct
+    LmxRoot *root; } ????", and of LmxMsgBindWait, LmxMsgExecBind, LmxMsgRuntime, LmxMsgEnv and LmxMsgCopy: "Это все на
+    L1 не является корневым Message, и при портировании все алгоритмы записываются на LMX но не описывают Message".
+    A Message is {running, success, root}. An L3 Thread is a Message plus its mailbox plus its scheduler and maintenance
+    state as Structure data in its own arena. Today's C record is the L3 Thread's; the five types are scaffolding.
+    Rule: each stage's note names, for every field it touches, its owner in LMX (the parent's Structure, the L3
+    Thread's Structure, the arena from root, the mailbox, R0's arena, a native primitive) or its deletion. A field with
+    neither is a contradiction, and the stage stops. The table of every field is LOCK_REMOVAL_FIELDS.txt; its
+    "proposed" lines and questions Q1-Q4 wait for the coordinator.
+
 S0. The proof tool (57): the lane tripwire red on a lane write from a thread with no turn. It is the proof for S2-S5
     and lands first.
 
