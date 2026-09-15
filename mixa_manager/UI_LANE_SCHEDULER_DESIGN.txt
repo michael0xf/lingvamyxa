@@ -12,8 +12,9 @@ SCOPE (Mikhail, verbatim, 2026-09-15, relayed by 6f; recorded on main)
   implementation, without Smalltalk semaphores).
 - "Точней вы пишите не на Си, на Си пишет транслятор" (more precisely, you do not write in C; the translator
   writes C).
-This file is a design, not the spec. Nothing in it is a rule until Mikhail agrees. Every question below has two
-answers and neither is decided here.
+This file is a design, not the spec. Nothing in it is a rule until Mikhail agrees. The three questions this draft
+raised (Q1-Q3) are answered below, from 6f's review against what is already on main -- implementation within
+Mikhail's own words, not new spec sentences.
 
 --- MEASURED FACTS (grep-verified, mixa_manager as it stands on e88dab64) ---
 
@@ -77,6 +78,20 @@ F6. mixa_manager/SPEC_DIGEST.txt:28-30 (already in the tree, read 2026-09-11): "
   scheduling policy or family tree."
 - 11503-11506: "A request to another lane (mapping a child onto the UI lane) is a Message to that lane's mailbox;
   the mailbox's admission lock is the one cross-lane synchronization the model permits."
+- 11483-11486 (Clarification, 2026-09-14, the same clarification opens at 11476): "The scheduler exists only in
+  varieties of L3 Thread: it allocates execution to the Messages that L3 Thread attached (a consumer schedules the
+  Messages it attached) and removes on timeout as judged by the children's own checks; it does not manage running
+  children in full."
+- 11570-11574 (Mikhail, 2026-09-15, verbatim): "Синхронизация только локальная в почтовом ящике каждого L3
+  Thread -- больше в проекте нет (за исключением поддержки ресивера \"synchronized\")" (synchronization is only
+  local, in the mailbox of each L3 Thread; there is none else in the project, except the support of the receiver
+  "synchronized", 20.5.7).
+19.29.2 (12317-12318, Mikhail, 2026-09-15, verbatim): "Одна арена на Message, арены присоединяются при
+потреблении -- это ядро" (one arena per Message, arenas attach on consumption, that is the core).
+19.29.7 (12780-12789, Mikhail, 2026-09-15, verbatim): "У нас нет никаких копий message. Есть только он сам и у
+него своя арена... При получении Message который не L3 Thread присоединяется к арене получателя. Всё" (there
+are no copies of a message; there is only the message itself, and it has its own arena; on receipt a Message
+that is not an L3 Thread attaches to the recipient's arena; that is all).
 Plan section 7 (mixa_manager/BACKEND_SEAM.txt 202-250, quoted in full under F2).
 Mikhail's 2026-09-15 words under SCOPE above (the lane-is-an-L3-Thread order and the event-driven/no-semaphore
 order).
@@ -96,15 +111,16 @@ D2. What today calls mixa_backend_poll/mixa_pump_drain becomes the UI lane's own
     poll function (F4) keeps its exact non-blocking shape and becomes the lane's event SOURCE, not its scheduler --
     matching BACKEND_SEAM 7's own distinction ("The backend is an EVENT SOURCE feeding that loop's inbox").
 
-D3. The lane's scheduler is not a pool, not a wait primitive, not own.lm2's shape. Per Mikhail's newest words: it
-    is an L2 Structure, in the lane's own arena, holding the ordered list of Messages currently attached to this
-    lane (a Message becomes "attached" the same way any child becomes attached to a parent's scheduler, 19.28.R2.2
-    11452-11456: "ordinary private Structure data"). Event-driven: an admitted Message in the lane's own mailbox
-    IS the event; running that Message's one turn IS the reaction. No condition variable, no semaphore, no thread
-    pool, no blocking wait inside the scheduler's own code (SCOPE, Mikhail's newest words) -- this rules out
-    anything shaped like own.lm2's route_mutex/work_ready/state_mutex/stopped_condition (this branch's own
-    LOCK_REMOVAL_OWN_INVENTORY.txt) as a model for the UI lane, even though own.lm2's runtime is mixa_manager's
-    only working precedent for a message-thread pool today.
+D3. The lane's scheduler is not a pool, not a wait primitive, not own.lm2's shape. It is an L2 Structure, in the
+    lane's own arena, holding the ordered list of Messages currently attached to it -- ANSWERED, Q3 below:
+    "attached" is not the parent/child launch relation; it is a Message the lane received and whose storage
+    attached to the lane's own arena on receipt (19.29.7, 19.29.2), scheduled the way 19.28.R2.2's 2026-09-14
+    clarification already names ("it allocates execution to the Messages that L3 Thread attached"). Event-driven:
+    an admitted Message in the lane's own mailbox IS the event; running that Message's one turn IS the reaction.
+    No condition variable, no semaphore, no thread pool, no blocking wait inside the scheduler's own code (SCOPE,
+    Mikhail's newest words) -- this rules out anything shaped like own.lm2's route_mutex/work_ready/state_mutex/
+    stopped_condition (this branch's own LOCK_REMOVAL_OWN_INVENTORY.txt) as a model for the UI lane, even though
+    own.lm2's runtime is mixa_manager's only working precedent for a message-thread pool today.
 
 D4. Its C is whatever the L2-to-L1 translator emits (SCOPE, "на Си пишет транслятор"). This design names the
     Structure's fields and the scheduler's algorithm at the L2 level; it does not name a C struct, a C function
@@ -120,50 +136,34 @@ D5. One attached Message's turn at a time, in the order of its own mailbox (the 
     turn, and returns. No fairness policy beyond FIFO order is proposed (matching BACKEND_SEAM 7.1's existing rule,
     "one turn, no scheduler... turns taken in FIFO order").
 
-D6. What makes the lane run at all is the OS's own event surface (Win32's message queue), not a primitive this
-    design adds. The lane's own turn -- deciding which attached Message goes next (D5) and running it -- happens
-    each time the UI thread is given control by the OS after an event arrives; this is the same non-blocking-poll
-    shape mixa_backend_win32.lm1 already has (F4), read as the lane's own "am I given a chance to run" check, not
-    as a scheduler-owned wait.
+D6. The lane's own thread wait is the platform's own thread wait on its own mailbox -- ANSWERED, Q1 below: not a
+    second waitable handle alongside the OS queue, and not a bare non-blocking poll either. The scheduler owns the
+    platform wait outright; admission into the lane's mailbox is delivered through that same platform queue (a
+    thread message on Win32), so there is exactly one wait, on exactly one queue, and it is the lane's own
+    mailbox wait that 19.28.R2.2's 2026-09-15 sentence names for every L3 Thread, not a UI-specific mechanism.
 
---- QUESTIONS (two answers each, neither decided here) ---
+--- ANSWERED (6f's review against main, 2026-09-15; implementation within Mikhail's words, not new spec
+sentences -- written so here, with the citations, per 6f's instruction) ---
 
-Q1. How does the UI lane's own thread idle between events (BACKEND_SEAM 7.2's still-open question, cited under
-    F2, not closed by this design)?
-    Answer A: the backend (Win32's message queue) exposes a waitable handle (MsgWaitForMultipleObjects) that the
-      lane's own thread waits on directly -- no scheduler-level primitive, the OS's own blocking call, which is
-      not a lock and not covered by "no locks in the project" (it synchronizes with the OS, not with another
-      Message).
-    Answer B: the scheduler owns the platform wait outright (BACKEND_SEAM 7.2's second named shape) -- the lane's
-      thread blocks on GetMessage (a real block, not PeekMessage's drain) as its own turn boundary, and every
-      other admission into its mailbox rides in through the same Win32 message queue (a PostMessage to the lane's
-      own window), so the OS queue IS the lane's mailbox admission path and no separate cross-thread primitive is
-      needed at all.
-    Both keep "no locks but the message collection's own" (neither is a lock); they differ in whether the Win32
-    message queue and the L3 Thread mailbox are the same queue (B) or two queues the lane's own turn bridges (A).
+Q3 (settled first, because it settles Q1/Q2). "Attached" is Mikhail's own word, not this design's: 19.28.R2.2's
+2026-09-14 clarification (11483-11486, cited above) already says the scheduler "allocates execution to the
+Messages that L3 Thread attached (a consumer schedules the Messages it attached)" -- a relation distinct from
+parent/child launch. His 2026-09-15 sentences make the relation concrete: 19.29.2's "arenas attach on
+consumption" and 19.29.7's "on receipt a Message that is not an L3 Thread attaches to the recipient's arena" (both
+cited above). So: a Message the UI lane received and attached to its own arena is what the lane schedules; the
+lane owns it as its arena's content, not as a supervised child under 2.1(2)'s parent/child ownership clause. D3
+above states this directly rather than as an open question.
 
-Q2. Does a non-UI Message's send to the UI lane (19.28.R2.2 11503-11506's "a Message to that lane's mailbox")
-    cross an OS thread boundary through the lane's own mailbox admission alone, or does it need a Win32-specific
-    wake (PostMessage to the lane's window) to make the UI thread notice before its next natural event?
-    Answer A: admission alone is sufficient if Q1 is answered B (the same queue), since posting into the lane's
-      own mailbox already rides the Win32 queue that wakes GetMessage.
-    Answer B: if Q1 is answered A (two queues), admission into the lane's own L3-Thread mailbox needs its own
-      explicit nudge (a PostMessage carrying no payload, purely a wake) so the lane's thread does not wait on
-      MsgWaitForMultipleObjects past a sender's admission.
-    This question is downstream of Q1, not independent of it.
+Q1 (thread idle). His 2026-09-15 sentence in 19.28.R2.2 (11570-11574, cited above), "synchronization is only
+local, in the mailbox of each L3 Thread; there is none else in the project": a thread waits only for its own
+mailbox. On the UI thread, the lane's wait is the platform's own thread wait, and the mailbox's wake is delivered
+through that same platform queue (a thread message on Win32) -- the scheduler owns the platform wait outright;
+there is no second waitable handle alongside it. D6 above states this directly.
 
-Q3. Is the lane's scheduler Structure attached to the lane's own arena directly, or is it the lane Message's own
-    "scheduler for its direct children" per 19.28.R2.2 11452-11456, even though the lane launches no threads for
-    what it schedules (SCOPE, "запускает никаких потоков")?
-    Answer A: it is exactly that clause's scheduler -- the attached Messages are the lane's "direct children" in
-      the ownership sense (2.1(2) in this branch's LOCK_REMOVAL_SPEC_MAP.txt, "the parent owns the supervision
-      cells about its direct children"), just never mapped onto their own OS thread.
-    Answer B: "attached" is a different relation than "child" -- a Message can be attached to the UI lane for one
-      piece of screen work while its real parent (whoever created it) is elsewhere in the tree, so the lane's
-      scheduler is closer to 19.29.6's "scheduling policy/state for its own direct children" read loosely, or it
-      needs its own named relation the spec does not yet have a word for.
-    This question decides whether D3's Structure reuses the ownership rules already settled for parent/child
-    (2.1(2)) or needs a new rule Mikhail has not stated.
+Q2 (cross-lane wake) follows from Q1: admission into the lane's mailbox wakes the thread through the platform
+queue itself, no separate Win32 primitive (no bare PostMessage-as-pure-wake alongside a payload-carrying one; the
+admission IS the wake). D2/D6 above already describe one queue, one wait; this is that same fact restated as the
+answer to what was Q2.
 
 --- ACCEPTANCE (red-first) ---
 
@@ -177,6 +177,6 @@ nothing else. Red today because none of D1-D6 exists yet; the test is the same s
 (a counter/tripwire asserting the property, not yet green because the property is not yet implemented).
 
 --- What this file does not decide ---
-The C emitted for D2's admission path, the exact Structure field names for D3's attached-list, and Q1-Q3 are open
-for Mikhail through 6f. This file inventories and proposes; nothing here is coded before 6f reviews it against the
-spec, per the ticket.
+Q1-Q3 are answered above (6f's review, within Mikhail's words). Still open: the C emitted for D2's admission path
+and the exact Structure field names for D3's attached-list -- these are implementation, decided by the L2 source
+and the translator's emission, not by this design document.
