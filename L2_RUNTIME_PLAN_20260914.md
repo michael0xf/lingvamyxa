@@ -4882,3 +4882,17 @@ every input it holds, so a test turn that does not recv its input gets
 turn after turn (owned send re-sent three times until its turn took the
 input); (3) a yield loop must read the flag the check reads (close-path
 read done while end_turn had not yet written STOPPED).
+b5's exec selftest gate census landed on sonnet/exec-gates d4887106 at
+793c267f (l2src/LOCK_REMOVAL_EXEC_SELFTEST_GATES.txt; checked by the
+coordinator): the file has no block convention of its own, so blocks
+are its 111 runtime_new() calls plus 9 inner sub-scopes in the
+shared-rt boot span, 125 in all (a stated methodology choice); 49
+gated, 76 ungated; by stage M 4, S4 2, S6 37, Y 6 (S2 0, S5 0); by
+kind Sleep 61, event 65 (CreateEvent/SetEvent folded into the wait's
+kind), go cell 66, GetTickCount 117, exec_lock 2, sum 311; the sums
+equal grep -c of the patterns restricted to main() (event 68 in all of
+main, the first block's CreateEvent calls sitting before its own
+runtime_new); pre-main turn-handler functions (g_mail_go,
+g_cleanup_go) are outside any block by the ruling's framing. This is
+the test-debt list: M converts its 4, and S4, S6 and Y their own
+blocks, the S6 share (37 of 49) being the executor-lock blocks.
