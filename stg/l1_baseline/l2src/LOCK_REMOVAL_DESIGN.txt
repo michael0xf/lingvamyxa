@@ -258,12 +258,19 @@ O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced 
     refutes the commit.
     O2. The emission switch in self-building steps (b5), each small enough to self-build, each with its own
         committed generated C and the fixed point as its green:
-        O2.1 Allocation: trans_l1_statement.lm2 and trans_l1_expr.lm2 emit the arena allocator on the turn
-             Message's arena (O1's accessor) instead of lm_own_arena_new_zero(thread, lm_message_thread_owner(...)),
-             in the ~130 sites and their dynamic variants, with the thread still created by the old scaffold so the
-             program still runs. Full self-build, fixed point.
-        O2.2 Entry: the ~500-line main scaffold (thread, runtime, root attach, turn loop, detach, delete) becomes the
-             core's entry (process runtime, R0's entry turn, the program as R0's turn). Full self-build, fixed
+        Order corrected (coordinator, 2026-09-15): O1's functions return 0 outside a core turn, so allocations
+        cannot move onto the turn arena while the program still runs in the old scaffold's thread. The entry moves
+        first.
+        O2.1 Entry: the ~500-line main scaffold (thread, runtime, root attach, turn loop, detach, delete) becomes the
+             core's entry (process runtime, R0's entry turn, the program as R0's turn, the shape l2trans emits).
+             Allocations keep today's form for this step. Proposed by the lead instead of a heap interval: inside
+             R0's entry turn the old thread object is still created, only as the holder of the arena
+             lm_own_arena_new_zero(thread, lm_message_thread_owner(thread), ...) allocates in, with no mailbox or
+             turn loop used. No step then runs arena-less ("без арены Message не имеет смысла"). If the coordinator
+             prefers heap allocations for the one step, that is recorded here. Full self-build, fixed point.
+        O2.2 Allocation: trans_l1_statement.lm2 and trans_l1_expr.lm2 emit lmx_msg_turn_new_zero /
+             lmx_msg_turn_copy_bytes (O1) instead of lm_own_arena_new_zero(thread, lm_message_thread_owner(...)) in the
+             ~130 sites and their dynamic variants, and the thread object from O2.1 goes. Full self-build, fixed
              point.
         O2.3 The REST client and server's generated C regenerated on the new emission, their ingress left to O3's
              deletion. Full self-build, fixed point.
