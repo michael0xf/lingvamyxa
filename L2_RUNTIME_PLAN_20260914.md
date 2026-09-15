@@ -5046,3 +5046,11 @@ running, then a commit and the full 31 gates again; the coordinator's
 acceptance runs follow on the new tip. Lesson for impact lists: grep
 also for the numeric side effects of a deleted mechanism (ids,
 sequences, pre-allocation counts, check counts), not only its names.
+M tip 26dde049 (the lead, 2026-09-15; checked on origin, exec-3a moved to
+it): the two numbering pins of the deleted UI lane (lmx_message_selftest
+p0 = [1, 1], the grandchild-mid check at 539 now seg != 1U, the
+legitimate second-sibling check at 530 kept; run_port_msg_path_storage
+pre_allocations=2) and two stale comments; measured before the commit:
+run_lmx -Suite Message ok, run_port_msg_path_storage parity PASS 541
+checks 0 failures. The full 31 gates running on it with the pin
+hash-checked; the coordinator's acceptance runs follow the result.
