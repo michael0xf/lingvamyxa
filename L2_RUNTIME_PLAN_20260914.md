@@ -1495,3 +1495,29 @@ counts and wait signals survive as primitives; the model's section 30 on
 execution tables; which arena holds an admitted copy; whether R0's scheduler
 steps its threadless children before R0's thread ends), each with a proposed
 answer and an alternative, none of them in the spec.
+Inventory 1 of 3 (0c, 2026-09-15): claude-0c/lock-inventory e71e64b8,
+l2src/LOCK_REMOVAL_INVENTORY_TESTS.txt, 34 lines against the grep (24
+exec_lock sites in the model tests and the executor selftest: checks_19_29_6
+10, orphan_mapped_17 5, root_ingress_5b 2, root_record_5e 2, the selftest 5;
+2 _locked name uses in l2_and_foreign_call_own_local; 8 in the two stage-5 (f)
+tests on the impl branch, run by no default gate). Kinds as ruled: MAIL 15
+(the worker's result reaches the test through its parent's mailbox, read on
+the host lane), LANE 6, JOINED 3 (allowed only for threads the test itself
+created; the runtime's workers are joined by no one), NAME 2, silent 8 (the
+test-only Interlocked go flags and rendezvous that hold a worker inside its
+turn until the host flips a cell: not a shape the model has, since a turn
+runs to its end and waiting is between turns on the mailbox; each such test
+is restructured into turns exchanging mail in the lead's design, or its
+property dropped with a line saying what is lost). The executor selftest's
+29/38/29 events and 385 Interlocked are harness state of a C selftest of the
+C executor and go with that executor's rewrite; the host selftest's pthread
+gate goes with the host forms. Measured gap in the proof tool: -LaneCheck
+does not go red when a lane write moves to a thread with no turn (the oracle
+returns when the thread-local turn is 0, exec.c 177; run_child_turn's
+ready_clear moved onto a joined helper thread ran in both builds and both
+runs with exit 0 and no LANE WRITE FAIL), so it never proved the one-lane
+rule for that class; ruled: 0c writes the tripwire (the bootstrap thread
+recorded at runtime_new; a lane write with turn == 0 on any other thread is
+red), red on that mutation and green on the baseline, and no removal stage
+cites -LaneCheck as its proof before the tripwire is measured; a lane write
+from the bootstrap thread outside any turn must stay green.
