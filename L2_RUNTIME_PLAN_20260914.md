@@ -2793,3 +2793,13 @@ worker-lifecycle signals (bind_wait_retire 2123, the unbind join 2236,
 stop's retire walk 3370) that wake a waiting worker so it can exit; whether
 they remain depends on what an idle owner thread does, so the oracle will
 fail on whatever primitive his answer leaves, not on a guessed list.
+Mikhail on the empty-mailbox question (2026-09-15, verbatim): "\"завершается
+ли поток владельца при пустом ящике после выхода из turn'а\" -- нет!!!! L3
+Thread точно так же завершается только по success пользовательским кодом.
+Каким образом вы будете код писать иначе?" (does the owner thread end
+when its mailbox is empty after a turn? no; an L3 Thread ends only by
+success set by user code, like everything; how else would you write
+code?). The coordinator's reading put back to him for a yes: between turns
+the owner thread keeps its own loop running (its self-maintenance:
+liveness queries to its parent, timers) and looks into its mailbox each
+time round without blocking on anything.
