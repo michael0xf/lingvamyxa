@@ -131,6 +131,13 @@ typedef struct LmxMsgExec {
     int test_fail_ctx;
     int test_fail_adopt_block;
     int test_fail_start_kicks;
+    /* The thread that attached the executor (runtime_new's caller): the only
+     * thread that may write a scheduler cell outside any turn (lane tripwire). */
+#if defined(_WIN32)
+    DWORD test_boot_tid;
+#else
+    pthread_t test_boot_tid;
+#endif
 #endif
 } LmxMsgExec;
 
@@ -174,7 +181,32 @@ void lmx_msg_test_lane_write(LmxMsgRuntime *rt, LmxMsg *owner, const char *site)
         return;
     }
     turn = lmx_turn_msg;
-    if (turn == 0 || turn->owner_rt != rt || turn == owner) {
+    if (turn == 0) {
+        /* Outside any turn only the bootstrap thread acts, with the parent's
+         * authority; a write from any other thread outside a turn has no lane
+         * (tripwire, 2026-09-15). A settled owner has no lane either (19.29.6). */
+        LmxMsgExec *boot = (LmxMsgExec *)rt->exec;
+        if (boot == 0) {
+            return;
+        }
+#if defined(_WIN32)
+        if (GetCurrentThreadId() == boot->test_boot_tid) {
+            return;
+        }
+#else
+        if (pthread_equal(pthread_self(), boot->test_boot_tid)) {
+            return;
+        }
+#endif
+        if (owner->handoff_ready != 0 && lmx_msg_running_load(owner) == 0) {
+            return;
+        }
+        fprintf(stderr, "LANE WRITE FAIL site=%s owner=%u turn=none: a cell written outside any turn off the bootstrap thread (decision 18)\n",
+            site, (unsigned)owner->addr);
+        fflush(stderr);
+        abort();
+    }
+    if (turn->owner_rt != rt || turn == owner) {
         return;
     }
     /* A settled owner (handoff-safe, not running) has no lane: whoever settles
@@ -193,6 +225,33 @@ void lmx_msg_test_lane_write(LmxMsgRuntime *rt, LmxMsg *owner, const char *site)
     abort();
 }
 
+/* The take's lane (19.28.R2.2 (3)): the lane that takes a Message's turn is that
+ * Message's lane for the take and clears its ready flag; outside any turn that
+ * lane is the thread holding the run claim (held_by). Only take_this calls this. */
+static void lmx_msg_test_lane_take(LmxMsgRuntime *rt, LmxMsg *owner,
+#if defined(_WIN32)
+    DWORD held_by,
+#else
+    pthread_t held_by,
+#endif
+    const char *site) {
+    if (lmx_msg_test_lane_check == 0 || rt == 0 || owner == 0) {
+        return;
+    }
+    if (lmx_turn_msg == 0) {
+#if defined(_WIN32)
+        if (held_by == GetCurrentThreadId()) {
+            return;
+        }
+#else
+        if (pthread_equal(held_by, pthread_self())) {
+            return;
+        }
+#endif
+    }
+    lmx_msg_test_lane_write(rt, owner, site);
+}
+
 /* The mapping cell's tripwire (19.28.R2.2 (2), 19.29.6): release_slot's unbind is
  * the settling lane's write, refused by construction never; a wrong-lane release
  * that reaches a refusal aborts under the lane check, silent otherwise. */
@@ -208,6 +267,8 @@ void lmx_msg_test_unbind_refused(LmxMsgRuntime *rt, LmxMsg *m, int st, const cha
     fflush(stderr);
     abort();
 }
+#else
+#define lmx_msg_test_lane_take(r, o, h, s) ((void)0)
 #endif
 
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
@@ -1170,6 +1231,7 @@ int lmx_msg_exec_attach(LmxMsgRuntime *rt) {
     e->rt = rt;
 #if defined(LMX_MSG_EXEC_TEST)
     lmx_msg_test_lane_check = getenv("LMX_LANE_CHECK") != 0;
+    e->test_boot_tid = lmx_tid();
 #endif
 #if defined(_WIN32)
     InitializeCriticalSection(&e->lock);
@@ -2963,7 +3025,7 @@ static int take_this(LmxMsgExec *e, LmxMsgExecBind *r, LmxMsgAddr addr, LmxMsgEx
     }
     r->held = 1;
     r->held_by = lmx_tid();
-    lmx_msg_test_lane_write(m->owner_rt, m, "take_this:ready_clear");
+    lmx_msg_test_lane_take(m->owner_rt, m, r->held_by, "take_this:ready_clear");
     m->ready = 0;
     *snap = *r;
     return 1;
