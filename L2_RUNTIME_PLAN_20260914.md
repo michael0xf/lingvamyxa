@@ -5246,3 +5246,11 @@ dispose_child, end_turn, run_entry_turn and create keep their address
 parameters (the design threads the sites; SPINE 27-46 and b5's file name
 no public signature change); the two entry-call text pins depend on it.
 C3/C4 uses listed separately for S4.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only: the S4 site table on
+the post-M tip, l2src/LOCK_REMOVAL_S4_SITES.txt on sonnet/s4-sites off
+d8f758e6: the S4_WRITES sites re-read at d8f758e6 (file:line now, the
+writer lane, the FIELDS row and category, the permitting item), and
+what S4 adds or changes at each: nothing, a guard (the emergency_cancel
+ruling), an edge before a cross-lane read, or a move of the write to
+the owner's lane; the cancel_spin_host test change included; counts at
+the top.
