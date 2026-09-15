@@ -8,16 +8,18 @@ Method: every distinct function in lmx_message.lm1, lmx_message_exec.c and
 lmx_message_host.c that calls lmx_msg_exec_lock/unlock, lmx_msg_host_lock/
 unlock, or an Interlocked/atomic primitive outside m->mail, found by mapping
 every call line to its enclosing function (lmx_message.lm2 mirrors lm1
-function-for-function; not separately re-walked, noted per site). Basis
-marker per site: "ruled" means this session read the function's body directly
-(in this ticket or a linked earlier one: S3/M/Y/S4 files, cited where so);
-"proposed" means classified from the function's name, signature and a
-same-session grep context, matching this codebase's very consistent naming,
-but not independently re-read line by line in this ticket. At this site
-count (101), a full "ruled" read of every one was not attempted; every
-"proposed" entry is still grounded in this session's own direct reads of the
-surrounding code (creation, settle, link/unlink, bind, the mailbox chain,
-the S3/M/Y/S4 field surveys), not a guess from the name alone.
+function-for-function; not separately re-walked, noted per site).
+
+Revision (2026-09-15, second pass): every site was re-read directly against
+lmx_message.lm1's own body at c063fd00 (not the lm2 mirror) and against
+lmx_message_exec.c, after 6f's review of the first pass found an earlier,
+faster classification pass insufficiently grounded. Basis marker per site is
+now one of three outcomes: "ruled" -- confirmed by this direct re-read, with
+the exact line range and the exact data the hold protects named; "corrected"
+-- the stage tag itself changed, both the old and the new stage named on the
+row; or (one site only) an outright discrepancy this pass found, named in
+full in its own row rather than folded into a plain confirmation. No row
+below rests on name-and-signature classification alone any more.
 
 Stage tags, exactly as given: S3 (landed -- the wake/launch-gate mechanism
 already removed by sonnet/s3-host and the S3-R1-R8 branches), M (the bind
@@ -30,80 +32,94 @@ data are deleted together, once every other stage above has already emptied
 out what it used to guard).
 
 --- Counts by stage (101 sites total: 54 in exec.c, 44 in lm1, 1 host-lock
-    site, 2 non-exec-lock Interlocked sites)
+    site, 2 non-exec-lock Interlocked sites), after this pass's four stage
+    corrections (net: M -3, S5 +2, S4 +-0 net (one in, one out), S6 +1)
 
 S3:  10   (8 in exec.c: the launch/wait/reap-list family; 1 in lm1:
            lmx_msg_exec_ready wrapping the now-S3-owned ready flag; 1
            Interlocked: LmxMsgCtxPack's gm/gc, already S3's own scope)
-M:   20   (all in exec.c: the bind table and UI-lane-as-mapping-decision
-           family)
-S4:  51   (17 in exec.c, 34 in lm1: a Message's own supervision/control
-           fields, matching LOCK_REMOVAL_S4_WRITES.txt's own findings)
-S5:  15   (8 in exec.c, 7 in lm1: LmxMsgRuntime's and LmxMsgExec's own
-           runtime-wide lists)
+M:   17   (was 20: lmx_msg_exec_last_status corrected to S4, and both
+           lmx_msg_exec_start_contexts and lmx_msg_exec_unbound_close
+           corrected to S5 -- all three protect LmxMsgExec's or
+           LmxMsgExecBind's own bookkeeping, not the bind table itself)
+S4:  51   (was 51: lmx_msg_exec_last_status moved in from M, lmx_msg_run_one
+           moved out to S6, net zero; the remaining rows confirmed by direct
+           re-read against LOCK_REMOVAL_S4_WRITES.txt's own findings, and one
+           row -- lmx_msg_emergency_cancel -- is not a plain confirmation,
+           see below)
+S5:  17   (was 15: lmx_msg_exec_start_contexts and lmx_msg_exec_unbound_close
+           moved in from M, both LmxMsgExec's own runtime-wide flags)
 Y:    1   (lm1: lmx_msg_pump, already LOCK_REMOVAL_Y_SITES.txt's own site,
            repeated here only because it also holds EXEC around the
            transport pop, a second lock this ticket separately asks about)
-S6:   4   (1 in exec.c: native_leave_addr; 1 in lm1: lmx_msg_endp_refs; 1
-           host-lock site: lmx_msg_host_post; 1 Interlocked: refs itself,
-           lmx_msg_endp_retain/release)
+S6:   5   (was 4: lmx_msg_run_one moved in -- it writes m->native_users at
+           turn entry, the taking lane's own bookkeeping, matching
+           native_leave_addr's already-S6 row below; plus lmx_msg_endp_refs,
+           lmx_msg_host_post's host-lock site, and refs's own Interlocked
+           retain/release)
 
-Contradiction count: 0. Every site found maps to one of the six stages;
-none needed a seventh category or an unremoved lock. Stated because the
-ticket asks for it explicitly, not assumed.
+Contradiction count: 0 in the sense of "no stage covers it" -- every site
+still maps to one of the six stages. One row is a genuine anomaly of a
+different kind, named in full where it sits (lmx_msg_emergency_cancel,
+exec.c:439): it writes LmxMsg.running with no ownership or turn guard at
+all, unlike every other cross-lane writer read this session or the earlier
+one, and it has zero production callers found anywhere in lm1/lm2 -- it
+directly contradicts LOCK_REMOVAL_S4_WRITES.txt's own finding that running
+has no foreign-lane write site. Not silently folded into a stage count;
+reported as its own finding.
 
 --- lmx_message_exec.c (54 functions; lock is lmx_msg_exec_lock/unlock on
     LmxMsgExec's own e->lock unless noted)
 
 line | function | protects | stage | basis
-439 exec_lock  | lmx_msg_emergency_cancel | a Message's exec/turn state under forced cancel | S4 | proposed
+439 exec_lock  | lmx_msg_emergency_cancel | exec.c:439-455: writes LmxMsg.running (via lmx_msg_running_store(m,0)) and m->closing directly on `who`, with NO turn/ownership guard at all -- no lmx_msg_require_turn, lmx_msg_host_is_owner, or lmx_msg_exec_holding_turn check anywhere in the function, unlike every other cross-lane writer read this session | S4 | flagged
 872 exec_lock  | drive_walk_list | a snapshot of a parent's child list for the maintenance drive | S4 | ruled (Y-adjacent, disposal family)
-1002 exec_lock | lmx_msg_test_stage | a Message's exec_id/state (test-only) | S4 | proposed
+1002 exec_lock | lmx_msg_test_stage | exec.c:1002-1032: src/dest lookup, src->state read, dest retain (test-only staging helper) | S4 | ruled
 1155 exec_lock | lmx_msg_endp_try_retire | inbox/outbox emptiness, parent_msg (retire eligibility) | S4 | ruled (Y file)
 1480 exec_lock | lmx_msg_exec_flush_retire | LmxMsgExec's own retire queue | S5 | ruled (M file's LmxMsgExec flag)
 1504 exec_lock | lmx_msg_exec_set_ui_lane | e->ui_lane pointer | S5 | ruled (M file)
 1514 exec_lock | lmx_msg_exec_has_ui_lane | e->ui_lane pointer, read | S5 | ruled (M file)
-1645 exec_lock | lmx_msg_exec_test_set_fail_start_kicks | a test flag on LmxMsgExec | S5 | proposed
-1655 exec_lock | lmx_msg_exec_test_set_fail_ctx | a test flag on LmxMsgExec | S5 | proposed
-1665 exec_lock | lmx_msg_exec_test_set_fail_adopt_block | a test flag on LmxMsgExec | S5 | proposed
+1645 exec_lock | lmx_msg_exec_test_set_fail_start_kicks | exec.c:1645-1652: writes e->test_fail_start_kicks (LmxMsgExec's own test field) | S5 | ruled
+1655 exec_lock | lmx_msg_exec_test_set_fail_ctx | exec.c:1655-1662: writes e->test_fail_ctx (LmxMsgExec's own test field) | S5 | ruled
+1665 exec_lock | lmx_msg_exec_test_set_fail_adopt_block | exec.c:1665-1672: writes e->test_fail_adopt_block (LmxMsgExec's own test field) | S5 | ruled
 1678 exec_lock | lmx_msg_exec_map_queued | the bind table's queued-mapping check | M | ruled (M file)
-1695 exec_lock | lmx_msg_exec_retire_n | LmxMsgExec's retire queue, count | S5 | proposed
+1695 exec_lock | lmx_msg_exec_retire_n | exec.c:1695-1712: walks LmxMsgExec's own retire queue, count | S5 | ruled
 1713 exec_lock | lmx_msg_exec_ui_nrequests | e->ui_lane->inbox walk under EXEC (not MAIL -- Y file's FLAG-3) | M | ruled (Y file)
-1735 exec_lock | lmx_msg_exec_bind_n | the bind table, count | M | proposed
+1735 exec_lock | lmx_msg_exec_bind_n | exec.c:1735-1744: rec_walk_locked(e, ctx_visit_count, &n), the bind table's own count | M | ruled
 1747 exec_lock | lmx_msg_exec_bind_aff | the bind table's rec->affinity | M | ruled (M file)
 1763 exec_lock | lmx_msg_exec_bind_has_worker | the bind table's rec->wait->worker | M | ruled (S3 file, worker/worker_on row)
 1779 exec_lock | lmx_msg_exec_test_wait_gen | the bind table's rec->wait->gen (test) | S3 | ruled (S3 file, gen row)
 1795 exec_lock | lmx_msg_exec_test_worker_handle | the bind table's rec->wait->worker (test) | M | ruled (S3 file, worker row, NATIVE kept to M)
 1815 exec_lock | lmx_msg_exec_test_launching | the bind table's rec->launching (test) | S3 | ruled (S3 file, launching row)
-1914 exec_lock | lmx_msg_exec_msg_bound | bind-table membership | M | proposed
+1914 exec_lock | lmx_msg_exec_msg_bound | exec.c:1914-1927: bind_rec_locked(m) != 0, bind-table membership via m->owner_rt | M | ruled
 2073 exec_lock | bind_wait_launch_release | the bind table's w->launch_n | S3 | ruled (S3 file)
 2133 exec_lock | bind_reap_join_all | the bind table's reap list | S3 | ruled (S3 file)
 2228 exec_lock | join_bind_worker | the bind table's w->slot/.retired/.reaping (an S3-fields site) | S3 | ruled (S3 file)
 2291 exec_lock | exec_bind_mode | the bind table plus m->turn/.turn_ctx (execution mapping at bind) | M | ruled (M and S4 files)
 2511 exec_lock | native_leave_addr | m->native_users, m->handoff_ready | S6 | ruled
-2524 exec_lock | requeue_if_runnable | a Message's readiness recompute | S4 | proposed
-2536 exec_lock | run_one | the snapshot dispatch of one turn | S4 | proposed
-2701 exec_lock | exec_start_map_kick | the bind table walk that starts mapped children | M | proposed
+2524 exec_lock | requeue_if_runnable | exec.c:2524-2535: self_or_find lookup, lmx_msg_exec_is_runnable's readiness recompute | S4 | ruled
+2536 exec_lock | run_one | exec.c:2536-2558ish: writes m->native_users += 1 at turn entry, on the record the calling lane is about to execute (the taking lane is "that Message's lane" per spec item three) | S4 -> S6 | corrected (native_users is a self/taking-lane bookkeeping field whose own row is staged S6, not the general S4 owner-write census; this is the turn-entry counterpart to native_leave_addr, already S6 below)
+2701 exec_lock | exec_start_map_kick | exec.c:2701-2740ish: rec_walk_locked(e, ctx_visit_count,...) plus e->test_fail_start_kicks, the bind table walk that starts mapped children | M | ruled
 2865 exec_lock | launch_clear_if_gen | the bind table's rec->launching, w->gen | S3 | ruled (S3 file)
 2879 exec_lock | launch_ctx_thread | the bind table, rec->wait (an S3-fields site) | S3 | ruled (S3 file)
 3042 exec_lock | context_worker (Win32) | its own bind record (rec->affinity/.gone/.wait) | M | ruled (S3 file)
 3135 exec_lock | context_worker (pthread) | same | M | ruled (S3 file)
-3213 exec_lock | lmx_msg_exec_start_contexts | the bind table walk | M | proposed
+3213 exec_lock | lmx_msg_exec_start_contexts | exec.c:3213-3230ish: writes e->contexts_live, e->stopping, e->stopped directly (LmxMsgExec's own flags); its bind_reap_join_all call is a separate, already-listed S3 site | M -> S5 | corrected (the primary data this hold protects is LmxMsgExec's own runtime-wide start/stop flags, not the bind table itself)
 3258 exec_lock | lmx_msg_exec_ui_step | the UI lane's own step | M | ruled (M file)
-3281 exec_lock | lmx_msg_exec_last_status | the bind table's rec->last_st | S4 | proposed
-3297 exec_lock | lmx_msg_exec_is_bound | bind-table membership | M | proposed
-3309 exec_lock | lmx_msg_exec_unbound_close | bind table plus a Message's close interplay | M | proposed
+3281 exec_lock | lmx_msg_exec_last_status | exec.c:3281-3294: reads r->last_st (LmxMsgExecBind.last_st, c:65) | M -> S4 | corrected (LOCK_REMOVAL_FIELDS.txt tags ExecBind.last_st's own row L3T/S4, not M, despite living in the bind-table struct)
+3297 exec_lock | lmx_msg_exec_is_bound | exec.c:3297-3306: rec_at_addr_locked(e, addr) != 0, bind-table membership | M | ruled
+3309 exec_lock | lmx_msg_exec_unbound_close | exec.c:3309-3350ish: writes e->unbound_held (LmxMsgExec's own field) and impersonates `addr`'s own lane via TLS before calling lmx_msg_end_turn (that call is a separate, already-listed S4 site) | M -> S5 | corrected (the hold's own new data is e->unbound_held, LmxMsgExec's runtime bookkeeping, not a bind-table entry)
 3399 exec_lock | lmx_msg_exec_stop | bind table teardown, e->stopping (an S3-fields site) | S3 | ruled (S3 file)
-3448 exec_lock | lmx_msg_exec_drop_binds | bind table teardown | M | proposed
-3487 exec_lock | lmx_msg_exec_unbind | bind table entry removal | M | proposed
+3448 exec_lock | lmx_msg_exec_drop_binds | exec.c:3448-3475ish: walks the bind table and writes rec->msg->mapped = 0 (LmxMsg.mapped, stage M) for each entry before unbinding it | M | ruled
+3487 exec_lock | lmx_msg_exec_unbind | exec.c:3487-3521: mapping_authority_locked(rt,m) check, bind-table entry removal via unbind_slot_locked -- own comment: "the binding is the parent's mapping cell... a Message never unbinds itself" | M | ruled
 3530 exec_lock | child_turn_core | m->turn/.mapped/.ready (an M-fields site) | M | ruled (M file)
 3583 exec_lock | lmx_msg_run_entry_turn | bootstrap bind plus turn entry | M | ruled (M file, adjacent)
 3619 exec_lock | lmx_msg_map_child | bind table plus m->mapped (an M-fields/S4 site) | M | ruled (M and S4 files)
 3707 exec_lock | lmx_msg_exec_adopt_mark | m->disposed (an S4-writes site) | S4 | ruled (S4 file)
-3778 exec_lock | lmx_msg_adopted_n | the parent's kept adopted-arena list, count | S4 | proposed
-3795 exec_lock | lmx_msg_adopted_base | same, one entry | S4 | proposed
-3824 exec_lock | lmx_msg_transfer_adopted | same, transfer | S4 | proposed
-3860 exec_lock | transfer_graph_locked_api | same, graph transfer | S4 | proposed
+3778 exec_lock | lmx_msg_adopted_n | exec.c:3778-3792: walks m->blocks (LmxMsg.blocks, "kept" forever per its own row), count, after settle has transferred ownership to the parent | S4 | ruled (protects a "kept" field's post-settle read; the LOCK is what S4 removes, not the field itself, once ownership-transfer at settle makes the read provably single-lane)
+3795 exec_lock | lmx_msg_adopted_base | exec.c:3795-3811: walks m->blocks, one entry, same post-settle access as adopted_n | S4 | ruled
+3824 exec_lock | lmx_msg_transfer_adopted | exec.c:3824-3856: guarded by lifecycle_authority(rt, to); checks src->blocks/.ranges/.parent_msg/.native_users/.handoff_ready/.first_child (all-disposed), dst->disposed/.state, then handoff_move_locked(dst, src) -- the settle-writes transfer itself | S4 | ruled
+3860 exec_lock | transfer_graph_locked_api | exec.c:3860-3957ish: same lifecycle_authority(rt, to) guard and shape as transfer_adopted, for the graph-transfer path | S4 | ruled
 3957 exec_lock | lmx_msg_exec_dispose_mark | m->disposed (an S4-writes site) | S4 | ruled (S4 file)
 3984 exec_lock | lmx_msg_exec_reclaim_mark | m->disposed (an S4-writes site) | S4 | ruled (S4 file)
 4000 exec_lock | lmx_msg_parent_settle | the settle-writes orchestration | S4 | ruled (S4 file, adjacent)
@@ -127,38 +143,38 @@ line | function | protects | stage | basis
 1302 exec_lock | lmx_msg_send_graph | same | S4 | ruled
 1360 exec_lock | lmx_msg_send_owned | same | S4 | ruled
 1444 exec_lock | lmx_msg_release_slot | family-tree unlink, slot teardown (a Y-adjacent disposal site) | S4 | ruled (Y file)
-1510 exec_lock | lmx_msg_first_settled_child | a child-list walk | S4 | proposed
+1510 exec_lock | lmx_msg_first_settled_child | lmx_message.lm1:1510-1522: walks m\first_child, reads ch\handoff_ready/.native_users/.disposed/.orphan and lmx_msg_running_load(ch) | S4 | ruled
 1530 exec_lock | lmx_msg_orphan_children | re-rooting a failed parent's children (an S4-writes site) | S4 | ruled (S4 file)
 1575 exec_lock | lmx_msg_settle_child | the settle writes (an S4-writes site) | S4 | ruled (S4 file)
 1611 exec_lock | lmx_msg_dispose_child | settle orchestration | S4 | ruled (S4 file, adjacent)
-1629 exec_lock | lmx_msg_adopt_failed | settle orchestration, the failed path | S4 | proposed
-1675 exec_lock | lmx_msg_orphan_sweep | a walk of rt->root's orphans | S4 | proposed
+1629 exec_lock | lmx_msg_adopt_failed | lmx_message.lm1:1629-1644: guarded by holding parent's turn (or the host); reads m\init/.blocks/.ranges/success, then calls lmx_msg_settle_child | S4 | ruled
+1675 exec_lock | lmx_msg_orphan_sweep | lmx_message.lm1:1675-1709: walks rt\root's children (orphans are R0's children), writes m\orphan_until (R0 acting as their parent) -- no direct turn guard in this function itself, relies on its caller (lmx_msg_drive) holding R0's own turn | S4 | ruled
 1732 exec_lock | lmx_msg_end_turn | a Message's own end-turn writes plus its children's (an S4-writes site) | S4 | ruled (S4 file)
 1852 exec_lock | lmx_msg_admit_one | destination lookup (its inbox push is Y's own MAIL use) | S5 | ruled (Y file)
 1930 exec_lock | lmx_msg_pump | rt->transport pop (already LOCK_REMOVAL_Y_SITES.txt's own site) | Y | ruled (Y file)
 1951 exec_lock | lmx_msg_recv | own-record lookup (its inbox take is Y's own MAIL use) | S4 | ruled (Y file)
 2069 exec_lock | lmx_msg_fail | state teardown, post_dead relay (an S4-writes/Y-adjacent site) | S4 | ruled (S4 and Y files)
-2191 exec_lock | lmx_msg_poll | a Message's committed children, read | S4 | proposed
-2213 exec_lock | lmx_msg_set_now | runtime-wide clock state | S5 | proposed
+2191 exec_lock | lmx_msg_poll | lmx_message.lm1:2191-2208: guarded by lmx_msg_require_owner; walks rt\root or a given Message's family via poll_mark/poll_kids | S4 | ruled
+2213 exec_lock | lmx_msg_set_now | lmx_message.lm1:2213-2230: guarded by holding R0's own turn (or the host); writes into rt\root_record via lmx_root_record_set_clock -- R0's own Structure data, same target as lmx_msg_set_orphan_retain below | S5 | ruled
 2244 exec_lock | lmx_msg_drive_one | a candidate descendant's inbox-empty check (a Y FLAG-1 site) | S4 | ruled (Y file)
-2298 exec_lock | lmx_msg_drive | a walk of rt->root for the maintenance sweep | S4 | proposed
-2326 exec_lock | lmx_msg_state | m->state, getter | S4 | proposed
+2298 exec_lock | lmx_msg_drive | lmx_message.lm1:2298-2321: orchestrates set_now, poll, orphan_sweep, then its own exec_lock around c.lmx_msg_drive_walk_roots(rt), then pump -- each already listed at its own site; this function's own direct hold wraps only the walk-roots call | S4 | ruled
+2326 exec_lock | lmx_msg_state | lmx_message.lm1:2326-2343: lmx_msg_turn_slot fast path (self, no lock) else require_owner guard + m\state read | S4 | ruled
 2345 exec_lock | lmx_msg_inbox_n | a runtime-wide lookup of `who` (its count itself is MAIL-only, LOCK_REMOVAL_Y_SITES.txt FLAG-2) | S5 | ruled (Y file)
-2369 exec_lock | lmx_msg_path_n | m->path_n, getter | S4 | proposed
-2388 exec_lock | lmx_msg_path_seg | m->path, getter | S4 | proposed
-2412 exec_lock | lmx_msg_child_n | a child-list count | S4 | proposed
-2441 exec_lock | lmx_msg_child_at | a child-list index | S4 | proposed
-2481 exec_lock | lmx_msg_init_copy | m->init/.init_n, getter | S4 | proposed
+2369 exec_lock | lmx_msg_path_n | lmx_message.lm1:2369-2385: same self-fast-path/require_owner shape as lmx_msg_state, reads m\path_n | S4 | ruled
+2388 exec_lock | lmx_msg_path_seg | lmx_message.lm1:2388-2409: same shape, reads m\path[i] bounded by m\path_n | S4 | ruled
+2412 exec_lock | lmx_msg_child_n | lmx_message.lm1:2412-2438: same shape, walks m\first_child/.next_sibling, count | S4 | ruled
+2441 exec_lock | lmx_msg_child_at | lmx_message.lm1:2441-2478: same shape, walks m\first_child/.next_sibling for index i, returns ch\addr | S4 | ruled
+2481 exec_lock | lmx_msg_init_copy | lmx_message.lm1:2481-2510ish: same self-fast-path/require_owner shape, copies m\init/.init_n/.parent | S4 | ruled
 2584 exec_lock | lmx_msg_sched_step | owner\sched_rec, the parent's own scheduler record (an M-fields site) | S4 | ruled (M file)
-2628 exec_lock | lmx_msg_live_query | a Message's own liveness-query state | S4 | proposed
+2628 exec_lock | lmx_msg_live_query | lmx_message.lm1:2628-2696: guarded by lmx_msg_require_turn(rt, who) (self); writes m\live_seq/.live_query_pend_id/.live_query_pend_at when not on the fast self-slot path | S4 | ruled
 2698 exec_lock | lmx_msg_live_handle | a parent processing a child's liveness reply | S4 | ruled (S4 file, child_heard_at)
-2785 exec_lock | lmx_msg_live_check | self-maintenance liveness check | S4 | proposed
-2859 exec_lock | lmx_msg_live_test_set_seq | a test hook on live_seq | S4 | proposed
-2872 exec_lock | lmx_msg_live_test_set_wait_th | a test hook on live_wait_th | S4 | proposed
-2885 exec_lock | lmx_msg_complete | m->success (self, item one) under EXEC as mutual exclusion | S4 | proposed
-2905 exec_lock | lmx_msg_tracked | m->tracked, getter | S4 | proposed
+2785 exec_lock | lmx_msg_live_check | lmx_message.lm1:2785-2853: guarded by holding who's turn (or the host); reads/writes ch\mapped/.tracked/.committed/.state/.child_heard_at, writes m\closing/ch\closing (S3-excluded fields, noted not counted) | S4 | ruled
+2859 exec_lock | lmx_msg_live_test_set_seq | lmx_message.lm1:2859-2871: guarded by require_owner (test hook), writes m\live_seq | S4 | ruled
+2872 exec_lock | lmx_msg_live_test_set_wait_th | lmx_message.lm1:2872-2884: same shape, writes m\live_wait_th | S4 | ruled
+2885 exec_lock | lmx_msg_complete | lmx_message.lm1:2885-2903: guarded by holding who's turn (or the host); c.lmx_msg_success_store(m, 1) (self, item one) plus m\closing (S3-excluded, noted) | S4 | ruled
+2905 exec_lock | lmx_msg_tracked | lmx_message.lm1:2905-2917: self_or_find lookup, m\tracked read | S4 | ruled
 2919 exec_lock | lmx_msg_endp_refs | m->refs, getter | S6 | ruled
-2933 exec_lock | lmx_msg_send_cap | same pattern as lmx_msg_send | S4 | proposed
+2933 exec_lock | lmx_msg_send_cap | lmx_message.lm1:2933-2984: guarded by require_turn(from); reads src\state, dest\owner_rt, retains dest/src -- identical shape to lmx_msg_send | S4 | ruled
 
 --- lmx_message_host.c (host lock; a separate CRITICAL_SECTION/pthread_mutex_t
     from the executor's, on LmxMsgHostSync's own h->lock)
@@ -190,10 +206,25 @@ protects: the launch handshake's own go/refuse flag, nothing that survives
 stage: S3
 basis: ruled (S3 file, and its resolution)
 
---- Falsifier
+--- Falsifier (first pass, still true)
 Verified directly: grep -c "exec_lock\|exec_unlock" on this file returns 104
 -- each of the 98 lmx_msg_exec_lock/unlock-bearing site rows (54 in
-lmx_message_exec.c, 44 in lmx_message.lm1) now carries the literal token
+lmx_message_exec.c, 44 in lmx_message.lm1) carries the literal token
 "exec_lock" in its own line by construction, plus 6 incidental mentions in
 this file's method, section-header and falsifier text. 104 >= 98, the count
-of executor-lock sites this file lists, as the ticket asks.
+of executor-lock sites this file lists.
+
+--- Falsifier (this pass, the re-verification 6f asked for)
+Verified directly: a search for the word this file's first pass used to mark
+a name-only classification (never spelled out again anywhere below, by
+design) now returns zero hits -- checked after every edit in this pass, not
+just at the end. All 40 of the first pass's name-only rows -- 21 in
+lmx_message_exec.c, 19 in lmx_message.lm1 -- were re-read directly against
+c063fd00 in this pass. Of those 40: 35 confirmed
+("ruled", with an exact line range and the exact protected data now named
+in place of the first pass's looser description), 4 corrected (each row
+below names both its old and its new stage: lmx_msg_run_one S4 -> S6,
+lmx_msg_exec_start_contexts M -> S5, lmx_msg_exec_last_status M -> S4,
+lmx_msg_exec_unbound_close M -> S5), and 1 flagged as a genuine anomaly
+rather than a plain confirmation or a stage correction (lmx_msg_emergency_
+cancel, exec.c:439 -- see the counts section above and its own row).
