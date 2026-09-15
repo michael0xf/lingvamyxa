@@ -25,7 +25,7 @@ copy 66/0, merge 261/0 and 132/132 fixtures; the following full historical run
 ends `l2trans gen2 ok`.
 
 The next clean-selfhost step is the tracked source
-`stg/l1_baseline/l2src/l2trans.lm2`. The trusted seed is used once; generation
+`l2src/l2trans.lm2`. The trusted seed is used once; generation
 1 must translate that same source into generation 2 with deterministic
 L1/C/behavioral agreement. `lm2/l1trans.lm2` is the later L1-to-C compiler
 port, not a substitute. The normalized probe now passes the root `unsigned` fields. They use a distinct
@@ -1590,7 +1590,7 @@ outbox отбрасывается, а доступное безопасно уд
 
 ## 37. Что читать в исходниках
 
-Основной replacement-код находится в `stg/l1_baseline/l2src/`. Старый `lm2/`
+Основной replacement-код находится в `l2src/`. Старый `lm2/`
 полезен для сопоставления прежнего поведения, но его Namespace/descriptor
 projection и process-static throw нельзя принять за ABI нового ядра.
 
@@ -1603,7 +1603,7 @@ projection и process-static throw нельзя принять за ABI ново
 | Message и исполнитель | `lmx_message.lm1`, `lmx_msg*.lm1`, `lmx_msg*.h`, `LMX_MSG_CONTEXT_V0.txt`, `LMX_MSG_EXEC_HOST_V0.txt` |
 | Frontend/генерация | `l2trans.lm1`, его parser/emitter modules, SPEC 21 |
 | Runtime-прогоны | `tests/l2/`, `tests/lmx_graph_abi_selftest.lm1`, `run_l2trans.ps1` |
-| Граница стабильного L1 | `L1_IMPORT_CAPACITY_20260912.md`, `stg/l1_baseline/l1src/l1trans.lm1` и корневой L1 source |
+| Граница стабильного L1 | `L1_IMPORT_CAPACITY_20260912.md`, корневой `l1src/l1trans.lm1` |
 | Живая координация | `CORE_TEAM_PLAN_20260912.md`, `work_chat/CORE_CONTINUATION_20260911.md`, именованные inbox/outbox |
 
 Названия с `*` в таблице — группы файлов, не обещание, что любой helper уже
@@ -1756,10 +1756,10 @@ throw/Message ABI проверены в `17fef09a`. `independent: const: immutab
 ## 41. Как проверять и сохранять знание
 
 Стабильный L1 используется read-only:
-`stg/l1_baseline/build/l1trans/gen2/l1trans.exe`, SHA256
+`build/l1trans/gen2/l1trans.exe`, SHA256
 `0B3D85B36E72A5935CA43D76B71B8CBBB060AF041CBB6FAE805796595810B2A2`
 (продвинут 2026-09-15 с `722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466` — обновлением среза, привязка к исходникам в L1_PIN_SOURCE.txt;
-раннеры читают хеш из `stg/l1_baseline/l2src/L1_PIN.txt`).
+раннеры читают хеш из `l2src/L1_PIN.txt`).
 
 Критерий L1-гейта — неподвижная точка **gen2 C == gen3 C** (побайтово), а не
 gen1 C == gen2 C: семя gen0 — bootstrap-артефакт (spec 1.2), и его C может
