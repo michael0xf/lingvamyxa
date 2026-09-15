@@ -4896,3 +4896,8 @@ runtime_new); pre-main turn-handler functions (g_mail_go,
 g_cleanup_go) are outside any block by the ruling's framing. This is
 the test-debt list: M converts its 4, and S4, S6 and Y their own
 blocks, the S6 share (37 of 49) being the executor-lock blocks.
+Standing ticket to b5 (the coordinator, 2026-09-15): when the lead pushes
+his converted exec selftest on d6/m-sequential, read its diff against
+793c267f and check that the converted blocks are the 4 M blocks of the
+census and that no block outside them lost or gained a gate, as
+LOCK_REMOVAL_M_EXEC_REVIEW.txt on sonnet/exec-gates.
