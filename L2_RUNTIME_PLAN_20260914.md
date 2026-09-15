@@ -2747,3 +2747,21 @@ first as its own branch off the integration tip after the 32-gate landing,
 0c stacks the seed branch on it and measures the cold green there with
 root lm2 and the dead files moved aside, the two landing together after
 (b), b5's branch after them.
+Mikhail on the mailbox monitor (2026-09-15, verbatim): "тупейший вложенный
+synchronized по локу на чтение и запись как в Java, без остальных
+усложнений вообще. \"notify получает не «поток», а поток-владелец ящика\" --
+ну а смысл его нотифицировать если он занят в turn?!!! Выйдет и посмотрит"
+(the dumbest nested synchronized on the lock for reading and writing, as in
+Java, with no other complications at all; what is the point of notifying
+the owner thread if it is busy in a turn? it will come out and look). So
+the mailbox's synchronization is synchronized on the mailbox object for
+every read and write, reentrant as Java's, and nothing else: no wait, no
+notify, no condition variable, no wake primitive; the owner thread looks
+at its mailbox itself when it comes out of its turn. Stage Y: Y2 the
+monitor's reentrant enter/leave only, Y3 the mailbox's reads and writes
+under it; S3: the wake-all, the map kick and the launch wake go and
+nothing replaces them; 0c's oracle becomes "no wake site exists" (any wake
+red, the green 0 sites). Put to him by the coordinator: what the owner
+thread does when its mailbox is empty after a turn (the thread ends and
+the next admission launches the turn, or it waits on something); nothing
+coded for the empty case until his word.
