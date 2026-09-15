@@ -1131,7 +1131,19 @@ the redirects, seen after the unit's own includes where -D applies before its
 first line, the order Stage d's oracle-named headers rely on. 0c's runner
 change, landed via the lead before e4b, red first with a permanent padding
 stage whose inline line exceeds 8192 chars (red with "The command line is too
-long." before, green after, kept as the guard at one gcc call).
+long." before, green after, kept as the guard at one gcc call). Implemented
+by 0c as claude-0c/port-parser-rsp cd8c9028 (Invoke-Gcc writes the .rsp
+beside the -o target, each argument quoted with \ and " escaped, runs gcc
+@file; the guard at 8823 inline chars, the red now "gcc did not start: cmd
+/c refused a 8876-character line (cmd.exe's limit is 8191)", the largest
+real line 186 chars), with two commits on top: the working-directory rows
+(L839, L876 absolute) and a quoted -D value checked by a negative-size
+typedef; measured 2026-09-15: a dropped \ escape is caught by any
+backslash path in the guard's own arguments (the mangled empty.c path, the
+same red with or without the quoted entry), and the quoted entry alone
+catches a dropped " escape (red at the size check), so the two failure
+texts are distinguishable in the logs; lands through the lead after slots
+as one branch, hashes to follow.
 
 Translator repairs driven by the parser port's Stage e (2026-09-14/15, the
 lead, each a leaf in run_l2trans's historical set with its pin, red on the
