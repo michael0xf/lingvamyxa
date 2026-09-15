@@ -396,6 +396,19 @@ Y. The mailbox's one synchronization as a Java monitor through the synchronized 
     that L1 mailbox carry the lock removal now. Whether an explicit enter/leave pair in L1 is acceptable until the
     receiver arrives (spec 20.5.7: "not a raw lock/unlock pair in source syntax", said of the L2 receiver) is the
     coordinator's ruling to confirm, or a question for Mikhail if it reads as a contradiction.
+    Ruled by the coordinator (2026-09-15), not a contradiction: 19.28.R2.2 at 11623 allows it for the bootstrap
+    ("Necessary thread, wait/wake and synchronized-mailbox primitives belong to the Message implementation in L2
+    (temporarily L1/native bootstrap)"), and 20.5.7's sentence is about the L2 receiver. He is told so he can overrule.
+    Conditions:
+    - Y2's hook is exactly Java's monitor: reentrant enter/leave for the same thread, one mutex and one condition per
+      monitor, wait releasing and reacquiring, notify and notifyAll. The receiver's later lowering to
+      lm_synchronized_enter/leave with the same wait/notify then changes nothing in the mailbox.
+    - Y3 calls the hook only through the mailbox's own functions (admission notifies, take waits), with no other
+      caller. Y3's proof is a grep at 0 for the hook's names outside lmx_message.lm1/lm2 and the hook's own unit,
+      beside 57's S3 oracle.
+    - Y1 is the first item of the L2 port after the self-build. Its red is the old trans_synchronized_cleanup as a
+      run_l2trans leaf.
+    Order: Y after M and D.
     S6's end state follows: the monitor inside each mailbox is the project's only lock (grep for
     CRITICAL_SECTION, pthread_mutex, pthread_cond, SleepConditionVariable and CreateEvent in the tree finds only
     the monitor hook).
