@@ -1287,6 +1287,17 @@ S5. The runtime-level lists (L5). Waits on 5.1.
       - (iii) slots and n wait for S6: once refs goes, a released child is freed by its parent at settle.
       Recommended: S5 = (a) + (c) + (i), with (ii) as a record and (iii) in S6's scope. Items (a) and (c) proceed as
       edits.
+    - Ruled (the coordinator, 2026-09-15, withdrawing answer (1)): the creates and the last releases write on every
+      parent's lane, so R0 cannot own slots, n or next_addr without a message to R0, which is a wait. S5 is:
+      - (a) the retire queue deleted;
+      - (c) the root list collapsed to R0;
+      - (i) root_seq the constant 1, with the field gone;
+      - (ii) next_addr one order-free atomic counter (__atomic fetch-add: addresses unique, order irrelevant,
+        within Mikhail's allowance of order-free atomic state), recorded in its FIELDS row as "atomic counter, no
+        owner lane".
+      (iii) slots and n go to S6 with refs; the slots module and the test reads change then.
+      The probe on d6/lock-s5-red is updated to four counts: retire_queue, root_seq, next_addr_nonatomic,
+      root_list_loops. Green is 0/0/0/0 with the union base and the UAF kit.
 
 S6. The lock deleted (L4, L7, L8 and what remains).
     - Red: lmx_msg_exec_lock and unlock defined to abort() in a test build. Every remaining call site is red by name
