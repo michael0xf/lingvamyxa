@@ -154,15 +154,28 @@ tests are not on c067bed9 and are listed from origin/d6/stage5f-impl ee8b80c9.)
   lmx_message_host_selftest.c:25 | pthread_mutex_t g_go_mu, with pthread_cond_t g_go_cv (L26), used at L60-64, L77-79, L228-236 | the POSIX branch's start gate that releases the producer threads together | TO GO: the Windows branch already gates with a one-shot event (L58, L203, L223); use the same gate or an atomic flag the producers poll
   exec lock sites in tests | see section 1 | | TO GO (section 1)
 
-  5c. Not locks, listed for 6f's ruling (threads, events and waits, atomics)
-  lmx_message_host_selftest.c:185 | CreateThread / pthread_create (L185, L192: off_owner; L212, L217: producer x N) | the host selftest's producer threads posting from other OS threads | thread, not a lock
-  lmx_message_host_selftest.c:203 | CreateEventA g_go, SetEvent (L223), WaitForSingleObject (L58, L189) | Windows start gate and joins | event and wait, not a lock
-  tests/cancel_spin_host.c:421 | CreateThread x4 (L421, L475, L542, L603), WaitForSingleObject (L51, L53) | cancel helper threads, joined with a 3 s timeout | thread and wait, not a lock
-  tests/lmx_exec_crash_report.c:80 | CreateThread / pthread_create (L80, L101) | the crash-report watchdog thread | thread, not a lock
-  lmx_message_exec_selftest.c | 29 CreateEvent handles (unblock, started, g_cleanup_seen, g_cleanup_go, g_mail_entered, g_mail_go, entered, go, g_rel_entered, g_rel_done), 29 WaitForSingleObject, 5 threads | the executor selftest's staged interleavings | events, waits and threads, not locks
-  Interlocked* calls | lmx_message_exec_selftest.c 409, tests/cancel_spin_host.c 21, lmx_message_host_selftest.c 1 | test counters and flags | atomics, not locks
+  5c. Synchronization admitted by Mikhail's recorded words (2026-09-15): "Wait signals need no lock", and a
+  Message may share atomic state "whose order doesn't matter". This section first called these "not locks",
+  a kind of their own; that kind is withdrawn (6f, 2026-09-15). Each row is admitted by one of the two
+  sentences, or is a thread with no synchronization of its own.
+  lmx_message_host_selftest.c:185 | CreateThread / pthread_create (L185, L192: off_owner; L212, L217: producer x N) | the host selftest's producer threads posting from other OS threads | thread, no synchronization of its own
+  lmx_message_host_selftest.c:203 | CreateEventA g_go, SetEvent (L223), WaitForSingleObject (L58, L189) | Windows start gate and joins | ADMITTED: wait signal
+  tests/cancel_spin_host.c:421 | CreateThread x4 (L421, L475, L542, L603), WaitForSingleObject (L51, L53) | cancel helper threads, joined with a 3 s timeout | threads; the joins ADMITTED: wait signal
+  tests/lmx_exec_crash_report.c:80 | CreateThread / pthread_create (L80, L101) | the crash-report watchdog thread | thread, no synchronization of its own
+  lmx_message_exec_selftest.c | 29 CreateEvent handles (unblock, started, g_cleanup_seen, g_cleanup_go, g_mail_entered, g_mail_go, entered, go, g_rel_entered, g_rel_done), 29 WaitForSingleObject, 5 threads | the executor selftest's staged interleavings | ADMITTED: wait signals; threads
+  Interlocked* calls | lmx_message_exec_selftest.c 409, tests/cancel_spin_host.c 21, lmx_message_host_selftest.c 1 | test counters and flags | ADMITTED: order-free atomics
 
-  6f's ruling on 5b and 5c: the host selftest's pthread gate goes with the host forms; the executor
+  5d. Locks outside the mailbox in production code. Found by a grep of l2src on cf326822 (S0) for
+  CRITICAL_SECTION, pthread_mutex_, SRWLOCK, pthread_rwlock, CreateMutex, pthread_spin; line numbers are
+  cf326822's. Sections 1-5c cover tests and runners only, so these were outside their grep.
+  lmx_message_exec.c:107/111 | LmxMsgExec.lock (CRITICAL_SECTION / pthread_mutex_t), with the pthread context worker's pthread_cond_wait(&w->cv, &e->lock) | the shared executor lock | TO GO: sections 1-4
+  lmx_message_exec.c:2789 | pthread_mutex_t gm in LmxMsgCtxPack (init L2801), locked in pack_gate_wait / pack_gate_signal (L2816-2832) around go and pthread_cond_wait / pthread_cond_signal; the Win32 branch uses a one-shot event | the launched context worker's start gate | TO GO: a lock outside the mailbox, mapped X in LOCK_REMOVAL_SPEC_MAP 3.5 (origin/main 7025f6b8, L292-293), replaced by the launched Message's first mail
+  lmx_message_host.c:31/40 | LmxMsgHostSync.lock via lmx_msg_host_lock / lmx_msg_host_unlock, taken by msg_host_post (lmx_message.lm2 L969-1015, lmx_message.lm1 L914-960), by the shutdown (host.c L180-189) and by the POSIX host wait (L221-244) | orders a host post against runtime_shutdown | TO GO: mapped "host_sync: X (stage 5 (f), the host forms retire)", LOCK_REMOVAL_SPEC_MAP origin/main L256
+  lmx_message_exec.c:493/500 | the per-Message m->mail CRITICAL_SECTION / pthread_mutex | the message collection's own lock | ALLOWED (5a)
+  Not examined here: stg/l1_baseline/lm2/own.lm2 (132 lines matching mutex) and own_abi.lm2 (10), outside
+  l2src.
+
+  6f's ruling on 5b and 5c (given before 5c was rewritten against Mikhail's words): the host selftest's pthread gate goes with the host forms; the executor
   selftest's events, waits, threads and Interlocked cells are harness state of a C selftest of the C executor
   and go with that executor's rewrite, not one by one (grep counts above: 29 CreateEvent assignments,
   77 event calls, 29 waits, 409 Interlocked; 6f quoted 29/38/29 and 385, counted differently).
