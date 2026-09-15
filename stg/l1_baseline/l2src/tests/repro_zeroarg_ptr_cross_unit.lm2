@@ -3,23 +3,38 @@ predef: "l2src/tests/repro_zeroarg_ptr_cross_unit.h.lm1"
 # Repro for lingvamyxa-ba (d6), 2026-09-15: a zero-argument function
 # declared via `prototype:` (a cross-unit call, e.g. calling another
 # already-ported unit's own p0_stream_event_new() from a different
-# .lm2 file) fails to translate when its return type is a pointer --
-# "unsupported body, frame=<name>" -- but the identical shape with an
-# `int` return type translates fine. Found while porting l1src/
-# parser.lm1:2634's `block_event: lm_p0_stream_event_new()` inside
-# lm_p0_parse_fields_until_with_layout (parser-l2 Stage e Slice 5):
-# p0_stream_event_new (Stage d's l2src/parser_stack_stream_port.lm2,
-# already ported and already called the identical way IN-UNIT there,
-# l2src/parser_stack_stream_port.lm2:682) fails the moment the same
-# call is made from a DIFFERENT unit (Stage e's own l2src/parser_
-# field_parse_port.lm2) via a `prototype:` entry. Every other cross-
-# unit prototype call already in this port takes at least one
-# argument (e.g. p0_new_node, p0_position_in_slice, p0_is_field_
-# space), so this specific shape -- zero args AND a pointer return,
-# cross-unit -- had never been exercised before. This file's own
-# probe_zeroarg_ptr_source (fails) and probe_zeroarg_int_source
-# (passes) isolate exactly that combination, standing in for the
-# real cross-unit source/caller split with a single header.
+# .lm2 file) fails to translate -- "unsupported body, frame=<name>".
+# Found while porting l1src/parser.lm1:2634's `block_event: lm_p0_
+# stream_event_new()` inside lm_p0_parse_fields_until_with_layout
+# (parser-l2 Stage e Slice 5): p0_stream_event_new (Stage d's l2src/
+# parser_stack_stream_port.lm2, already ported and already called the
+# identical way IN-UNIT there, l2src/parser_stack_stream_port.lm2:
+# 682) fails the moment the same call is made from a DIFFERENT unit
+# (Stage e's own l2src/parser_field_parse_port.lm2) via a
+# `prototype:` entry.
+#
+# CORRECTION (2026-09-15, follow-up): the line below originally read
+# "fails to translate when its return type is a pointer... but the
+# identical shape with an int return type translates fine" -- that
+# claim was wrong, from a flawed control (the int-returning callee's
+# real body was accidentally also present in the SAME file as its
+# caller, so it resolved in-unit despite the prototype: entry,
+# without ever exercising the cross-unit path this repro is about).
+# A follow-up set of four properly cross-unit-only probes (d6's
+# ticket, same day) measured the true trigger: zero FORMALS on a
+# cross-unit prototype: call, regardless of return type -- int,
+# LmP0StreamEvent* (this file's own shape) and char* all fail the
+# same way; one formal with a pointer return already passes. This
+# repro stays valid as a reproducing case (a zero-formal, pointer-
+# return instance of the bug); only the characterization above it
+# was too narrow. Every other cross-unit prototype call already in
+# this port takes at least one argument (p0_new_node, p0_position_in_
+# slice, p0_is_field_space, etc.), so zero formals specifically had
+# never been exercised before either probe set. This file's own
+# probe_zeroarg_ptr_source (fails) and probe_zeroarg_int_source (also
+# fails, per the correction -- the comment below is left as written
+# at commit time to show what was actually measured then) stand in
+# for the real cross-unit source/caller split with a single header.
 
 fn: probe_zeroarg_ptr_caller () int
     @: LmP0StreamEvent ev
