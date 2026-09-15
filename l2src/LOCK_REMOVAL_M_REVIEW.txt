@@ -1,0 +1,114 @@
+LOCK_REMOVAL_M_REVIEW: LOCK_REMOVAL_M_FIELDS.txt and LOCK_REMOVAL_S2_LOOKUPS.txt
+checked against the lead's M section (LOCK_REMOVAL_DESIGN.txt ba1aa1ad, l2src/,
+lines 446-541) and LOCK_REMOVAL_FIELDS.txt at ba1aa1ad (sonnet/m-review,
+2026-09-15, doc-only; the lead builds M meanwhile).
+
+--- Counts
+
+Sites of mine the section does not name (by grep of the site's own name): 2
+  (context_worker, ctx_visit_first_launchable -- both with a caveat: their
+  content is covered by M's own line-number list under a different name; see
+  below).
+Fields whose fate in the section differs from the FIELDS.txt row at ba1aa1ad
+  (or 3c3b91be, whichever is later -- both agree here): 0. Every field the
+  section names (LmxMsg.mapped/.ui_pending/.ready, LmxMsgExecBind.affinity/
+  .held/.held_by/.gone, LmxMsgBindWait.retired/.rec/.worker_on,
+  LmxMsgCtxPack.wait, LmxMsgExec.ui_lane, LmxMsgExecBind.launching and
+  LmxMsgBindWait.gen/.slot/.launch_n as already-S3) was checked row by row
+  against the current table text and matches exactly, verbatim, including
+  the two rows with multi-clause history (ready's "staged S3 before; S3 as
+  landed kept it" and worker_on's "L1 data of the L3 Thread's code, like any
+  other" -- both match the section's own account word for word).
+Replacements needing a new lock, wait or signal: 0. Confirmed independently
+  (re-read every site's own removal against the standing no-locks-but-mailbox
+  rule) and by the section's own text, which states the same conclusion and
+  cites this file's earlier survey by name: "Decided (lead; no lock, wait or
+  signal involved)" and "b5's survey found no site whose removal needs a
+  lock, a wait or a signal."
+
+--- Sites unnamed, in detail
+
+context_worker: absent from the M section by grep of its own name (0 matches
+  in lines 446-541, and its only mentions anywhere in the file are S3's F2/R8
+  passages, not M's). LOCK_REMOVAL_M_FIELDS.txt's own entry for it is now
+  stale, though: it says context_worker itself "refuses to continue if its
+  record is UI-affinity or gone" (reading LmxMsgExecBind.affinity/.gone
+  directly) -- true when that survey was written (c063fd00), but S3's own R8
+  refactor (comment at exec.c 2381-2387, "S3 (R8): each round is the L3
+  Thread's model round") factored that exact check out into a new helper,
+  worker_round_rec_locked (exec.c:2368-2380 at 80101431), which
+  context_worker now only calls. Read directly at 80101431: context_worker's
+  own body (2392-2437) contains no affinity or gone reference at all;
+  worker_round_rec_locked's does, at line 2370 -- one of the section's own
+  "14 LMX_MSG_AFFINITY_UI branches (... 2370 ...) go". So the content this
+  file's context_worker entry was about is covered by the section, by line
+  number, just under a function name (worker_round_rec_locked) that did not
+  exist when this file's M survey was written and that the section's text
+  does not spell out either. Not a gap in the section's coverage; a stale
+  function name in this file's own earlier entry, worth a note when M's
+  branch is written, not a contradiction to stop on.
+ctx_visit_first_launchable: absent from the M section by grep of its own
+  name anywhere in the whole design file, not just lines 446-541. Same
+  pattern as context_worker: its affinity/gone check (exec.c:2440 at
+  80101431) is one of the section's own "14" line numbers, just not called
+  out by function name. Its third field, LmxMsgBindWait.wait (checked
+  transitively through bind_has_worker), is already S3-owned and done.
+
+Every other site this file's M survey names is present in the section by
+grep of its own name in lines 446-541 (count of matches each, confirmed
+directly rather than skimmed): lmx_msg_sched_step (3, lm1 and lm2 lines
+both given), child_turn_core (3), lmx_msg_run_child_turn (3),
+lmx_msg_exec_ui_step (3), ui_request_if_ready_locked (2),
+lmx_msg_exec_take_ui_locked (2), exec_bind_mode (1), lmx_msg_map_child (1,
+under "what stays"), lmx_msg_runtime_new/runtime_new (2), lmx_msg_
+create_prepare/create_prepare (1). take_this is present too (2, at lines
+533-534: "take_this clears it... the clear in take_this is its only reader
+left, so M deletes it too") -- not a gap; this file's earlier read of the
+section missed it on a first pass and a direct grep caught it before this
+count was written.
+
+--- The "no UI lane in the core" decision against this file's UI_LANE_ID
+    and exec_ui_step rows
+
+The section's new decision (line 470ish, "Decided (lead; no lock, wait or
+signal involved): the core runtime no longer creates a UI lane of its own
+... After M ... the application (mixa_manager) creates it as an ordinary
+child of R0") contradicts one explicit claim in LOCK_REMOVAL_M_FIELDS.txt's
+own lmx_msg_runtime_new entry: that file's flag reads "UI_LANE_ID is a
+create-time sentinel, not a stepping mechanism ... but creating it is not
+itself something M removes." The section's own "Code sites" list now
+explicitly includes "runtime_new's UI lane creation (lm1 894-897, lm2
+946-949)" in what "goes". This file's claim was accurate for the ticket it
+answered (whether the sequential-mapping mechanism itself touches
+UI-lane creation -- it does not) but is now superseded by a decision made
+after that file was written, not a contradiction in the section itself.
+lmx_msg_exec_ui_step's own row in this file (LmxMsgRuntime.root, S5) is
+unaffected and matches the section, which separately lists
+lmx_msg_exec_ui_step itself among the sites that go.
+
+--- S2_LOOKUPS.txt cross-reference
+
+LOCK_REMOVAL_S2_LOOKUPS.txt's Q capability class (the UI lane's request,
+not yet answered by the design: 1 site, lmx_msg_exec_take_ui_locked) is
+resolved by M, not contradicted: the section's own code-sites list deletes
+lmx_msg_exec_take_ui_locked outright. Once M lands, S2's Q class is empty
+by construction -- the open question it named answers itself by removal,
+consistent with the standing rule that a question a stage's own deletion
+closes needs no further ruling. S2_LOOKUPS.txt's C1-tagged exec_bind_mode
+and lmx_msg_map_child both survive M (map_child is explicitly named under
+"what stays"; exec_bind_mode loses only its launch=0 host-mapping path,
+named in the section, leaving its own two C1 lookups -- msg_at_addr,
+rec_at_addr_locked -- untouched). context_worker's one S2 lookup site (C2,
+its own "self" msg_at_addr read) is likewise untouched by M; only its
+affinity/gone check (not a lookup) moved to worker_round_rec_locked at S3,
+already covered above.
+
+--- Falsifier
+
+context_worker and ctx_visit_first_launchable: grep for each name in
+LOCK_REMOVAL_DESIGN.txt at ba1aa1ad returns 0 matches inside lines 446-541
+(context_worker also 0 outside M's section other than S3's F2/R8 text,
+confirmed by grepping the whole file); both are absent by name. Every
+other site named above returns at least 1 match in lines 446-541 by grep
+of its own name, counts given per site above and independently
+reconfirmed before this file was written, not asserted from memory.
