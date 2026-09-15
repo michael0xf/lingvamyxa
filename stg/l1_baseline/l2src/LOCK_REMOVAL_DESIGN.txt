@@ -268,7 +268,13 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
     F3. What goes without question under the rulings: every signal at the 11 sites, the wait primitive and its
         generation bookkeeping, the launch gate (a launch does not wait for its thread), the unbind join and reap
         list (the thread frees itself), and the stop event.
-    OPEN (put to Mikhail by the lead through the coordinator, 2026-09-15; nothing of S3 is coded until the answer):
+    DECIDED (the coordinator, 2026-09-15; not a spec matter): (b), SwitchToThread on Win32 and sched_yield on
+        pthreads between empty rounds, no object, no signal, no timeout, the live check inside each round. The
+        question should not have gone to Mikhail. His answer, verbatim: "уступка планировщику, тик сна,чтение почты,
+        просмотр кино, выгул собакм -- ты издеваешься?". Standing rule from here on: anything that adds no lock, no
+        wait on a primitive and no signal is decided by the lead and the coordinator and recorded as ours; only a
+        fix that would need another lock, or a contradiction between Mikhail's own sentences, stops a stage and goes
+        to him through the coordinator. The question as it was put, kept for the record:
         with no wait on any primitive, an owner thread (and the host drive) whose mailbox is empty goes straight
         back to looking at it, one CPU core per L3 Thread while it has no mail. Options put: (a) pure spin; (b) a
         scheduler yield between empty rounds (SwitchToThread / sched_yield: no object, no signal); (c) a fixed sleep
@@ -305,12 +311,12 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
     R8. context_worker (Win32 3071-3132, pthread twin from 3135): the block at 3097-3131 (the two-handle
         WaitForMultipleObjects with INFINITE or 20 ms) becomes, after a round with nothing taken: the live check
         when live_wait_th != 0 (lmx_msg_live_check with lmx_msg_now, every round instead of by a timeout), then the
-        EMPTY-ROUND line: (a) nothing, (b) SwitchToThread() / sched_yield(), or (c) Sleep(tick) / nanosleep. The
+        EMPTY-ROUND line, decided (b) by the coordinator: SwitchToThread() on Win32, sched_yield() on pthreads. The
         loop's other checks stay as they are (e->stopping, the rec gone or UI).
     R9. host.c: lmx_msg_host_wake (148-168, host.h 13; callers lmx_message.lm1 974, lmx_message.lm2 1030) deleted
         with its callers; lmx_msg_host_shutdown keeps writing shutting_down under the host lock but its SetEvent /
         pthread_cond_broadcast (182, 187-188) go; lmx_msg_host_wait (194-, lmx_message.h 289) becomes one
-        EMPTY-ROUND step for the host drive instead of a wait on h->wake (its callers: lmx_message_host_selftest.c
+        EMPTY-ROUND step for the host drive instead of a wait on h->wake (decided (b): SwitchToThread / sched_yield) (its callers: lmx_message_host_selftest.c
         133/238, lmx_message_selftest.lm1 642/646, mixa_manager/tests/mixa_ingress_host_harness.c 242/277 keep the
         call). The vendored snapshot mixa_manager/vendor/lmx_msg_host_ingress_v0 is not touched by S3.
     Red and green: red on record at 74146146 (-LaneCheck exit 1 at ctx_visit_wake). After R1-R9 merged with
