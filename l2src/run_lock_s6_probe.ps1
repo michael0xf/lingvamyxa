@@ -75,7 +75,7 @@ $hostField = Get-StructFieldCount 'l2src/lmx_message_host.c' 'typedef struct Lmx
 $hExecFields = Get-ProbeLines @('l2src/lmx_message_exec.c') @('->nworkers', '->contexts_live', '->stopping', '->stopped', '->no_retire', '->unbound_held') -SkipAtomic
 $hRefs = Get-ProbeLines $files @('lmx_msg_endp_retain(', 'lmx_msg_endp_release(', 'lmx_msg_endp_refs(', '->refs', '\refs', 'InterlockedCompareExchange')
 $refsField = Get-StructFieldCount 'l2src/lmx_message.h' 'typedef struct LmxMsg {' '} LmxMsg;' @(' refs;')
-$listFields = Get-StructFieldCount 'l2src/lmx_message.h' 'struct LmxMsgRuntime {' '};' @(' slots;', ' n;')
+$listFields = Get-StructFieldCount 'l2src/lmx_message.h' 'struct LmxMsgRuntime {' '};' @('slots;', ' n;')
 $hLists = Get-ProbeLines $files @('->slots', '\slots', '->alloc_next', '\alloc_next')
 
 $execLockCalls = Get-Sum $hExecCalls
