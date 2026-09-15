@@ -4308,3 +4308,13 @@ same minute it is made, on the branch it belongs to (the coordinator's
 docs to main directly, the lead's and b5's on their branches), never
 left uncommitted in a worktree; the lead merges the branch documents to
 main with each landing.
+First self-build tag (the lead, 2026-09-15; checked by the coordinator's
+ls-remote): ONE ROOT's merge 5cee1426 (run_self_build "fixed point 8 of 8
+(pass 3 == pass 2), committed generated C 8 of 8 equal to the fixed
+point") pushed as d6/one-root-landing (d6/one-root stays linear at
+6bfefa81) with the annotated tag selfbuild/5cee1426 (date, pin
+0B3D85B3, the self-build line, the eight committed generated-C blob ids;
+nothing to commit first, the regenerated C equals the committed C).
+land_oneroot.sh now pushes <branch>-landing and tags selfbuild/<merge>
+right after a PASS, leaves an existing tag, and a later red does not
+withdraw it; every future land_*.sh with run_self_build gets the step.
