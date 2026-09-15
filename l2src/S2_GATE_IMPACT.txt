@@ -112,6 +112,14 @@ l2_message_root  run_l2_message_root.ps1 (opt-in, -L2MessageRoot; calls run_l2tr
   asserts: the driver wraps the runtime's create and find by address: l2_message_root_driver.lm1:80
     c.__real_lmx_msg_create(rt, parent, id, init, n, out) and :87 c.__real_lmx_msg_find(rt, who); run_l2trans.ps1:1152
     as under c_scanners.
+  added by d6 (2026-09-15; the coordinator asked for it to be added here): the find wrap is a C2 failure injection,
+    not only a pass-through. l2_message_root_driver.lm1:84-87 __wrap_lmx_msg_find returns 0 in mode 3, which fails the
+    generated l2_program_turn's own lookup (l2trans.lm1 14737 emits "@: LmxMsg m c.lmx_msg_find(rt, who)", then "if:
+    m = 0 return: c.LMX_MSG_INVALID"). The driver then checks binds = 0 ("failure precedes graph binding"), and
+    run_l2_message_root.ps1:553-557 requires "root entry mode=3 checks=N PASS". S2's C2 emits lmx_msg_turn_self
+    instead, so mode 3 would inject nothing, binds would be 1, and the gate would go red. S2 retargets the mode 3
+    wrap onto lmx_msg_turn_self and adds it to run_l2_message_root.ps1:530's $rootWrap list (both files in S2's
+    allowlist; LOCK_REMOVAL_DESIGN.txt S2 "One case outside e9's list", d6/lock-removal 244b0b35).
 
 == Pins a numeric side effect of addresses that S2 changes (0) ==
 
