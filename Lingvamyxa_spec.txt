@@ -1082,6 +1082,14 @@ thread, the mailbox's monitor)", verbatim: "the C keeps only the native primitiv
 Thread? it too is written in L1, moved to L2 and the remainder to L3; of
 course the low level stays on L2, but what has C to do with it; you do not
 write assembler insertions in C "because it has to compile"; delete it).
+And, the same day, on the whole of the synchronization, verbatim: "синхронизации только по inbox outbox более чем достаточно, многократно проговоренная мной схема по которой ребенок  иродитель взаимно опрашиваются (в приоритете ребенок опрашивает -- он и должен оставлять след что живой) тоже совершенна надежна, никаких утечек там никогда не будет так как от пользовательского L3 однопоточного кода это не зависит. L2 и L1 это уже ответственность юзера, но мы можем писать без этого"
+(synchronization only on inbox and outbox is more than enough; the scheme
+he has stated many times, the child and the parent polling each other
+mutually, with the child's poll the priority since it is the child that
+must leave the trace that it is alive, is perfectly reliable too; there
+will never be leaks there, since it does not depend on the user's
+single-threaded L3 code; L2 and L1 are the user's responsibility, but we
+can write without that).
 And on what L1 is for, verbatim: "Вы пытаетесь писать на Си, а на Си (L1) надо просто пилить ядро _на котором_ уже пилить дальнейший функционал самого ядра. Это как я бы попросил на goto имитировать все циклы, а вы бы заменили задание на "написать примеры while и for"  -- совершенно разне задачи" (you are trying to write in
 C, while in C, that is L1, one simply builds the kernel on which the further
 functionality of the kernel itself is then built; as if I asked you to

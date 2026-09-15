@@ -6240,3 +6240,12 @@ Correction to the Y2 flag above: the non-recursive init is
 pthread_mutex_init((pthread_mutex_t *)m->mail, 0) at exec.c 517 (not 519),
 against e->lock's PTHREAD_MUTEX_RECURSIVE at 1277-1278; checked by grep
 at 11f581e0.
+Mikhail (2026-09-15, verbatim, after the S6-1 exchange): "синхронизации только по inbox outbox более чем достаточно, многократно проговоренная мной схема по которой ребенок  иродитель взаимно опрашиваются (в приоритете ребенок опрашивает -- он и должен оставлять след что живой) тоже совершенна надежна, никаких утечек там никогда не будет так как от пользовательского L3 однопоточного кода это не зависит. L2 и L1 это уже ответственность юзера, но мы можем писать без этого"
+Entered verbatim in spec section 2 (after his sentence on L1 and the
+native primitives) and model section 2. Read by the coordinator: the
+mailbox's monitor on inbox and outbox is the whole synchronization;
+the mutual poll (the child's poll first, the child leaving the trace
+that it lives) is the whole liveness; no leaks come from either, since
+neither depends on the user's single-threaded L3 code; what L2 and L1
+user code does with threads is the user's, and the core is written
+without any of it.
