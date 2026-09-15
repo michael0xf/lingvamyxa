@@ -1733,3 +1733,13 @@ for now every L3 Thread runs on its own OS thread, and the sequential
 mapping (children without a thread stepped by the parent's thread:
 run_child_turn, sched_step, the host lane) is removed from the runtime
 until the core is exact by the spec.
+Found by 0c (2026-09-15): RUNNER_HAZARDS.txt, cited by section 6 as the gate
+policy's source, was never landed (absent at c067bed9, on integration and
+on main; it exists only on claude-0c/runner-hazards c6b5ef27). Ruled: the
+lane_oracle hardening commit lands the file as it stands plus the no-turn
+row, allowlist run_gates.ps1 and that file, on the lead's merge cf326822
+(S0 plus S1); the verdict requires the parity pass line and 0 "LANE WRITE
+FAIL" in the gate log (the tripwire's abort line reaches the console log,
+two lines in runs C and F); then S3's red test (one wake per lane,
+test-only, 0c's, stacked on cf326822); step 2's default-set commit merges
+over lane_oracle afterwards.
