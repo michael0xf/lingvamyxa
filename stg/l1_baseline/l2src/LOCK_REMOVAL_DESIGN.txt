@@ -369,6 +369,15 @@ O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced 
         root CMakeLists.txt reads root lm2 (343-355) and the dead lm1/build files (331-341), so root lm2's deletion
         lands with b5's CMake group. stg's buildCore.lm0.bat (77-82) and run_seed.ps1 (48) require trans.lm0.exe,
         which is the old seed, and its need goes with (c).
+        MEASURED (probe_prereq.sh at 7200294b, cold, one fresh worktree per variant): A, B and C are green on stg's
+        buildCore, run_seed and run_gen with one fixed point (gen2 == gen3 = 25DC4758...), so the stg route reads
+        nothing of the root's lm1 or lm2. D: buildCore exits 1 ("pinned old-chain binary missing:
+        build\lm0\trans.lm0.exe"), run_seed exits 1 ("missing external prerequisite (trans.lm0)"), run_gen green. E:
+        root buildCore green, root run_gen at its fixed point (gen2 == gen3 = CBC779B1...), then red at "gen2 smoke
+        failed" on root tests/l1/run_smoke.ps1:175 and :180 (lm2\l1trans.lm2); root run_seed.ps1:46-62 also reads
+        lm2. Both are in 0c's seed branch, so root lm2's deletion lands with or after it. Found while measuring: stg's
+        old buildCore.lm0.bat exits 0 on its missing-archive check (an exit /b inside a for body holding a "|| exit /b"
+        line), so gate.ps1 showed that step "ok"; d6/stg-buildcore (e5da89f5) deletes that loop.
     (b) Regeneration at the root: the root's l1src translated by the previous binary (the committed root
         lm1/build/l1trans.lm1.c built by buildCore.lm0.bat). The eight generated files are lm1/build/{buildCore,
         finalize,make,own,parser,printTree,l1trans}.lm1.c and lm1/build/l1src/p0.lm1.h, from l1src/<name>.lm1 and
