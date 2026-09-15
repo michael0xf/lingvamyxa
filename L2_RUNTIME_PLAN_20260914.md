@@ -4368,3 +4368,18 @@ code on the old stg layout (wt0c_lane_gate's run_gates.ps1 identical to
 what landed; wt0c_s5 and wt0c_s6 scratch selftest edits from the 09-14
 landings, superseded); patches saved in its scratchpad; the coordinator
 approved removing the three worktrees.
+e9 (2026-09-15): the three stale worktrees removed (wt0c_lane_gate,
+wt0c_s5, wt0c_s6; patches kept in its scratchpad, each checked with git
+apply --check -R before removal); none of its 14 remaining worktrees has
+a modified tracked file. Its SELF_BUILD_LOG line follows the lead's six
+fields (date, full commit, pin, the PASS line without the evidence path,
+name=12-hex blobs in run_self_build's map order, who and how); the
+resolve check reads entry lines only and needs a resolving 40-hex commit
+in field 2, refused on two corrupted values (a discarded first attempt
+whose sed matched nothing was reported); --check at 27edf717 finds the
+file; origin unchanged (one selfbuild tag, no log branch).
+Open with Mikhail: whether the self-build's green must also cover the
+L2 stage (l2trans built from the fixed point regenerating the .lm2
+sources' C identically, and the compiled result passing parity with the
+L1 reference); his sentence arrived cut off, the coordinator asked him
+to finish it, with a fourth run_self_build pass proposed if yes.
