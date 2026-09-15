@@ -2357,3 +2357,21 @@ first item of the L2 port after the self-build; conditions: the hook is the
 monitor exactly as Java's so the receiver's later lowering changes nothing,
 and the hook is called only by the mailbox's own functions, a grep for its
 names elsewhere at 0 being Y3's proof beside the S3 oracle.
+Stage D sized and split (the lead, on d7f3b569): 487 create-API occurrences
+(the executor selftest 290, lmx_message_selftest.lm1 79, the model tests 2-7
+each, l2trans's emitted entry and library open 2). D1 keeps the signature
+and deletes lmx_msg_find_create (lm1 765-783, lm2 808-827), LmxMsg.create_id
+with its store and its handoff/orphan clears, and the UI lane reservation
+(with M), plus the checks of those properties, each named
+(lmx_message_selftest's "idempotent create changed sibling/path" 566-573,
+entry_turn's "the UI lane's create_id is refused" 88, the executor
+selftest's handoff "create_id != 0U" 3685-3690); D2 drops the parameter
+from the API and every caller, l2trans's emission, the generated units and
+run_l2trans's cases with the historical pin. O1 ready to measure on
+d6/o1-turn-arena (24c4ecd6 the wrap hook; 2ac67ba0 and fb1c7221 the red
+test in the defaults with its header note; 69255593 the addition):
+measure_o1.sh does the red in a scratch worktree at fb1c7221 (must fail to
+link), green on the O1 test and the defaults, the falsifier (pushing onto
+parent_msg's blocks prints FAIL), run_port_message plain and -LaneCheck;
+land_o1.sh with an allowlist of the six files; both waiting for 57's
+"done".
