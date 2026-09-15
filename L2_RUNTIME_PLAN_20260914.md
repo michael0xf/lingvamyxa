@@ -5819,3 +5819,21 @@ receiver of the removed names tree-wide and runs run_port_msg_slots
 locally; the probe unaffected; the new tip differs from ddab10a0 by
 that one test line; re-landed with land_s5.sh, the allowlist extended by
 that test file, no re-measure by the coordinator needed.
+S5's second landing hung (2026-09-15, flagged by Mikhail after two hours;
+the coordinator's check at 19:06: integration still 3e6fc02a, the
+landing branch d6/lock-s5-landing-30d88a43 on origin with the self-build
+tag, the newest gate directory in wti last written at 16:37, one
+git.exe alive): on merge 30d88a43 the gates reached c_scanners at 16:37
+and run_candidate_c_scanners.ps1's git archive (--format=zip, HEAD --
+l1src l2src lm1/build/l1src/p0.lm1.h) sat with 0.016 CPU seconds and
+one thread, no zip, no .lock files; the same gate took 22 s on S4's
+landing; the second such hang (the first at S3's landing #3). The lead
+stops the landing tree (git, the runner, run_gates, land_base2,
+land_s5), re-runs the archive by hand under a 60 s timeout, relaunches
+land_s5.sh 3e6fc02a 1f5b0c82 with a per-command timeout watch if it
+completes, and stops with the cause if it hangs again. Rules from it
+(coordinator): every landing step runs under a timeout that turns the
+landing red on expiry, never a bare wait; and the coordinator checks a
+landing's gate-log mtimes itself once it runs past its expected time,
+instead of waiting on the lead's message; e9 gets the archive-hang
+isolation ticket if the hand re-run reproduces it.
