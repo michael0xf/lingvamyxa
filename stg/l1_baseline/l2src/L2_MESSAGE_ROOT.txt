@@ -855,6 +855,16 @@ spelling, `n * c.sizeof(c.T)` without parentheses, would have hit it at the firs
 that wrote it. The leaf exits 10 (1 before: the copy's in-bounds copy[2] read 0), and
 the runner checks both lengths as written.
 
+Added 2026-09-15, making 145 (D7383CA995A65332E9CE5BBD8964D38FFB004619A3B75EA3FAF502BB59C6BA06):
+Leaf (1):
+  unit_uchar_local
+Removing only that line reproduces the 144-case digest (D0F9CDAB...) exactly.
+It is the acceptance for UCHAR_LOCAL_DESIGN (5e's repro 52ca8c76, parser-l2 Stage e
+slice 4b): the oracle's signed-char idiom `uchar: value; value: (cast: uchar c)` then
+c.isalpha, with a high-bit byte read back as 233. The design lands as three commits on
+one branch; the leaf enters with the first (uchar as an own local) and is green only at
+the third (after the bare-atom cast type and the ctype includes).
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for

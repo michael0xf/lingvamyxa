@@ -1,0 +1,22 @@
+# uchar as an own local (UCHAR_LOCAL_DESIGN; 5e's repro 52ca8c76, parser-l2 e4b): the oracle's idiom from
+# l1src/parser.lm1:1712-1728, `uchar: value` then `value: (cast: uchar c)` before a ctype call. A high-bit byte
+# keeps its value 0-255 through the unsigned-backed cell.
+fn: byte_value (char: c) unsigned
+    uchar: value
+    value: (cast: uchar c)
+    return: value
+end: byte_value
+fn: is_alpha_byte (char: c) int
+    uchar: value
+    value: (cast: uchar c)
+    return: (c.isalpha(value) != 0)
+end: is_alpha_byte
+fn: main () int
+    if: byte_value(0 - 23) != 233U
+        return: 1
+    if: is_alpha_byte('a') = 0
+        return: 2
+    if: is_alpha_byte('1') != 0
+        return: 3
+    return: 10
+end: main

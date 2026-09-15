@@ -55,7 +55,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 144 -or $digest -ne 'D0F9CDAB8C533E5BF298664BF2CCC333F077B57BE219784229773552E5C46155') {
+if ($cases.Count -ne 145 -or $digest -ne 'D7383CA995A65332E9CE5BBD8964D38FFB004619A3B75EA3FAF502BB59C6BA06') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2336,6 +2336,10 @@ Invoke-Leaf "l2src\tests\unit_sizeof_element.lm2" "unit_sizeof_element" 5 "forma
 Invoke-Leaf "l2src\tests\unit_lm_own_actual_span.lm2" "unit_lm_own_actual_span" 10 "copy_tail"
 $ownSpanL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_lm_own_actual_span.lm1")))
 if ($ownSpanL1.IndexOf('lm_own_resize(cells, 8U * c.sizeof(c.int))') -lt 0 -or $ownSpanL1 -notmatch 'lm_own_copy_bytes\(l2_p\d+_0, l2_p\d+_1 \+ 1U\)') { throw "unit_lm_own_actual_span dropped a field of an lm_own actual" }
+# uchar as an own local with the oracle's signed-char idiom (UCHAR_LOCAL_DESIGN, 5e's
+# repro 52ca8c76): `uchar: value; value: (cast: uchar c)`, a high-bit byte read back
+# as 233, and c.isalpha; exit 10.
+Invoke-Leaf "l2src\tests\unit_uchar_local.lm2" "unit_uchar_local" 10 "byte_value"
 # LmP0Document is a foreign pointer type like LmP0Frame (Stage B step 3): its
 # fields resolve as a formal and as a local.
 Invoke-Leaf "l2src\tests\unit_p0_document_field.lm2" "unit_p0_document_field" 0 "doc_field"

@@ -5273,7 +5273,7 @@ fn: l2_is_asgn (const: @(LmP0Node stmt)) int
     h: stmt\as\frame\head
     if: h = 0 || l2_ident(h) = 0
         return: 0
-    if: l2_frame_head(stmt, "if") || l2_frame_head(stmt, "else") || l2_frame_head(stmt, "while") || l2_frame_head(stmt, "for") || l2_frame_head(stmt, "return") || l2_frame_head(stmt, "fn") || l2_frame_head(stmt, "sub") || l2_frame_head(stmt, "end") || l2_frame_head(stmt, "char") || l2_frame_head(stmt, "int") || l2_frame_head(stmt, "size_t") || l2_frame_head(stmt, "unsigned") || l2_frame_head(stmt, "ulong") || l2_int_alias_head(stmt) != 0 || l2_frame_head(stmt, "@")
+    if: l2_frame_head(stmt, "if") || l2_frame_head(stmt, "else") || l2_frame_head(stmt, "while") || l2_frame_head(stmt, "for") || l2_frame_head(stmt, "return") || l2_frame_head(stmt, "fn") || l2_frame_head(stmt, "sub") || l2_frame_head(stmt, "end") || l2_frame_head(stmt, "char") || l2_frame_head(stmt, "int") || l2_frame_head(stmt, "size_t") || l2_frame_head(stmt, "unsigned") || l2_frame_head(stmt, "ulong") || l2_frame_head(stmt, "uchar") || l2_int_alias_head(stmt) != 0 || l2_frame_head(stmt, "@")
         return: 0
     if: l2_find_method(h) >= 0 || l2_is_known(h)
         return: 0
@@ -5651,7 +5651,7 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
         return: 0
     if: l2_is_known(t)
         return: 0
-    if: l2_text_eq(t, "return") || l2_text_eq(t, "if") || l2_text_eq(t, "else") || l2_text_eq(t, "while") || l2_text_eq(t, "for") || l2_text_eq(t, "continue") || l2_text_eq(t, "break") || l2_text_eq(t, "fn") || l2_text_eq(t, "sub") || l2_text_eq(t, "end") || l2_text_eq(t, "node") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "size_t") || l2_text_eq(t, "unsigned") || l2_text_eq(t, "ulong") || l2_text_eq(t, "data") || l2_text_eq(t, "length") || l2_text_eq(t, "columns") || l2_text_eq(t, "count") || l2_text_eq(t, "capacity") || l2_text_eq(t, "slots") || l2_text_eq(t, "alloc_next") || l2_text_eq(t, "addr") || l2_text_eq(t, "next")
+    if: l2_text_eq(t, "return") || l2_text_eq(t, "if") || l2_text_eq(t, "else") || l2_text_eq(t, "while") || l2_text_eq(t, "for") || l2_text_eq(t, "continue") || l2_text_eq(t, "break") || l2_text_eq(t, "fn") || l2_text_eq(t, "sub") || l2_text_eq(t, "end") || l2_text_eq(t, "node") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "size_t") || l2_text_eq(t, "unsigned") || l2_text_eq(t, "ulong") || l2_text_eq(t, "uchar") || l2_text_eq(t, "data") || l2_text_eq(t, "length") || l2_text_eq(t, "columns") || l2_text_eq(t, "count") || l2_text_eq(t, "capacity") || l2_text_eq(t, "slots") || l2_text_eq(t, "alloc_next") || l2_text_eq(t, "addr") || l2_text_eq(t, "next")
         return: 0
     if: t\length >= 2U && t\data[0] = 99 && t\data[1] = 46
         return: 0
@@ -5665,7 +5665,7 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
             l2_m_own[mi]: l2_m_own[mi] + 1
         l2_m_uses[l2_own_off(mi, oi)]: 1
         return: 0
-    if: oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2 || l2_own_ty[oi] = 3 || l2_own_ty[oi] = 36) && (seen = 0 || seen[oi] = 0)
+    if: oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2 || l2_own_ty[oi] = 3 || l2_own_ty[oi] = 36 || l2_own_ty[oi] = 42) && (seen = 0 || seen[oi] = 0)
         l2_m_pre[l2_own_off(mi, oi)]: 1
         ty: l2_own_ty[oi]
         return: l2_dyn_add(mi, t, ty)
@@ -6274,7 +6274,7 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
     if: mi >= 0
         k: 0
         while: k < l2_own_n
-            if: l2_own_mi[k] = mi && (l2_own_host[k] = 0 || l2_scope_has(l2_own_host[k])) && l2_own_name[k] != 0 && l2_own_name[k]\length = n - lb - 2U && c.memcmp(l2_own_name[k]\data, t\data + lb + 1U, n - lb - 2U) = 0 && (l2_own_ty[k] = 0 || l2_own_ty[k] = 1 || l2_own_ty[k] = 2 || l2_own_ty[k] = 3 || l2_own_ty[k] = 36)
+            if: l2_own_mi[k] = mi && (l2_own_host[k] = 0 || l2_scope_has(l2_own_host[k])) && l2_own_name[k] != 0 && l2_own_name[k]\length = n - lb - 2U && c.memcmp(l2_own_name[k]\data, t\data + lb + 1U, n - lb - 2U) = 0 && (l2_own_ty[k] = 0 || l2_own_ty[k] = 1 || l2_own_ty[k] = 2 || l2_own_ty[k] = 3 || l2_own_ty[k] = 36 || l2_own_ty[k] = 42)
                 ok: 1
             k: k + 1
         ---
@@ -7017,6 +7017,10 @@ fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
         ty: 6
     if: l2_frame_head(stmt, "ulong")
         ty: 36
+    # uchar is stored in the unsigned cell with a uchar cache (UCHAR_LOCAL_DESIGN):
+    # the C spelling keeps the signed-char idiom, and 0-255 fits the cell exactly.
+    if: l2_frame_head(stmt, "uchar")
+        ty: 42
     # A foreign int alias (l2_int_alias's table) is int storage as an own local.
     if: l2_int_alias_head(stmt) != 0
         ty: 3
@@ -10932,7 +10936,7 @@ fn: l2_sizeof_name_bytes (const: @(LmP0Node node); const: @(char d); size_t: b; 
         k: k + 1
     if: oi < 0
         return: 2
-    if: l2_own_ty[oi] != 0 && l2_own_ty[oi] != 1 && l2_own_ty[oi] != 2 && l2_own_ty[oi] != 3 && l2_own_ty[oi] != 36
+    if: l2_own_ty[oi] != 0 && l2_own_ty[oi] != 1 && l2_own_ty[oi] != 2 && l2_own_ty[oi] != 3 && l2_own_ty[oi] != 36 && l2_own_ty[oi] != 42
         return: l2_error(l2_src, node, "c.sizeof of this own field type not yet implemented")
     t: l2_tn
     l2_tn: l2_tn + 1
@@ -10943,6 +10947,8 @@ fn: l2_sizeof_name_bytes (const: @(LmP0Node node); const: @(char d); size_t: b; 
     if: l2_own_ty[oi] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d 0U\n", ind, t) < 0
         return: 1
     if: l2_own_ty[oi] = 3 && c.fprintf(l2_out, "%sunsigned: l2_t%d 0U\n", ind, t) < 0
+        return: 1
+    if: l2_own_ty[oi] = 42 && c.fprintf(l2_out, "%suchar: l2_t%d 0U\n", ind, t) < 0
         return: 1
     if: l2_own_ty[oi] = 36 && c.fprintf(l2_out, "%sulong: l2_t%d 0U\n", ind, t) < 0
         return: 1
@@ -11039,6 +11045,8 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
                 if: l2_own_ty[idx] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: lmx_size_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
                     return: 1
                 if: l2_own_ty[idx] = 3 && c.fprintf(l2_out, "%sunsigned: l2_t%d\n%sl2_t%d: lmx_unsigned_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
+                    return: 1
+                if: l2_own_ty[idx] = 42 && c.fprintf(l2_out, "%suchar: l2_t%d\n%sl2_t%d: (cast: uchar lmx_unsigned_value_known(l2_xp[0]))\n", ind, t, ind, t) < 0
                     return: 1
                 if: l2_own_ty[idx] = 36 && c.fprintf(l2_out, "%sulong: l2_t%d\n%sl2_t%d: lmx_ulong_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
                     return: 1
@@ -12149,9 +12157,13 @@ fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
             return: 1
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 3 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_unsigned_store_known(l2_q%d_from[0], l2_q%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, i, ind, i, ind, ind) < 0
             return: 1
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 42 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_unsigned_store_known(l2_q%d_from[0], l2_q%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, i, ind, i, ind, ind) < 0
+            return: 1
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 36 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_ulong_store_known(l2_q%d_from[0], l2_q%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, i, ind, i, ind, ind) < 0
             return: 1
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 3 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_unsigned_store_known(l2_q%d_from[0], l2_p%d_%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, mi, fi, ind, i, ind, ind) < 0
+            return: 1
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 42 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_unsigned_store_known(l2_q%d_from[0], l2_p%d_%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, mi, fi, ind, i, ind, ind) < 0
             return: 1
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 36 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_ulong_store_known(l2_q%d_from[0], l2_p%d_%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, mi, fi, ind, i, ind, ind) < 0
             return: 1
@@ -12206,6 +12218,8 @@ fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
     if: l2_own_ty[oi] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: lmx_size_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
         return: 1
     if: l2_own_ty[oi] = 3 && c.fprintf(l2_out, "%sunsigned: l2_t%d\n%sl2_t%d: lmx_unsigned_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
+        return: 1
+    if: l2_own_ty[oi] = 42 && c.fprintf(l2_out, "%suchar: l2_t%d\n%sl2_t%d: (cast: uchar lmx_unsigned_value_known(l2_xp[0]))\n", ind, t, ind, t) < 0
         return: 1
     if: l2_own_ty[oi] = 36 && c.fprintf(l2_out, "%sulong: l2_t%d\n%sl2_t%d: lmx_ulong_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
         return: 1
@@ -13762,9 +13776,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             oi: l2_own_find(mi, l2_own_decl_name(stmt))
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0
             l2_own_live[oi]: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && l2_own_fid[oi] >= 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2 || l2_own_ty[oi] = 3 || l2_own_ty[oi] = 36) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_slot_known(l2_h%d, %uU)\n%sif: l2_q%d_from = 0\n%s    %s\n", ind, oi, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi]), ind, oi, ind, l2_fail_return(mi)) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && l2_own_fid[oi] >= 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2 || l2_own_ty[oi] = 3 || l2_own_ty[oi] = 36 || l2_own_ty[oi] = 42) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_slot_known(l2_h%d, %uU)\n%sif: l2_q%d_from = 0\n%s    %s\n", ind, oi, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi]), ind, oi, ind, l2_fail_return(mi)) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && l2_own_fid[oi] < 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2 || l2_own_ty[oi] = 3 || l2_own_ty[oi] = 36) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_slot_known(%s, %uU)\n%sif: l2_q%d_from = 0\n%s    %s\n", ind, oi, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi]), ind, oi, ind, l2_fail_return(mi)) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && l2_own_fid[oi] < 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2 || l2_own_ty[oi] = 3 || l2_own_ty[oi] = 36 || l2_own_ty[oi] = 42) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_slot_known(%s, %uU)\n%sif: l2_q%d_from = 0\n%s    %s\n", ind, oi, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi]), ind, oi, ind, l2_fail_return(mi)) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && l2_count_active(stmt\as\frame\body) = 2 && l2_eval_fields(l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next), 1, mi, ind, l2_tok) != 0
             return: 1
@@ -13822,6 +13836,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             if: l2_own_ty[oi] = 2 && c.fprintf(l2_out, "%sif: lmx_size_store_known(l2_xp[0], %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
                 return: 1
             if: l2_own_ty[oi] = 3 && c.fprintf(l2_out, "%sif: lmx_unsigned_store_known(l2_xp[0], %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
+                return: 1
+            if: l2_own_ty[oi] = 42 && c.fprintf(l2_out, "%sif: lmx_unsigned_store_known(l2_xp[0], %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
                 return: 1
             if: l2_own_ty[oi] = 36 && c.fprintf(l2_out, "%sif: lmx_ulong_store_known(l2_xp[0], %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
                 return: 1
@@ -13924,6 +13940,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 0 && c.fprintf(l2_out, "%sif: lmx_int_store_known(l2_xp[0], %s) != 0\n%s    %s\n", ind, l2_tok, ind, l2_fail_return(mi)) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 3 && c.fprintf(l2_out, "%sif: lmx_unsigned_store_known(l2_xp[0], %s) != 0\n%s    %s\n", ind, l2_tok, ind, l2_fail_return(mi)) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 42 && c.fprintf(l2_out, "%sif: lmx_unsigned_store_known(l2_xp[0], %s) != 0\n%s    %s\n", ind, l2_tok, ind, l2_fail_return(mi)) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 36 && c.fprintf(l2_out, "%sif: lmx_ulong_store_known(l2_xp[0], %s) != 0\n%s    %s\n", ind, l2_tok, ind, l2_fail_return(mi)) < 0
             return: 1
@@ -14217,6 +14235,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 3 && c.fprintf(l2_out, "    unsigned: l2_q%d\n    @@: void l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 42 && c.fprintf(l2_out, "    uchar: l2_q%d\n    @@: void l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
+                c.fclose(l2_out)
+                return: 1
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 36 && c.fprintf(l2_out, "    ulong: l2_q%d\n    @@: void l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
@@ -14241,6 +14262,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
                 c.fclose(l2_out)
                 return: 1
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 3 && c.fprintf(l2_out, "    l2_q%d: lmx_unsigned_value_known(l2_q%d_from[0])\n", k, k) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 42 && c.fprintf(l2_out, "    l2_q%d: (cast: uchar lmx_unsigned_value_known(l2_q%d_from[0]))\n", k, k) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 36 && c.fprintf(l2_out, "    l2_q%d: lmx_ulong_value_known(l2_q%d_from[0])\n", k, k) < 0
@@ -14409,6 +14433,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 3 && c.fputs("        slot[0]: lmx_unsigned_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 42 && c.fputs("        slot[0]: lmx_unsigned_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
         if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 36 && c.fputs("        slot[0]: lmx_ulong_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
@@ -14493,6 +14520,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
                 c.fclose(l2_out)
                 return: 1
             if: l2_own_fid[oi] = k && l2_own_ty[oi] = 3 && c.fputs("        slot[0]: lmx_unsigned_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_own_fid[oi] = k && l2_own_ty[oi] = 42 && c.fputs("        slot[0]: lmx_unsigned_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_own_fid[oi] = k && l2_own_ty[oi] = 36 && c.fputs("        slot[0]: lmx_ulong_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0

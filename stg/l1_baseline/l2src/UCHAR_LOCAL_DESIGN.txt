@@ -1,0 +1,50 @@
+uchar as a scalar own local, the bare-atom cast type, and the ctype includes (d6, 2026-09-15, on ea7fa1ce)
+
+SCOPE (6f's rulings, 2026-09-15)
+Trigger: 5e's e4b (parser-l2 Stage e slice 4), repro sonnet/parser-l2 52ca8c76. The oracle's signed-char idiom,
+l1src/parser.lm1:1712-1728 (lm_p0_is_bare_identifier_start/_rest, lm_p0_is_hex_digit):
+    uchar: value
+    value: (cast: uchar c)
+    ... c.isalpha(value) / c.isalnum(value) / c.isxdigit(value)
+An `unsigned:` spelling is not a stopgap: it sign-extends a high-bit byte. One design, three commits on
+d6/uchar-local, one mechanism each, landed together at the tip:
+  1. uchar as an own local: Q1 (a) the cache spelled `uchar:` backed by the existing unsigned cell (no new runtime
+     cell kind for a byte, decision 12). Red on ea7fa1ce: "unsupported body, frame=uchar".
+  2. The bare-atom cast type `(cast: uchar c)` beside the parenthesized form, as a general spelling for any scalar or
+     foreign atom. Red on commit 1: "unsupported cast type".
+  3. The ctype names in l2_is_known's emission table with their include. Red on commit 2: gcc "implicit declaration
+     of function 'isalpha'".
+unit_uchar_local (the oracle's idiom) enters with commit 1 at historical pin 145 and is green at commit 3; each commit
+names the leaf's failure line it removes and the one it leaves.
+
+MEASURED (854166a1's translator, l2trans -> l1trans -> gcc -fsyntax-only with run_l2trans's -Werror set)
+- By-value formal `uchar: value`: l2trans and l1trans pass (`uchar: l2_p0_0`); gcc fails only on c.isalpha (gap 3).
+  No change needed for the formal.
+- Return `fn: low_byte (char: c) uchar` with `return: (cast: (uchar) c)`: green at all three. No change needed.
+- Local `uchar: value`: "unsupported body, frame=uchar" (gap 1).
+- `(cast: uchar c)`, also alone as `c.isalpha((cast: uchar c))`: "unsupported cast type" (gap 2); l2_cast_type
+  (~10790) accepts a parenthesized structure only.
+- No landed L2 unit calls isalpha/isalnum/isxdigit/isdigit; l2_is_known has no ctype rule (gap 3).
+
+COMMIT 1 FOOTPRINT (storage code 42: unused by l2_own_ty, lty, l2_loc_ty and l2_ml_ty; neither array nor pointer)
+Declaration: l2_own_decl_ty returns 42 for a `uchar` head; l2_own_store_ty returns it unchanged.
+By storage code, every site handling unsigned (code 3), found by grep and read:
+- admission lists: free-name scan (l2_scan_ident), l2_index_head's own list, the two declaration binding lists in
+  l2_emit_body, the c.sizeof own list;
+- the c.sizeof own temp `uchar: l2_tN 0U`;
+- value loads in l2_prep and l2_emit_path_load: `uchar: l2_tN` / `(cast: uchar lmx_unsigned_value_known(...))`;
+- checkpoint stores (plain and alias) and the two assignment stores: lmx_unsigned_store_known, as unsigned;
+- the method cache `uchar: l2_qN` and its load `(cast: uchar lmx_unsigned_value_known(l2_qN_from[0]))`;
+- the cell: lmx_unsigned_new_owned for a method local and for a body local.
+By type name (found when the first build still failed "unresolved dynamic=value" on a uchar local while its unsigned
+twin translated):
+- l2_is_asgn's list of heads that are not assignments;
+- l2_scan_ident's list of words that are not references.
+Not extended, so they stay refused:
+- the address of a uchar own local (`@ value`): its lowering points into the storage cell, which is unsigned-wide;
+  the oracle idiom never takes it;
+- an entry-level (mi < 0) uchar local: entry locals are spelled for int, char and size_t only, as unsigned is today;
+- unit fields (l2_unit_decl_ty), pointer locals, arrays, formals and returns (the last two already work).
+Measured after commit 1: a uchar local assigned by `(cast: (uchar) c)`, compared and returned, translates; its .lm1
+has `uchar: l2_q0`, `lmx_unsigned_new_owned`, `lmx_unsigned_store_known`, `(cast: uchar lmx_unsigned_value_known(...))`;
+l1trans and gcc -fsyntax-only pass. The unsigned twins translate before and after.
