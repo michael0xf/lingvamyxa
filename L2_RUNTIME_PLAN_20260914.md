@@ -3439,3 +3439,11 @@ success == 1, and only where is the implementation's. Entered verbatim in
 spec 19.28.R2.2 and model 31 after the root sentence; the lead's c4442c56
 carries the root narrowing, his next commit carries this sentence in
 KERNEL, S3 and the FIELDS success comment.
+Mikhail (2026-09-15, verbatim, correcting the coordinator's gloss "a finished
+L3 Thread reads success && !running"): "завершённый L3 Thread читается как success && !running" -- если пользовательский код не поставит success=1 то success останется 0 если running стал 0 So an ended L3 Thread
+reads !running; success && !running is the end by success, and success
+stays 0 when running became 0 without user code setting it (a stop or a
+failure). Corrected on main in spec section 2 (gloss), 19.28.R2.2 and
+model 31 with his sentence verbatim; the lead corrects the same phrase in
+KERNEL, S3, Y3 and the FIELDS comments (1e355676 carries the closing
+sentence and the M line; the next hash carries this).

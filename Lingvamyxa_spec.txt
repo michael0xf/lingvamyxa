@@ -1058,8 +1058,8 @@ same day):
         Lmx *root;                           /* the root of its graph; its arena is reached from it */
     } LmxMsg;
 
-Mikhail, 2026-09-15, verbatim, on the two flags: "success && !running, с выходом выставляется running = 0. Просто running опрашивается при выполнении Lmx* root и я же не знаю как кокнретный планировщик устроен и когда выйдет. Но условия выхода очевидно есть!" (a finished
-one is success and not running; at exit running = 0 is set; running is
+Mikhail, 2026-09-15, verbatim, on the two flags: "success && !running, с выходом выставляется running = 0. Просто running опрашивается при выполнении Lmx* root и я же не знаю как кокнретный планировщик устроен и когда выйдет. Но условия выхода очевидно есть!" (one that
+ended by success is success and not running; at exit running = 0 is set; running is
 simply polled while Lmx* root executes, and how a particular scheduler is
 arranged and when it exits is not fixed here, but the exit conditions
 obviously exist).
@@ -11648,7 +11648,9 @@ description of the implementation, not of the model": "«цикл выходит
 going both ways, the loop does in the end break on success == 1; only
 where is up to the implementation)); user
 code sets success, running is polled while root executes, and at exit
-running is set to 0, so a finished L3 Thread reads success && !running. And:
+running is set to 0; an ended L3 Thread reads !running, and success says
+whether it ended by success, verbatim: "завершённый L3 Thread читается как success && !running" -- если пользовательский код не поставит success=1 то success останется 0 если running стал 0 (if user code does not set
+success = 1, success stays 0 when running became 0). And:
 "то есть цикл не бесконечный -- из него есть выход хоть по return хоть как" (that is, the loop is not infinite: there is a way out of it,
 by return or however). And, to the lead's "running = 0 is the parent's stop
 request, not the loop's exit", verbatim: "L3 Thread это модель же а не реализация. Да, 0 это запрос остановки от родителя. Что значит "не выход из цикла"? Как можно остановить не выходя в конечном итоге из цикла?" (the L3 Thread is a
