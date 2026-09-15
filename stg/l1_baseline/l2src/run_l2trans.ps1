@@ -11,11 +11,8 @@ if ($TranslatorPath) { $l1trans = $TranslatorPath }
 if (-not (Test-Path -LiteralPath $l1trans)) {
     throw "missing L1 translator: $l1trans (run tests\l1\run_gen.ps1 first)"
 }
-$repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
-if (-not $OutputTranslatorPath) {
-    $candidateOutputTranslator = Join-Path $repoRoot 'build\l1trans\gen3\l1trans.exe'
-    if (Test-Path -LiteralPath $candidateOutputTranslator) { $OutputTranslatorPath = $candidateOutputTranslator }
-}
+# The output translator is -OutputTranslatorPath or the translator above; a root build\l1trans\gen3 is
+# used only when named, never because the file exists (l2src/RUNNER_HAZARDS.txt (a)).
 if (-not $OutputTranslatorPath) { $OutputTranslatorPath = $l1trans }
 if (-not (Test-Path -LiteralPath $OutputTranslatorPath)) { throw "missing output L1 translator: $OutputTranslatorPath" }
 $outputL1trans = (Resolve-Path -LiteralPath $OutputTranslatorPath).ProviderPath
