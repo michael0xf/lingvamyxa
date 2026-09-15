@@ -2557,3 +2557,17 @@ root lm1/build moved aside, and with build/lm0/trans.lm0.exe absent; green
 means those prerequisites are stale text; a red names the dependency by
 file and line. O1 is 06ab81b0 (pushed, measure green), landing after 57's
 inbox probe, then ad3fc6b8, then D1; none touch the bootstrap.
+b5 on sonnet/stage-o before the hold arrived, under the "split" reading:
+701a1b80 (own_abi.lm2 split, the message-thread declarations removed, the
+ownership, arena and REST ABI kept), e09a457e (own.lm2 and the twelve-file
+trans.lm2 chain deleted in lm2/ and stg/l1_baseline/lm2/,
+table_descriptor.lm2 kept), 6c6aaa60 (parser.lm2's three undeclared call
+sites marked with comments only); they stand and continue if "whole" wins.
+Found while checking the tests group: the rest_lmx_http_server_civetweb.c,
+rest_lmx_http_client_libcurl_loopback.c and the other rest_lmx_http_*.c
+files under tests/ are REST's own backend implementations plugging into the
+deleted runtime through the LmMessageThread family, not test fixtures;
+ruled: they go as REST's own group under Mikhail's (b) ("REST-провайдеры и
+реестр парсера уходят вместе с ним"), each named with its role, after a
+grep for rest_lmx and LmMessageThread across the live chain (l2src, root
+l1src, stg's l1src) finds no user.
