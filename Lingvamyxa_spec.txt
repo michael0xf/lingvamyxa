@@ -12746,7 +12746,13 @@ address-domain payloads involved. A raw mutable pointer into reclaimable storage
 must not silently cross the boundary. Ordinary incoming LMX text is
 added to the receiver's one logical arena with ownership transfer.
 Ordinary local delivery does not deep-copy a graph, replace its identities or
-rewrite its internal pointers. The delivered storage must be independently
+rewrite its internal pointers. (Mikhail, 2026-09-15, verbatim, on a sent
+Message: "У нас нет никаких копий message. Есть только он сам и у него своя
+арена. Пускай это будет один alloc но это его собственный. При получении
+Message который не L3 Thread присоединяется к арене получателя. Всё", there
+are no copies of a message; there is only the message itself, and it has its
+own arena, be it one alloc, its own; on receipt a Message that is not an L3
+Thread attaches to the recipient's arena; that is all.) The delivered storage must be independently
 transferable: a running sender cannot also keep using it through mutable aliases.
 An explicit copy, merge, materialization or transport/codec contract may allocate
 fresh state; this is not a runtime choice to clone ordinary delivery. Activation preserves

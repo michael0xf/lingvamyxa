@@ -1650,3 +1650,43 @@ and the prototype-locks paragraph, both descriptions of the L1
 implementation, removed. Standing rule from his sentence: every description
 of the L1 implementation in the model is interim and is brought to the L2
 specification, never the reverse.
+Mikhail on the map's question 5.4 (2026-09-15, verbatim): "какая копия? У нас
+нет никаких копий message -- выше же с тобой обсуждали. Есть только он сам
+и у него своя арена. Пускай это будет один alloc но это его собственный. При
+получении Message который не L3 Thread присоединяется к арене получателя.
+Всё" (what copy? there are no copies of a message, we discussed this
+above; there is only the message itself, and it has its own arena, be it
+one alloc, its own; on receipt a Message that is not an L3 Thread attaches
+to the recipient's arena; that is all). Entered verbatim in spec 19.29.7
+and the model's section 27 the same hour. Consequence for the design (the
+lead's, not the spec's): the mailbox is a synchronized collection of
+Messages, each with its own arena; LmxMsgCopy, copy_bytes and copy_dup are
+today's artefact and go; A3 no longer waits. b5's next ticket: the
+LmxMsgCopy census in lmx_message.lm1 (fields with writers and readers,
+envelope kinds, byte copies, chain walkers) as the data for that
+replacement.
+S0 landed on 0c's side: claude-0c/lock-inventory 95fb6a62, the lane tripwire
+as ruled (the attaching thread recorded; a no-turn write from any other
+thread aborts; take_this admits the write only when held_by is the calling
+thread, 19.28.R2.2 (3)); measured cold with run_port_message -LaneCheck: A
+green on the committed bytes, P listing the admitted held take and the
+bootstrap thread's five writes outside a turn (bind:affinity,
+run_child_turn:ready_clear, unbind:record, stop_unmap:ready_clear,
+stop_reset:ready_clear), F red without the held_by comparison, C red on the
+moved ready_clear that was green before; the lead cherry-picks it onto
+claude-0c/lane-tripwire and lands it with run_port_message -LaneCheck,
+run_lmx -Suite Exec (plain and LMX_LANE_CHECK=1) and scenario36, which
+builds exec.c without LMX_MSG_EXEC_TEST, so no model test arms the check.
+b5's allocation inventory of lmx_message.lm1: sonnet/lock-inventory
+e34468b3, 16 allocation and 34 free sites against the grep, lm2 equal; 26
+M, 7 P, 3 X, 12 S, 2 provenance-dependent; release_slot's frees of a
+released child's init and path are the parent's settle write (P) on the
+disposing lane; done_grow's arrays are P but freed on admit_one's lane, a
+cross-lane free like done_add's, a design item.
+The lead's spine corrected (b57db1ad): exec.c has 57 lookup call sites in 39
+functions (line 1114 is a comment naming msg_at_addr in endp_try_retire, which
+makes no lookup), 96 in total with lm1's 39. S1 (adopt_push deleted) is
+measuring on d6/lock-s1 off c067bed9; its first run was void for the
+environment (a fresh worktree without the ignored pinned l1trans, every
+runner stopping at "missing L1 translator"), rerun with the pinned exe
+whose SHA-256 matches L1_PIN.txt.

@@ -325,7 +325,15 @@ cite this map's owner codes in their target-owner column.
       the owner's lane; there are no execution tables", keeping the snapshot rule for a parent reading
       its children's cells. Alternative: leave the section as a description of the L1 implementation, marked
       historical.
-  5.4 Which arena holds an admitted copy (a sender's envelope queued in the recipient's inbox)?
+  5.4 ANSWERED by Mikhail, 2026-09-15, verbatim: "какая копия? У нас нет никаких копий message -- выше же с
+      тобой обсуждали. Есть только он сам и у него своя арена. Пускай это будет один alloc но это его
+      собственный. При получении Message который не L3 Thread присоединяется к арене получателя. Всё"
+      (what copy? there are no copies of a message; only the message itself with its own arena, be it one
+      alloc; on receipt a Message that is not an L3 Thread attaches to the recipient's arena; that is all).
+      So the mailbox is a synchronized collection of Messages, each with its own arena; LmxMsgCopy,
+      copy_bytes and copy_dup are today's artefact, X; the 3.1 inbox/outbox lines read "M: the queue
+      holds Messages; their admission Q; no copy". The original question, kept for the record: which
+      arena holds an admitted copy (a sender's envelope queued in the recipient's inbox)?
       Proposed: the recipient's arena, allocated under the recipient's admission lock (the one
       permitted cross-lane operation makes the one cross-lane allocation), so the queue and its
       entries die with the recipient and 19.29.6's "arenas are isolated" holds; the payload's bytes are
