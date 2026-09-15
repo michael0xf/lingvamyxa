@@ -73,9 +73,25 @@ scratchpad\archive_hang\<stage>\)
   - whether core_<i>.zip exists and its size; lock files under .git (index.lock, packed-refs.lock,
     objects\pack\*.lock, objects\pack\tmp_*) and under .git\worktrees\<tree>;
   - the trace2 file up to the stall.
-  Then the tree is killed (taskkill /PID <pid> /T /F) and the stage continues.
-  Report: per stage, iterations, hangs, elapsed-ms percentiles (50/99/max), and for each hang the stack and the
-  last trace2 region.
+  Then the tree is killed (taskkill /PID <pid> /T /F).
+  Stop condition:
+  - The first hang in any stage ends the whole isolation. It is captured as above, killed, and reported. One
+    captured hang (stack, trace2, locks, process tree) answers which hypothesis holds, and the machine is shared,
+    so no stage continues past it.
+  - A stage ends clean after its full repetitions with no hang. Only a clean stage moves to the next, in order
+    A, B, C, then D.
+  - A ref that moved during a stage (the reflog heads before and after differ) voids that stage: it is not
+    counted, and the isolation stops and reports which ref moved, before any rerun.
+  - The coordinator's word stops it at any point.
+  - Time budget, for the machine's plan: A about 5 min (200 x about 1.5 s), B about 10 min (200 x about 3 s),
+    C about 20 min (30 x about 40 s), D about 5 min; a hard stop at 60 min in total, reported as incomplete.
+  - What the outcome means: a hang first in A is git alone (H1; B-D not run); a hang only in B is the PowerShell
+    native-call form (H2); a hang only in C, with A and B clean, is the runner's surroundings; a hang only in D is
+    concurrent git activity (H3); all four clean is "not reproduced", with the chances of missing it given under
+    Repetitions. H4 (the output path) is read from the capture: git waiting before core_<i>.zip exists, with a
+    handle or lock on its directory.
+  Report: per stage, iterations, hangs, elapsed-ms percentiles (50/99/max), and for the hang, if any, the stack,
+  the last trace2 region and which stop condition ended the isolation.
 
 Proposed change: bound the archive step at 120 s (not applied, not run)
   Normal archive time is about a second; the whole gate takes 22-51 s, so 120 s cannot fail a working run.
