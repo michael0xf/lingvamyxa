@@ -165,6 +165,25 @@ D. create_id and create-retry idempotence deleted (X), with S1's dead-code kind.
     - Red: none for a deletion. The proof is the grep at 0 for create_id and find_create in the tree, and every
       runner that builds lmx_message green. Each deleted test check is named in the commit with the property it
       checked (create retry returns the same child, tombstone refuses the freed handle).
+    Sizing, read on d7f3b569 (grep of lmx_msg_create/_graph/_prepare and the lm2 msg_create names, definitions
+    included): 487 occurrences. lmx_message_exec_selftest.c 290, lmx_message_selftest.lm1 79, the model tests 2-7
+    each, cancel_spin_host.c 4, lmx_message_host_selftest.c 3, run_port_message.ps1 2 (its warm-up C), l2trans.lm1 2
+    (the emitted process entry and library open), the three generated units under tests/generated and their collect
+    C 1 each. So D is two steps, each green on its own:
+    D1. The retry semantics and the stored field go, and the signature stays:
+        - lmx_msg_find_create (lm1 765-783, lm2 808-827) and its call in create_prepare;
+        - LmxMsg\create_id and its writes (create_prepare's store, handoff_supervision's and orphan_children's clears);
+        - LMX_MSG_UI_LANE_ID's reservation check (with stage M's UI lane);
+        - the checks that test those properties, named in the commit: lmx_message_selftest.lm1's "idempotent create
+          changed sibling" / "idempotent create changed path" (~568-572), lmx_entry_turn_selftest's "the UI lane's
+          create_id is refused for any other create" (88), and the executor selftest's handoff check
+          "vcm->create_id != 0U" (3685-3690).
+        run_port_message's warm-up "create again" (340) becomes a second child's create, with the same status
+        expected.
+    D2. The parameter goes from lmx_msg_create, _create_graph and _create_prepare and every caller, mechanically:
+        the 487 sites above, l2trans.lm1's emitted process entry and library open, the generated units and their
+        collect C, and run_l2trans's affected cases with the historical case pin in L2_MESSAGE_ROOT.txt. The
+        signature becomes the spec's create/spawn(handler, initialData).
 
 O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced by the one core (X).
     Mikhail, verbatim (2026-09-15), to its real extent: "3- да, удаляйте целиком".
