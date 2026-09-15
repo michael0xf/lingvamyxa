@@ -1,0 +1,43 @@
+Lock removal inventory -- l2src/lmx_message.lm1
+==================================================
+Mikhail's order, 2026-09-15 (relayed by 6f): stop all other work, remove
+LmxMsgExec's shared lock ("there must be no shared locks; the mail queue
+has only its own internal collection lock"). This file is the input: every
+`lmx_msg_exec_lock(` and every `*_locked(` call site in lmx_message.lm1,
+one line per site -- file:line, enclosing function, the state read and
+written under the lock, the lane it runs on today, and the target owner of
+that state by the rule (a Message's own fields on its own lane; a parent's
+scheduler state as the parent's Structure data; cross-lane only through a
+mailbox with its own collection lock), or "silent" where none of the three
+fits. lmx_message.lm2 mirrors lmx_message.lm1 line for line; the same grep
+count (65) holds on both -- verified below, not assumed.
+
+Read the code before naming state/lane; a site I could not classify from
+the code in front of me is marked silent, not guessed. Four "_locked("
+sites (lmx_msg_exec_route_locked, _wake_addr_locked, _ui_request_locked,
+_take_ui_locked) are C-level externs with no lm1/lm2 body in this file or
+anywhere in this worktree (grepped, no match) -- their own internal state
+is silent by necessity; only the calling context's lane is visible.
+
+Lanes seen so far: "R0/bootstrap" (the runtime-owner thread outside any
+turn, lmx_msg_host_is_owner), "<X>'s own turn" (lmx_msg_exec_holding_turn
+true for that Message), "any thread" (no turn/owner check in the function
+itself -- callable from any lane, exec lock is the only guard), "unknown,
+see caller <name>" (authority is enforced by a caller I have not traced).
+
+Format: lm1:LINE | function | reads: ... | writes: ... | lane: ... | owner: ...
+
+lmx_message.lm1:656 | lmx_msg_handoff_supervision (644-689) | reads: ch\parent_msg, q\state, q\closing, q\disposed, q\parent_msg, a\parent_msg (walk) | writes: ch\parent, ch\create_id, ch\child_heard_at, ch\live_query_id, ch\live_query_pend_id, plus parent/child linkage fields inside lmx_msg_child_chain_remove/lmx_msg_child_link (not inlined here) | lane: old_parent's own turn, OR R0/bootstrap outside any turn (pre-check lines 651-655: holding_turn(rt,old_parent) OR host_is_owner && !holding_any) | owner: silent -- writes the CHILD's own fields (parent, create_id, live_query_*) from the OLD PARENT's lane or bootstrap, not the child's own lane; does not fit any of the three.
+lmx_message.lm1:712 | lmx_msg_exec_is_runnable (708-715) | reads: m\state, m\closing (via lmx_msg_mail_inbox_has_input(m), a mailbox-side read) | writes: none | lane: any thread -- no turn/owner check in this function | owner: silent -- reads the Message's own fields but not on its own lane; a query callable cross-lane under the shared lock alone.
+lmx_message.lm1:713 | lmx_msg_exec_is_runnable_locked (691-706), called from is_runnable's own lock at 712 | reads: m\state, m\closing (same as above, this is the body) | writes: none | lane: same as caller (712) | owner: silent, same reasoning as 712.
+lmx_message.lm1:730 | lmx_msg_exec_ready (723-751) | reads: none direct (m found via self_or_find) | writes: m\ready=1, m\ui_pending (0 or 1) | lane: any thread -- no turn/owner check in this function itself | owner: silent -- writes the Message's own fields (ready, ui_pending) from no verified owning lane.
+lmx_message.lm1:737 | lmx_msg_exec_route_locked, called inside exec_ready's lock (730) | reads: unknown, extern in lmx_message_exec.c, no body in this file (args passed: m, @ui, @pool) | writes: unknown, same | lane: same as caller (exec_ready, any thread) | owner: silent -- implementation outside lmx_message.lm1.
+lmx_message.lm1:739 | lmx_msg_exec_wake_addr_locked, called inside exec_ready's lock (730) | reads: unknown, extern, no body in this file (args: rt, addr) | writes: unknown, same | lane: same as caller (exec_ready, any thread) | owner: silent -- implementation outside lmx_message.lm1.
+lmx_message.lm1:746 | lmx_msg_exec_ui_request_locked, called inside exec_ready's lock (730) | reads: unknown, extern, no body in this file (args: rt, addr) | writes: unknown, same | lane: same as caller (exec_ready, any thread) | owner: silent -- implementation outside lmx_message.lm1.
+lmx_message.lm1:757 | lmx_msg_exec_take_addr (753-761) | reads: none direct here | writes: none direct here | lane: any thread -- no turn/owner check in this function | owner: n/a for this line itself (see 758 for the actual state).
+lmx_message.lm1:758 | lmx_msg_exec_take_ui_locked, called inside take_addr's lock (757) | reads: unknown, extern in lmx_message_exec.c, no body in this file (arg: rt) | writes: unknown, same | lane: same as caller (take_addr, any thread) | owner: silent -- implementation outside lmx_message.lm1.
+lmx_message.lm1:922 | lmx_msg_host_post (905-961) | reads: rt\root (via lmx_msg_ingress_root) | writes: none under this specific lock (pin/retain happens via lmx_msg_endp_retain, a refcount op, not a direct field write visible here) | lane: any OS thread -- function's own header comment (901-904) says so explicitly, guarded by the separate host lock (lmx_msg_host_lock, acquired before this exec lock at 914) | owner: silent -- reads rt\root (runtime-wide) under the exec lock while ALSO holding the host lock; two locks over the same runtime-wide state, ownership split across both.
+lmx_message.lm1:975 | lmx_msg_host_drain (968-997), first lock | reads: rt\root (via lmx_msg_ingress_root) | writes: none under this lock | lane: R0/bootstrap outside any turn -- require_owner(rt) && !holding_any at line 973 | owner: silent -- reads rt\root (runtime-wide) under the exec lock; not a Message's own field, not a parent's scheduler state, not a mailbox.
+lmx_message.lm1:987 | lmx_msg_host_drain (968-997), second lock | reads: n\next (walked) | writes: n\next=0, n\kind=n\ingress_kind, n\ingress_kind=0, rt\transport, rt\transport_tail (via lmx_msg_q_push) | lane: R0/bootstrap outside any turn (same guard as 975, still inside the same function) | owner: silent -- rt\transport/rt\transport_tail are runtime-wide queue state, not a mailbox with its own collection lock (this uses the shared exec lock instead).
+lmx_message.lm1:1011 | lmx_msg_runtime_delete (999-1046), first lock | reads: rt\slots (walked via m\alloc_next) | writes: none under this specific acquisition (set_no_retire is a mode flag, not inlined here) | lane: R0/bootstrap -- host_is_owner(rt) check at 1006 | owner: silent -- rt\slots is runtime-wide table state.
+lmx_message.lm1:1021 | lmx_msg_runtime_delete (999-1046), re-acquired inside the while loop after each iteration's unlock (1016) | reads: nxt (already captured as m\alloc_next before the unlock) | writes: none new at re-acquisition itself; the loop continues to walk rt\slots | lane: R0/bootstrap, same guard as 1011 | owner: silent -- same runtime-wide table state as 1011, released and re-acquired per iteration to let mailbox-side calls (inbox/outbox take) run unlocked.
