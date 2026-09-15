@@ -7,8 +7,10 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # made in R0's own turn it is in R0's blocks and not in A's; outside any turn the
 # turn arena allocates nothing. The block has no registered range, so the end-turn
 # collection (lmx_msg_arena_collect, which only takes blocks with a range) leaves it,
-# and the Message's release frees it: the two-cycle balance (ld --wrap live count
-# after the second runtime_delete equal to the first) shows nothing is left behind.
+# and the Message's release frees it: each cycle watches, through ld --wrap free, the
+# exact bases of A's and R0's turn-arena blocks and requires each freed once by that
+# runtime's delete (M: the live-count comparison across cycles also counted a context
+# worker's thread-local blocks, freed at thread exit, and raced it).
 # So the blocks are counted after the turns, not inside them and not through a root.
 # Classifying turn-arena blocks for reachability collection (19.29.4) belongs to the
 # design's later arena stage (A2), not to O1.
@@ -52,9 +54,20 @@ fn: __wrap_realloc (@: void p; size_t: n) @: void
     ---
     return: q
 
+@: void g_watch_a 0
+@: void g_watch_r 0
+int: g_freed_a 0
+int: g_freed_r 0
+
 sub: __wrap_free (@: void p)
     if: p != 0
         c.__sync_fetch_and_add(@ g_live, -1)
+        if: p = g_watch_a
+            c.__sync_fetch_and_add(@ g_freed_a, 1)
+        ---
+        if: p = g_watch_r
+            c.__sync_fetch_and_add(@ g_freed_r, 1)
+        ---
     ---
     c.__real_free(p)
 end: __wrap_free
@@ -106,6 +119,7 @@ fn: in_blocks (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void p) int
 fn: turn_a_alloc (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     @: LmxMsgEnv got
     @: void p
+    int: est
     if: ctx != 0
         return: 1
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
@@ -117,8 +131,11 @@ fn: turn_a_alloc (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     c.free((cast: (@: void) got))
     p: lmx_msg_turn_new_zero(32U)
     g_a_ptr: p
+    # M: done is published after end_turn, so the host's reads of A's blocks come
+    # after A's turn has ended on its context.
+    est: lmx_msg_end_turn(rt, who, 1)
     c.__sync_fetch_and_add(@ g_a_done, 1)
-    return: lmx_msg_end_turn(rt, who, 1)
+    return: est
 
 # R0's own turn: copy bytes into the turn arena.
 fn: turn_root_alloc (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
@@ -147,7 +164,6 @@ fn: turn_map_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 fn: cycle (@: LmxMsgRuntime rt) int
     unsigned: a 0U
     unsigned: r0
-    unsigned: deadline
     int: done 0
     int: an0
     int: rn0
@@ -168,11 +184,11 @@ fn: cycle (@: LmxMsgRuntime rt) int
     map_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
     st: lmx_msg_root_turn(rt, turn_map_child, (cast: (@: void) map_cell))
     check(st = c.LMX_MSG_OK && (cast: (int) map_cell[1]) = c.LMX_MSG_OK, "R0's turn mapped A onto its own context")
-    deadline: c.GetTickCount() + 5000U
-    while: done = 0 && c.GetTickCount() < deadline
+    # M: yield rounds, no wall clock; the runner's timeout decides "too long".
+    while: done = 0
         done: c.__sync_fetch_and_add(@ g_a_done, 0)
         if: done = 0
-            c.Sleep(2U)
+            c.SwitchToThread()
         ---
     ---
     check(done != 0 && g_a_ptr != 0, "A's turn on its context worker allocated from the turn arena")
@@ -183,25 +199,33 @@ fn: cycle (@: LmxMsgRuntime rt) int
     check(st = c.LMX_MSG_OK && g_r_ok != 0, "R0's own turn copied bytes into the turn arena")
     check(lmx_msg_adopted_n(rt, r0) = rn0 + 1 && in_blocks(rt, r0, g_r_ptr) != 0, "R0's allocation is one block of R0's own arena")
     check(in_blocks(rt, a, g_r_ptr) = 0, "and not a block of A's arena")
+    g_freed_a: 0
+    g_freed_r: 0
+    g_watch_a: g_a_ptr
+    g_watch_r: g_r_ptr
     lmx_msg_runtime_delete(rt)
+    check(g_freed_a = 1 && g_freed_r = 1, "A's and R0's turn-arena blocks were freed by their runtime's delete, once each")
+    g_watch_a: 0
+    g_watch_r: 0
     return: g_live
 
 fn: main () int
     @: LmxMsgRuntime rt
-    int: first
-    int: second
 
     rt: lmx_msg_runtime_new()
     check(rt != 0 && lmx_msg_root_addr(rt) != 0U, "the first runtime and its R0 exist")
     if: rt = 0
         return: 2
-    first: cycle(rt)
+    cycle(rt)
     rt: lmx_msg_runtime_new()
     check(rt != 0 && lmx_msg_root_addr(rt) != 0U, "the second runtime and its R0 exist")
     if: rt = 0
         return: 2
-    second: cycle(rt)
-    check(second = first, "the second runtime's turn-arena blocks were freed with their Messages: the live count after its delete equals the first's")
+    cycle(rt)
+    # M: the process-wide live count after a delete also holds a context worker's
+    # thread-local blocks (emutls, freed at OS thread exit, after exec_stop has seen the
+    # worker count reach 0), so it is not compared across cycles; each cycle checks
+    # its own Messages' blocks by address instead.
     c.printf("turn arena o1: %d checks, %d failures\n", checks, failures)
     if: failures != 0
         return: 1

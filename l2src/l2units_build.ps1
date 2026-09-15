@@ -2,14 +2,14 @@
 #
 # Stage 3c-2a (L2_RUNTIME_PLAN_20260914.md): the production runtime is the L1
 # modules plus every L2 unit under l2src whose first line is `profile:
-# runtime` (today lmx_sched_record.lm2). Dot-source this file and call
+# runtime` (today lmx_root_record.lm2). Dot-source this file and call
 # Build-L2RuntimeUnits once per run; it returns the object paths to append to
 # the runtime link. Behaviour-neutral until exec.c reads a unit (3c-2b): the
 # symbols are linked and unused.
 #
 # What it does, per run, into -Out:
 #   1. builds l2trans.exe from l2src/l2trans.lm1 with the pinned l1trans
-#      (the runner has already verified the pin), as run_sched_record.ps1;
+#      (the runner has already verified the pin);
 #   2. for each unit: its .h.lm1 header (if present) to <IncludeDirs[0]>/
 #      l2src/<stem>.lm1.h so the unit's own predef resolves; l2trans to a
 #      generated lm1; two checks (a library unit, no escape poll: a
@@ -27,9 +27,6 @@
 #     the runner's generated headers dir first in -IncludeDirs;
 #   - give each optimization level its own -Out (l2units_<level>), with
 #     -<level> in -CFlags, since the objects are linked per level.
-# run_sched_record is the exception: it builds the unit it tests and links
-# that object itself, so it does not call this function (a second copy would
-# be a duplicate definition in its link).
 # Native calls go through cmd /c with a log, never through PowerShell's
 # stderr (PS 5.1 under $ErrorActionPreference Stop treats stderr as failure).
 
@@ -41,16 +38,13 @@ function Invoke-L2Native([string]$Command, [string]$Log) {
     }
 }
 
-function Build-L2RuntimeUnits([string]$L1Trans, [string]$Out, [string[]]$IncludeDirs, [string]$CFlags, [string]$Gcc = 'gcc', [string[]]$Exclude = @()) {
-    # A runtime unit is an L2 unit with no L1 twin: lmx_sched_record.lm2 yes,
+function Build-L2RuntimeUnits([string]$L1Trans, [string]$Out, [string[]]$IncludeDirs, [string]$CFlags, [string]$Gcc = 'gcc') {
+    # A runtime unit is an L2 unit with no L1 twin: lmx_root_record.lm2 yes,
     # lmx_message.lm2 no (the parity mirror of lmx_message.lm1, measured by
     # run_port_message, never linked beside the L1 module it mirrors).
-    # -Exclude names stems a runner builds itself (run_sched_record's unit under
-    # test), so the link holds one copy of each unit.
     $units = @(Get-ChildItem -LiteralPath 'l2src' -File -Filter 'lmx_*.lm2' | Where-Object {
         (Get-Content -LiteralPath $_.FullName -TotalCount 1).Trim() -eq 'profile: runtime' -and
-        -not (Test-Path -LiteralPath (Join-Path 'l2src' ([IO.Path]::GetFileNameWithoutExtension($_.Name) + '.lm1'))) -and
-        ($Exclude -notcontains [IO.Path]::GetFileNameWithoutExtension($_.Name))
+        -not (Test-Path -LiteralPath (Join-Path 'l2src' ([IO.Path]::GetFileNameWithoutExtension($_.Name) + '.lm1')))
     } | Sort-Object Name)
     if ($units.Count -eq 0) { return @() }
     New-Item -ItemType Directory -Force -Path $Out | Out-Null

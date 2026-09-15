@@ -9,11 +9,10 @@
 # working tree.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File l2src/run_gates.ps1
-#   ... -SchedRecordSource <copy.lm2>   run_sched_record against another source
 #   ... -L2MessageRoot                  also run the opt-in l2_message_root gate, last
 #
-# The default set (RUNNER_HAZARDS (e), 6f's decision): the eleven core gates,
-# then the turn_step_child corpus check, the entry turn, the 18 port parity
+# The default set (RUNNER_HAZARDS (e), 6f's decision): the ten core gates,
+# then the entry turn, the 18 port parity
 # runners and the graph ABI runner. run_l2trans, run_port_parser and
 # run_l2_message_root stay outside the defaults.
 #
@@ -45,7 +44,6 @@
 #     message_graph_copy) run inside graph_abi, a default.
 #   run_foreign_alloc has no port parity runner.
 param(
-    [string]$SchedRecordSource,
     [switch]$L2MessageRoot,
     [string]$LogDir
 )
@@ -71,7 +69,6 @@ $gates = @(
     # decision 18 lane oracle with the no-turn tripwire, S0
     @('lane_oracle', 'run_port_message.ps1', "-TranslatorPath `"$pinned`" -LaneCheck", 'lmx_message parity PASS', 'LANE WRITE FAIL'),
     @('scenario36', 'run_model_scenario36.ps1', '', 'core tests PASS'),
-    @('sched_record', 'run_sched_record.ps1', $(if ($SchedRecordSource) { "-SourcePath `"$SchedRecordSource`"" } else { '' }), 'sched record'),
     @('lmx_message', 'run_lmx.ps1', '-Suite Message', 'selected=Message'),
     @('history', 'run_lmx_msg_history_owned.ps1', '', 'history checks='),
     @('roots_stale', 'run_lmx_msg_roots_stale.ps1', '', 'stale checks='),
@@ -80,7 +77,6 @@ $gates = @(
     @('send_local', 'run_msg_send_local.ps1', '', 'send local checks='),
     @('family_handoff', 'run_msg_family_handoff.ps1', '', 'family handoff checks='),
     @('c_scanners', 'run_candidate_c_scanners.ps1', '', 'candidate scanner parity cases='),
-    @('turn_step_child', 'run_turn_step_child_copies.ps1', '', 'turn_step_child copies:'),
     @('entry_turn', 'run_entry_turn.ps1', '', 'entry turn PASS'),
     @('port_array_owned', 'run_port_array_owned.ps1', '', 'lmx_array_owned parity PASS'),
     @('port_array_ref_owned', 'run_port_array_ref_owned.ps1', '', 'lmx_array_ref_owned parity PASS'),
