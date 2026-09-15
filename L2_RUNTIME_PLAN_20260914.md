@@ -3065,3 +3065,14 @@ precedence, rewritten before the local commit. Falsifiers run: the
 goldens directory deleted, run_parser "missing golden directory"; the
 record removed, run_smoke "stale check: no build record". Green of the
 whole chain waits for (b).
+0c's seed branch pushed: claude-0c/seed-committed-c a30ed131 on the lead's
+e5da89f5, one commit with exactly the measured tree (tests/l1 run_seed,
+run_gen, run_smoke, run_parser, run_legacy_p0, run_c_array, run_define,
+run_ifdef, stg/l1_baseline/gate.ps1, tests/l1/goldens/printTree.lm0 with
+its 301 files; 310 files, no other path), the note quoting every red-first
+line, the three old gen0 diagnostics and the run_smoke skip's lm2
+justification; the README fixed before the commit, the golden data
+untouched (a CRLF .stdout byte-identical from the commit, text unset); the
+two local drafts folded into one commit by commit-tree with a guarded
+update-ref, no reset, rebase or force. The cold green on the first base
+with (b), with root lm2 and the dead lm1/build files aside.
