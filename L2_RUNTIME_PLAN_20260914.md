@@ -5735,3 +5735,14 @@ lines); exec.c syntax-checked with the port_message headers, 0
 warnings. s5_green.sh re-running on 2f137863 with 85953500 and 165 UAF
 runs; then the falsifier (release_slot's root-list unlink put back in
 lm1, root_list_loops >= 1); then the tip to the coordinator.
+S5's second green attempt (the lead, 2026-09-15): measure tree 04659274
+(2f137863 plus 85953500): run_port_message exit 0 in 51 s, parity PASS;
+the UAF kit over the executor selftest "165 of 165 clean in 403 s" (21
+objects, 1 unit); tree clean; the probe "retire_queue=0 root_seq=0
+next_addr_nonatomic=1 root_list_loops=0", exit 1: the 1 is the lead's
+own size-check typedef naming next_addr without an __atomic_ call. Fix
+committing: the typedef checks sizeof(unsigned), the field's declared
+type, without naming the field; the probe left as accepted; the chain
+runs the probe on the tree first (0/0/0/0 required), the exec.c syntax
+check, commit and push, then s5_green.sh in full; after green the
+falsifier, then the tip to the coordinator.
