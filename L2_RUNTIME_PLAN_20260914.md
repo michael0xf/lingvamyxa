@@ -4847,3 +4847,22 @@ gate (Sleep, event, go cell, GetTickCount loop, exec_lock around test
 cells), the block's name and lines, each gate's kind and line, and the
 stage whose subject the block is (M, S2, S4, S5, S6, Y); counts by stage
 and by kind; this is the test-debt list the block ruling requires.
+liveness_33 refinement (e9, 2026-09-15; accepted by the coordinator):
+lmx_msg_pump (lmx_message.lm1 1893-1907) pops one transport node under
+the exec lock, releases it, admits the node (admit_one locking on its
+own), then locks again for the next, so a mapped child's worker can take
+a turn between two envelopes of one publication: the answer may be
+consumed before the stop lands, or the child may run its closing turn
+empty and the later answer is refused GONE (dest STOPPED). So "one
+end-turn publishes the input and then the close" is deterministic only
+for a child with no thread yet: the test's block X (P's turn creates X
+and publishes one input plus X's stop in that end-turn; the host binds
+X; P's turn maps X; X's first turn is its closing turn starting with the
+input, entry record inbox 1 and closing, kind NUMBER 9, STOPPED at its
+end), the same no-thread-before-the-map-point argument as C4's; E keeps
+"the stop is not handler-visible work" and "stopped at its end-turn";
+D's and E's consumption of P's answers asserted as it happens. The pump
+fact goes to the lead's Y note: whether one end-turn's admissions to one
+destination are made under one hold of that mailbox's monitor (the same
+monitor, no new lock) so a publication is one unit to its recipient, or
+the model makes no such promise; decided there.
