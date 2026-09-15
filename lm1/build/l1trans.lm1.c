@@ -6425,6 +6425,7 @@ int l1_is_incdec_atom(const LmP0Text * text);
 int l1_emit_call_frame(FILE * out, const LmP0Frame * frame, const char * path, const LmP0Node * node);
 int l1_emit_expr(FILE * out, const LmP0Structure * body, const char * path, int as_cond);
 int l1_c_ident_from(FILE * out, const LmP0Text * text, size_t start, const char * path, const LmP0Node * node);
+int l1_head_looks_assignable_target(const LmP0Text * head);
 int l1_assign_index_close(const LmP0Text * text, size_t open, size_t * out_close);
 int l1_emit_assign_index(FILE * out, const char * data, size_t n, const char * path, const LmP0Node * node);
 int l1_emit_cast(FILE * out, const LmP0Structure * body, const char * path);
@@ -7598,6 +7599,23 @@ int l1_c_ident(FILE * out, const LmP0Text * text, const char * path, const LmP0N
     }
     return l1_c_ident_from(out, text, start, path, node);
 }
+int l1_head_looks_assignable_target(const LmP0Text * head)
+{
+    size_t i = 0U;
+    if (head == 0 || head -> data == 0) {
+    return 0;
+    }
+    while (i < head -> length) {
+    if (head -> data[i] == 91 || head -> data[i] == 92) {
+    return 1;
+    }
+    if (i >= 2U && head -> data[i] == 46 && l1_text_starts(head, "c.")) {
+    return 1;
+    }
+    i = i + 1U;
+    }
+    return 0;
+}
 int l1_emit_c99_string(FILE * out, const char * data, size_t n)
 {
     size_t i = 0U;
@@ -7987,11 +8005,50 @@ int l1_emit_assign_head(FILE * out, const LmP0Text * head, const char * path, co
     size_t i;
     size_t close_index;
     size_t field_end;
+    size_t c_prefix = 0U;
+    size_t name_start;
+    size_t name_end;
     if (out == 0 || head == 0 || head -> data == 0) {
     return 1;
     }
-    if (head -> length >= 2U && head -> data[0] == 99 && head -> data[1] == 46) {
-    start = 2U;
+    while (c_prefix < head -> length && head -> data[c_prefix] == 92) {
+    c_prefix = c_prefix + 1U;
+    }
+    if (c_prefix + 2U <= head -> length && head -> data[c_prefix] == 99 && head -> data[c_prefix + 1U] == 46) {
+    start = c_prefix + 2U;
+    }
+    if (start != 0U) {
+    if (c_prefix != 0U && (l1_write_cstr(out, "(") != 0 || l1_emit_stars(out, c_prefix) != 0)) {
+    return 1;
+    }
+    i = start;
+    while (i < head -> length) {
+    if (head -> data[i] == 91) {
+    if (l1_assign_index_close(head, i, &close_index) == 0) {
+    return l1_error(path, node, "unclosed index in assignment target");
+    }
+    if (l1_write_cstr(out, "[") != 0 || l1_emit_assign_index(out, head->data + i + 1U, close_index - i - 1U, path, node) != 0 || l1_write_cstr(out, "]") != 0) {
+    return 1;
+    }
+    i = close_index + 1U;
+    continue;
+    }
+    if (head -> data[i] == 92) {
+    if (l1_write_cstr(out, "->") != 0) {
+    return 1;
+    }
+    }
+    else {
+    if (l1_write_span(out, head->data + i, 1U) != 0) {
+    return 1;
+    }
+    }
+    i = i + 1U;
+    }
+    if (c_prefix != 0U && l1_write_cstr(out, ")") != 0) {
+    return 1;
+    }
+    return 0;
     }
     while (start + deref < head -> length && head -> data[start + deref] == 92) {
     deref = deref + 1U;
@@ -8004,15 +8061,23 @@ int l1_emit_assign_head(FILE * out, const LmP0Text * head, const char * path, co
     if (root_end == root_start) {
     return l1_error(path, node, "dereferenced assignment target expects a name");
     }
+    name_start = root_start;
+    name_end = root_end;
+    if (root_end - root_start >= 2U && head -> data[root_start] == 96 && head -> data[root_end - 1U] == 96) {
+    name_start = root_start + 1U;
+    name_end = root_end - 1U;
+    }
+    else {
     if (l1_span_is_reserved(head->data, root_start, root_end - root_start) != 0) {
     return l1_error(path, node, "reserved L1 name");
+    }
     }
     if (deref != 0U) {
     if (l1_write_cstr(out, "(") != 0 || l1_emit_stars(out, deref) != 0) {
     return 1;
     }
     }
-    if (l1_write_span(out, head->data + root_start, root_end - root_start) != 0) {
+    if (l1_write_span(out, head->data + name_start, name_end - name_start) != 0) {
     return 1;
     }
     if (deref != 0U && l1_write_cstr(out, ")") != 0) {
@@ -10671,7 +10736,7 @@ int l1_emit_stmt(FILE * out, const LmP0Node * node, const char * path)
     if ((frame -> flags & LM_P0_FRAME_COLON) != 0U && l1_is_keyword(head) == 0 && l1_head_is_unknown_type(head)) {
     return l1_error(path, node, "unknown type name");
     }
-    if (l1_text_starts(head, "c.") == 0 && l1_is_keyword(head) == 0 && (frame -> flags & LM_P0_FRAME_COLON) != 0U) {
+    if (l1_is_keyword(head) == 0 && (frame -> flags & LM_P0_FRAME_COLON) != 0U && (l1_text_starts(head, "c.") == 0 || l1_head_looks_assignable_target(head) != 0)) {
     field = 0;
     if (frame -> body != 0) {
     field = frame -> body -> first_field;
