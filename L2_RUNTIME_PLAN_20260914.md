@@ -2319,3 +2319,21 @@ form, expressed through the language's synchronized receiver (spec 20.5.7,
 lowered to lm_synchronized_enter/leave), the old project's emission and
 runtime hooks the reference; given to the lead as the rule for the mailbox
 and its wake (S3) with the spec's lines and the old project's files.
+Mikhail (2026-09-15, verbatim, on which chain is the self-build): "да,
+вариант б. Сначала добиваемся самосборки а потом уже опять делаем порт в L2 и
+далее в L3" (yes, option (b); first we achieve the self-build, and only then
+we do the port to L2 again and further to L3). Applied: the project's
+self-build is the live chain (l1trans from its committed generated C,
+l2trans in l2src, the l2src core); lm2/own.lm2 and the unbuildable lm2
+self-host are deleted whole as dead (stage O reduces to that deletion, with
+its CMake targets, tests and fixtures, each named; O0's measurement is the
+record of why); the L2 port of the runtime and the parser waits until the
+self-build without locks is achieved. Order under the single goal: the
+lock-removal stages (S2 on, M, D) in the live chain; the lm2 chain deleted
+whole (b5); the live chain's self-build fixed point as a gate (0c); O1 (the
+turn Message's arena in the core) stays as a core primitive but the
+switch of l2trans's allocations onto it is a stage after the locks are out.
+The coordinator's operating rule (c) adjusted to his order: until the
+self-build is achieved, new executor policy or state is written in L1
+(lmx_message.lm1 with its lm2 mirror as today), not as new L2 units; the C
+keeps shrinking; test hooks under the test define as before.
