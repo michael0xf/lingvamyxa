@@ -5349,3 +5349,23 @@ child_chain_remove and the settle section corrected to the same
 reasoning. The double landing (the fix, then D2) runs with the union
 base on d8f758e6; b5's red measurement of the two guard checks waits for
 the machine.
+The struct-field fix LANDED (the lead, 2026-09-15; checked by the
+coordinator): merge fd8f532b on d8f758e6, integration 1bdbfca0 (the
+SELF-BUILD OK line); union base green: self-build 8 of 8 (tag
+selfbuild/fd8f532b), gates 31 of 31 in 575 s, port_message plain and
+-LaneCheck PASS (97), run_l2trans ok in 289 s, run_port_parser ok,
+run_mixa ok, the ingress harness ok. D2 RED, not pushed: merge d5343746
+on 1bdbfca0; green: self-build 8 of 8 (tag selfbuild/d5343746 and log
+ed00470d on sonnet/d2-create-id-landing, both pushed by the rule),
+gates 31 of 31 in 549 s, port_message both modes PASS, run_l2trans ok,
+run_port_parser ok, lmx_cancel ok; red: run_mixa and the ingress
+harness at gcc, "too few arguments to function 'lmx_msg_create'" at
+mixa_ingress_host_harness.c 223 and 228. Cause: the harness builds only
+against mixa_manager/vendor/lmx_msg_host_ingress_v0 (header, lm1,
+host.c, host.h, sha256-pinned in MANIFEST and checked by the runner),
+which keeps create_id, while b5's harness edit targeted live l2src.
+b5 reverts only that harness hunk (SPEC_DIGEST kept, the vendor copy
+untouched), the lead re-lands D2 with land_base.sh; the union base
+caught what a per-stage set would have missed. Order: b5's revert
+push, the D2 re-landing, e9's gate record on D2's tip, then b5's red
+measurement of the two S4 guard checks.
