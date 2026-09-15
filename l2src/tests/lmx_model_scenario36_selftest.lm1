@@ -1,4 +1,4 @@
-include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
 predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1" "l2src/lmx_owned_ranges.h.lm1" "l2src/tests/lmx_model_scenario36.h.lm1"
 
 # The model's one end-to-end scenario (L2_CORE_AND_MESSAGE_MODEL_20260912.md
@@ -25,9 +25,12 @@ predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_
 #
 # Level: L1, the workbench (decision 15/16, the review chat's choice); the
 # runtime under test is the L1 bootstrap brought to the model (decision 14).
-# The L3 Thread here is the host's sequential mapping on the owner thread:
-# since stage 5 (d) R0's turn steps P and P's turn steps A or B
-# (step_from_root); T and the envelopes have no turn.
+# The host acts as P's turn outside any turn (the bootstrap); P's own turn maps
+# A, and later B, onto its own context (stage M: no Message steps another). A's
+# and B's turns run on their own workers; the host reads their effects in yield
+# rounds once an edge orders them: A's reply in P's mailbox (published by A's
+# end-turn after its collection), B's report in R0's mailbox, B handoff-ready
+# after its stop. T and the envelopes have no turn.
 
 int: checks 0
 int: failures 0
@@ -61,6 +64,21 @@ fn: scenario_f (@: Lmx self) int
 int: observed_value 0
 unsigned: observed_reply_to 0U
 unsigned: observed_id 0U
+
+# What P's own turns work on, handed over by the host before each entry turn
+# (the host thread runs those turns; once a child's worker exists the host no
+# longer acts as P outside a turn: recv, send, create and end_turn require P's
+# turn).
+@: LmxMsg g_pm 0
+@: LmxMsg g_am 0
+@: Lmx g_root 0
+@: LmxMsgEnv g_reply_env 0
+@: LmxMsgEnv g_env 0
+unsigned: g_a 0U
+unsigned: g_b 0U
+uchar: g_ini 1
+int: g_create_st -1
+int: g_send_st -1
 
 # A's turn: one input, F' selected in A's own graph, f called through
 # F'.child[0] with F', a temporary allocated in A's arena and left
@@ -121,16 +139,19 @@ fn: turn_a (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     return: lmx_msg_end_turn(rt, who, 1)
 
 # B's turn: the same work, then the turn ends in failure; the staged reply
-# must never reach P.
+# must never reach P. Before its end-turn B reports that it ran by a host post,
+# an admission into R0's mailbox that the failure does not drop.
 fn: turn_b (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     @: LmxMsgEnv got
     @: LmxMsgEnv reply
+    @: LmxMsgEnv ran
     int: st
     if: ctx != 0
         return: 1
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     reply: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
-    if: got = 0 || reply = 0
+    ran: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0 || reply = 0 || ran = 0
         return: 1
     if: lmx_msg_recv(rt, who, got) != c.LMX_MSG_OK
         return: 2
@@ -140,47 +161,66 @@ fn: turn_b (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     reply\kind: c.LMX_MSG_KIND_NUMBER
     reply\number: 999
     st: lmx_msg_send(rt, who, got\reply_to, reply)
+    ran\id: 201U
+    ran\kind: c.LMX_MSG_KIND_NUMBER
+    ran\number: 1
+    if: lmx_msg_host_post(rt, got\reply_to, ran) != c.LMX_MSG_STAGED
+        st: -1
+    ---
     lmx_msg_env_release(got)
     c.free((cast: (@: void) got))
     c.free((cast: (@: void) reply))
+    c.free((cast: (@: void) ran))
     if: st != c.LMX_MSG_STAGED
         return: 4
     return: lmx_msg_end_turn(rt, who, 0)
 
-# Stage 5 (d): a parent's turn that steps the one child named in its cell.
-# ctx is the test's cell: [0] the child's address, written before the
-# root_turn; [1] the step's status, written here. The same text in every
-# migrated test.
-fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+# Stage M: a parent's own turn maps its child onto the child's own context;
+# ctx is the test's cell, [0] the child to map, [1] map_child's status.
+fn: turn_map_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     @: unsigned cell
     if: ctx = 0
         return: 1
     cell: (cast: (@: unsigned) ctx)
-    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    cell[1]: (cast: (unsigned) lmx_msg_map_child(rt, who, cell[0]))
     return: lmx_msg_end_turn(rt, who, 1)
 
-# Stage 5 (d): step child from R0's turn through its parent's turn. main
-# binds parent (the host acts as its turn otherwise) only around the step.
-# Returns root_turn's status, else the parent step's, else the child step's.
-[]: unsigned step_cell_parent 2
-[]: unsigned step_cell_child 2
+# P's receiving turn: it takes A's reply and checks it before its own end-turn
+# collects what it does not keep.
+fn: turn_p_receive (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    if: ctx != 0
+        return: 1
+    got: g_reply_env
+    check(lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK && got\kind = c.LMX_MSG_KIND_GRAPH && got\number = 8 && got\correlation = 1U && got\reply_to = g_a, "P reads the reply: a graph, value 8, correlated to its request")
+    check(got\graph != 0 && got\graph != observed_reply_root && lmx_int_value_known(lmx_branch_child_known(got\graph, 0U)) = 8, "the delivered reply is the copier's copy and carries the value")
+    check(lmx_owned_ranges_find(g_pm\ranges, (cast: (@: void) got\graph)) != 0 && lmx_owned_ranges_find(g_am\ranges, (cast: (@: void) got\graph)) = 0, "the reply's storage is P's now, not A's")
+    check(lmx_owned_ranges_find(g_am\ranges, (cast: (@: void) observed_reply_root)) = 0, "A's own original of the reply was unreachable and was collected at A's end-turn")
+    lmx_msg_env_release(got)
+    return: lmx_msg_end_turn(rt, who, 1)
 
-fn: step_from_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
+# P's turn that creates B from T and stages B's input; its end-turn publishes both.
+fn: turn_p_create_b (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    g_create_st: lmx_msg_create_graph(rt, who, 3U, g_root, g_pm\ranges, lmx_msg_eternal_ranges(g_pm), lmx_msg_method_ranges(g_pm), @ g_ini, 1U, @ g_b)
+    if: g_create_st = c.LMX_MSG_OK
+        g_send_st: lmx_msg_send(rt, who, g_b, g_env)
+    ---
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# P, one of R0's direct children, maps child in its own turn on the host thread.
+# Returns run_entry_turn's status, else map_child's.
+[]: unsigned map_cell 2
+
+fn: map_in_own_turn (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
     int: st
-    step_cell_parent[0]: parent
-    step_cell_parent[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
-    step_cell_child[0]: child
-    step_cell_child[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
-    st: lmx_msg_exec_bind(rt, parent, turn_step_child, (cast: (@: void) step_cell_child), c.LMX_MSG_AFFINITY_ANY)
+    map_cell[0]: child
+    map_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_run_entry_turn(rt, parent, turn_map_child, (cast: (@: void) map_cell))
     if: st != c.LMX_MSG_OK
         return: st
-    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_parent))
-    lmx_msg_exec_unbind(rt, parent)
-    if: st != c.LMX_MSG_OK
-        return: st
-    if: (cast: (int) step_cell_parent[1]) != c.LMX_MSG_OK
-        return: (cast: (int) step_cell_parent[1])
-    return: (cast: (int) step_cell_child[1])
+    return: (cast: (int) map_cell[1])
 
 fn: main () int
     @: LmxMsgRuntime rt
@@ -284,10 +324,19 @@ fn: main () int
     check(am\committed != 0 && lmx_msg_inbox_n(rt, a) = 1 && lmx_msg_state(rt, a) = c.LMX_MSG_STATE_RUNNING, "publication commits A and admits P's input in FIFO order")
     check(lmx_msg_graph(pm) = root && lmx_int_value_known(counter) = 7, "P's own graph and counter are untouched by publication and collection")
 
-    # --- A's turn on the host's sequential mapping.
-    check(lmx_msg_exec_bind(rt, a, turn_a, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "A is launched on the parent's mapping")
-    pst: step_from_root(rt, p, a)
-    check(pst = c.LMX_MSG_OK || pst = 1, "A's turn ran")
+    # --- A's turn on its own context, mapped by P's own turn.
+    g_pm: pm
+    g_am: am
+    g_root: root
+    g_a: a
+    check(lmx_msg_exec_bind(rt, a, turn_a, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "A is bound")
+    pst: map_in_own_turn(rt, p, a)
+    check(pst = c.LMX_MSG_OK, "P's own turn maps A onto its own context")
+    c.printf("reading: A's reply in P's mailbox, published by A's end-turn after its collection\n")
+    while: lmx_msg_inbox_n(rt, p) < 1
+        c.SwitchToThread()
+    ---
+    check(lmx_msg_inbox_n(rt, p) = 1, "A's turn ran")
     check(observed_id = 1U && observed_reply_to = p, "A took exactly the one input P published")
     check(observed_fprime = a_fprime, "A selected F' in its own graph")
     check(observed_value = 8 && lmx_int_value_known(a_counter) = 8 && lmx_int_value_known(counter) = 7, "f changed A's own counter through F', not T's")
@@ -298,37 +347,44 @@ fn: main () int
     # --- P receives the reply later, in its own separate turn. The reply is
     # a delivered Message: its storage joins P's arena at its addresses.
     check(lmx_msg_inbox_n(rt, p) = 1, "A's successful end-turn published the reply into P's inbox")
-    check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && got\kind = c.LMX_MSG_KIND_GRAPH && got\number = 8 && got\correlation = 1U && got\reply_to = a, "P reads the reply: a graph, value 8, correlated to its request")
-    check(got\graph != 0 && got\graph != observed_reply_root && lmx_int_value_known(lmx_branch_child_known(got\graph, 0U)) = 8, "the delivered reply is the copier's copy and carries the value")
-    check(lmx_owned_ranges_find(pm\ranges, (cast: (@: void) got\graph)) != 0 && lmx_owned_ranges_find(am\ranges, (cast: (@: void) got\graph)) = 0, "the reply's storage is P's now, not A's")
-    check(lmx_owned_ranges_find(am\ranges, (cast: (@: void) observed_reply_root)) = 0, "A's own original of the reply was unreachable and was collected at A's end-turn")
-    lmx_msg_env_release(got)
-    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P's receiving turn succeeds")
+    g_reply_env: got
+    pst: lmx_msg_run_entry_turn(rt, p, turn_p_receive, 0)
+    check(pst = c.LMX_MSG_OK, "P's receiving turn succeeds")
 
     # --- E lives at the first Message whatever the children do.
     check(lmx_msg_eternal_ranges(pm) = p_eternal_before && lmx_msg_method_ranges(pm) = p_method_before && lmx_int_value_known(e_value) = 33 && lmx_owned_ranges_find(lmx_msg_eternal_ranges(pm), (cast: (@: void) e)) != 0, "E remains root-owned and classified eternal at P")
 
     # --- The failure alternative, with a second child B from the same T.
-    st: lmx_msg_create_graph(rt, p, 3U, root, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ b)
+    env\id: 2U
+    env\number: 6
+    g_env: env
+    pst: lmx_msg_run_entry_turn(rt, p, turn_p_create_b, 0)
+    b: g_b
     bm: lmx_msg_find(rt, b)
-    check(st = c.LMX_MSG_OK && bm != 0, "P creates B from T")
+    check(pst = c.LMX_MSG_OK && g_create_st = c.LMX_MSG_OK && bm != 0, "P creates B from T")
     if: bm = 0
         return: 2
     b_graph: lmx_msg_graph(bm)
     b_counter: lmx_branch_child_known(b_graph, 0U)
-    env\id: 2U
-    env\number: 6
-    check(lmx_msg_send(rt, p, b, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, b) = 1, "P publishes B and its input")
-    check(lmx_msg_exec_bind(rt, b, turn_b, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "B is launched")
+    check(g_send_st = c.LMX_MSG_STAGED && lmx_msg_inbox_n(rt, b) = 1, "P publishes B and its input")
+    check(lmx_msg_exec_bind(rt, b, turn_b, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "B is bound")
     adopted_before: lmx_msg_adopted_n(rt, p)
-    pst: step_from_root(rt, p, b)
-    check(pst = c.LMX_MSG_OK || pst = 1, "B's turn ran and ended in failure")
-    check(lmx_msg_inbox_n(rt, p) = 0, "B's unpublished outbox was dropped: P receives nothing")
+    pst: map_in_own_turn(rt, p, b)
+    check(pst = c.LMX_MSG_OK, "P's own turn maps B onto its own context")
+    c.printf("reading: B's report in R0's mailbox, posted by B's turn before its failing end-turn\n")
+    while: lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) < 1
+        c.SwitchToThread()
+    ---
+    check(lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 1, "B's turn ran")
     check(lmx_int_value_known(b_counter) = 7 && lmx_int_value_known(a_counter) = 8 && lmx_int_value_known(counter) = 7, "failure undoes nothing already done in other arenas; B's own counter is B's")
     # The lifecycle protocol hands B's safely retained state to P.
     check(lmx_msg_emergency_cancel(rt, b) = c.LMX_MSG_OK, "P requests B's stop")
-    pst: step_from_root(rt, p, b)
-    check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_handoff_ready(rt, b) != 0, "B leaves its native activation, handoff-safe")
+    c.printf("reading: B handoff-ready after its failed turn and its stop\n")
+    while: lmx_msg_handoff_ready(rt, b) = 0
+        c.SwitchToThread()
+    ---
+    check(lmx_msg_handoff_ready(rt, b) != 0, "B leaves its native activation, handoff-safe")
+    check(lmx_msg_inbox_n(rt, p) = 0, "B's turn ended in failure: its unpublished outbox was dropped, P receives nothing")
     check(lmx_msg_adopt_failed(rt, p, b) = c.LMX_MSG_OK, "P adopts B's retained state")
     check(lmx_msg_find(rt, b) = 0 && lmx_msg_adopted_n(rt, p) > adopted_before, "B's ownership moved to P, nothing copied; adoption closed B (decision 17, rule 5)")
     check(lmx_owned_ranges_find(pm\ranges, b_counter) != 0 && lmx_int_value_known(b_counter) = 7, "B's counter now lives in P's one arena at its old address")
@@ -337,6 +393,8 @@ fn: main () int
     # --- Kinship never became lexical parenthood.
     check(a_fprime\node = a_graph && a_graph\node = 0 && f\node = root && root\node = 0, "no node points at P because of Message kinship")
 
+    # exec_stop's own rounds read the worker count until A's worker has left.
+    lmx_msg_exec_stop(rt)
     lmx_msg_runtime_delete(rt)
     c.free((cast: (@: void) env))
     c.free((cast: (@: void) got))
