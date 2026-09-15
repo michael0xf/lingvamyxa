@@ -97,8 +97,6 @@ typedef struct LmxMsgExec {
     int no_retire;
     int contexts_live;
     LmxMsgRuntime *rt;
-    LmxMsg *retire_head;
-    LmxMsg *retire_tail;
     LmxMsgAddr unbound_held;
 #if defined(LMX_MSG_EXEC_TEST)
     int test_fail_ctx;
@@ -1436,29 +1434,6 @@ static int ctx_visit_count(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
 }
 
 
-void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    LmxMsg *head;
-    LmxMsg *m;
-    LmxMsg *nxt;
-    if (e == 0) {
-        return;
-    }
-    lmx_msg_exec_lock(rt);
-    head = e->retire_head;
-    e->retire_head = 0;
-    e->retire_tail = 0;
-    lmx_msg_exec_unlock(rt);
-    m = head;
-    while (m != 0) {
-        nxt = m->retire_next;
-        m->retire_next = 0;
-        m->retire_queued = 0;
-        (void)lmx_msg_endp_try_retire(rt, m);
-        m = nxt;
-    }
-}
-
 
 
 /* D1 allocation enumeration. Not the scheduler. Delegates to
@@ -1494,22 +1469,6 @@ void lmx_msg_exec_test_set_fail_adopt_block(LmxMsgRuntime *rt, int v) {
 
 
 
-int lmx_msg_exec_retire_n(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    int n = 0;
-    LmxMsg *m;
-    if (e == 0) {
-        return 0;
-    }
-    lmx_msg_exec_lock(rt);
-    m = e->retire_head;
-    while (m != 0) {
-        n += 1;
-        m = m->retire_next;
-    }
-    lmx_msg_exec_unlock(rt);
-    return n;
-}
 
 
 
@@ -2385,7 +2344,6 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     e->contexts_live = 0;
     (void)rec_walk_locked(e, ctx_visit_stop_unmap, 0);
     lmx_msg_exec_unlock(rt);
-    lmx_msg_exec_flush_retire(rt);
     /* S3 (R7): the stop writes stopping and signals nothing; each worker reads it
      * at the head of its next round and leaves its loop. The host's rounds read the
      * worker count until every worker has left: no primitive, no join. */
@@ -2403,7 +2361,6 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     e->unbound_held = 0;
     e->stopped = 1;
     lmx_msg_exec_unlock(rt);
-    lmx_msg_exec_flush_retire(rt);
     return LMX_MSG_OK;
 }
 
@@ -2443,7 +2400,6 @@ void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt) {
         unbind_slot_locked(e, rec);
     }
     lmx_msg_exec_unlock(rt);
-    lmx_msg_exec_flush_retire(rt);
 }
 
 void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v) {
@@ -2477,7 +2433,6 @@ int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     lmx_msg_test_lane_write(rt, m != 0 ? m->parent_msg : 0, "unbind:record");
     unbind_slot_locked(e, r);
     lmx_msg_exec_unlock(rt);
-    lmx_msg_exec_flush_retire(rt);
     return LMX_MSG_OK;
 }
 
@@ -2502,7 +2457,6 @@ int lmx_msg_exec_unbind_msg(LmxMsgRuntime *rt, LmxMsg *m) {
     lmx_msg_test_lane_write(rt, m->parent_msg, "unbind:record");
     unbind_slot_locked(e, r);
     lmx_msg_exec_unlock(rt);
-    lmx_msg_exec_flush_retire(rt);
     return LMX_MSG_OK;
 }
 

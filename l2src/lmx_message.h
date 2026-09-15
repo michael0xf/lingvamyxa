@@ -148,10 +148,6 @@ typedef struct LmxMsg {
      * requester, the bind kick); the lane that takes this Message's turn
      * clears it. Nothing is appended to a parent's cells from another lane. */
     int ready;
-    /* Allocation-free retire drain. Linked on LmxMsgExec.retire_head while
-     * eligible; not a ready queue. */
-    struct LmxMsg *retire_next;
-    int retire_queued;
     LmxMsgTurn turn;
     void *turn_ctx;
     /* Stage 3a (L2_RUNTIME_PLAN_20260914.md): the executor's bind record is

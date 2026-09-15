@@ -765,7 +765,6 @@ fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsg
     ch\live_query_id: 0U
     ch\live_query_pend_id: 0U
     c.lmx_msg_exec_unlock(rt)
-    c.lmx_msg_exec_flush_retire(rt)
     return: c.LMX_MSG_OK
 end: msg_handoff_supervision
 
@@ -1885,7 +1884,6 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         ---
         msg_arena_collect(m)
         c.lmx_msg_exec_unlock(rt)
-        c.lmx_msg_exec_flush_retire(rt)
         return: c.LMX_MSG_OK
     ch: m\first_child
     while: ch != 0
@@ -1932,7 +1930,6 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     ---
     msg_arena_collect(m)
     c.lmx_msg_exec_unlock(rt)
-    c.lmx_msg_exec_flush_retire(rt)
     return: msg_pump(rt)
 end: msg_end_turn
 
