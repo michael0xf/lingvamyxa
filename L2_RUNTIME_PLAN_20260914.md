@@ -5403,3 +5403,22 @@ Main d3c0cc40 = 0c376f79 + integration 391b5062 (the lead, 2026-09-15; 37
 files, no conflict; checked by the coordinator). S2's code starts on
 d6/lock-s2 off 391b5062 (worktree ws2code, pin installed), edits only
 until the machine is free after e9's record and b5's two runs.
+b5's S4 guard checks measured on d8f758e6 (2026-09-15; sonnet/s4-guard-checks
+a3576110): emergency_cancel RED as expected (exit 1, "S4 guard check
+FAILED: emergency_cancel from neither the parent's lane nor the host
+outside any turn returned 0, want LMX_MSG_INVALID=2"); exec_bind GREEN,
+not red ("s4 guard exec_bind ok (refused from a spawned thread)"):
+exec_bind_mode (exec.c 1701-1798) calls mapping_authority_locked (1686-
+1696) at 1721, which already implements the S4 check (the host outside
+any turn, or holding the turn of m's parent walking up through settled
+ancestors per 19.29.6, INVALID otherwise), unchanged between d8f758e6
+and the branch; the census missed that read, as with orphan_sweep and
+drive. Ruling (coordinator): confirmed; S4_SITES site 5 becomes
+"nothing (guarded at mapping_authority_locked)"; S4's code list is one
+guard, emergency_cancel, with its red check as the acceptance; the
+exec_bind check stays in the suite as a green guard-holds check (it
+documents the existing guard and would catch its removal), not as a
+red-first item. Note: b5 ran the two short suites while e9's cold gate
+record was in progress; if that record shows a load-sensitive red, this
+is the cause; the hold rule stands for everyone until the record is
+reported.
