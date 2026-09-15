@@ -3561,3 +3561,24 @@ in 52 s, "lmx_message parity PASS ... 101 methods redirected". Green
 criterion for S3: on the S3 branch merged with 74146146, run_port_message
 -LaneCheck exits 0 (0 sites signalled) and the plain run still passes; the
 lane_oracle gate in run_gates is the same check.
+S3 STOP before any code (the lead, 2026-09-15), one question for Mikhail.
+Facts at c063fd00 (lmx_message_exec.c): context_worker (3071-3132) takes a
+turn when take_this succeeds (3091), otherwise blocks at 3117 in
+WaitForMultipleObjects(2, {stop_ev, wait_ev}, to) with to = INFINITE, or
+20 ms when live_wait_th is set; that 20 ms timeout drives
+lmx_msg_live_check (3126), the self-maintenance. The other waits: the
+launch gate (pack_gate_wait, 3058) and the unbind join (bind_wait_join,
+2097-2117); the host drive waits on h->wake (host.c 148-192). S3 as ruled
+removes the wake primitive and every wait; the launch gate and the join go
+without question. Open: with no wait at all, an owner whose mailbox is
+empty goes straight back to looking at it, one core spinning per L3
+Thread (and per host drive) while it has no mail. Options: (a) pure spin
+(each round: self-maintenance, a look into the mailbox under synchronized,
+a turn if there is one); (b) a scheduler yield between empty rounds
+(SwitchToThread / sched_yield: no object, no signal, no timeout); (c) a
+fixed sleep tick between empty rounds (Sleep(1): no object, no signal, a
+timed pause bounding the latency of seeing new mail by the tick). Whether
+(b) or (c) counts as "blocking" is Mikhail's call. Put to him by the
+coordinator with (b) recommended; nothing of S3 coded until his answer;
+the S3 facts section goes on the branch with the point marked open; b5's
+host.c sub-ticket waits for the same answer.
