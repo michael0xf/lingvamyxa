@@ -1235,6 +1235,13 @@ static void seen_attach(LmxMsgRuntime *rt) {
     lmx_msg_exec_test_after_turn = seen_after_turn;
 }
 
+/* A new runtime: every count starts from zero, even when the allocator reuses a
+ * deleted runtime's address. Called right after lmx_msg_runtime_new. */
+static void seen_new(LmxMsgRuntime *rt) {
+    g_seen_rt = 0;
+    seen_attach(rt);
+}
+
 /* Read cond on yield rounds until it holds. */
 #define YIELD_UNTIL(what, cond) \
     do { \
@@ -2573,6 +2580,7 @@ int main(int argc, char **argv) {
         mix.a1 = &a1;
         mix.a2 = &a2;
         rtp = lmx_msg_runtime_new();
+        seen_new(rtp);
         if (rtp == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
             fprintf(stderr, "mix family\n");
             return 1;
@@ -2630,6 +2638,7 @@ int main(int argc, char **argv) {
         DWORD owner = GetCurrentThreadId();
         memset(&rec, 0, sizeof(rec));
         rtm = lmx_msg_runtime_new();
+        seen_new(rtm);
         if (rtm == 0 || lmx_msg_create(rtm, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
@@ -2689,6 +2698,7 @@ int main(int argc, char **argv) {
         TurnCtx rec;
         memset(&rec, 0, sizeof(rec));
         rtl = lmx_msg_runtime_new();
+        seen_new(rtl);
         if (rtl == 0) {
             return 1;
         }
@@ -2751,6 +2761,7 @@ int main(int argc, char **argv) {
         TurnCtx rec;
         memset(&rec, 0, sizeof(rec));
         rtr = lmx_msg_runtime_new();
+        seen_new(rtr);
         if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
@@ -2938,6 +2949,7 @@ int main(int argc, char **argv) {
             venv.n = 1;
             venv.bytes = &ini;
             rtv = lmx_msg_runtime_new();
+            seen_new(rtv);
             if (rtv == 0 || lmx_msg_create(rtv, 0, 1, &ini, 1, &vp) != LMX_MSG_OK
                 || lmx_msg_create(rtv, 0, 2, &ini, 1, &vq) != LMX_MSG_OK
                 || lmx_msg_create(rtv, vp, 3, &ini, 1, &vc) != LMX_MSG_OK
@@ -3022,6 +3034,7 @@ int main(int argc, char **argv) {
             int qadopted0;
             int qst;
             rtq = lmx_msg_runtime_new();
+            seen_new(rtq);
             if (rtq == 0 || lmx_msg_create(rtq, 0, 1, &ini, 1, &qr) != LMX_MSG_OK
                 || lmx_msg_create(rtq, qr, 2, &ini, 1, &qp) != LMX_MSG_OK
                 || lmx_msg_end_turn(rtq, qr, 1) != LMX_MSG_OK
@@ -3372,6 +3385,7 @@ int main(int argc, char **argv) {
         LmxMsg *gm;
         memset(&rec, 0, sizeof(rec));
         rtc = lmx_msg_runtime_new();
+        seen_new(rtc);
         if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
@@ -3434,6 +3448,7 @@ int main(int argc, char **argv) {
         TurnCtx rec;
         memset(&rec, 0, sizeof(rec));
         rtp = lmx_msg_runtime_new();
+        seen_new(rtp);
         if (rtp == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
@@ -3492,6 +3507,7 @@ int main(int argc, char **argv) {
         g_admit_n = 0;
         memset(g_admit_log, 0, sizeof(g_admit_log));
         rta = lmx_msg_runtime_new();
+        seen_new(rta);
         if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
             return 1;
         }
@@ -3598,6 +3614,7 @@ int main(int argc, char **argv) {
         void *cbase;
         void *c2base;
         rth = lmx_msg_runtime_new();
+        seen_new(rth);
         memset(&nu, 0, sizeof(nu));
         if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
             return 1;
@@ -3768,6 +3785,7 @@ int main(int argc, char **argv) {
         LmxMsgEnv e;
         memset(&os, 0, sizeof(os));
         rto = lmx_msg_runtime_new();
+        seen_new(rto);
         if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
             return 1;
         }
@@ -3808,6 +3826,7 @@ int main(int argc, char **argv) {
         uchar ini = 1;
         int i;
         rts = lmx_msg_runtime_new();
+        seen_new(rts);
         if (rts == 0 || lmx_msg_create(rts, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
             return 1;
         }
@@ -3860,6 +3879,7 @@ int main(int argc, char **argv) {
         LmxMsg *cm;
         void *init_keep;
         rtr = lmx_msg_runtime_new();
+        seen_new(rtr);
         if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rtr, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtr, dummy, 1) != LMX_MSG_OK
@@ -3941,6 +3961,7 @@ int main(int argc, char **argv) {
         void *init_keep;
         LmxOwnedRange *range_keep;
         rta = lmx_msg_runtime_new();
+        seen_new(rta);
         if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rta, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rta, dummy, 1) != LMX_MSG_OK
@@ -4817,6 +4838,7 @@ int main(int argc, char **argv) {
         TurnCtx tctx;
         memset(&tctx, 0, sizeof(tctx));
         rtt = lmx_msg_runtime_new();
+        seen_new(rtt);
         if (rtt == 0 || lmx_msg_create(rtt, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rtt, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtt, dummy, 1) != LMX_MSG_OK
@@ -4899,6 +4921,7 @@ int main(int argc, char **argv) {
         TurnCtx tctx;
         memset(&tctx, 0, sizeof(tctx));
         rtg = lmx_msg_runtime_new();
+        seen_new(rtg);
         if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rtg, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtg, dummy, 1) != LMX_MSG_OK
@@ -5013,6 +5036,7 @@ int main(int argc, char **argv) {
         TurnCtx tctx;
         memset(&tctx, 0, sizeof(tctx));
         rtd = lmx_msg_runtime_new();
+        seen_new(rtd);
         if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &top) != LMX_MSG_OK
             || lmx_msg_create(rtd, top, 2, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtd, top, 1) != LMX_MSG_OK
@@ -5088,6 +5112,7 @@ int main(int argc, char **argv) {
         void *dead_back;
         int *cells;
         rth = lmx_msg_runtime_new();
+        seen_new(rth);
         if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rth, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rth, dummy, 1) != LMX_MSG_OK
@@ -5163,6 +5188,7 @@ int main(int argc, char **argv) {
         int *dead;
         LmxMsgRoot *history;
         rtp = lmx_msg_runtime_new();
+        seen_new(rtp);
         if (rtp == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rtp, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtp, dummy, 1) != LMX_MSG_OK
@@ -5319,6 +5345,7 @@ int main(int argc, char **argv) {
         LmxOwnedRange *parent_ranges;
         int *cells;
         rto = lmx_msg_runtime_new();
+        seen_new(rto);
         if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rto, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rto, dummy, 1) != LMX_MSG_OK
@@ -5401,6 +5428,7 @@ int main(int argc, char **argv) {
         int *ccells;
         int *gcells;
         rtn = lmx_msg_runtime_new();
+        seen_new(rtn);
         if (rtn == 0 || lmx_msg_create(rtn, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rtn, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtn, dummy, 1) != LMX_MSG_OK
@@ -5500,6 +5528,7 @@ int main(int argc, char **argv) {
         int *ccells;
         int *gcells;
         rtr = lmx_msg_runtime_new();
+        seen_new(rtr);
         if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rtr, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtr, dummy, 1) != LMX_MSG_OK
@@ -5950,6 +5979,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        seen_new(rti);
         {
             LmxMsgAddr p = 0, a = 0, d = 0;
             int refs0;
@@ -6089,6 +6119,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        seen_new(rti);
         {
             LmxMsgAddr p = 0, a = 0, d = 0;
             int refs0;
@@ -6134,6 +6165,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        seen_new(rti);
         {
             LmxMsgAddr p = 0, a = 0, d = 0;
             int refs0;
@@ -6193,6 +6225,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        seen_new(rti);
         {
             LmxMsgAddr p = 0, a = 0, d = 0;
             LmxMsgEnv got;
@@ -6254,6 +6287,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        seen_new(rti);
         {
             LmxMsgAddr p = 0, a = 0, d = 0;
             StageJob ja, jb;
@@ -6924,6 +6958,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        seen_new(rti);
         {
             LmxMsgAddr p = 0, a = 0, b = 0;
             SiblingMapRec sib;
@@ -6964,6 +6999,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        seen_new(rti);
         {
             LmxMsgAddr p = 0, c = 0, g = 0;
             DisposeInTurnRec dz;
@@ -7167,6 +7203,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        seen_new(rti);
         {
             /* Stage 5 (c): a successful orphan waits for the root's next maintenance;
              * drive from inside a turn refuses and reclaims nothing; outside any turn
@@ -7252,6 +7289,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        seen_new(rti);
         {
             /* Stage 5 (d1c), spec 19.29.6 consequences (i)-(ii): a parent's settled
              * children are settled only by its dispose or adopt; a turn of the parent
