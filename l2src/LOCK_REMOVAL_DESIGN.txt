@@ -1571,6 +1571,26 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         branch, exec_unbound_close's impersonation and unbound_held go.
       Sent to the coordinator as a question, possibly for Mikhail, since the ruling and the spec's "each Message's
       own mechanism" / "owning executor" name different owners.
+    - RULED (the coordinator, 2026-09-15; d6's candidate; a design choice with no lock, wait or signal, recorded here
+      and not in the spec; the coordinator tells Mikhail in one sentence so he can object): the spec's sentences
+      leave the owner unnamed rather than pulling apart.
+      - The owning executor of a nonexecuting Message (spec 13277-13278) is its nearest executing ancestor's L3
+        Thread, and R0's thread for R0's subtree.
+      - That thread applies already-requested closes to its idle nonexecuting descendants (closing, not
+        exec_live, empty inbox, RUNNING or committed INACTIVE) in cascade order, in its own rounds, before its own
+        settle. A grandchild's close is requested only by its own parent's close.
+      - The same lane is the only one that binds such a Message: under a stopped parent there is no other mapping
+        authority, and mapping_authority_locked's host-outside-any-turn branch serves the bootstrap only. The bind
+        and the close are therefore on one lane.
+      - Hence unbound_held, exec_unbound_close's TLS impersonation and drive's unbound branch go. The close is a
+        direct call on the owning lane of the closing path of end_turn for that Message, with no borrowed
+        identity.
+      Fixtures that exercise it, all with a STOPPED or gone parent, so their owning executor is R0's thread (the
+        host's drive round):
+      - tests/lmx_model_family_close_32_selftest.lm1 (G1, H, G2 under the stopped C);
+      - tests/lmx_model_family_release_17_selftest.lm1 (C2 under the stopped P2, C3 under the completed P3);
+      - tests/lmx_model_liveness_33_selftest.lm1 (F under the stopped Q);
+      - lmx_message_exec_selftest.c's case at 7458 (an emergency-cancelled nonexecuting child of R0).
     - Red measured by d6 (2026-09-15, d6/lock-s6-red 695d54fc = 8eeb094f plus l2src/run_lock_s6_probe.ps1; builds
       nothing): -Part all exits 1 with "S6 probe: exec_lock_calls=601 exec_lock_decl=11 host_lock=43 exec_fields=27
       | refs=349 runtime_lists=36", S6-1 RED, S6-2 RED.
