@@ -14734,7 +14734,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_entry_n != 0 && c.fputs(", argc, argv", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs(")\n        return: 0\n    end: l2_program_entry\nend: external\nexternal:\n    fn: l2_program_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int\n        @: LmxMsg m c.lmx_msg_find(rt, who)\n", l2_out) < 0
+    if: c.fputs(")\n        return: 0\n    end: l2_program_entry\nend: external\nexternal:\n    fn: l2_program_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int\n        @: LmxMsg m c.lmx_msg_turn_self(rt)\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_entry_n != 0 && c.fputs("        @@: void cells (cast: (@@: void) ctx)\n        @: int argcp (cast: (@: int) cells[1])\n", l2_out) < 0
