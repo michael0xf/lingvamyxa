@@ -1737,8 +1737,9 @@ Found by 0c (2026-09-15): RUNNER_HAZARDS.txt, cited by section 6 as the gate
 policy's source, was never landed (absent at c067bed9, on integration and
 on main; it exists only on claude-0c/runner-hazards c6b5ef27). Ruled: the
 lane_oracle hardening commit lands the file as it stands plus the no-turn
-row, allowlist run_gates.ps1 and that file, on the lead's merge cf326822
-(S0 plus S1); the verdict requires the parity pass line and 0 "LANE WRITE
+row, allowlist run_gates.ps1 and that file, on the lead's integration hash
+with S0 in (cf326822 is 57's S0 commit alone on claude-0c/lane-tripwire, not
+a merge with S1; corrected by 57); the verdict requires the parity pass line and 0 "LANE WRITE
 FAIL" in the gate log (the tripwire's abort line reaches the console log,
 two lines in runs C and F); then S3's red test (one wake per lane,
 test-only, 0c's, stacked on cf326822); step 2's default-set commit merges
@@ -1754,3 +1755,26 @@ a stage of its own, larger than S4: the host-run mapping and its tests
 (stage 5 (d)'s turn_step_child migrations, the sequential scheduler
 record's cursor, the UI lane as a stepped lane) are X; a child is launched
 on its own thread or not at all; the lead re-plans S4-S6 on it.
+Mikhail, 2026-09-15, verbatim, on the last open items (the coordinator's
+2026-09-14 handoff-identity sentence in 19.29.6 and the model's section 32,
+and lm2/own.lm2's unused mutex and condition wrappers): "Да всё удаляйте
+потому что это совершенно очевидно лишнее. Одна арена на Message, арены
+присоединяются при потреблении -- это ядро" (yes, delete all of it, it is
+obviously superfluous; one arena per Message, arenas attach on consumption,
+that is the core). Done the same hour: the handoff sentence removed from
+both copies; his core sentence entered verbatim in spec 19.29.2 and the
+model's section 25; own.lm2's wrappers go in the design's S1.
+b5's LmxMsgCopy census (sonnet/lock-inventory db042997, section 3 of the
+lm1 inventory): 39 LmxMsgCopy declaration and cast sites in lm1, 39 in lm2;
+all 14 fields with every writer and reader by function and line; all 12
+LMX_MSG_KIND_* constants, five of them (ITEM, CANCELLED, DONE, REJECTED,
+MAP) created and consumed nowhere in lmx_message.lm1; 8 byte-copy sites
+(copy_bytes 7, copy_dup 1), five into an LmxMsgCopy's bytes (host_post,
+send, send_owned, send_cap), three into bare buffers (create_prepare's
+init, init_copy's read-back twice), each a byte-for-byte duplicate where
+one arena would move or attach storage; six functions walk a mailbox chain
+by next (q_push, q_pop, copy_free, host_drain, end_turn's outbox transfer,
+fail's inbox redirect); flagged for the design: KIND_DEAD is created but
+never consumed by a kind check in this file, and KIND_GRAPH is detected by
+node.delivered rather than its kind tag, so a replacement keyed on kind
+must check what reads them above this file.

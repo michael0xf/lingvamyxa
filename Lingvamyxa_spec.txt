@@ -12295,6 +12295,9 @@ Its C layout/duration cannot replace the identity or lifetime of an Lmx value.
 Every Message, inactive or running, owns one logical arena throughout its
 turns and worker migration. L3 source does not select it, and Lmx has no arena
 field. The arena may contain multiple non-overlapping blocks/address domains.
+(Mikhail, 2026-09-15, verbatim: "Одна арена на Message, арены присоединяются
+при потреблении -- это ядро", one arena per Message, arenas attach on
+consumption, that is the core.)
 
 Adopting a non-executing Message or a handoff-safe failed child adds its blocks
 and registered domains to this same logical arena (19.29.7--8). It creates no
@@ -12601,11 +12604,7 @@ Message. Hence exactly two ways keep a line of descendants beyond the closing
 of their parent (Mikhail, 2026-09-14): (i) spawn a plain Message and send it,
 so that whatever it spawns at the receiver is the receiver's line; (ii) spawn
 an L3 Thread and hand its supervision to another branch. A subtree that is
-neither closes with the chain. Under a supervision handoff the child keeps
-its creation identity (its path: the creator's path plus the creator's
-sequence number) and loses its creation id (it is no longer the result of
-anyone's create); only the supervisor changes (assumption recorded
-2026-09-14, review chat; Mikhail may overrule).
+neither closes with the chain.
 Three consequences of rules (1)-(3) for the runtime, read together with
 19.29.8, which selects the settling policy (review chat, 2026-09-14; corrected
 the same day against 19.29.8): (i) the parent's dispose of a settled failed
