@@ -571,6 +571,29 @@ SUMMARY, by class:
       through the slot table is the X form of this. Alternative: mailbox records kept alive by a count
       of their holders, which is the atomic cell of 5.2.
 
+5.7 THE TARGET FORM OF THE RECORD (Mikhail, 2026-09-15, in the coordinator's chat, after seeing
+    today's C structs). His words: a Message needs no more than running, success and its root ("Почему
+    вам не хватает typedef struct LmxMsg { volatile ... running = 1; volatile ... success = 0; struct
+    LmxRoot *root; } ????"); the record shown is the L3 Thread of today's implementation, and an L3
+    Thread's record "очевидно может быть сложней и содержать большее число полей так как там
+    планировщик и так далее"; and of LmxMsgBindWait, LmxMsgExecBind, LmxMsgRuntime, LmxMsgEnv and
+    LmxMsgCopy: "ЧТО ЭТО? Это все на L1 не является корневым Message, и при портировании все алгоритмы
+    записываются на LMX но не описывают Message".
+    So the target: Message = {running, success, root} (19.28.R2.2: the control flags belong to the
+    Message independently of its arena; a Message is an isolated LMX graph; its arena is reached from
+    its root); L3 Thread = a Message plus its mailbox (the synchronized collection of Messages, the one
+    lock) plus whatever scheduler and maintenance state it keeps as Structure data in its own arena.
+    The five C types are the L1 executor's scaffolding and describe no Message: LmxMsgCopy (the queued
+    envelope copy) and LmxMsgEnv (the handler's envelope) go with "no copies" (the mailbox holds the
+    Messages themselves); LmxMsgExecBind (the handler binding with its thread claim and affinity) becomes
+    the L3 Thread's or its parent's Structure data in the arena; LmxMsgBindWait (the worker's wait
+    object) goes with "no wait, no notify"; LmxMsgRuntime (the process-wide record: the slot list, the
+    root list, the transport queue, the host sync, the executor pointer, the address counters) goes,
+    what R0 needs of it (its children's addresses and paths, its policy record) being R0's data in
+    R0's arena. In the port every algorithm (scheduling, maintenance, closing) is written in LMX as
+    Structure data; the C keeps the native primitives only (the thread, the mailbox's monitor). The
+    design checks each of today's fields against this form: an owner in LMX, or deletion.
+
 6. WHAT THIS MAP DOES NOT DECIDE
   The removal's stages, their order and their reds are the lead's design in the (a) format after the
   three inventories are in; the gate per stage is 0c's; the map is amended by line when Mikhail answers

@@ -3169,3 +3169,17 @@ L1_PIN_SOURCE.txt in the same commit (root_l1trans_lm1_c=<blob>,
 c_fixed_point=<hash>, built_by=refresh <hash>, the date), checked later by
 0c's self-build row against the committed root l1trans.lm1.c's blob; no
 reader changes.
+Mikhail on today's C structs (2026-09-15, in the coordinator's chat, verbatim
+in the map's new section 5.7): a Message needs no more than {running,
+success, root}; the record shown is the implementation's L3 Thread, whose
+record may hold more (its scheduler and so on); LmxMsgBindWait,
+LmxMsgExecBind, LmxMsgRuntime, LmxMsgEnv and LmxMsgCopy "на L1 не является
+корневым Message, и при портировании все алгоритмы записываются на LMX но не
+описывают Message". The target form recorded in the map: Message =
+{running, success, root}; L3 Thread = a Message plus its mailbox (the one
+synchronized collection) plus its scheduler and maintenance state as
+Structure data in its arena; the five C types are executor scaffolding
+with their fates named (copies and envelopes gone with "no copies"; the
+binding becomes Structure data; the wait object gone with "no wait"; the
+runtime record gone, R0's data in R0's arena); the design checks every
+field of today's LmxMsg against this form, an owner in LMX or deletion.
