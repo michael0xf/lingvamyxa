@@ -1181,9 +1181,14 @@ real line 186 chars), with two commits on top: the working-directory rows
 typedef; measured 2026-09-15: a dropped \ escape is caught by any
 backslash path in the guard's own arguments (the mangled empty.c path, the
 same red with or without the quoted entry), and the quoted entry alone
-catches a dropped " escape (red at the size check), so the two failure
-texts are distinguishable in the logs; lands through the lead after slots
-as one branch, hashes to follow.
+catches a dropped " escape (measured: gcc "<command-line>: error: stray
+'\' in program" while parsing the define, before the size check is
+evaluated; without the entry the run is green end to end, nothing else
+carrying a quote), so the two failure texts are distinguishable in the
+logs; the branch is claude-0c/port-parser-cwd 673c3475 on 7a1eb5fc on
+cd8c9028, the guard line "cmdline guard ok: 137 arguments, 8855 characters
+inline, through a response file", green from the worktree root in 318 s;
+lands through the lead after slots as one branch.
 
 Translator repairs driven by the parser port's Stage e (2026-09-14/15, the
 lead, each a leaf in run_l2trans's historical set with its pin, red on the
