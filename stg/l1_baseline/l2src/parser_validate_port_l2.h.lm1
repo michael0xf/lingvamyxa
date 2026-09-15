@@ -1,0 +1,21 @@
+include: "l1src/p0.lm1.h"
+
+# Header unit for the clean L2 port of l1src/parser.lm1's colon-frame
+# validation family plus lm_p0_path_has_extension (parser-in-L2 port
+# ticket, Stage g). g's actual scope is l1src/parser.lm1:4453-4520
+# (lm_p0_colon_frame_empty .. lm_p0_validate_nonempty_colon_frames_
+# in_structure) plus 4611-4635 (lm_p0_path_has_extension) -- NOT the
+# whole 4453-4677 span, which also holds the module's public
+# `external:` API surface (lm_p0_parse_bytes/_string/_file, lm_p0_
+# document_destroy/_root/_mutable_root/_diagnostic, lm_p0_free) at
+# 4522-4610 and 4637-4677. That surface is a different concern (see
+# PARSER_L2_PORT.txt's "Unassigned" note, b4a8de83) and isn't ported
+# here; lm_p0_parse_bytes itself calls lm_p0_parse_stream, the
+# capstone item. One still-oracle-native entry: lm_p0_set_diagnostic
+# (not yet ported by any stage). g has no dependency on Stage f --
+# none of its functions call anything from l2src/parser_postprocess_
+# port.lm2.
+
+prototype:
+    sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))
+end: prototype

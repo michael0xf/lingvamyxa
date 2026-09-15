@@ -1,0 +1,117 @@
+predef: "l2src/parser_validate_port_l2.h.lm1"
+
+# L2 port of l1src/parser.lm1's colon-frame validation family plus
+# lm_p0_path_has_extension (Stage g of the parser-in-L2 port ticket).
+# Bodies are ported straight from the oracle, unedited. Named p0_*,
+# never lm_p0_*, per the ticket. node renamed nd, same rule as every
+# other renamed formal in this port (l2trans: "unsupported body,
+# atom=node" -- node collides the same way here as everywhere else
+# it's been renamed in this port; frame/trailer/structure don't
+# collide and keep their oracle names).
+#
+# One adaptation, purely syntactic: the oracle spells lm_p0_colon_
+# frame_empty and lm_p0_colon_trailer_empty (l1src/parser.lm1:4453,
+# 4464) without an explicit `end:` marker -- the next `fn:` closes
+# them implicitly, and each one's final `return: 1` sits unindented
+# at column 0 in the oracle source itself. l1trans accepts this for
+# the oracle; l2trans's own grammar wasn't tested against it and
+# every other function in this port uses an explicit end:, so both
+# gain one here for consistency. The logic (the sequence of ifs and
+# the final return) is unchanged, byte for byte.
+
+fn: p0_colon_frame_empty (const: @(LmP0Frame frame)) int
+    if: frame = 0
+        return: 0
+    if: (frame\flags & c.LM_P0_FRAME_COLON) = 0U
+        return: 0
+    if: frame\body = 0
+        return: 1
+    if: frame\body\field_count != 0U
+        return: 0
+    return: 1
+end: p0_colon_frame_empty
+
+fn: p0_colon_trailer_empty (const: @(LmP0Trailer trailer)) int
+    if: trailer = 0
+        return: 0
+    if: (trailer\flags & c.LM_P0_TRAILER_COLON) = 0U
+        return: 0
+    if: trailer\body = 0
+        return: 1
+    if: trailer\body\field_count != 0U
+        return: 0
+    return: 1
+end: p0_colon_trailer_empty
+
+fn: p0_validate_nonempty_colon_frames_in_trailer (@: LmP0Document document; const: @(LmP0Trailer trailer)) int
+    if: (trailer = 0)
+        return: 1
+    if: p0_colon_trailer_empty(trailer) != 0
+        lm_p0_set_diagnostic(document, 32, 1U, 1U, "empty colon Frame is not allowed")
+        return: 0
+    return: p0_validate_nonempty_colon_frames_in_structure(document, trailer\body)
+end: p0_validate_nonempty_colon_frames_in_trailer
+
+fn: p0_validate_nonempty_colon_frames_in_node (@: LmP0Document document; const: @(LmP0Node nd)) int
+    size_t: line 1U
+    size_t: column 1U
+    if: (nd = 0)
+        return: 1
+    if: nd\span != 0
+        line: nd\span\line
+        column: nd\span\column
+    if: nd\kind = c.LM_P0_NODE_FRAME && nd\as != 0 && p0_colon_frame_empty(nd\as\frame) != 0
+        lm_p0_set_diagnostic(document, 32, line, column, "empty colon Frame is not allowed")
+        return: 0
+    if: nd\kind = c.LM_P0_NODE_FRAME && nd\as != 0 && p0_colon_trailer_empty(nd\as\frame\trailer) != 0
+        lm_p0_set_diagnostic(document, 32, line, column, "empty colon Frame is not allowed")
+        return: 0
+    if: nd\kind = c.LM_P0_NODE_STRUCTURE && nd\as != 0 && p0_colon_trailer_empty(nd\as\structure\trailer) != 0
+        lm_p0_set_diagnostic(document, 32, line, column, "empty colon Frame is not allowed")
+        return: 0
+    if: (nd\kind = c.LM_P0_NODE_FRAME)
+        if: (p0_validate_nonempty_colon_frames_in_structure(document, nd\as\frame\body) = 0)
+            return: 0
+        return: p0_validate_nonempty_colon_frames_in_trailer(document, nd\as\frame\trailer)
+    if: (nd\kind = c.LM_P0_NODE_STRUCTURE)
+        if: (p0_validate_nonempty_colon_frames_in_structure(document, nd\as\structure) = 0)
+            return: 0
+        return: p0_validate_nonempty_colon_frames_in_trailer(document, nd\as\structure\trailer)
+    return: 1
+end: p0_validate_nonempty_colon_frames_in_node
+
+fn: p0_validate_nonempty_colon_frames_in_structure (@: LmP0Document document; const: @(LmP0Structure structure)) int
+    const: @: LmP0Field field
+    field: structure\first_field
+    while: (field != 0)
+        if: (p0_validate_nonempty_colon_frames_in_node(document, field\value) = 0)
+            return: 0
+        field: field\next
+    return: 1
+end: p0_validate_nonempty_colon_frames_in_structure
+
+fn: p0_path_has_extension (const: @(char path); const: @(char extension)) int
+    size_t: path_length
+    size_t: extension_length
+    size_t: i
+    char: left
+    char: right
+    if: ((path = 0) || (extension = 0))
+        return: 0
+    path_length: c.strlen(path)
+    extension_length: c.strlen(extension)
+    if: (path_length < extension_length)
+        return: 0
+    i: 0U
+    while: (i < extension_length)
+        left: path[((path_length - extension_length) + i)]
+        right: extension[i]
+        if: ((left >= 'A') && (left <= 'Z'))
+            left: (cast: char ((left - 'A') + 'a'))
+        if: ((right >= 'A') && (right <= 'Z'))
+            right: (cast: char ((right - 'A') + 'a'))
+        if: (left != right)
+            return: 0
+        i: i + 1U
+    return: 1
+end: p0_path_has_extension
