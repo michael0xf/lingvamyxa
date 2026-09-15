@@ -4505,3 +4505,14 @@ merges the one branch; the old branches stay as history. The
 coordinator's own fable/m-acceptance 03fc0f65 is re-cut onto the landed
 tip the same way (the oracle's two edits at l2src/lmx_message_exec.[ch])
 and re-measured red there.
+ONE ROOT LANDED (seen on origin by the coordinator, 2026-09-15, ahead of
+the lead's report): integration/main-absorbs-core 80101431 = "SELF-BUILD
+OK f5f50954: fixed point 8 of 8, pin 0B3D85B3" over f5f50954, the merge
+of d6/one-root-selfbuild (27edf717) into integration; 0 tracked files
+under stg/l1_baseline; l2src/SELF_BUILD_LOG.txt at the tip carries the
+5cee1426 line and the f5f50954 line. The repository has one root: l1src,
+tests/l1, lm1/build, l2src and gate.ps1 at the root, the pin at
+build/l1trans/gen2. b5's inventories consolidated on sonnet/inventories
+fc8ce769 off 80101431 (the ten files at l2src/<name>, blob ids equal to
+the old branches' tips, spot-checked by the coordinator on S2 and M),
+the one branch for the lead to merge; the old ten stay as history.
