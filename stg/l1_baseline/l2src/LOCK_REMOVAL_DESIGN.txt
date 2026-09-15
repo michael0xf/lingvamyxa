@@ -377,6 +377,71 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
     selftests green, then the 33 gates. Falsify R-by-R: put back any one signal (e.g. bind_wait_signal at 2995) and
     -LaneCheck is red at that site.
 
+ONE ROOT. The stg/l1_baseline slice folded into the repo root, after S3 and before M.
+    Mikhail, verbatim (2026-09-15, via the coordinator): "сейчас, после приземления S3, пока деревья равны и слияние
+    дешёвое". Coordinator's ruling on the shape (plan on main, "option (a), everything to the root"): l2src and the
+    gates move to the root, and stg/l1_baseline disappears whole. The first wording kept l2src in the slice; F2-F3
+    showed no cwd could then resolve l2src's own sources, and that clause was withdrawn.
+    Facts (integration c063fd00):
+    F1. The slice's copies equal the root: git diff HEAD:<d> HEAD:stg/l1_baseline/<d> is empty for l1src (16 tracked
+        files), tests/l1 (585) and lm1/build (8); stg/l1_baseline/tests/*.lmx (16) equal the root's tests/*.lmx by
+        blob. stg/l1_baseline tracks 1229 files: l2src 599, tests 601, l1src 16, lm1 8, and .gitignore, README.txt,
+        README.snapshot-origin.txt, buildCore.lm0.bat, gate.ps1.
+    F2. l1trans and l2trans open a predef or import path as written, relative to the process cwd, with no search path
+        (l1src/l1trans.lm1 1207, l1_src_load's fopen(path); l2src/l2trans.lm1 3885 and 4059). Probe with the pinned
+        translator 0B3D85B3 on a file holding predef: "l1src/parser.lm1": cwd an empty directory exit 1, "l1trans
+        error: cannot read import l1src/parser.lm1"; cwd the repo root exit 0; cwd stg/l1_baseline exit 0.
+    F3. l2src's sources name both trees that way: predef: "l2src/ 32 lines in 29 .lm1 files and 91 in 39 .lm2;
+        include: "l2src/ 55 .lm1 and 7 .lm2; predef: "l1src/ in l2trans.lm1 line 1, 3 .lm2 and 24 lines embedded in 4
+        runners; include: "l1src/ 11 .lm1 and 3 .lm2. Translating l2trans.lm1 needs l1src/ and l2src/ under one cwd;
+        with l2src at the root and the copy gone, the root is that cwd, with no source edit.
+    F4. Readers of the slice. In l2src: 36 runners (243 lines), spelled relative to $baseline = Split-Path -Parent
+        $PSScriptRoot or through git archive sets naming stg/l1_baseline/{l1src,l2src,lm1/build}
+        (run_l2_message_root 64, run_candidate_c_scanners 49, run_msg_family_handoff 84, run_msg_send_local 72),
+        plus run_candidate_indent's HEAD:stg/l1_baseline/l1src/parser.lm1 and run_slice_equal's repo climb;
+        run_gates.ps1 reads its pinned translator at build\l1trans\gen2 under that baseline. stg gate.ps1 runs
+        buildCore.lm0.bat, tests\l1\run_seed, run_gen, 11 suites on gen0 and gen2, and l2src\run_lmx. Outside stg:
+        74 mixa_manager .ps1 (52 name stg build/l1trans, 12 stg l2src; lib_l2_runtime_support.ps1's L1Root),
+        mixa_manager/tests/l1_gaps/run.sh 14, the root's tests/l1/run_legacy_p0.ps1 15 and run_import_capacity.py
+        219. In comments only: mixa_backend.h 13 and four mixa .lm2 (event_fifo 14, selection 16 and 21,
+        selection_l2_probe 19, tiles 28). 39 .md/.txt documents name stg paths.
+    F5. The root tracks no l2src/, gate.ps1 or run_gates.ps1, so the moves collide with nothing. The root's
+        tests/l1/run_gen.ps1 already writes build\l1trans\gen1..gen3 at the root, and the root's buildCore.lm0.bat
+        builds the bootstrap tools.
+    The change (one branch, landed through the lead):
+    O1. R: git mv stg/l1_baseline/l2src l2src (599 files, with run_gates.ps1, L1_PIN.txt, L1_PIN_SOURCE.txt,
+        RUNNER_HAZARDS.txt and this design), and stg/l1_baseline/gate.ps1 -> gate.ps1.
+    O2. D, only under stg/l1_baseline: l1src, tests/l1, lm1/build, tests/*.lmx, buildCore.lm0.bat, README.txt,
+        README.snapshot-origin.txt, .gitignore, and l2src/run_slice_equal.ps1 (its subject, slice against root, is
+        gone; run_self_build keeps the fixed-point row).
+    O3. M, runners: after O1 a runner's Split-Path -Parent $PSScriptRoot is the repo root, so relative spellings
+        (l1src/, lm1/build, tests\l1, build\l1trans\gen2) resolve there unchanged; the edits are the explicit
+        stg/l1_baseline strings (archive sets, HEAD:stg/... blob reads) and repo climbs (..\..), counted before code.
+        gate.ps1 runs the root's buildCore.lm0.bat and tests\l1 runners and l2src\run_lmx. mixa_manager: L1Root and the
+        74 runners' stg\l1_baseline\build\l1trans and stg\l1_baseline\l2src become build\l1trans and l2src;
+        run_mixa's tracked C becomes lm1/build/l1trans.lm1.c; tests/l1_gaps/run.sh likewise. The root's
+        run_legacy_p0.ps1 and run_import_capacity.py drop their slice rows.
+    O4. The pin: L1_PIN.txt unchanged (the same binary; its source blob 7ccb37c0 is the root's committed
+        l1trans.lm1.c). L1_PIN_SOURCE.txt: distributed = a hash-checked copy into the root's build/l1trans/gen2, and
+        built_by kept as the refresh's history. Every landing script re-installs the pin after any run that
+        regenerates gen2 (gate.ps1, run_gen).
+    O5. Text (coordinator's ruling, recorded in the plan on main): the source comments of F4 name the new paths in the
+        same commit, text only. Dated history keeps its paths as written at its hashes (the plan's entries, the map,
+        the design's measured rows, the field tables, evidence and measurement files). The current instructions get
+        the new paths in the same landing: CORE_LEAD_INSTRUCTION ru and en, the model's current parts, the root
+        README, RUNNER_HAZARDS.txt. The spec gets no path edit; its verbatim sentences and citations stay.
+    Allowlist by status: R only stg/l1_baseline/l2src/** -> l2src/** and stg/l1_baseline/gate.ps1 -> gate.ps1; D only
+    under stg/l1_baseline; M only runners (l2src/run_*.ps1, l2units_build.ps1, lib files, gate.ps1,
+    tests/l1/run_*.ps1, tests/l1/run_import_capacity.py, mixa_manager run_*.ps1, its lib and tests/l1_gaps/run.sh),
+    L1_PIN_SOURCE.txt, and the O5 text lines.
+    Red and green: red today: git ls-files stg/l1_baseline counts 1229, and any l2src runner run with the slice's
+    l1src removed fails at its first translation (F2). Green on the merge: git ls-files stg/l1_baseline counts 0, and
+    the landing set of (c) on the new paths: the root's buildCore.lm0.bat, tests/l1 run_seed and run_gen, gate.ps1
+    all green, run_legacy_p0, run_self_build 8 of 8, run_p0_tree_contract, a CMake configure; the pin re-installed at
+    build/l1trans/gen2; run_gates -L2MessageRoot 33 of 33, run_l2trans, run_port_parser, run_port_message
+    -LaneCheck, and run_mixa.ps1. Falsify: leave one archive set unedited (run_msg_send_local 72): the send_local gate
+    is red with the missing stg/l1_baseline path.
+
 M. The sequential mapping removed (X), after S3 and before S4.
     Mikhail on 5.5, verbatim (2026-09-15): "мы же обсудили миллион раз. Закрытие родителя это авария. _Каждый ребенок
     закрывает себя сам и для его детей это такая же авария_. Если дети L3 Thread но реализация такая что у них нет
