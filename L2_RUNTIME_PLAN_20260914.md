@@ -1110,6 +1110,30 @@ re-parses actuals on its own is a defect waiting; actuals go through
 l2_expr_span. Named for its own ticket: U4's remaining default that casts
 any other lm_own_new_zero argument to `@: LmP0Text`; a probe's
 `lm_own_resize(stack\columns, ...)` failing with no located diagnostic.
+The uchar branch (d6/uchar-local off ea7fa1ce, three commits, 5e's leaf
+entering with commit 1 at pin 145 and U4 moving to 146; commits 1 and 2 red
+on that leaf by design, measured and landed as a whole at its tip): commit 1
+the uchar local (an unsigned-backed cache spelled uchar), commit 2 the
+bare-atom cast `(cast: uchar c)`, commit 3 ruled 2026-09-15 as `"<ctype.h>"`
+joining the unit writer's fixed include list beside stdlib and string (the
+flags l2_need_string/l2_need_stdlib feed only the entry-program writer;
+units get their includes from l2_emit_unit's fixed line, and nothing brought
+ctype), no name table and no flag under decision 12, the prototype's
+l2_is_known ctype table out with it; if run_l2trans's historical set compares
+emitted text, the goldens' regeneration is in commit 3 with one include-line
+hunk per golden and nothing else. Two more gaps from b5, queued after the
+uchar branch and before U4 and the handler deletion, in this order: the
+expression length (sonnet/parser-l2 af150cd6, the oracle's 318-character `||`
+condition in lm_p0_scan_builtin_compact_atom_piece fails "expression too
+long" at l2_cat's fixed 256-byte buffer; blocks e4b; pin 147; ruled: the
+buffer is sized from the span it concatenates, not a bigger constant, and a
+doubled condition in a scratch probe must still translate), then the
+zero-argument cross-unit prototype with a pointer return (10f294a2,
+`block_event: p0_stream_event_new()` "unsupported body" cross-unit while the
+same call works in-unit and an int return works; blocks e5, WIP on a side
+branch; pin 148; the leaf's note names which difference drives it, the zero
+formals or the pointer return, measured by two scratch probes before the
+fix). U4 and the handler deletion follow at 149.
 
 - Lead (`lingvamyxa-d6`): translator gaps found by this lane, with fixtures
   as before; merges through integration; the model's §31/§34 wording carries
