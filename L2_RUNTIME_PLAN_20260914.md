@@ -3625,3 +3625,15 @@ model. The design's R8 and R9 are to say so, the name EMPTY-ROUND goes;
 the scheduler yield stays only as an implementation line, the
 coordinator's, after a round that found neither mail nor work, and is no
 part of the model. Entered verbatim in spec 19.28.R2.2 and model 31.
+Mikhail (2026-09-15) on "проверка живости внутри каждого круга": "какой
+живости?" Answered by the coordinator from the code at c063fd00
+(lmx_message.lm1 2785, lmx_msg_live_check, called by context_worker on its
+20 ms timeout): it is the spec's own two checks and nothing else: (1) a
+Message with an outstanding query to its parent older than the threshold
+marks itself closing (19.28.R2.2: a child closes itself after prolonged
+absence of its parent; polling child to parent, 19.29.7.1); (2) for each
+of its unmapped, tracked, committed, live children whose last-heard time
+is older than the threshold it marks that child closing (19.28.R2.2: the
+parent removes on timeout, the second, emergency mechanism). After S3 both
+run as part of the L3 Thread's end_turn work each round, no timer; the
+design's R8 is to name them so, not "liveness".
