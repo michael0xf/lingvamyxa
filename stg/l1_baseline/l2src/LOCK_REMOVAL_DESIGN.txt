@@ -89,6 +89,11 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       executor selftest and the model tests, and asserts 0 lookups from C1/C2/C5 sites. Red today with the counts
       per site; it gets a tripwire run with one site put back.
     - Green: those counts at 0, the inventories' lookup lines for C1/C2/C5 gone, the lock still in place.
+    - Measured red (2026-09-15, d6/lock-s2-red b3d16381, executor selftest's reference.exe from run_port_message,
+      twice with LMX_LOOKUP_COUNT=1): "lookup walks: C1=1812 C2=2 turn_other=426 host=327729", then "... host=305125".
+      C1, C2 and turn_other are stable. host varies with the selftest's polling loops from main. Parity is unchanged
+      with the counter built in, and there are no report lines without the variable. The threading comes after
+      stage M, because run_child_turn and sched_step are part of C1 and are deleted, not threaded.
 
 S3. One wake per lane (L6), no lock around a signal (Mikhail on wait signals).
     exec_wake_locked, which signals every worker after any turn, goes. A turn's end wakes only the lanes it readied,
