@@ -4075,3 +4075,12 @@ and host.c; the pin is in place. The eleven wake sites are gone: the
 executor and the host wake, wait and join nothing. e9 has the machine
 slot now; ONE ROOT code starts on a fresh branch off b4e1296d, its heavy
 runs waiting for e9's "done".
+S3 acceptance green measured by the coordinator on the landed tip
+b4e1296d in exec-3a (pin 0B3D85B3): run_port_message -LaneCheck exit 0 in
+57 s, plain exit 0 in 56 s, parity PASS, 101 methods redirected. The
+acceptance's record for S3: red 74146146 (13 s, site=ctx_visit_wake),
+green b4e1296d, falsifier acac8e30 (stop_event put back, red again).
+Pattern for every later stage's acceptance: the oracle on its own
+branch merged onto the stage's base for the red, the stage's branch
+merged with it for the green, one removed signal or write put back for
+the falsifier, all three measured cold before "landed".
