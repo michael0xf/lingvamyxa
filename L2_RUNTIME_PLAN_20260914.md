@@ -1893,3 +1893,22 @@ hour: on any bug or contradiction met in a stage, the stage stops with the
 contradiction formulated in one paragraph and waits for his word through
 the coordinator; the synchronization sentence entered in spec 19.28.R2.2
 and the model's section 29.
+Refined by Mikhail the same hour, verbatim: "\"при любом баге\" -- при любом
+баге фикс которого потребовал бы введения других локов" ("at any bug" means
+any bug whose fix would require introducing other locks). So the stop rule
+covers contradictions and the bugs whose fix would need a lock outside a
+Message's mailbox; other bugs are fixed in the ordinary way, red-first.
+Relayed to the lead, 0c and b5.
+b5's deletion of the vendored host ingress V0: sonnet/mixa-ingress-inventory
+1a9f1ca8 on 589c8aae; before, the vendor path 6 files, the harness 15 call
+sites, run_mixa.ps1 referencing run_ingress_harness.ps1 at line 183; deleted
+the vendor directory, tests/mixa_ingress_host_harness.c,
+run_ingress_harness.ps1 and the runner's invocation block in run_mixa.ps1
+(lines 182-185), nothing else; after, 0 files, 0 call sites, 0 runner
+references; run_mixa.ps1 cold exit 0 through "mixa backend table ok" with
+no ingress line; the string lmx_msg_host_ingress_v0 remains in 5
+documentation lines (the inventory file, 4; mixa_console_window.txt, 1),
+reported as 5 rather than claimed 0. Ruled: the inventory file goes in a
+third commit (the commit history and this plan hold the record), the
+design note's mention stays and is named as the one match; lands through
+the lead's chain after the S-stages in flight.
