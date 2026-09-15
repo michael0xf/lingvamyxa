@@ -1487,15 +1487,21 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         start). unbound_held goes with lmx_msg_exec_unbound_close's impersonation. Each is named per the pre-read.
       - (c) the host lock: h->shutting_down becomes one atomic flag (the host writes it, admissions read it), and
         lmx_msg_host_lock/unlock and LmxMsgHostSync's mutex go.
-      - (d) refs, endp_retain/endp_release and LmxMsgRuntime.slots/n go together: a released child is freed by its
-        parent at settle, and runtime_delete walks R0's tree instead of slots.
-    - Dependency that may stop (d): a sender resolves and pins a sibling destination on another lane
-      (lmx_msg_dest_from_src <- send/send_owned, the 14 turn_other walks S2 attributed; C3), and a child queries its
-      parent (C4). S4's section names both as depending on 5.6 (a capability after its target closes), and S4 as
-      landed added only the emergency_cancel guard. Without refs, nothing keeps that destination's record alive
-      across the unlocked window, and a reference count is not order-free state. If 5.6 is still unanswered when
-      the pre-read lands, (d) is put to Mikhail through the coordinator as a needed decision, and S6 lands (a)-(c)
-      first.
+      - (d) refs, endp_retain/endp_release and LmxMsgRuntime.slots/n go, by Mikhail's recorded answers (this
+        document, "S5 on 5.1" and "5.6, answered"):
+        - 5.6: a capability is the target's mailbox handle, so there is no holder count;
+        - a closing Message's mailbox settles into its parent with the rest of its storage;
+        - a late send lands in the parent's mailbox and is refused there, on the parent's lane, with a status to the
+          sender;
+        - 5.1: the slot list goes without replacement, and there is no walk at deletion, since the close is R0's own
+          closing end-turn.
+        This replaces the draft's first wording ("runtime_delete walks R0's tree"), which contradicted 5.1.
+    - (d) is not a pure deletion. Today a sender resolves and pins a sibling destination on another lane
+      (lmx_msg_dest_from_src <- send/send_owned, S2's 14 turn_other walks; C3), and a child queries its parent (C4).
+      Under 5.6 both hold the target's mailbox handle instead, and a send arriving after the target closed is
+      redirected to the parent's mailbox and refused on the parent's lane. That redirect-and-refuse is new
+      behaviour and needs its own red-first check (a send to a closed sibling: today's result versus the parent's
+      refusal status), in the words of spec 19.29.7 as entered.
     - Proposed acceptance (the S2/S5 pattern):
       - Red: a probe runner on its own branch (d6/lock-s6-red off 8eeb094f) prints the counts:
         exec_lock_calls (lines naming lmx_msg_exec_lock( or lmx_msg_exec_unlock( in lm1, lm2, exec.c, host.c and the
@@ -1507,6 +1513,23 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       - Green: every count 0 on the S6 tip merged with the probe; the union base (land_base3.sh) plus lmx_cancel;
         the UAF kit's 165 clean runs over the executor selftest; the model scenario36 set.
       - Falsifier: one hold put back (a lock/unlock pair around one census site) turns exec_lock_calls >= 1.
+    - Ruled (the coordinator, 2026-09-15): 5.6 is not open. The spec carries Mikhail's agreed wording at
+      Lingvamyxa_spec.txt 12885-12891: a capability is the target's mailbox handle; a closing Message's mailbox is
+      settled into its parent with the rest of its storage, so a late send lands in a mailbox the parent owns and
+      is refused there, on the parent's lane, with a status to the sender; there is no count of holders. (d) is
+      designed on that and not put to Mikhail:
+      - a child's storage is never freed while its parent lives (it is settled into the parent's arena, whose blocks
+        do not move), so a sender's handle stays valid;
+      - a send after the close is refused on the parent's lane, with no count;
+      - a child's query reaches a live parent by the cascade; the abrupt-death case belongs to the liveness poll.
+      S6 lands in two parts under this one section:
+      - S6-1 = (a) + (b) + (c), first;
+      - S6-2 = (d), on 5.6's wording. Its settle-moves-the-mailbox design is written before its code, and if it
+        needs a lock, wait or signal, the stage stops.
+      Acceptance accepted as proposed. The probe is on d6/lock-s6-red off 8eeb094f: exec_lock_calls, exec_lock_decl,
+      host_lock and exec_fields for S6-1; refs and runtime_lists for S6-2. Red now, green 0 with land_base3.sh's
+      union base plus lmx_cancel, the UAF kit's 165 runs and scenario36. Falsifier: one hold put back (for S6-2,
+      one retain).
 
 A1-A3. The arena (19.29.2), after S6 or interleaved where a stage touches the same record.
     Mikhail on 5.4, verbatim (2026-09-15): "какая копия? У нас нет никаких копий message -- выше же с тобой обсуждали.
