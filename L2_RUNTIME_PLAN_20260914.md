@@ -2919,3 +2919,16 @@ lmx_message_host.c), its red and green runs waiting for the next slot.
 (run_self_build.ps1 and run_slice_equal.ps1 only, byte-identical to what
 was measured), a branch outside the defaults until it lands with (b) and
 the refresh through the lead.
+Finding (the lead, measured with replicas, 2026-09-15): stg/l1_baseline/
+buildCore.lm0.bat returns exit 0 when its pinned prerequisite check fails
+(printing "pinned seed prerequisite missing: oldchain\lib\libparser.lm0.a"),
+so gate.ps1's Step marks buildCore "ok": an `exit /b 1` inside a for body
+that also holds a `copy ... || exit /b 1` line returns 0 from cmd, the
+same loop without that line returns 1, a top-level `failing || exit /b 1`
+returns 1, identical from bash and in gate.ps1's `cmd /c ... $LASTEXITCODE`
+form. Consequences: until d6/stg-buildcore lands a cold gate.ps1 without
+the archives is green at buildCore while they are missing (read the log,
+not the step); the rewrite deletes the loop and keeps only the top-level
+form, so its green is sound; the red measure judges by the bat's own
+diagnosis with the exit code recorded, not trusted. The root's
+buildCore.lm0.bat has no such loop. A RUNNER_HAZARDS row for 0c.
