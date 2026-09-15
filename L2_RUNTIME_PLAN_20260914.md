@@ -2915,3 +2915,7 @@ all eleven signals: ctx_visit_wake, wake_addr_locked, bind_reap_push,
 join_bind_worker, launch, launch_gate_go, launch_gate_refuse,
 stop_retire_walk, stop_event in exec.c; host_wake and host_shutdown in
 lmx_message_host.c), its red and green runs waiting for the next slot.
+0c's two rows pushed as claude-0c/self-build-rows 92f70d7c on 88934463
+(run_self_build.ps1 and run_slice_equal.ps1 only, byte-identical to what
+was measured), a branch outside the defaults until it lands with (b) and
+the refresh through the lead.
