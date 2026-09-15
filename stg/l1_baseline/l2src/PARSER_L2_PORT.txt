@@ -701,8 +701,104 @@ d) COMPLETE -- all 5 slices landed, see above. One open item: the
 e) field-parsing state machine -- e1/e2 landed and pushed; e3 written,
    blocked on d6's fix for the bracket-char-literal l2trans defect
    above (repro pushed, commit 7acecbbd).
-f) postprocess
-g) registry/diagnostics/validate
+f) postprocess -- l1src/parser.lm1:4260-4452 (lm_p0_structure_recount
+   .. lm_p0_wrap_fields_from_line). Contiguous. Written and pushed,
+   sonnet/parser-l2-f 828eab1f, clean on both translators, no gap hit.
+g) registry/diagnostics/validate -- l1src/parser.lm1:4453-4520
+   (lm_p0_colon_frame_empty .. lm_p0_validate_nonempty_colon_frames_
+   in_structure) plus 4611-4635 (lm_p0_path_has_extension). NOT
+   contiguous: 4522-4610 and 4637-4677 sit between/after these and
+   are the module's public `external:` API surface (lm_p0_parse_
+   bytes/_string/_file, lm_p0_document_destroy/_root/_mutable_root/
+   _diagnostic, lm_p0_free) -- a different concern, not validate or
+   registry, and not assigned to any stage here (lm_p0_parse_bytes
+   itself calls lm_p0_parse_stream, the capstone item).
+
+Stage ranges (6f's ruling, 2026-09-15: the plan's anchors are the
+only stage boundaries; write them down since this file didn't state
+them)
+-----------------------------------------------------------------
+a) l1src/parser_text.lm1 (a separate oracle file, not l1src/
+   parser.lm1) -- its whole content, lines 4-82, all 15 functions
+   (lm_p0_text_equals .. lm_p0_text_from_cstr).
+b) l1src/parser.lm1:441-768, non-contiguous (lm_p0_indent_tab_column
+   .. lm_p0_find_physical_line_end at 441-564, then a gap of
+   not-yet-assigned functions at 565-748, then lm_p0_scan_layout_
+   prefix .. lm_p0_layout_prefix_is_deeper at 749-768).
+c) l1src/parser.lm1, widely non-contiguous, scattered at each
+   function's own natural position in the file rather than a
+   dedicated block: lm_p0_node_kind_class_name (341),
+   lm_p0_dump_append_size/_field_count_line (860-877),
+   lm_p0_new_structure/_frame (923-932), lm_p0_new_node (1499),
+   lm_p0_free_node (2077), lm_p0_dump_reserve .. lm_p0_dump_delete
+   (4678-4923), and lm_p0_dump_alloc (4931-4949, inside an
+   `external:` block at 4930).
+d) l1src/parser.lm1:3040-3695, contiguous, except lm_p0_stream_
+   event_is_tail_cutter which sits far earlier at 712 (grouped with
+   the not-yet-ported trailer_role family there, not with the rest
+   of d).
+e) Overall span 366-3038 (e3's indent_stack_push/_new_empty/_delete
+   cluster sits at the low end, well before everything else). The
+   slices interleave in file order rather than nesting cleanly --
+   none of e1/e2/e3 is one contiguous block:
+   e1: 2482-2552 (lifecycle -- field_parse_loop_frame_delete_any,
+       _stack_new, _stack_delete, _push, field_parse_fail). Sits
+       between e2's two clusters and e3's second cluster.
+   e2: 2011-2076 (append_atom_slice, append_positional_skip,
+       append_compact_atom_pieces) plus 2553-2563 (parse_append_
+       node_and_update, alone, right after e1).
+   e3: 366-408 (indent_stack_push/_new_empty/_delete -- grouped with
+       Stage b's own area, well before e1/e2's cluster) plus
+       2081-2481 (relaxed_level_from_column, source_level_after_
+       line_break, skip_field_space, scan_python_string, scan_
+       quoted, require_quoted_token_boundary, find_matching_paren/
+       _bracket, field_start_looks_explicit_frame).
+   e4a: 1804-1957, contiguous (10 of e4's 16 functions with no
+       dependency on the uchar or expression-length gaps -- scan_c_
+       quoted_token, starts_c_prefixed_quote, scan_c_char_token,
+       scan_c_prefixed_quote_token, starts_c_surface_atom, is_c_
+       surface_top_boundary, scan_c_sizeof_surface_atom, scan_c_
+       surface_atom, scan_c_char, scan_c_prefixed_quote). Sits
+       between e4b's two clusters.
+   e4b: 1712-1802, 1959-2010 (the other 6 -- is_bare_identifier_
+       start/_rest, is_hex_digit, scan_number_token, scan_builtin_
+       compact_atom_piece, scan_compact_atom_piece -- blocked on the
+       uchar-local and expression-length gaps).
+   e5: 2564-3020 (lm_p0_parse_fields_until_with_layout). Written,
+       blocked on the zero-arg cross-unit prototype gap.
+   e6: 3022-3038 (lm_p0_parse_fields_until, lm_p0_parse_fields_into).
+       Written, inherits e5's block, no new gap of its own.
+f) l1src/parser.lm1:4260-4452 (lm_p0_structure_recount ..
+   lm_p0_wrap_fields_from_line). Contiguous.
+g) l1src/parser.lm1:4453-4520 (lm_p0_colon_frame_empty ..
+   lm_p0_validate_nonempty_colon_frames_in_structure) plus 4611-4635
+   (lm_p0_path_has_extension). Not contiguous -- see the external:
+   API surface note above.
+
+Unassigned (the anchors above don't cover these; not a stage, not
+guessed into one):
+   - lm_p0_registry_* family, l1src/parser.lm1:287-336 (registry_
+     compact_atom_piece is at 287, separately, and belongs to c's
+     scattered set already -- but registry_load_default/_table_has_
+     rows*/_lookup_cstr/_compare_enabled/_lookup_key_by_unsigned_
+     payload at 318-336 are unassigned).
+   - lm_p0_trailer_role family and neighbors, l1src/parser.lm1:
+     336-711 (trailer_role, legacy_trailer_role, trailer_role_from_
+     payload/_payload/_is_tail_cutter, node_head_is, trailer_role_
+     accepts_target, and the brace-mark/mix-prefix/dash-fence/raw-
+     comment/block-string scanning family down to 1710) -- this
+     range interleaves with b's own two clusters (441-564, 749-768)
+     and reaches the capstone (lm_p0_record_mix_mark is in here).
+   - The capstone itself (unchanged from the Stage d note above):
+     lm_p0_record_mix_mark, the disabled-block-validation family
+     (lm_p0_validate_disabled_item_text, lm_p0_disabled_scan_next_
+     event, lm_p0_disabled_event_is_tail_cutter, lm_p0_disabled_
+     state_accept_event, lm_p0_validate_disabled_block), and
+     lm_p0_parse_stream itself.
+   - The public `external:` API surface, l1src/parser.lm1:4522-4610
+     and 4637-4677 (see g's own note above) -- lm_p0_parse_bytes/
+     _string/_file, lm_p0_document_destroy/_root/_mutable_root/
+     _diagnostic, lm_p0_free.
 
 Build and verification
 -----------------------
