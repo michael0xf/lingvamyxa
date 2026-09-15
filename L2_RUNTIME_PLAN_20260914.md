@@ -1548,3 +1548,64 @@ other six 5.1 lines: the root list in drive_walk_list, the retire queue
 exec_wake_locked wakes every worker after any turn (run_one 2587),
 exec_ready routes one wake, and walks take refs. Next for the lead on the
 same branch: the exec.c allocation inventory, the arena half.
+Mikhail's answers of 2026-09-15 on the map's question 5.2, verbatim: "Каких
+сигналов ожидания? Снятие блокировки с сигналов ожидания чем-то может
+нарушить смысл этих сигналов? Очевидно нет. Снимать всё и никогда больше не
+редактируй спеку своими выводами -- всё спрашивай и только согласованное
+вноси в документы. Каких ссылок? 1) Message не имеет никаких ссылок на общие
+ресурсы кроме тех которые неизменяемые (independents: const: immutable:
+хранятся в неизменяемых массивах у root). Либо на атомарные для которых
+очередность не важна 2) Очередь сообщений -- синхронизированная коллекция"
+(what wait signals? can removing the lock from the wait signals break their
+meaning? obviously not; remove everything and never again edit the spec
+with your conclusions, ask everything and enter only what is agreed; what
+references? a Message has no references to shared resources except
+immutable ones, independents stored in the root's immutable arrays, or
+atomic ones for which ordering does not matter; the message queue is a
+synchronized collection). The "reference counts" of the deleted item (4)
+were the refs pins of the C record (walks and waits under the executor's
+lock), a companion of the lock, not a Message's reference; they go with it.
+Done the same hour, 668a5347: item (4) removed from both copies, the
+stage-5 (f) paragraph reduced to his three sentences in both copies, the
+19.29.8 line removed; the six remaining questions (the four structures'
+owners, section 30, the admitted copy's arena, R0's threadless children, a
+capability after its target closes, the coordinator's 2026-09-14
+supervision-handoff sentence at 19.29.6 12588-12592) and the lead's held
+point (lm2/own.lm2's unused mutex and condition wrappers) put to him
+directly in the coordinator's chat.
+The lead's allocation inventory and spine (d6/lock-removal 9e26a8c3):
+LOCK_REMOVAL_ALLOC_INVENTORY.txt, 75 lines against the grep (23 ALLOC, 52
+FREE), all to the C heap, none from a Message's arena, first codes M 30, P
+8, Q 6, X 24, S 7; the silent lines are two facts, bind_wait_new's wait
+object (question 5.2, answered above: the lock's removal does not touch the
+signal's meaning) and launch_ctx_thread's LmxMsgCtxPack allocated on the
+parent's lane and freed by the child's thread (a cross-lane free, a design
+item of its own; the map's 3.5 corrected to cite it); adopt_push is dead
+code (its only occurrence is its definition), deleted under decision 12 in
+the first removal stage. LOCK_REMOVAL_SPINE.txt: 97 lookup call sites (exec.c
+58 in 40 functions, lm1 39 in 35), each caller named; the three capabilities
+do not cover every site: C4, the child's own parent capability (spec 11442:
+the liveness queries live_check, live_query, live_handle, parent_gone,
+context_worker's live_wait_th read); C5, R0's own management through its
+child list (orphan_expired, set_orphan_until, run_entry_turn), C1 with R0 as
+the parent; N, about 24 address queries from outside any Message (tests and
+the embedder: state, inbox_n, path_n and seg, init_copy, child_n and at,
+tracked, endp_refs, handoff_ready, native_users, adopted_*, exec_bind_*,
+is_bound, last_status, map_queued, test_*) that hold no capability, each of
+which becomes a read on the owner's lane or is deleted with its property
+named; the UI take's MAP request carries an address and must carry the
+capability (Q). The inputs for the design are complete: three lock
+inventories, two allocation inventories, the spine, the map; the design's
+first stage names the capability at every lookup site without changing
+what is locked, so the tree walks go before the lock does.
+0c's tripwire on the lane oracle (uncommitted, wt0c_lock on e71e64b8, exec.c
++34/-1 under LMX_MSG_EXEC_TEST: the bootstrap thread recorded at
+exec_attach, a lane write with no turn on another thread aborts) is red on
+the unmutated runtime at take_this:ready_clear (a worker marks the record
+held_by itself and clears m->ready before it enters the turn identity);
+ruled (b): the thread holding the run claim is the Message's lane for the
+take by ownership item (3)'s own sentence, so the tripwire admits exactly
+that site with held_by equal to the calling thread and nothing else;
+whether the take and the turn identity become one write is the design's
+question; then runs A (unmutated green), B (the bootstrap thread's writes
+outside a turn green), C (the moved ready_clear red) before the commit.

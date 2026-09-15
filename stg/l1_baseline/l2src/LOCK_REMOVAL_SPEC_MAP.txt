@@ -34,6 +34,18 @@ cite this map's owner codes in their target-owner column.
   мной инструкциями, после дополнения пушай и коммить" (find out who made that clarification and when;
   delete it immediately; add to all docs only instructions agreed with him, then commit and push). The
   lead deleted it from both copies in 657ce3f9 and 07ad3679; this map cites it only as deleted history.
+- On item (4) and the "references" (2026-09-15, verbatim): "Каких сигналов ожидания? Снятие блокировки с
+  сигналов ожидания чем-то может нарушить смысл этих сигналов? Очевидно нет. Снимать всё и никогда
+  больше не редактируй спеку своими выводами -- всё спрашивай и только согласованное вноси в документы.
+  Каких ссылок? 1)Message не имеет никаких ссылок на общие ресурсы кроме тех которые неизменемые
+  (independents: const: immutable: хранятся в неизменяемых массивах у root). Либо на атомарные для
+  которых очередность не важна 2) Очередь сообщений -- синхронизированная коллекция" (what wait
+  signals? can removing the lock from them break their meaning? obviously not; remove everything and
+  never again edit the spec with your conclusions, ask everything, enter only what is agreed; what
+  references? a Message has no references to shared resources except immutable ones, independents in
+  the root's immutable arrays, or atomic ones for which ordering does not matter; the message queue is
+  a synchronized collection). Done in 668a5347: item (4), the (f) consequences and the 19.29.8 line gone
+  from both copies; his sentences stay.
 - On children cut off by the end of the process: "подобное завершение детей это всё равно аварийный
   выход. Утечка памяи из ОС будет или нет?" (such an ending of children is an abnormal exit anyway; will
   there be a memory leak from the OS or not?). Answer, the lead's, confirmed: no; the OS reclaims the
@@ -271,8 +283,12 @@ cite this map's owner codes in their target-owner column.
     restores them (restore_turn), which stays.
 
 3.5 Runtime-local scratch: drive_walk_list's table (malloc 822), exec_start_map_kick's arrays
-    (2651-2658), parent_settle's buffer (3963), launch_ctx_thread's pack (2868): the caller's lane's
-    own temporaries, freed on the same path: M of the lane that runs the step, or X where the step goes.
+    (2651-2658), parent_settle's buffer (3963): the caller's lane's own temporaries, freed on the same
+    path: M of the lane that runs the step, or X where the step goes. launch_ctx_thread's LmxMsgCtxPack
+    (2868) is NOT same-path: allocated on the parent's lane and freed by the child's thread
+    (context_worker 2993/3086), a cross-lane free found by the lead's allocation inventory (9e26a8c3)
+    and a design item of its own: the pack becomes the child's own (its arena, freed by its thread) or
+    the parent's (freed on the parent's lane after the child's thread has read it), never handed across.
 
 4. RULE FOR THE INVENTORIES
   A line's target owner is M, P, Q, T or X only if the section quoted in 2 names it (cite the line);
@@ -291,7 +307,13 @@ cite this map's owner codes in their target-owner column.
       parent's lane, and a Message reclaims its own at its end-turn); a lane's own queue is that
       lane's Message's mailbox. Alternative: the runtime record keeps them for the bootstrap only, which keeps the lock
       they need and so contradicts "there must be no shared locks".
-  5.2 Ownership item (4): do reference counts and wait signals survive as primitives? Proposed: a wait
+  5.2 ANSWERED by Mikhail, 2026-09-15 (verbatim in the plan's section 7 and in section 0 above): the lock's
+      removal cannot touch a wait signal's meaning; a Message has no references to shared resources except
+      immutable ones (independents, const:, immutable:, in the root's immutable arrays) or atomic ones for
+      which ordering does not matter; the message queue is a synchronized collection. The "reference
+      counts" were the C record's refs pins (walks and waits under the executor's lock), the lock's
+      companion, and go with it. The original question, kept for the record: do reference counts and
+      wait signals survive as primitives? Proposed: a wait
       signal is a lane's own wake primitive, paired with its mailbox (19.28.R2.2 11468-11473, "narrow
       mailbox wait/wake primitives"), one per lane, never one event for all workers (today's stop_ev);
       a reference count on a Message record is replaced by ownership (the parent's child list holds
