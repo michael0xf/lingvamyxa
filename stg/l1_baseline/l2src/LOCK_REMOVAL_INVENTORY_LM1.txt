@@ -151,3 +151,109 @@ Counts, widened scope, by exact grep on this file's own "class:" field:
   \inbox/\inbox_tail or \outbox/\outbox_tail, the message collection's own
   admission lock the 2026-09-15 rule permits, per spec 19.29.6.
 66 + 6 = 72.
+
+==================================================
+SECTION 2: ALLOCATION INVENTORY (2026-09-15, ba's ticket -- the arena half
+of Mikhail's order). Every c.calloc(, c.malloc(, c.realloc( and c.free( site
+in lmx_message.lm1: file:line, enclosing function, the record allocated or
+freed, the lane that runs the site today, and the owner by
+l2src/LOCK_REMOVAL_SPEC_MAP.txt's codes (main 56bb505d/07ad3679): M the
+Message's own arena, P the parent's, Q a mailbox admission, X goes, S
+silent with the map's question number (section 5). For a free site, also
+whether the freeing lane is the owner's lane today. lm2 mirrors lm1 line
+for line; the counts are equal (verified below, not assumed). This section
+covers only lmx_message.lm1, per the ticket -- exec.c's allocations are the
+lead's own inventory. c.realloc( does not occur in this file (0 sites,
+confirmed by grep).
+
+Format: lm1:LINE | function (range) | op: calloc/malloc/free | record: ... |
+lane: ... | owner: ... [| free lane = owner lane: yes/no/n-a for allocs]
+
+--- Allocations (16: 12 calloc + 4 malloc) ---
+
+lmx_message.lm1:267 | lmx_msg_root_attach (244-275) | op: malloc | record: LmxMsgRoot (a GC-root retain marker pushed onto m\roots) | lane: unknown -- no rt/turn parameter and no caller anywhere in lmx_message.lm1/lm2 (grepped, zero matches); a public API called from native/exec.c code holding a pointer to m | owner: M -- map 3.1 names this exact line: "roots (LmxMsgRoot, malloc in lmx_msg_root_attach lm1 267)... : M".
+lmx_message.lm1:383 | lmx_msg_copy_bytes (375-387) | op: malloc | record: raw uchar byte buffer (a payload copy, size n) | lane: not its own -- a leaf allocator with no rt/turn parameter, called from 7 different lanes in this file (483 copy_dup/admit_one's lane, 939 host_post/any OS thread, 1128 create_prepare/parent-or-R0, 1249 send/from's own turn, 2484 and 2507 init_copy/who's-own-turn-or-R0, 2941 send_cap/from's own turn) | owner: S -- not one of the map's named records; the buffer's eventual owner is fixed at whichever call site stores the result (see that site's own line), not at this shared leaf. No map question number fits; a gap in the map's coverage of leaf helpers, not one of its 5.1-5.5 questions.
+lmx_message.lm1:410 | lmx_msg_delivery_new (405-423) | op: calloc | record: LmxMsg, used as a transient delivery envelope (node\delivered), never launched as an L3 Thread | lane: from's own turn -- its one caller is send_graph (1325), require_turn(rt,from) at 1297 | owner: M -- map 3.1 names this exact line: "a delivery record by lmx_msg_delivery_new (lm1 410)... Target: M". Note: created on the sender's turn, its storage is moved into the recipient's arena on the recipient's own turn by delivery_receive (434-436, a boundary operation per spec 12524-12531), then the empty husk is freed wherever last touched (402); this record has no "own lane" at all since it is never a running Message, so M here means the storage-ownership rule as applied to a boundary transfer, not "written only on one lane."
+lmx_message.lm1:471 | lmx_msg_copy_dup (464-497) | op: calloc | record: LmxMsgCopy (a fresh dedup copy destined for an admission) | lane: admit_one's lane -- its one caller is admit_one (1898), which has no turn/owner check of its own; admit_one's own caller, pump, requires require_owner(rt) OR exec_holding_any(rt) (1925-1928), i.e. any turn-holder or R0/bootstrap, not necessarily the destination's own turn | owner: S, question 5.4 -- map 3.1: "Which arena holds an admitted copy: S, question 5.4." This is exactly that: a copy manufactured outside the destination's arena, about to be pushed into the destination's inbox (1914-1916).
+lmx_message.lm1:810 | lmx_msg_done_grow (793-826) | op: malloc | record: unsigned[] (m\done_from's next backing array, grown to next_cap) | lane: whatever lane calls done_add -> done_grow; done_add's only callers are inside admit_one (1890, 1905), same lane as 471 (any turn-holder or R0/bootstrap, not necessarily m's/dest's own turn) | owner: P -- map 3.1 names this exact line: "done_from/done_id/done_n/done_cap (malloc in lmx_msg_done_grow lm1 810/813): the parent's record of its children's completions: P."
+lmx_message.lm1:813 | lmx_msg_done_grow (793-826) | op: malloc | record: unsigned[] (m\done_id's next backing array) | lane: same as 810 | owner: P, same citation as 810.
+lmx_message.lm1:860 | lmx_msg_runtime_new (856-884) | op: calloc | record: LmxMsgRuntime (the whole runtime record) | lane: the bootstrap/creating thread -- no rt exists yet, so no turn concept applies; this is the one call that predates any turn | owner: S -- the map does not name one code for the record as a whole (3.2 splits its fields: root/next_addr/root_seq are P of R0, root_record is M of R0, slots/transport/host_sync are X); closest open question is 5.1 ("the runtime record keeps them for the bootstrap only, which keeps the lock they need and so contradicts 'there must be no shared locks'" -- the alternative 5.1 explicitly rejects).
+lmx_message.lm1:934 | lmx_msg_host_post (905-961) | op: calloc | record: LmxMsgCopy (an INGRESS envelope for R0's own inbox) | lane: any OS thread -- no turn/owner check in this function at all (comment at 903-904: "Any OS thread may post") | owner: S, question 5.4, same citation as 471 -- this node is pushed directly into root\inbox at 955-957, the exact "sender's envelope queued in the recipient's inbox" question names.
+lmx_message.lm1:1238 | lmx_msg_send (1232-1286) | op: calloc | record: LmxMsgCopy | lane: from's own turn -- require_turn(rt,from) | owner: M -- map 3.1: "the queues are M (19.29.6 components)"; this node is staged into src\outbox (1282-1284), the sender's own field, on the sender's own lane, before any admission -- a clean M match, not the 5.4 question (that applies only once a copy crosses into a different Message's inbox).
+lmx_message.lm1:1299 | lmx_msg_send_graph (1293-1349) | op: calloc | record: LmxMsgCopy | lane: from's own turn -- require_turn(rt,from) at 1297 | owner: M, same as 1238 -- staged into src\outbox (1345-1347).
+lmx_message.lm1:1361 | lmx_msg_send_owned (1351-1419) | op: calloc | record: LmxMsgCopy | lane: from's own turn -- require_turn(rt,from) at 1355 | owner: M, same as 1238 -- staged into src\outbox (1415-1417).
+lmx_message.lm1:1426 | lmx_msg_stop (1421-1433) | op: calloc | record: LmxMsgEnv (a local scratch STOP envelope, built and freed within this one function, never stored) | lane: from's own turn -- require_turn(rt,from) at 1424 | owner: M -- map 3.5: "Runtime-local scratch:... the caller's lane's own temporaries, freed on the same path: M of the lane that runs the step."
+lmx_message.lm1:2049 | lmx_msg_post_dead (2040-2059) | op: calloc | record: LmxMsgCopy (a DEAD notice) | lane: caller's -- post_dead has no turn check of its own; its one caller, lmx_msg_fail, checks require_turn(rt,who) at 2070, so who's own turn | owner: X -- pushed into rt\transport (2058), and map 3.2 names that exact field: "transport/transport_tail (LmxMsgCopy nodes staged by the host pump between publish and delivery):... the runtime-level list is a host form: X."
+lmx_message.lm1:2663 | lmx_msg_live_query (2620-2688) | op: calloc | record: LmxMsgEnv (local scratch PROGRESS/live-query envelope, freed at 2671 in the same function) | lane: who's own turn -- require_turn(rt,who) at 2626 | owner: M, same citation as 1426 (map 3.5).
+lmx_message.lm1:2766 | lmx_msg_live_handle (2690-2775) | op: calloc | record: LmxMsgEnv (local scratch PROGRESS/live-reply envelope, freed at 2774 in the same function) | lane: who's own turn -- require_turn(rt,who) at 2698 | owner: M, same citation as 1426.
+lmx_message.lm1:2930 | lmx_msg_send_cap (2925-2980) | op: calloc | record: LmxMsgCopy | lane: from's own turn -- require_turn(rt,from) at 2928 | owner: M, same as 1238 -- staged into src\outbox (2976-2978).
+
+--- Frees (34) ---
+
+lmx_message.lm1:295 | lmx_msg_root_release (276-303) | op: free | record: LmxMsgRoot (cur, the retain marker unlinked from m\roots) | lane: unknown, same as 267 -- no caller in this file/lm2 | owner: M, same citation as 267 | free lane = owner lane: unknown (cannot verify without the external caller).
+lmx_message.lm1:402 | lmx_msg_delivery_dispose (396-403) | op: free | record: LmxMsg (d, the delivery envelope) | lane: caller's -- called from delivery_new's own failure paths (415, 418: sender's own turn, same as 410) and from delivery_receive (441: the recipient's own turn, after storage_move_all has already emptied d) and from copy_free (452: see below) | owner: M, same citation as 410 | free lane = owner lane: yes at 415/418 (sender's own turn, matches 410's creating lane); yes at 441 by the boundary-transfer reading (the recipient has just become the storage's owner); depends on caller at 452.
+lmx_message.lm1:449 | lmx_msg_copy_free (444-462) | op: free | record: node\bytes (a copy's payload buffer, from copy_bytes at 383) | lane: whichever lane calls copy_free -- this sub is called from nearly every function in the file, both on a sender's own unstaged/torn-down outbox item (M) and on an admitted inbox item being drained (S 5.4); no single lane | owner: varies by the freed copy's own provenance -- M when it is a sender's own outbox item (e.g. send's failure paths, 1251 area), S/5.4 when it is an admitted inbox item (e.g. runtime_delete's inbox drain at 1017-1018, release_slot's inbox drain at 1473-1474) | free lane = owner lane: varies, see the specific call site.
+lmx_message.lm1:459 | lmx_msg_copy_free (444-462) | op: free | record: node (the LmxMsgCopy record itself) | lane: same as 449 | owner: same as 449, varies by provenance | free lane = owner lane: varies, see the specific call site.
+lmx_message.lm1:485 | lmx_msg_copy_dup (464-497) | op: free | record: n (the fresh dup, on its own n\bytes copy failure) | lane: admit_one's lane, same as 471 | owner: S, question 5.4, same as 471 | free lane = owner lane: yes -- freed on the same lane and before ever crossing into dest's inbox, so no owner is contradicted; the open question is only which arena it would have joined on success.
+lmx_message.lm1:490 | lmx_msg_copy_dup (464-497) | op: free | record: n\bytes (on src\dest_msg retain failure) | lane: same as 485 | owner: S 5.4, same as 485 | free lane = owner lane: yes, same reasoning as 485.
+lmx_message.lm1:492 | lmx_msg_copy_dup (464-497) | op: free | record: n (final teardown on the same retain failure) | lane: same as 485 | owner: S 5.4, same as 485 | free lane = owner lane: yes, same reasoning as 485.
+lmx_message.lm1:815 | lmx_msg_done_grow (793-826) | op: free | record: next_from (on next_id's malloc failure, 813) | lane: same as 810 | owner: P, same citation as 810 | free lane = owner lane: no by the strict reading -- done_grow's caller (admit_one, via done_add) does not verify it holds m's/dest's own turn, only any turn or R0; the same cross-lane shape the exec-lock inventory already flagged for done_add's callers.
+lmx_message.lm1:821 | lmx_msg_done_grow (793-826) | op: free | record: m\done_from (the old, undersized array, replaced by next_from on success) | lane: same as 810 | owner: P, same citation | free lane = owner lane: no, same reasoning as 815.
+lmx_message.lm1:822 | lmx_msg_done_grow (793-826) | op: free | record: m\done_id (the old array) | lane: same as 810 | owner: P, same citation | free lane = owner lane: no, same reasoning as 815.
+lmx_message.lm1:865 | lmx_msg_runtime_new (856-884) | op: free | record: rt (on host_attach failure) | lane: bootstrap/creating thread, same as 860 | owner: S, same citation as 860 | free lane = owner lane: n/a (no owner lane is defined for a record the map gives no single code).
+lmx_message.lm1:869 | lmx_msg_runtime_new (856-884) | op: free | record: rt (on exec_attach failure) | lane: same as 865 | owner: S, same as 865 | free lane = owner lane: n/a, same as 865.
+lmx_message.lm1:876 | lmx_msg_runtime_new (856-884) | op: free | record: rt (on R0's own create_prepare failure) | lane: same as 865 | owner: S, same as 865 | free lane = owner lane: n/a, same as 865.
+lmx_message.lm1:941 | lmx_msg_host_post (905-961) | op: free | record: node (the INGRESS envelope, on its bytes-copy failure, before any admission) | lane: any OS thread, same as 934 | owner: S, question 5.4, same as 934 | free lane = owner lane: yes -- freed before ever crossing into root's inbox, same reasoning as 485.
+lmx_message.lm1:1031 | lmx_msg_runtime_delete (999-1046) | op: free | record: m\init (walking every slot in rt\slots directly, not via settle) | lane: R0/bootstrap -- host_is_owner(rt) check at 1006, holding the exec lock throughout the walk (1011-1042) | owner: X -- exists only as a consequence of rt\slots, which map 3.2 names X ("exists for runtime_delete's slot loop... the target has no registry"); on a live Message m\init is M (map 3.1), but here it is freed by a centralized whole-runtime sweep with no per-Message close, which "each L3 Thread frees its own memory" (section 0) replaces. | free lane = owner lane: n/a (X has no lane; the mechanism itself goes).
+lmx_message.lm1:1034 | lmx_msg_runtime_delete (999-1046) | op: free | record: m\path (same walk) | lane: same as 1031 | owner: X, same citation as 1031 | free lane = owner lane: n/a, same as 1031.
+lmx_message.lm1:1045 | lmx_msg_runtime_delete (999-1046) | op: free | record: rt itself | lane: same as 1031 | owner: S, same citation as 860/865 | free lane = owner lane: n/a, same as 865.
+lmx_message.lm1:1135 | lmx_msg_create_prepare (1083-1220) | op: free | record: initp (the pre-attachment init buffer, on slot_new's own allocation failure) | lane: parent's own turn (require_turn at 1104), OR R0/bootstrap for a parentless create (require_owner at 1099) | owner: M -- destined for slot\init (attached at 1201 on success), which map 3.1 names M ("init/init_n... : M"); here freed before attachment on a failure path | free lane = owner lane: yes -- the creating lane is the same lane that would have become the new Message's own launching parent/R0, and no other lane has touched initp yet.
+lmx_message.lm1:1145 | lmx_msg_create_prepare (1083-1220) | op: free | record: initp (on graph-copy install failure) | lane: same as 1135 | owner: M, same as 1135 | free lane = owner lane: yes, same reasoning.
+lmx_message.lm1:1154 | lmx_msg_create_prepare (1083-1220) | op: free | record: initp (on eternal_clone failure) | lane: same as 1135 | owner: M, same as 1135 | free lane = owner lane: yes, same reasoning.
+lmx_message.lm1:1163 | lmx_msg_create_prepare (1083-1220) | op: free | record: initp (on method_clone failure) | lane: same as 1135 | owner: M, same as 1135 | free lane = owner lane: yes, same reasoning.
+lmx_message.lm1:1172 | lmx_msg_create_prepare (1083-1220) | op: free | record: initp (duplicate of 1163's failure branch shape) | lane: same as 1135 | owner: M, same as 1135 | free lane = owner lane: yes, same reasoning.
+lmx_message.lm1:1182 | lmx_msg_create_prepare (1083-1220) | op: free | record: initp (on assign_path failure) | lane: same as 1135 | owner: M, same as 1135 | free lane = owner lane: yes, same reasoning.
+lmx_message.lm1:1251 | lmx_msg_send (1232-1286) | op: free | record: node (on its own bytes-copy failure, before staging) | lane: from's own turn, same as 1238 | owner: M, same as 1238 | free lane = owner lane: yes -- freed on the same lane that allocated it, before it ever left the sender's own scope.
+lmx_message.lm1:1383 | lmx_msg_send_owned (1351-1419) | op: free | record: node (on self_or_find failure, env\bytes handed back to caller first) | lane: from's own turn, same as 1361 | owner: M, same as 1361 | free lane = owner lane: yes, same reasoning as 1251.
+lmx_message.lm1:1390 | lmx_msg_send_owned (1351-1419) | op: free | record: node (on dead/stopped state failure) | lane: same as 1383 | owner: M, same as 1361 | free lane = owner lane: yes, same reasoning.
+lmx_message.lm1:1401 | lmx_msg_send_owned (1351-1419) | op: free | record: node (on dest retain failure) | lane: same as 1383 | owner: M, same as 1361 | free lane = owner lane: yes, same reasoning.
+lmx_message.lm1:1432 | lmx_msg_stop (1421-1433) | op: free | record: env (local scratch, unconditionally after send returns) | lane: from's own turn, same as 1426 | owner: M, same citation as 1426 (map 3.5) | free lane = owner lane: yes -- allocated and freed on the same lane in the same function.
+lmx_message.lm1:1478 | lmx_msg_release_slot (1435-1491) | op: free | record: m\init (the released child's own field, freed as part of the settle) | lane: the disposing parent's own turn OR R0/bootstrap -- release_slot has no check of its own (comment at 1442-1446: "Authority is checked once, by the public entry"); its callers are settle_child (1597, reached from dispose_child/adopt_failed which check holding_turn(parent) OR host_is_owner&&!holding_any) and reclaim_orphan (1659, reached from orphan_sweep, R0's own supervision of its re-rooted orphans) | owner: P -- map 2.1(2) names this exact case: "the settle writes (the storage moved into the parent, the child's graph and init at settle)." On a live Message m\init would be M, but AT SETTLE the map carves it out as the parent's own write. | free lane = owner lane: yes -- the settling lane (the real parent's turn, or R0 acting as an orphan's effective parent) is exactly the P owner the map names.
+lmx_message.lm1:1483 | lmx_msg_release_slot (1435-1491) | op: free | record: m\path (same settle) | lane: same as 1478 | owner: P, same citation as 1478 | free lane = owner lane: yes, same reasoning.
+lmx_message.lm1:2032 | lmx_msg_env_release (2028-2038) | op: free | record: env\bytes (a caller-held LmxMsgEnv's payload) | lane: unknown -- no rt/turn parameter, no caller anywhere in this file; by its one plausible use (releasing a buffer just received via recv(), which requires who's own turn at 1947) the same Message's own turn that called recv() | owner: M -- recv (1962-1963) moves an admitted copy's bytes into out\bytes on the recipient's own turn, i.e. the recipient's own field once received; map 2.1(1) "a Message owns its arena... its mailbox except admission" covers the received content once it is the recipient's own. | free lane = owner lane: presumed yes, unverifiable from this leaf function alone.
+lmx_message.lm1:2671 | lmx_msg_live_query (2620-2688) | op: free | record: env (local scratch, unconditionally after send returns) | lane: who's own turn, same as 2663 | owner: M, same citation as 1426 | free lane = owner lane: yes, same reasoning as 1432.
+lmx_message.lm1:2774 | lmx_msg_live_handle (2690-2775) | op: free | record: out (local scratch, unconditionally after send returns) | lane: who's own turn, same as 2766 | owner: M, same citation as 1426 | free lane = owner lane: yes, same reasoning as 1432.
+lmx_message.lm1:2943 | lmx_msg_send_cap (2925-2980) | op: free | record: node (on its own bytes-copy failure, before staging) | lane: from's own turn, same as 2930 | owner: M, same as 2930 | free lane = owner lane: yes, same reasoning as 1251.
+
+Falsify: grep -c "c.calloc(" plus "c.malloc(" plus "c.realloc(" on c067bed9's
+l2src/lmx_message.lm1 = 12 + 4 + 0 = 16, matching this section's 16
+allocation entries; grep -c "c.free(" = 34, matching this section's 34 free
+entries. The same four greps on l2src/lmx_message.lm2 give the same four
+numbers (12, 4, 0, 34), confirmed directly, not assumed.
+
+Counts, by exact count of this section's own entries (not hand-tallied):
+- Allocation sites: 16 (12 calloc + 4 malloc + 0 realloc), matching the
+  grep count.
+- Free sites: 34, matching the grep count.
+- 50 sites total.
+- Silent (owner S, any question number, across allocations and frees):
+  383, 471, 485, 490, 492, 860, 865, 869, 876, 934, 941, 1045 -- 12 lines.
+  Mostly question 5.4 (the admitted-copy question, 471/485/490/492/934/941)
+  and the runtime-record-as-a-whole gap (closest to 5.1, 860/865/869/876/
+  1045); 383 fits no numbered question at all (a leaf helper the map does
+  not name).
+- X (goes, a runtime-level list or host form): 1031, 1034, 2049 -- 3 lines.
+- P (the parent's own supervision/settle state): 810, 813, 815, 821, 822,
+  1478, 1483 -- 7 lines.
+- M (the Message's own arena, including boundary-transfer and scratch
+  cases): 267, 410, 1238, 1299, 1361, 1426, 2663, 2766, 2930 (9 allocations)
+  plus 295, 402, 1135, 1145, 1154, 1163, 1172, 1182, 1251, 1383, 1390, 1401,
+  1432, 2032, 2671, 2774, 2943 (17 frees, 402 included -- its owner is
+  fixed at M by the boundary-transfer reading, only its lane varies by
+  caller) -- 26 lines.
+- Owner itself caller-dependent, not one fixed code (449, 459 only): 2
+  lines -- these two, unlike 402, can be either M or S/5.4 depending on
+  the freed copy's own provenance (a sender's own torn-down outbox item
+  vs. an admitted inbox item being drained); see their own entries.
+Grep-verified directly on this section's own "owner:" field: S=12, X=3,
+P=7, M=26, varies=2. 12 + 3 + 7 + 26 + 2 = 50.
