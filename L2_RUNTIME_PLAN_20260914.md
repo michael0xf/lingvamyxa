@@ -4695,3 +4695,9 @@ measured: hits of the 13 deleted names per gate (lane_oracle 137,
 scenario36 91, sched_record 20, lmx_message 138, send_local 8,
 family_handoff 5, turn_step_child 3, entry_turn 2; the 24 give 0). Two
 drafting errors corrected before the commit, reported.
+Ticket to e9 (the coordinator, 2026-09-15), logs only: the unexplained 1016 s
+run of run_gates -L2MessageRoot against the 520-545 s runs, from the gate
+logs on disk, as l2src/GATE_TIME_1016.txt on claude-0c/gate-time off
+00b04751: per-gate wall times side by side, the gates accounting for the
+difference and what their log lines show; stop if the 1016 s logs are
+gone.
