@@ -1,0 +1,249 @@
+LOCK_REMOVAL_S3_FIELDS: the field read/write for each of S3's 11 wake sites, cross-referenced
+against LOCK_REMOVAL_FIELDS.txt's owner table (sonnet/s3-fields, 2026-09-15, doc-only).
+
+Read at integration 79871822: stg/l1_baseline/l2src/lmx_message_exec.c (4109 lines) and
+lmx_message_host.c (251 lines). Site names and call points cross-checked against 57's oracle,
+claude-0c/s3-wake-oracle 022b1136 (lmx_msg_test_wake_site call sites), which names the same 11
+functions/call-points verbatim in its commit message and diff. exec.c and host.c are NOT edited
+by this branch; this file is read-only analysis.
+
+Line range convention: the enclosing static function for a one-signal-per-function site; for the
+three sites sharing launch_ctx_thread (launch, launch_gate_go, launch_gate_refuse) the function's
+full range plus the specific statement(s) for that site. Fields read/written are those touched in
+establishing and issuing the signal at the site itself; where the site resolves its record by
+address (wake_addr_locked, launch's rec_at_addr_locked calls) the lookup chain's own field touches
+are listed separately and marked "(lookup)". Owner/basis/stage are copied verbatim from
+LOCK_REMOVAL_FIELDS.txt's matching row.
+
+--- Sites
+
+site: ctx_visit_wake
+file:line range: lmx_message_exec.c:1442-1449
+fields read: LmxMsgExecBind.affinity; LmxMsgExecBind.wait
+fields written: none directly (bind_wait_signal(rec->wait) writes inside LmxMsgBindWait, see below)
+via bind_wait_signal (exec.c:1994-2006), called with rec->wait:
+  Win32: reads LmxMsgBindWait.wait_ev
+  non-Win32: writes LmxMsgBindWait.sig = 1; uses LmxMsgBindWait.cv (pthread_cond_signal)
+owners:
+  LmxMsgExecBind.affinity | c:62 | DEL | ruled (stage M) | M
+  LmxMsgExecBind.wait     | c:69 | DEL | ruled (map 5.7) | S3
+  LmxMsgBindWait.wait_ev/.cv/.sig | c:36,39,40 | DEL | ruled (map 5.7; S3) | S3
+flags: none.
+
+site: wake_addr_locked
+file:line range: lmx_message_exec.c:1467-1477 (lmx_msg_exec_wake_addr_locked)
+fields read: LmxMsgExecBind.affinity; LmxMsgExecBind.wait
+fields written: none directly (bind_wait_signal as above)
+(lookup) via rec_at_addr_locked -> msg_find_any_locked -> bind_rec_locked, to resolve addr to a record:
+  reads LmxMsg.addr (matched against the addr parameter); reads LmxMsgRuntime.root (the walk);
+  reads LmxMsg.exec_bind; reads LmxMsgExecBind.in_table
+via bind_wait_signal: same as ctx_visit_wake.
+owners:
+  LmxMsgExecBind.affinity | c:62 | DEL | ruled (stage M) | M
+  LmxMsgExecBind.wait     | c:69 | DEL | ruled (map 5.7) | S3
+  LmxMsg.addr             | h:119 | PAR (parent's child ref); DEL as a lookup key | proposed | S2
+  LmxMsgRuntime.root      | h:212 | R0 | ruled (map 5.7) | S5
+  LmxMsg.exec_bind        | h:173 | L3T or PAR | ruled (map 5.7) | S4/M
+  LmxMsgExecBind.in_table | c:73 | DEL | proposed | S5
+  LmxMsgBindWait.wait_ev/.cv/.sig | c:36,39,40 | DEL | ruled | S3
+flags: none. (Note, not a contradiction: this site's own deletion at S3 does not depend on when
+the addr-lookup chain it uses is retired at S2/S4/S5/M — the whole function goes together with its
+lookup at S3, so the lookup fields' later stage tags are not in tension with this site's stage.)
+
+site: bind_reap_push
+file:line range: lmx_message_exec.c:2119-2131
+fields read: LmxMsgBindWait.on_reap; LmxMsgBindWait.reaping
+fields written: LmxMsgBindWait.retired = 1; LmxMsgBindWait.slot = 0; LmxMsgBindWait.reap_next;
+  LmxMsgBindWait.on_reap = 1 (conditionally)
+(caller's LmxMsgExec.reap_head is also written; LmxMsgExec is not one of the four ticket types and
+has no row in LOCK_REMOVAL_FIELDS.txt — out of scope per the ticket's explicit field list.)
+via bind_wait_signal(w): as above.
+owners:
+  LmxMsgBindWait.retired, .slot        | c:45-46 (row: gen,.retired,.slot,.launch_n) | DEL | ruled (S3 launch wake goes) | S3
+  LmxMsgBindWait.reaping, .on_reap, .reap_next | c:48,49,51 | DEL (each thread frees itself; no join) | ruled (Mikhail) | S3/S5
+  LmxMsgBindWait.wait_ev/.cv/.sig | c:36,39,40 | DEL | ruled | S3
+flags: see FLAG-1 below (retired).
+
+site: join_bind_worker
+file:line range: lmx_message_exec.c:2228-2252
+fields read: LmxMsgExecBind.wait
+fields written: LmxMsgExecBind.wait = 0; LmxMsgBindWait.slot = 0; LmxMsgBindWait.retired = 1;
+  LmxMsgBindWait.reaping = 1 (then = 0 after join)
+via bind_wait_signal(w): as above.
+via bind_wait_join(w) (exec.c ~2100-2117, called after unlocking): reads LmxMsgBindWait.worker_on
+  (non-Win32) / implicitly LmxMsgBindWait.worker (Win32, pthread_join/WaitForSingleObject target);
+  writes LmxMsgBindWait.worker_on = 0 (non-Win32 path only, matching the earlier grep of this
+  function's tail).
+owners:
+  LmxMsgExecBind.wait | c:69 | DEL | ruled | S3
+  LmxMsgBindWait.slot, .retired | c:45-46 | DEL | ruled (S3 launch wake goes) | S3
+  LmxMsgBindWait.reaping | c:48 | DEL | ruled | S3/S5
+  LmxMsgBindWait.worker, .worker_on | c:37,41-42 | NATIVE (the L3 Thread's OS thread, C keeps it) | ruled | M/S3
+  LmxMsgBindWait.wait_ev/.cv/.sig | c:36,39,40 | DEL | ruled | S3
+flags: see FLAG-1 below (retired). Also note (not a new flag, confirms FLAG-1): this site both sets
+retired = 1 AND performs a real OS-thread join (bind_wait_join) immediately after — the join can only
+return once the lane thread's own loop notices retired and exits (see context_worker, exec.c:3063 and
+:3078, both `mine->retired != 0` checks), which is the concrete mechanism FLAG-1 is about.
+
+site: launch
+file:line range: lmx_message_exec.c:2879-3005 (launch_ctx_thread); site statement at :2992-2996
+fields read (whole function): LmxMsgExecBind.affinity; LmxMsgExecBind.gone; LmxMsgExecBind.wait;
+  LmxMsgExecBind.launching (implicitly, via launch_same_gen reading b->wait/b->launching is not
+  read there, but rec->launching is written, see below); LmxMsgBindWait.gen; LmxMsgBindWait.retired
+fields written (whole function): LmxMsgExecBind.launching = 1 then 0; LmxMsgExecBind.wait (assigned
+  a new LmxMsgBindWait if none); LmxMsgBindWait.rec = r; LmxMsgBindWait.launch_n (+=1/-=1, via
+  bind_wait_launch_hold_locked/release); LmxMsgBindWait.worker = th (Win32) / .worker = th and
+  .worker_on = 1 (non-Win32)
+site statement (:2992-2996) specifically: writes LmxMsgExecBind.launching = 0; reads/writes
+  LmxMsgBindWait.worker/.worker_on (just assigned above at :2987-2991); calls
+  bind_wait_signal(r->wait) -> LmxMsgBindWait.wait_ev/.cv/.sig, as above.
+(lookup) via rec_at_addr_locked (called twice, :2906 and :2966): same chain as wake_addr_locked
+  (LmxMsg.addr, LmxMsgRuntime.root, LmxMsg.exec_bind, LmxMsgExecBind.in_table).
+owners:
+  LmxMsgExecBind.affinity  | c:62 | DEL | ruled (stage M) | M
+  LmxMsgExecBind.gone      | c:67 | DEL | proposed | M
+  LmxMsgExecBind.wait      | c:69 | DEL | ruled | S3
+  LmxMsgExecBind.launching | c:66 | DEL (the launch gate goes with no wake) | ruled (S3 deletion
+    list: launch_gate_go/refuse) | S3
+  LmxMsgBindWait.gen, .retired, .slot, .launch_n | c:44-47 | DEL | ruled (S3 launch wake goes) | S3
+  LmxMsgBindWait.rec       | c:54 | DEL | ruled | S3
+  LmxMsgBindWait.worker, .worker_on | c:37,41-42 | NATIVE | ruled | M/S3
+  LmxMsgBindWait.wait_ev/.cv/.sig | c:36,39,40 | DEL | ruled | S3
+  (lookup) LmxMsg.addr, LmxMsgRuntime.root, LmxMsg.exec_bind, LmxMsgExecBind.in_table: as in
+    wake_addr_locked above.
+flags: none beyond FLAG-1 (launch_n/gen/slot/retired bundled; retired's poll role is the flag, not
+  gen/slot/launch_n, which are genuinely launch-race-only bookkeeping tied to the deleted wait).
+
+site: launch_gate_go
+file:line range: lmx_message_exec.c:2879-3005 (launch_ctx_thread); site statement at :2997
+fields read: none of the four ticket types directly (pack is LmxMsgCtxPack, not one of the four
+  types and not in LOCK_REMOVAL_FIELDS.txt's five/six scaffolding types either)
+fields written: none of the four ticket types (pack->go, pack->gate/gm/gc are LmxMsgCtxPack fields)
+owners: LmxMsgCtxPack has no row in LOCK_REMOVAL_FIELDS.txt (it documents LmxMsg + five scaffolding
+  types: LmxMsgEnv, LmxMsgCopy, LmxMsgRuntime, LmxMsgBindWait, LmxMsgExecBind; LmxMsgCtxPack is a
+  seventh, purely local/native launch-handshake type, not listed).
+flags: see FLAG-2 below (LmxMsgCtxPack entirely untabled).
+
+site: launch_gate_refuse
+file:line range: lmx_message_exec.c:2879-3005 (launch_ctx_thread); site statement at :2965-2984,
+  signal at :2976
+fields read: LmxMsgExecBind.gone; LmxMsgExecBind.affinity; LmxMsgExecBind.launching (read via
+  launch_same_gen(r, cap, gen), which reads LmxMsgExecBind.wait too); LmxMsgBindWait.gen,
+  LmxMsgBindWait.retired (both via launch_same_gen)
+fields written: LmxMsgExecBind.launching = 0 (conditionally, :2973)
+fields written (LmxMsgCtxPack, out of scope): pack->go via pack_gate_signal(pack, 2)
+owners:
+  LmxMsgExecBind.gone      | c:67 | DEL | proposed | M
+  LmxMsgExecBind.affinity  | c:62 | DEL | ruled | M
+  LmxMsgExecBind.launching | c:66 | DEL | ruled (S3 deletion list: launch_gate_go/refuse) | S3
+  LmxMsgExecBind.wait      | c:69 | DEL | ruled | S3
+  LmxMsgBindWait.gen, .retired | c:44-45 | DEL | ruled | S3
+flags: see FLAG-2 (LmxMsgCtxPack untabled, same as launch_gate_go).
+
+site: stop_retire_walk
+file:line range: lmx_message_exec.c:3373-3382 (ctx_visit_stop_retire_waits)
+fields read: LmxMsgExecBind.wait
+fields written: LmxMsgBindWait.retired = 1; LmxMsgExecBind.wait = 0
+via bind_wait_signal(rec->wait): as above.
+via bind_reap_push(e, rec->wait): as in the bind_reap_push site above (reads on_reap/reaping,
+  writes retired/slot/reap_next/on_reap — retired is written twice at this site's expansion, once
+  directly at :3376 and again inside bind_reap_push, both to 1).
+owners:
+  LmxMsgExecBind.wait | c:69 | DEL | ruled | S3
+  LmxMsgBindWait.retired | c:45 | DEL | ruled (S3 launch wake goes) | S3
+  LmxMsgBindWait.slot, .on_reap, .reap_next, .reaping | as in bind_reap_push above.
+  LmxMsgBindWait.wait_ev/.cv/.sig | c:36,39,40 | DEL | ruled | S3
+flags: see FLAG-1 below (retired) — this is the second of the two sites (with join_bind_worker)
+  that sets retired = 1 as the actual "stop" signal to a still-running lane loop, not merely as
+  launch-race bookkeeping.
+
+site: stop_event
+file:line range: lmx_message_exec.c:3399-3438 (lmx_msg_exec_stop); site statement at :3418-3420
+  (Win32 only: `#if defined(_WIN32) SetEvent(e->stop_ev) #endif` — no non-Win32 branch exists at
+  this site; consistent with the oracle commit's note that "the pthread paths are unbuilt")
+fields read/written: none of the four ticket types at the signal statement itself (e->stop_ev is
+  LmxMsgExec's own field, out of scope, not in LOCK_REMOVAL_FIELDS.txt).
+  The enclosing function lmx_msg_exec_stop does read/write LmxMsg/LmxMsgExecBind/LmxMsgRuntime
+  fields elsewhere (e.g. lmx_msg_host_is_owner(rt) reads LmxMsgRuntime.host_sync; ctx_visit_stop_reset,
+  called later in the same function, writes LmxMsg.ready/.mapped) but those are other statements
+  in the same function, not the wake/signal site itself, so they are noted here for completeness
+  and not folded into "fields read/written" above:
+    LmxMsgRuntime.host_sync | h:217 | DEL | ruled (census 2.6) | S6
+    LmxMsg.ready  | h:154 | DEL (a non-empty mailbox is the readiness; no wake) | proposed (map 5.7; S3 no wake) | S3
+    LmxMsg.mapped | h:174 | DEL (stage M) | ruled (stage M) | M
+flags: none for the signal statement itself (LmxMsgExec.stop_ev is out of scope). See FLAG-3 below
+  for LmxMsg.ready, which is touched later in this same function and is directly relevant to S3's
+  own "no wake" ruling.
+
+site: host_wake
+file:line range: lmx_message_host.c:148-168 (lmx_msg_host_wake)
+fields read: LmxMsgRuntime.host_sync
+fields written: none of the four ticket types (h->wake / h->signaled are LmxMsgHostSync fields, a
+  native platform-primitives struct pointed to by LmxMsgRuntime.host_sync, not itself one of the
+  four ticket types or one of LOCK_REMOVAL_FIELDS.txt's documented types)
+owners:
+  LmxMsgRuntime.host_sync | h:217 | the host lock | DEL | ruled (census 2.6; no lock but the
+    mailbox's) | S6
+flags: none — LmxMsgHostSync's own fields (wake, signaled, lock, owner, shutting_down) are covered
+  implicitly: the whole native struct goes when the pointer field host_sync is deleted at S6, and
+  S3 (this ticket) only needs to remove the SetEvent/pthread_cond_signal call inside this function,
+  which it can do without touching host_sync's declaration or its other fields (shutting_down,
+  owner) — those survive to S6 same as the pointer.
+
+site: host_shutdown
+file:line range: lmx_message_host.c:170-192 (lmx_msg_host_shutdown)
+fields read: LmxMsgRuntime.host_sync (twice: lmx_msg_host_is_owner(rt) and directly)
+fields written: none of the four ticket types (h->shutting_down / h->signaled as above, out of
+  scope, same as host_wake)
+owners:
+  LmxMsgRuntime.host_sync | h:217 | DEL | ruled (census 2.6) | S6
+flags: none, same reasoning as host_wake.
+
+--- Flags
+
+FLAG-1 (contradiction, CONFIRMED by direct read of the lane loop): LmxMsgBindWait.retired is
+bundled into one table row with .gen/.slot/.launch_n ("DEL | ruled (S3 launch wake goes) | S3"),
+as if all four fields are pure launch-wait/launch-race bookkeeping that disappears together with
+the deleted wait primitive. gen/slot/launch_n genuinely are (they exist only to disambiguate
+concurrent launch attempts on the same wait generation). retired is different in kind: it is the
+poll-checked "please stop" flag a still-running lane thread reads on its own, without being woken,
+to learn it should exit — exactly the polling-without-waking design S3's own ruling describes ("an
+owner thread loops forever, looks into its own mailbox each round and waits on no primitive").
+Direct evidence in this same file: context_worker (exec.c:3042-3133), the lane thread's own loop,
+already checks `mine->retired != 0` at :3063 (right after the launch handshake) and again at :3078
+(at the top of every iteration, before it blocks on WaitForMultipleObjects) — the retired check
+survives untouched by S3's removal of the blocking wait beneath it. Two of the 11 sites
+(join_bind_worker, stop_retire_walk) set retired = 1 specifically to make that poll observe true.
+If retired is deleted at S3 along with wait_ev/cv/sig/gen/slot/launch_n, nothing is left to tell a
+polling replacement loop to stop — S3's own replacement design needs a field that plays retired's
+role to survive, even though the row that names it says DEL at S3. This is exactly the kind of stop
+the rule is for: recommend the table split this row, giving .retired its own line with a stage that
+reflects it surviving in some form past S3 (or naming explicitly what field takes over its role in
+the S3 design), separate from .gen/.slot/.launch_n which can stay DEL/S3 as written.
+
+FLAG-2 (missing type, not a missing field on a documented type): LmxMsgCtxPack — the launch
+handshake struct (exec.c:2788-2799: rt, addr, wait, go, and either a Win32 gate HANDLE or a
+pthread_mutex_t/cond_t pair) — has no row anywhere in LOCK_REMOVAL_FIELDS.txt, because the table's
+own header scopes itself to LmxMsg plus five named scaffolding types (LmxMsgEnv, LmxMsgCopy,
+LmxMsgRuntime, LmxMsgBindWait, LmxMsgExecBind) and LmxMsgCtxPack is a sixth, undocumented one. It is
+touched at two of the 11 sites (launch_gate_go's pack_gate_signal(pack, 1) and launch_gate_refuse's
+pack_gate_signal(pack, 2), exec.c:2831-2841) and exists solely to hand the newly created OS thread
+its go/refuse verdict before the caller can safely inspect or join it. Since the ticket's own scope
+is "fields of LmxMsg, LmxMsgExecBind, LmxMsgBindWait and LmxMsgRuntime" this is not a violation of
+this ticket's rule, but it is the one type among the 11 sites' dependencies with zero ownership
+documentation anywhere, and S3's launch_gate_go/launch_gate_refuse deletion cannot be written as a
+one-line diff without deciding what happens to LmxMsgCtxPack's own gate mechanism (go/gate/gm/gc)
+too — worth a row (or an explicit "out of LOCK_REMOVAL_FIELDS.txt's scope, tracked separately")
+before S3's design note is written, so that stage does not stop on an undocumented type instead of
+an undocumented field.
+
+FLAG-3 (adjacent, not a contradiction at the stop_event site itself, flagged for visibility):
+LmxMsg.ready's row says "DEL (a non-empty mailbray is the readiness; no wake) | proposed (map 5.7;
+S3 no wake) | S3" — i.e. the table already expects S3 to delete .ready. lmx_msg_exec_stop (the
+function containing the stop_event site) writes rec->msg->ready = 0 via ctx_visit_stop_reset later
+in the same function (exec.c:3393, not itself one of the 11 named sites, so not given its own line
+above), consistent with .ready still existing at integration 79871822 and being cleared, not yet
+deleted. No contradiction: the table's own stage tag already places .ready's deletion at S3, same
+stage as this function's other changes, so S3's design note can delete this write together with
+the field. Listed only because it sits inside the same function as the stop_event site and a reader
+tracing that function's diff needs to know both changes land at once.
