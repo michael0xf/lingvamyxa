@@ -1,0 +1,77 @@
+lm_own_* allocations: the translator chooses no type (d6, draft, 2026-09-15)
+
+SCOPE (6f's ticket after the sizeof repair)
+A cast chosen by sniffing the argument text for "size_t" is a heuristic in the translator. Named as U4's remaining
+default in INDENT_STACK_FOREIGN_DESIGN; 5e's e3 hits it (`lm_own_new_zero(4U * c.sizeof(cells[0]))` became an
+`@: LmP0Text` temp). 6f's expectation, to be measured: the allocation's type comes from the source's explicit cast
+(LmP0Stack's spelling), and a call without one is a refusal with a line naming the missing cast, never a guessed type.
+
+READ (l2trans.lm1 on d6/l2trans-sizeof-element, off 1df6c447)
+- l2_prep, lm_own_new_zero (11165-11179): after the argument fields and a checkpoint, a temp `@: size_t` when the
+  emitted argument text contains "size_t", else `@: LmP0Text`, assigned `(cast: (@: T) lm_own_new_zero(args))`.
+- l2_prep, lm_own_resize (11224-11245): always an `@: size_t` temp.
+- l2_prep, lm_own_copy_bytes (11180-11202): an `@: char` temp, the prototype's own return type; not in scope.
+- l2_prep, cast (11072-11088): l2_cast_type gives the type text; a single-field operand is prepped separately, so an
+  allocation inside a cast makes its own (sniffed) temp first and the cast wraps the temp.
+- Emitted prototypes (13985): lm_own_new_zero and lm_own_resize return `@: void`.
+- Checker (9913-9925): lm_own_* only set l2_need_own and check the actual fields.
+
+MEASURED (every l2src .lm2 with an lm_own_new_zero/resize call, by tree grep; translated fresh with the sizeof
+branch's translator; three disjoint emitted forms, each file's sum equal to its source count)
+- 28 calls in 9 files: whole-cast 20, sniffed temp 7, raw 1.
+- whole-cast (20): a statement-level emission writes the source cast as written with renamed arguments, no temp:
+  parser_dump_port 4, parser_field_parse_port 2 (e1), parser_stack_stream_port 10 (incl. `@@:` resizes),
+  tests/repro_fnptr_value 2, tests/unit_fnptr_prototype_value 2.
+- sniffed temp (7): parser_indent_stack.lm2 30 and 41 (resize -> size_t), 85 (new_zero -> size_t; the argument text
+  contains "size_t"), 57 (new_zero -> LmP0Text although the source has `(cast: (@: LmP0IndentStack) ...)`);
+  parser_text_heap.lm2 6 (-> LmP0Text); tests/unit_indent_stack_field_index.lm2 2 (-> LmP0Text under an explicit
+  LmP0IndentStack cast; -> size_t). An explicit cast does not reach this path.
+- raw (1): parser_text_port.lm2 88, `l2_s12_0: lm_own_new_zero(1U * c.sizeof(c.LmP0Text))`, no temp, no cast.
+- Uncast in source: parser_indent_stack.lm2 30, 41, 85; parser_text_heap.lm2 6; parser_text_port.lm2 88.
+- 5e's e3 WIP (sonnet/parser-l2 8cfe6018): parser_field_parse_port.lm2 198 (resize, cast size_t) and 212 (new_zero,
+  cast LmP0IndentStack), per 5e's inventory; not in the landed tree.
+- Probe for Q1 (a): the 6 sniffed temps in generated parser_indent_stack (4) and the leaf (2) rewritten by hand to
+  `@: void l2_tN` with the call uncast: l1trans exit 0; gcc -fsyntax-only with run_l2trans's -Werror set exit 0;
+  the diagnostic sets equal the unmodified C's exactly (37 and 13 lines, positions ignored).
+
+DESIGN
+1. The allocation temp on the l2_prep path has no type chosen by the translator (Q1).
+2. The "size_t" strstr and the fixed `@: size_t` resize temp are deleted.
+3. Uncast allocations in the units are handled per Q2.
+4. Whole-cast emission (20 calls) is unchanged.
+
+RED SHAPES (measured on the sizeof branch's translator, scratch probes, l2trans -> l1trans -> gcc -fsyntax-only with
+run_l2trans's -Werror set)
+- V1, slot `@: size_t cells`, `cells: (cast: (@: size_t) lm_own_new_zero(4U * c.sizeof(cells[0])))`: temp
+  `@: LmP0Text l2_t0`; gcc exit 0 (the outer cast converts it).
+- V2, the same slot uncast, `cells: lm_own_new_zero(4U * c.sizeof(cells[0]))`: temp `@: LmP0Text l2_t0`; gcc exit 1,
+  "assignment to 'size_t *' from incompatible pointer type 'LmP0Text *' [-Werror=incompatible-pointer-types]".
+- V3, `@: int cells`, `cells: (cast: (@: int) lm_own_new_zero(4U * c.sizeof(c.int)))`: temp `@: LmP0Text l2_t0`;
+  gcc exit 0.
+So the sniff breaks C only for an uncast use; under an explicit cast it is a wrong type the cast hides.
+
+REDS AND ACCEPTANCE
+1. A leaf allocates on the l2_prep path through explicit casts, `@: size_t` (V1) and `@: int` (V3), writes and reads
+   an element, and resizes the int array. Red on today's translator: the generated .lm1 declares an `@: LmP0Text`
+   temp for either allocation (a grep in the runner, since C accepts it). Under Q2 (b) the leaf also holds V2, red by
+   the gcc line above; under Q2 (a) V2 is a negative case whose refusal names the missing cast.
+2. The "size_t" strstr and the fixed size_t resize temp grep to 0; a planted line proves the pattern matches.
+3. run_l2trans (all cases, Invoke-IndentStack, run_candidate_indent), run_port_parser cold, run_graph_abi cold, and
+   run_gates green; per Q2 each uncast call is kept or rewritten and named.
+
+QUESTIONS (each to be measured before it is claimed)
+Q1. The temp's type.
+  (a) The prototype's own return type, `@: void`: nothing is chosen, an explicit source cast converts it, an uncast
+      use converts at the assignment by C's void* rule. Measured compilable above. Cost: an uncast allocation into a
+      mistyped target compiles silently.
+  (b) The enclosing explicit cast's type, handed from the cast path to the allocation (6f's expectation); the cast
+      path grows an allocation case.
+Q2. An allocation without an explicit cast (5 in the landed units: parser_indent_stack 30, 41, 85; parser_text_heap 6;
+    parser_text_port 88).
+  (a) Refused at check time with a line naming the missing cast; the five are rewritten to the explicit cast in the
+      same commit, named.
+  (b) Admitted under Q1 (a), typed by the assignment.
+  6f expects (a). With Q1 (a) the refusal is not needed for correctness of the emitted C, only for the rule that a
+  source names its allocation's type; with Q1 (b) it is needed, since the path would have no type.
+Q3. Leaf for red 1: (a) a new unit_own_alloc_cast_type.lm2 run by run_l2trans (historical pin 144), (b) extend
+    unit_indent_stack_field_index. Recommend (a).
