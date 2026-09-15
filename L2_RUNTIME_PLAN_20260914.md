@@ -5577,3 +5577,13 @@ S5 branch merged with it, with the union base and the UAF kit over
 runtime_delete for (c) (the kit's 165 clean runs as the bar); the
 falsifier one item put back; the probe never folded in. The S6 census
 re-base onto 952d8e31 is b5's next doc ticket after S4 lands.
+e9's cold gate record on the S2 tip (2026-09-15; checked by the coordinator:
+selfbuild/952d8e31 peels to 952d8e31; integration c9ac4dda after the
+lead's merge of the log line): after_landed_gate.sh 952d8e31 exit 0,
+cold; gate.ps1 "gate: all green" in 291 s, 27 of 27 (buildCore 4 s,
+run_seed 2 s, run_gen 64 s, 12 of 12 on gen0 and gen2, l2 run_lmx 35 s
+and 32 s); run_self_build first, PASS 8 of 8 in 19 s; tag
+selfbuild/952d8e31 pushed at 15:03:48; the log commit
+claude-0c/selfbuild-log-952d8e31 c9ac4dda (13 to 14 lines) merged;
+pins installed in all three trees; D2's record tree removed. The
+machine is free for b5's S4 build; the lead lands S4 onto c9ac4dda.
