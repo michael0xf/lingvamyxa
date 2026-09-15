@@ -71,7 +71,11 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
 
 S3. One wake per lane (L6), no lock around a signal (Mikhail on wait signals).
     exec_wake_locked, which signals every worker after any turn, goes. A turn's end wakes only the lanes it readied,
-    through each readied Message's own wake primitive. exec_ready signals without taking the lock.
+    through each readied Message's own wake primitive (an implementation detail of this runtime, not agreed wording;
+    it does not go into the spec or the model). exec_ready signals without taking the lock. Reference counts on
+    Message records (refs, endp_retain/release) were a prop of the lock in the C record and go with it in S6
+    (Mikhail: a Message references nothing shared but immutable values in the root's arrays and order-free atomic
+    cells; the message queue is a synchronized collection).
     - Red: two mapped workers A and B. Readying A must not wake B. A test-build counter of wake returns that took
       nothing is nonzero for B today (run_one 2587 wakes all).
     - Green: B's empty-wake count at 0 over the same run; the executor selftest's wait tests green.
