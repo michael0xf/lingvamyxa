@@ -971,7 +971,6 @@ fn: lmx_msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv
     c.lmx_msg_mail_lock(root)
     lmx_msg_q_push(@ root\inbox, @ root\inbox_tail, node)
     c.lmx_msg_mail_unlock(root)
-    c.lmx_msg_host_wake(rt)
     c.lmx_msg_endp_release(root)
     c.lmx_msg_host_unlock(rt)
 return: c.LMX_MSG_STAGED

@@ -10,7 +10,6 @@ int lmx_msg_host_is_owner(LmxMsgRuntime *rt);
 int lmx_msg_host_lock(LmxMsgRuntime *rt);
 void lmx_msg_host_unlock(LmxMsgRuntime *rt);
 int lmx_msg_host_is_shutdown(LmxMsgRuntime *rt);
-int lmx_msg_host_wake(LmxMsgRuntime *rt);
 int lmx_msg_host_shutdown(LmxMsgRuntime *rt);
 
 /* Production: get_nomem is an immutable 0 stub. Setters exist only

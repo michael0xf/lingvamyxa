@@ -1,5 +1,6 @@
-/* LMX_MSG_HOST_INGRESS_V0 platform primitives only: owner id, mutex, wake.
- * Copy/envelope/queue policy lives in lmx_message.lm1. */
+/* LMX_MSG_HOST_INGRESS_V0 platform primitives only: owner id, mutex.
+ * Copy/envelope/queue policy lives in lmx_message.lm1. S3 (Mikhail 2026-09-15):
+ * no wait, no wake -- the owner loops, checked each round in its own caller. */
 #include "l2src/lmx_message_host.h"
 #include <stdlib.h>
 
@@ -29,19 +30,16 @@ int lmx_msg_host_test_get_nomem(void) {
 #include <windows.h>
 typedef struct LmxMsgHostSync {
     CRITICAL_SECTION lock;
-    HANDLE wake;
     DWORD owner;
     int shutting_down;
 } LmxMsgHostSync;
 #else
 #include <pthread.h>
-#include <time.h>
+#include <sched.h>
 typedef struct LmxMsgHostSync {
     pthread_mutex_t lock;
-    pthread_cond_t wake;
     pthread_t owner;
     int shutting_down;
-    int signaled;
 } LmxMsgHostSync;
 #endif
 
@@ -56,20 +54,9 @@ int lmx_msg_host_attach(LmxMsgRuntime *rt) {
     }
 #if defined(_WIN32)
     InitializeCriticalSection(&h->lock);
-    h->wake = CreateEventA(0, 0, 0, 0);
-    if (h->wake == 0) {
-        DeleteCriticalSection(&h->lock);
-        free(h);
-        return 1;
-    }
     h->owner = GetCurrentThreadId();
 #else
     if (pthread_mutex_init(&h->lock, 0) != 0) {
-        free(h);
-        return 1;
-    }
-    if (pthread_cond_init(&h->wake, 0) != 0) {
-        pthread_mutex_destroy(&h->lock);
         free(h);
         return 1;
     }
@@ -86,10 +73,8 @@ void lmx_msg_host_detach(LmxMsgRuntime *rt) {
     }
     h = (LmxMsgHostSync *)rt->host_sync;
 #if defined(_WIN32)
-    CloseHandle(h->wake);
     DeleteCriticalSection(&h->lock);
 #else
-    pthread_cond_destroy(&h->wake);
     pthread_mutex_destroy(&h->lock);
 #endif
     free(h);
@@ -145,28 +130,6 @@ int lmx_msg_host_is_shutdown(LmxMsgRuntime *rt) {
     return h->shutting_down;
 }
 
-int lmx_msg_host_wake(LmxMsgRuntime *rt) {
-    LmxMsgHostSync *h;
-    if (rt == 0 || rt->host_sync == 0) {
-        return 1;
-    }
-#if defined(LMX_MSG_HOST_TEST)
-    if (lmx_msg_host_test_nowake != 0) {
-        return 1;
-    }
-#endif
-    h = (LmxMsgHostSync *)rt->host_sync;
-#if defined(_WIN32)
-    if (SetEvent(h->wake) == 0) {
-        return 1;
-    }
-#else
-    h->signaled = 1;
-    pthread_cond_signal(&h->wake);
-#endif
-    return 0;
-}
-
 int lmx_msg_host_shutdown(LmxMsgRuntime *rt) {
     LmxMsgHostSync *h;
     if (rt == 0 || rt->host_sync == 0) {
@@ -179,20 +142,25 @@ int lmx_msg_host_shutdown(LmxMsgRuntime *rt) {
 #if defined(_WIN32)
     EnterCriticalSection(&h->lock);
     h->shutting_down = 1;
-    SetEvent(h->wake);
     LeaveCriticalSection(&h->lock);
 #else
     pthread_mutex_lock(&h->lock);
     h->shutting_down = 1;
-    h->signaled = 1;
-    pthread_cond_broadcast(&h->wake);
     pthread_mutex_unlock(&h->lock);
 #endif
     return LMX_MSG_OK;
 }
 
+/* S3 (Mikhail 2026-09-15): no round is empty. A round is the thread's end_turn
+ * work, then a look into its mailbox, then a turn if there is one; for R0's host
+ * drive that round already ran in the caller (its own maintenance work, then its
+ * drain/recv looked into the mailbox) before this is called. This only reports
+ * whether the host is still up. Only after a round that found neither mail nor
+ * work does it yield here -- one implementation tick (SwitchToThread/sched_yield,
+ * the coordinator's decision), not part of the model. */
 int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms) {
     LmxMsgHostSync *h;
+    int down;
     if (rt == 0 || rt->host_sync == 0) {
         return LMX_MSG_INVALID;
     }
@@ -204,48 +172,21 @@ int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms) {
     }
     h = (LmxMsgHostSync *)rt->host_sync;
 #if defined(_WIN32)
-    {
-        DWORD w = WaitForSingleObject(h->wake, timeout_ms);
-        if (w == WAIT_OBJECT_0) {
-            return LMX_MSG_OK;
-        }
-        if (w == WAIT_TIMEOUT) {
-            return LMX_MSG_EMPTY;
-        }
-        return LMX_MSG_INVALID;
-    }
+    EnterCriticalSection(&h->lock);
+    down = h->shutting_down;
+    LeaveCriticalSection(&h->lock);
 #else
-    {
-        struct timespec ts;
-        int rc;
-        pthread_mutex_lock(&h->lock);
-        if (h->signaled != 0) {
-            h->signaled = 0;
-            pthread_mutex_unlock(&h->lock);
-            return LMX_MSG_OK;
-        }
-        if (timeout_ms == 0U) {
-            pthread_mutex_unlock(&h->lock);
-            return LMX_MSG_EMPTY;
-        }
-        clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += (time_t)(timeout_ms / 1000U);
-        ts.tv_nsec += (long)(timeout_ms % 1000U) * 1000000L;
-        if (ts.tv_nsec >= 1000000000L) {
-            ts.tv_sec += 1;
-            ts.tv_nsec -= 1000000000L;
-        }
-        rc = pthread_cond_timedwait(&h->wake, &h->lock, &ts);
-        if (h->signaled != 0) {
-            h->signaled = 0;
-            pthread_mutex_unlock(&h->lock);
-            return LMX_MSG_OK;
-        }
-        pthread_mutex_unlock(&h->lock);
-        if (rc == 0) {
-            return LMX_MSG_OK;
-        }
-        return LMX_MSG_EMPTY;
-    }
+    pthread_mutex_lock(&h->lock);
+    down = h->shutting_down;
+    pthread_mutex_unlock(&h->lock);
 #endif
+    if (down != 0) {
+        return LMX_MSG_STOPPED;
+    }
+#if defined(_WIN32)
+    SwitchToThread();
+#else
+    sched_yield();
+#endif
+    return LMX_MSG_EMPTY;
 }
