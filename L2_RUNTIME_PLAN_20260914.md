@@ -5094,3 +5094,18 @@ lead merges install_pin 8479fdab, pushes, and launches land_m.sh
 00b04751 d6/m-sequential <hash> 31 (the self-build with its tag and log
 commit, the 31 gates, port_message plain and -LaneCheck, run_lmx -Suite
 Cancel, run_mixa; push only when all green and origin unmoved).
+M LANDED (the lead, 2026-09-15; checked by the coordinator on origin):
+merge ba357d4a on 00b04751; integration/main-absorbs-core fc8e9d6e =
+"SELF-BUILD OK ba357d4a" over the merge; allowlist M 29, A 2, D 6, all
+under l2src. On the merge (land_m.sh exit 0): the pin at gen2 and gen3;
+run_self_build PASS fixed point 8 of 8; tag selfbuild/ba357d4a and the
+log commit pushed at once as d6/m-sequential-landing; gates GREEN 31 of
+31 in 574 s; run_port_message plain and -LaneCheck parity PASS with 97
+methods redirected (62 s each); run_lmx -Suite Cancel ok; run_mixa ok;
+origin unmoved, pushed. The lock half's state: S3 and M landed; the
+sequential mapping, the UI lane and every wake, wait and join are gone
+from the executor and the host. Next in the order: D2 (b5 codes it on
+sonnet/d2-create-id off fc8e9d6e; the lead writes D2's section and
+merges), then S2 (green measurable now that M is in), S4-S6, Y, A. e9
+runs the cold gate record on fc8e9d6e; the lead merges integration into
+main.
