@@ -6059,3 +6059,38 @@ retries (a late read changes nothing), it is a control flag, one
 writer, order-free atomic, and the hold goes; if a stale read can
 bind into an unbound close's teardown, that is a contradiction and
 the stage stops; the lead states which by reading exec_bind_mode's act.
+STOP in S6-1 on unbound_held (the lead, 2026-09-15; checked by the
+coordinator at 11f581e0: unbound_held = addr, set_tls and the unlock
+before lmx_msg_end_turn at exec.c 2295-2304): lmx_msg_exec_unbound_close
+(exec.c 2277-2327), checked only by host_is_owner, called only from
+lmx_msg_drive's drive of unbound descendants (lm1 2252), under the lock
+readies addr if a record exists, else sets e->unbound_held = addr,
+borrows addr's TLS identity, and unlocked runs lmx_msg_end_turn(rt,
+addr, 1) as addr's bookkeeping, then relocked clears unbound_held,
+restores the TLS and sets handoff_ready; exec_bind_mode (1690-1704)
+refuses when unbound_held == addr, then admits the host outside any
+turn or the holder of addr's parent's turn; so a parent's turn on
+another lane can bind addr during that impersonated end_turn, and
+without the lock a stale 0 binds a record onto a Message whose closing
+end_turn and handoff are running on the host (the close then marks it
+handoff_ready), with a second check-then-act in unbound_close's "no
+record at addr" test: a multi-writer pair on addr's binding and closing
+state. Ruling (coordinator, from the spec, no new primitive): the
+host's impersonated close of an unbound child is the historical drive
+loop's act, which the spec marks "Historical prototype only, not the
+target architecture" and requires distributed to each Message's own
+mechanism; under the model closing and settling a child is its parent's
+act on the parent's lane (ownership item (2); a parent's end-turn
+requests its children's close; a reserved child released by its parent
+is settled by the parent), so the unbound child's close moves onto the
+parent's lane: P's turn (its end_turn's supervision step) closes and
+settles an unbound child of P, R0's turn does it for R0's unbound
+direct children (drive_walk_roots runs R0's turn on the host thread, as
+R0's lane), an orphan's by R0's reclaim on R0's lane; exec_unbound_close
+as a host act with impersonation goes, unbound_held goes, and the bind
+and the close are ordered by being on one lane (a parent cannot race
+its own turn). This is S6-1's design change, written in its section
+before the code; if a case cannot reach the parent's lane, the stage
+stops with it. set_orphan_until: the fixture puts orphan_until on R0
+itself, which the sweep never writes, so it stays as a test hook
+guarded like drive.
