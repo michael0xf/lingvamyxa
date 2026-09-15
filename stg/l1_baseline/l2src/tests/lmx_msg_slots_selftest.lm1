@@ -56,7 +56,7 @@ fn: main () int
     nodes\first_child: nodes + 128
     nodes\next_sibling: nodes + 64
     other\n: 23
-    other\clock: 97U
+    other\root_seq: 97U
     c.memcpy(saved_nodes, nodes, bytes)
     c.memcpy(saved_rt, rt, c.sizeof(c.LmxMsgRuntime))
     c.memcpy(saved_other, other, c.sizeof(c.LmxMsgRuntime))
