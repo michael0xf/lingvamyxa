@@ -6249,3 +6249,47 @@ that it lives) is the whole liveness; no leaks come from either, since
 neither depends on the user's single-threaded L3 code; what L2 and L1
 user code does with threads is the user's, and the core is written
 without any of it.
+S6-1, the unbound close settled by the search rule (the lead, 2026-09-15;
+checked by the coordinator on main): Lingvamyxa_spec.txt 12766-12771
+keeps the unbound close as a mechanism: "An unbound closing Message has
+no handler and no lane, so its close is end-turn bookkeeping written by
+the maintaining lane (the host's drive today, the root's maintenance
+later), not a step, and it leaves the Message stopped and handoff-safe
+so that its parent's dispose or adopt can settle it; a Message that
+nothing could ever settle would be the retention rule (1) forbids
+(clarified 2026-09-14)"; 12762-12765 adds that a child with pending
+input under a stopped parent is stepped by nothing else ("no ancestor
+rule, no maintenance step, no authority of a stopped Message"). So the
+two sentences are about two different Messages: a launched child
+(13147-13161) polls its parent and closes itself at its own end_turn;
+a never-launched closing Message (12766) has its close written as
+bookkeeping by the maintaining lane. The measurement agrees: with the
+branch deleted, port_message went red at the close-path case ("unbound
+child state=1", a committed never-launched closing child of a live
+parent that nothing closes any more); handoff_ready then has one
+writer, native_leave_addr (exec.c 1829), a turn's last step on the
+Message's own lane; settle_child_msg (lm1 1568) refuses unless
+handoff_ready, so a Message that never ran a turn could never be
+settled, the state 12771 forbids. The conversion set is wider than the
+four fixtures (the exec selftest's close-path cc, its "ingress close"
+at 7320, lmx_message_selftest.lm1 489, family_handoff 350), every one
+an unbound close. Ruling (coordinator): the coordinator's consequence
+"an unlaunched child is its creator's data, settled on the creator's
+lane" is withdrawn; the mechanism stays, and S6-1 moves it where the
+spec's "later" points: the maintaining lane is R0's maintenance on R0's
+lane (drive's unbound branch becomes a step of drive_walk_roots' R0
+rounds), the bookkeeping written as R0's act, not by borrowing the
+Message's identity, if end_turn's bookkeeping can be called on another
+Message's behalf (the lead reads it; if the TLS borrow is only the
+code's way to reach end_turn, rewriting it as a bookkeeping call is
+S6-1's honest change, not the close's removal); the ordering against a
+parent's bind: a parent refuses to bind a child whose close it
+requested (its own closing write, read on its own lane), and for the
+host's emergency stop the marks (stopped, handoff-safe) are
+idempotent so a late bind is harmless (the launched worker sees
+running 0 and leaves at once); unbound_held then goes, or stays as an
+atomic flag with one writer (R0's maintenance) if the lead finds a
+case the two rules do not cover, named. No question to Mikhail: the
+spec is explicit and consistent. The deletion patch saved and the tree
+restored; (a) proceeds on the green base (the transport move onto R0's
+monitor, then the lock).
