@@ -1169,6 +1169,28 @@ S4. The family tree and the mapping written only on the owner's lane (L2, L3), t
       the existing call sites that stand for the two legitimate callers go red too; the run names them.
     - Landing: land_base2.sh on b5's branch when green (the union base plus lmx_cancel, since cancel_spin_host
       changes; the landing branch named per merge).
+    - Pre-landing review of sonnet/s4-guard 2d9cf5fa (d6, 2026-09-15; read only, nothing built):
+      - Good: the guard is right. mapping_authority_locked is checked after the who lookup and before
+        running_store/closing, with its prototype at the top. Every create in the checks takes 5 arguments.
+      - Red, expected at lmx_cancel: cancel_spin_host.c's cancel_after_settle (154-160) still calls
+        emergency_cancel from a spawned thread after Sleep(20), counting fired only on OK. run_nested starts it
+        with who = p while P's spinning turn runs on the host thread through run_entry_turn, then fails on
+        "spin-nested cancel not fired". The guard returns INVALID to that thread, so fired stays 0, and nothing
+        else stops P's spin.
+      - The ruled restatement ("the canceller as the host outside any turn, or P's own turn") cannot reach this
+        case. P's turn holds the host thread, so the host is not outside a turn, and a spinning turn cannot cancel
+        itself. The only canceller the guard admits is R0's turn on another lane.
+      - Sent to b5 and to the coordinator; the test's form is the coordinator's ruling. No landing until b5 reports
+        green on the fixed branch.
+      - Ruled (the coordinator, 2026-09-15; 2d9cf5fa predates the ruling b5 is implementing): the fixture no longer
+        cancels p.
+        - p's entry turn creates and maps a child C whose turn is the spin (l2_m1 on C's own thread).
+        - The cancel of C is issued from p's own turn, which the host thread runs through run_entry_turn, so it
+          holds C's parent's turn. That is exactly what mapping_authority_locked admits; no R0 context is needed.
+        - After p's turn returns, the host reads C's field flag and running/success in yield rounds, with no Sleep,
+          and "spin-nested cancel not fired" becomes a read of C's flags.
+        The guard stays as ruled and the case is reachable. The falsifier on b5's next push: the 20 ms Sleep line
+        is gone, and the cancel's target is a child of p.
 
 S5. The runtime-level lists (L5). Waits on 5.1.
     rt->slots, rt->n, the retire queue, the reap queue, rt->transport and e->ui_lane each either go or become a cell in
