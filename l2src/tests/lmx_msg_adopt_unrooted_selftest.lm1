@@ -79,30 +79,13 @@ fn: probe_end (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         return: LMX_MSG_INVALID
     return: lmx_msg_end_turn(rt, who, 1)
 
-# Stage 5 (d): a parent's turn that steps the one child named in its cell.
-# ctx is the test's cell: [0] the child's address, written before the
-# root_turn; [1] the step's status, written here. The same text in every
-# migrated test.
-fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
-    @: unsigned cell
-    if: ctx = 0
-        return: 1
-    cell: (cast: (@: unsigned) ctx)
-    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
-    return: lmx_msg_end_turn(rt, who, 1)
-
-# Stage 5 (d): the receiver is R0's child, so R0's turn steps it. Returns
-# root_turn's status, else the receiver step's.
-[]: unsigned step_cell_r0 2
-
+# Stage M: the receiver is R0's direct child, so its own turn runs
+# synchronously through lmx_msg_run_entry_turn (M's "what stays": R0 and
+# R0's direct children run on the bootstrap thread, no bind/launch/wait).
+# The same text in every migrated test whose stepped Message is a direct
+# child of R0.
 fn: step_in_root (@: LmxMsgRuntime rt; unsigned: child) int
-    int: st
-    step_cell_r0[0]: child
-    step_cell_r0[1]: (cast: (unsigned) LMX_MSG_INVALID)
-    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_r0))
-    if: st != LMX_MSG_OK
-        return: st
-    return: (cast: (int) step_cell_r0[1])
+    return: c.lmx_msg_run_entry_turn(rt, child, probe_end, 0)
 
 fn: main () int
     @: LmxMsgRuntime rt
@@ -116,7 +99,6 @@ fn: main () int
     probe_check(lmx_msg_create(rt, 0U, 1U, @ initial, 1U, @ receiver) = LMX_MSG_OK, "create receiver Message")
     recipient: lmx_msg_find(rt, receiver)
     probe_check(recipient != 0, "resolve receiver fixture")
-    probe_check(lmx_msg_exec_bind(rt, receiver, probe_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind real receiver turn")
     probe_adopt_unrooted(recipient, 1)
     probe_check(step_in_root(rt, receiver) = LMX_MSG_OK, "run real end_turn with interior graph root")
     c.printf("adopt retained interior observed owned_frees=%d\n", owned_frees)

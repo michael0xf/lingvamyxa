@@ -1,4 +1,4 @@
-include: "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>"
+include: "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<windows.h>"
 predef: "l2src/lmx_value_owned.h.lm1" "l2src/lmx_branch_owned.h.lm1"
 
 # Model section 34 (failure, history and the handoff of a graph to the parent),
@@ -148,52 +148,68 @@ fn: family_has_block (@: LmxMsg m; @: void base) int
     ---
     return: 0
 
-# Stage 5 (d): a parent's turn that steps the one child named in its cell.
-# ctx is the test's cell: [0] the child's address, written before the
-# root_turn; [1] the step's status, written here. The same text in every
-# migrated test.
-fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
-    @: unsigned cell
-    if: ctx = 0
+# Stage M: yield-round observation. No wait, no Sleep, no wall clock, no
+# round bound; SwitchToThread between reads so the bound Message's own
+# thread makes progress, and the runner's own timeout is the loop's real
+# bound. A closing turn's own end (state -> STOPPED) is a safe one-way
+# cross-thread read; an ordinary turn has no such monotonic transition, so
+# its handler sets the kernel's own success flag as its last act, after
+# its own end_turn's work is done, and the observer polls that instead
+# (family_release_17's pattern: running/success reads, never a wait). The
+# same text in every migrated test that waits on a Message's own thread.
+fn: yield_until_stopped (@: LmxMsgRuntime rt; unsigned: who) int
+    while: lmx_msg_state(rt, who) != c.LMX_MSG_STATE_STOPPED
+        c.SwitchToThread()
+    return: 1
+
+fn: yield_until_success (@: LmxMsgRuntime rt; unsigned: who) int
+    @: LmxMsg m
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        return: 0
+    while: c.lmx_msg_success_load(m) = 0
+        c.SwitchToThread()
+    return: 1
+
+# A deeper descendant is woken by admitting mail through R0's direct
+# child's own synchronous turn (lmx_msg_run_entry_turn, M's "what stays"),
+# since the bootstrap thread loses its blanket send/recv/end_turn
+# privilege the moment any context has ever been started.
+unsigned: send_via_root_to 0U
+@: LmxMsgEnv send_via_root_env 0
+
+fn: send_via_root_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
         return: 1
-    cell: (cast: (@: unsigned) ctx)
-    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    if: lmx_msg_send(rt, who, send_via_root_to, send_via_root_env) != c.LMX_MSG_STAGED
+        return: 1
+    ---
     return: lmx_msg_end_turn(rt, who, 1)
 
-# Stage 5 (d): steps run from R0's turn down the family, one parent's turn per
-# level. main binds each intermediate parent only around the step. Returns
-# root_turn's status, else the first level's that is not OK, else the stepped
-# child's.
-[]: unsigned step_cell_top 2
-[]: unsigned step_cell_mid 2
-[]: unsigned step_cell_leaf 2
+fn: send_via_root (@: LmxMsgRuntime rt; unsigned: root; unsigned: to; @: LmxMsgEnv env) int
+    send_via_root_to: to
+    send_via_root_env: env
+    return: c.lmx_msg_run_entry_turn(rt, root, send_via_root_turn, 0)
 
-# R0 -> top -> mid -> child
-fn: step_via_root2 (@: LmxMsgRuntime rt; unsigned: top; unsigned: mid; unsigned: child) int
+# parent's own final end_turn (below) is an ordinary turn on a Message
+# that is not R0's direct child, so it needs the same real-thread wake.
+fn: parent_finish_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv wake
+    @: LmxMsg self
     int: st
-    step_cell_top[0]: top
-    step_cell_top[1]: (cast: (unsigned) LMX_MSG_INVALID)
-    step_cell_mid[0]: mid
-    step_cell_mid[1]: (cast: (unsigned) LMX_MSG_INVALID)
-    step_cell_leaf[0]: child
-    step_cell_leaf[1]: (cast: (unsigned) LMX_MSG_INVALID)
-    st: lmx_msg_exec_bind(rt, top, turn_step_child, (cast: (@: void) step_cell_mid), LMX_MSG_AFFINITY_ANY)
-    if: st != LMX_MSG_OK
-        return: st
-    st: lmx_msg_exec_bind(rt, mid, turn_step_child, (cast: (@: void) step_cell_leaf), LMX_MSG_AFFINITY_ANY)
-    if: st != LMX_MSG_OK
-        lmx_msg_exec_unbind(rt, top)
-        return: st
-    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
-    lmx_msg_exec_unbind(rt, mid)
-    lmx_msg_exec_unbind(rt, top)
-    if: st != LMX_MSG_OK
-        return: st
-    if: (cast: (int) step_cell_top[1]) != LMX_MSG_OK
-        return: (cast: (int) step_cell_top[1])
-    if: (cast: (int) step_cell_mid[1]) != LMX_MSG_OK
-        return: (cast: (int) step_cell_mid[1])
-    return: (cast: (int) step_cell_leaf[1])
+    if: ctx != 0
+        return: 1
+    wake: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: wake != 0
+        if: lmx_msg_recv(rt, who, wake) = c.LMX_MSG_OK
+            lmx_msg_env_release(wake)
+        ---
+        c.free(wake)
+    ---
+    self: lmx_msg_turn_self(rt)
+    st: lmx_msg_end_turn(rt, who, 1)
+    c.lmx_msg_success_store(self, 1)
+    return: st
 
 fn: main () int
     @: LmxMsgRuntime rt
@@ -232,6 +248,7 @@ fn: main () int
     @: LmxOwnedRange rg_node
     @: LmxOwnedRange rg_cell
     @: LmxOwnedRange rs_head
+    @: LmxMsgEnv wake
     @: void child_init
     @: void grand_init
     @: void sibling_init
@@ -295,6 +312,12 @@ fn: main () int
     gx_base: gxb\base
     family_check(lmx_msg_exec_bind(rt, child, family_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK && lmx_msg_exec_bind(rt, grandchild, family_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind failed branch")
     family_check(lmx_msg_exec_bind(rt, successful, family_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind success branch")
+    # Stage M: all three are bound but unmapped; start_contexts launches each
+    # its own thread now (child and grandchild stay idle until their own
+    # wake below; nothing here relies on the bootstrap thread's blanket
+    # send/recv/end_turn/complete privilege past this point except through
+    # a Message that is actually holding its own turn).
+    family_check(c.lmx_msg_exec_start_contexts(rt) = LMX_MSG_OK, "start contexts for the three bound threads")
 
     # Completion does not add the successful branch to P's failure history.
     family_check(lmx_msg_complete(rt, successful) = LMX_MSG_OK, "K marks success")
@@ -307,7 +330,7 @@ fn: main () int
     # old placement read a freed block and tested the pre-8ab7387d lifetime.
     family_watch_owner: k
     family_watch_a: bk
-    status: step_via_root2(rt, root, parent, successful)
+    status: yield_until_stopped(rt, successful)
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, successful) != 0 && lmx_msg_success_load(k) != 0, "K settled successfully")
     family_check(family_watched_frees = 1 && family_watch_a = 0, "unrooted K block died at K's end-turn")
     family_check(lmx_msg_dispose_child(rt, parent, successful) = LMX_MSG_OK, "dispose K after success")
@@ -317,10 +340,11 @@ fn: main () int
     # --- the failed branch: G and C are stopped, run their closing turns, and
     # keep their graphs as the failure's real state (section 34).
     family_check(lmx_msg_emergency_cancel(rt, grandchild) = LMX_MSG_OK && lmx_msg_emergency_cancel(rt, child) = LMX_MSG_OK, "stop failed branch")
-    # Stage 5 (d), e2's order until (f): C's closing turn runs from R0's turn
-    # through P's; the host unbinds G (the lane settling C writes C's mapping
-    # cell, the host today), and drive's unbound close leaves G handoff-ready.
-    c_status: step_via_root2(rt, root, parent, child)
+    # Stage M: G and C each close on their own thread now, concurrently;
+    # wait for G's own closing turn to finish before unbinding it, so its
+    # own thread is not still touching its record when unbind runs.
+    family_check(yield_until_stopped(rt, grandchild) != 0, "G's own closing turn finishes on its own thread")
+    c_status: yield_until_stopped(rt, child)
     lmx_msg_exec_unbind(rt, grandchild)
     status: lmx_msg_drive(rt, 0U, 0U)
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, grandchild) != 0, "G native activation left")
@@ -366,7 +390,16 @@ fn: main () int
     # transfer, section 34); nothing of the history reaches P's parent.
     family_watch_owner: p
     family_watch_a: gxb
-    family_check(lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "P ends a successful turn holding the history")
+    # Stage M: parent is not R0's direct child, so its own final end-turn
+    # needs a real thread of its own, same as K and C above but for an
+    # ordinary (non-closing) turn: bind, wake through root, wait for the
+    # kernel's own success flag.
+    wake: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    family_check(wake != 0 && lmx_msg_exec_bind(rt, parent, parent_finish_turn, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind parent's own final turn")
+    family_check(send_via_root(rt, root, parent, wake) = LMX_MSG_OK, "root admits the wake envelope into parent's inbox")
+    c.free(wake)
+    family_check(yield_until_success(rt, parent) != 0, "P ends a successful turn holding the history")
+    lmx_msg_exec_unbind(rt, parent)
     family_check(family_watched_frees = 2 && family_watch_a = 0 && family_has_block(p, gx_base) = 0 && lmx_owned_ranges_find(p\ranges, (cast: (@: void) gextra)) = 0, "the block only G's RETAIN root held dies at P's end-turn")
     family_check(family_has_block(p, gb\base) != 0 && family_has_block(p, cb\base) != 0, "P's collection keeps the HISTORY-rooted blocks")
     family_check(lmx_owned_ranges_find(p\ranges, (cast: (@: void) gnode)) = rg_node && lmx_owned_ranges_find(p\ranges, (cast: (@: void) cnode)) = rc_node, "the history's range records stay P's")
