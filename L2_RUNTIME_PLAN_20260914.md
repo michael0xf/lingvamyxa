@@ -4611,3 +4611,16 @@ ba1aa1ad recording the coordinator's red on 199dab84; d6/m-sequential
 tests convert under the no-wait rule, then -LaneCheck, the plain run, a
 one-site falsifier and the gates. b5's standing review of M's section
 starts now against its M and S2 files.
+e9's worktree retirement (2026-09-15): 12 old-layout wt0c_* trees removed,
+each with its branch equal to ls-remote, 0 commits not on origin, 0
+modified or untracked files (fix3 9bfbd144, gates32 ad3fc6b8, hazards_l
+760adb3d, lane_oracle 38a91c86, lock a21fa962, rh c6b5ef27, rows_branch
+92f70d7c, rsp 673c3475, s0 cf326822, s3o 022b1136, seed a30ed131, wait
+64df50cc); wt0c_d3 (two local scratch commits of the stage 5 d3 work,
+superseded by S3) to be pushed as claude-0c/d3-scratch-91e1b4c9 and then
+removed, patches kept; kept wt0c_oneroot and wt0c_oneroot_gate at
+00b04751 with the pin installed by the tool. Finding in install_pin.ps1
+4afe4ff5: a mangled -Tree printed Resolve-Path errors and the wrong
+reason; fixed by a two-line "no tree <path>" refusal, committed on
+claude-0c/oneroot-runners on top of 4afe4ff5, the lead to merge the new
+hash instead.
