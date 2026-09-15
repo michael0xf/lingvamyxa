@@ -1,0 +1,320 @@
+LOCK_REMOVAL_S2_LOOKUPS: every function that resolves a Message by address,
+grouped by function, at b4e1296d (S3 landed), with the capability that
+replaces its lookups by the design (LOCK_REMOVAL_DESIGN.txt S2 and
+LOCK_REMOVAL_SPINE.txt, both d6/lock-removal) and the FIELDS rows
+(sonnet/s2-lookups, 2026-09-15, doc-only, git and reading only).
+
+--- Counts
+
+Functions with at least one address-resolving lookup: 69 (34 in exec.c, 0
+  in host.c, 35 in lm1, 39 self_or_find call sites mirrored 1:1 in lm2 by
+  function count -- lm1 and its lm2 mirror are the same 35 functions under
+  two names, not counted twice in the 69).
+Lookup call sites (msg_at_addr, rec_at_addr_locked, msg_find_any_locked,
+  lmx_msg_self_or_find -- the four names LOCK_REMOVAL_SPINE.txt's own
+  falsifier grep names): 88 total (49 in exec.c, 39 in lm1; host.c 0;
+  lm2 mirrors lm1's 39 under unprefixed names, independently confirmed
+  below, not added to the 88 since it is the same logical site twice).
+Per capability (turn's own Message / C2, the parent's child capability /
+  C1, the mailbox's admitted Message or a sender's own capability / C3,
+  R0's record / C5), plus the design's own C4, Q, X and N classes that
+  the ticket's four names do not cover (see "Not one of the four named
+  capabilities" below, none of them a contradiction):
+  C1 (parent's child): 27 sites, 18 functions (10 exec.c, 8 lm1)
+  C2 (turn's own Message): 18 sites, 12 functions (7 exec.c, 5 lm1)
+  C3 (mailbox's admitted Message): 9 sites, 8 functions (1 exec.c, 7 lm1)
+  C5 (R0's record): 3 sites, 3 functions, exec.c only (lm1's own R0-sweep
+    equivalent, orphan_sweep, walks rt\root\first_child directly with no
+    self_or_find call -- 0 sites of the falsifier-grep kind, same
+    mechanism as exec.c's C5 read on R0's own child list)
+  C4 (the child's own parent capability, spec 19.28.R2.2 11442 --
+    liveness, not one of the ticket's four names): 6 sites, 4 functions,
+    lm1 only
+  Q (the UI lane's request, not yet answered by the design itself): 1
+    site, 1 function, exec.c only
+  X (the wrapper functions msg_at_addr/rec_at_addr_locked themselves,
+    deleted whole with S2, not callers holding a capability): 2 sites,
+    2 functions, exec.c only
+  N (queries from outside any Message; the design's own resolution is
+    "a read on the owner's lane, or deleted with the property it
+    checked", already answered, not a capability question): 22 sites,
+    21 functions (10 exec.c, 11 lm1) [see also the 2 lm1 functions not
+    covered by the primary four-name grep, listed under "Two more
+    lookup sites" below, both also N-shaped]
+Functions whose lookup no capability covers, a contradiction per the
+  ticket's instruction to stop: 0. Every uncovered site (C4, Q, X, N,
+  and the two extra lm1 sites below) already has a named resolution in
+  LOCK_REMOVAL_SPINE.txt or LOCK_REMOVAL_DESIGN.txt's own text; none is
+  newly unresolved. See "On 'contradiction'" at the end.
+
+--- Method and two corrections made before writing this table
+
+Read at b4e1296d (`git checkout -b sonnet/s2-lookups b4e1296d`, S3 landed,
+the old lookup paths named by the design's S2 section still present,
+matching the ticket's framing). Per-function counts were built by
+bucketing every raw match of the four falsifier-grep names to its
+enclosing function/subroutine (exec.c: nearest preceding column-0
+`name(...) {` opener; lm1: nearest preceding `fn:`/`sub:` line), then
+each multi-site function's body was read directly to confirm the bucket,
+not trusted from the automated pass alone. Two real errors surfaced and
+were fixed before this table was written, both caught by reading the
+flagged function's actual body rather than asserting the automated count:
+
+1. exec.c's raw grep initially counted a COMMENT as a call site: line
+   1170, "* msg_at_addr() walks a dangling tree..." inside
+   lmx_msg_endp_try_retire's own comment block. This is the exact
+   mistake LOCK_REMOVAL_SPINE.txt itself records making and fixing at
+   c067bed9 ("a comment in lmx_msg_endp_try_retire naming msg_at_addr,
+   as a call site; endp_try_retire makes no lookup") -- re-verified here
+   independently at b4e1296d and confirmed still the only comment-line
+   false positive in exec.c (grep for `#`-led matches in lm1/lm2 found
+   none). endp_try_retire is correctly absent from this table.
+2. A multi-line C signature, `static int transfer_graph_locked_api(...)`
+   opening at exec.c:3044 (four parameter lines, no single line ending
+   in `) {`), was invisible to a single-line function-opener regex, so
+   its two lookups (self_or_find at 3058, 3059) were first misattributed
+   to the preceding function, lmx_msg_transfer_adopted (making it read
+   4 instead of 2). Read directly: lmx_msg_transfer_adopted (exec.c:3008)
+   has exactly 2 (from, to), matching LOCK_REMOVAL_SPINE.txt's own "(2)"
+   exactly and unchanged since c067bed9 (byte-identical body, diffed
+   against 7200294b). transfer_graph_locked_api's own 2 are its own row
+   below, matching SPINE's separate mention of it by name ("deliver
+   form (2)"); its two public callers, lmx_msg_transfer_graph and
+   lmx_msg_deliver_graph (exec.c:3128, 3133), are thin wrappers with no
+   lookup of their own.
+   A parallel miss in lm1: two SPINE-named C1 functions,
+   lmx_msg_request_children_close and lmx_msg_exec_ready, are written
+   as `sub:` blocks (no return value), not `fn:` blocks; a boundary
+   tracker keyed on `fn:` alone merged their calls into the preceding
+   function (lmx_msg_orphan_sweep read 1 it does not have; the true
+   owners, request_children_close and exec_ready, read 0 each). Fixed by
+   tracking `sub:` as a function boundary too; re-verified against each
+   flagged function's own body (orphan_sweep walks rt\root\first_child
+   directly, no self_or_find call at all; request_children_close and
+   exec_ready each have exactly the 1 SPINE already expected).
+
+--- exec.c (49 sites, 34 functions; file lmx_message_exec.c)
+
+C1 the parent's child capability:
+  exec_bind_mode          | 1899-2052 | 2 | S3 dropped 1 of SPINE's 3: the
+    UI->ANY launch-generation retry/rewait branch (rec_at_addr_locked at
+    old 2371, diffed against 7200294b) is gone with the launch wait.
+  launch_ctx_thread       | 2259-2280ish | 1 | S3 dropped 1 of SPINE's 2,
+    same launch-generation retry pattern.
+  lmx_msg_map_child       | 2822-2868ish | 2 | S3 dropped 1 of SPINE's 3:
+    a third msg_at_addr in a launch-retry-after-wait block (old 3664,
+    diffed against 7200294b) is gone.
+  lmx_msg_exec_unbind     | 2701-2732ish | 2 | unchanged since SPINE
+  lmx_msg_exec_unbound_close | 2535-2572ish | 2 | unchanged
+  lmx_msg_exec_adopt_mark | 2891-2961ish | 2 | unchanged
+  lmx_msg_exec_dispose_mark | 3141-3183ish | 2 | unchanged
+  lmx_msg_transfer_adopted | 3008-3042 | 2 | unchanged, byte-identical
+    body to 7200294b (diffed)
+  lmx_msg_parent_settle   | 3184-3237ish | 1 | unchanged
+  lmx_msg_emergency_cancel | 427-432ish | 1 | unchanged (the parent stops
+    its child; FIELDS.txt's unguarded-write flag on this site, from
+    b5's S6 census, is about the running write, not this lookup)
+
+C2 the turn's own Message:
+  run_one                 | 2103-2258ish | 7 | unchanged
+  native_leave_addr       | 2078-2090 | 1 | unchanged
+  requeue_if_runnable     | 2091-2102 | 1 | unchanged
+  child_turn_core         | 2733-2785ish | 1 | unchanged (the parent's
+    lane taking the child's turn: C1 and C2 together per SPINE, filed
+    here under its own site's capability)
+  context_worker          | 2392-2506ish | 1 | unchanged; its own single
+    lookup (self, msg_at_addr) is C2 -- the liveness call it makes,
+    lmx_msg_live_check, is a separate function counted under lm1's C4
+  set_tls                 | 1354-1360ish | 1 | unchanged
+  take_ready               | 2063-2077 | 1 | unchanged
+
+C3 the mailbox's admitted Message (a sender's / recipient's own held
+   capability):
+  transfer_graph_locked_api | 3044-3127ish | 2 | unchanged from SPINE's
+    own separate mention ("deliver form (2)"); the two public entry
+    points lmx_msg_transfer_graph (3128) and lmx_msg_deliver_graph
+    (3133) call it with no lookup of their own.
+    [SPINE's other exec.c C3 site, exec_wake_addr_locked (via
+    exec_ready), is gone: S3 deleted the whole wake mechanism, and its
+    one rec_at_addr_locked call went with it -- named already in F1 of
+    the S3 design text and in b5's earlier S6/S3 census work, not a new
+    finding.]
+
+C5 R0's own record:
+  lmx_msg_run_entry_turn  | 2786-2794ish | 1 | unchanged
+  lmx_msg_set_orphan_until | 3238-3253 | 1 | unchanged
+  lmx_msg_orphan_expired  | 3278-3283ish | 1 | unchanged
+
+Q the UI lane's request (design's own open item, not yet answered: "the
+   MAP request carries the address; the request must carry the
+   capability instead"):
+  lmx_msg_exec_take_ui_locked | 1528-1554ish | 1 | unchanged
+
+X the wrappers, the lookup mechanism itself, deleted whole with S2:
+  msg_at_addr             | 2059-2061 | 1 (forwards to self_or_find)
+  rec_at_addr_locked      | 1764-1763ish | 1 (forwards to
+    msg_find_any_locked)
+
+N queries from outside any Message (design's own resolution: a read on
+   the owner's lane, or deleted with the property checked):
+  lmx_msg_test_stage        | 990-1005ish | 2
+  lmx_msg_exec_bind_aff     | 1687-1694 | 1
+  lmx_msg_exec_bind_has_worker | 1703-1710 | 1
+  lmx_msg_exec_is_bound     | 2523-2529 | 1
+  lmx_msg_exec_last_status  | 2507-2514 | 1
+  lmx_msg_exec_map_queued   | 1618-1625 | 1
+  lmx_msg_handoff_ready     | 2868-2872 | 1
+  lmx_msg_native_users      | 2873-2877 | 1
+  lmx_msg_adopted_n         | 2962-2966 | 1
+  lmx_msg_adopted_base      | 2979-2984 | 1
+  (three more N functions the design names -- exec_test_launching,
+  exec_test_wait_gen, exec_test_worker_handle -- have 0 lookup calls at
+  b4e1296d; not a drift worth chasing further, since N's own resolution
+  already covers "deleted with the property it checked" and these are
+  S3-era test setters for fields FIELDS.txt already marks done(S3).)
+
+host.c: 0 functions, 0 lookups (grep for msg_at_addr, rec_at_addr_locked,
+  msg_find_any_locked, lmx_msg_self_or_find, lmx_msg_find and rt->slots[
+  in lmx_message_host.c all return no match). No slot-array walk by
+  LmxMsgAddr exists anywhere in exec.c or lm1 either (grep for
+  `\slots[` / `->slots[` : no match) -- the ticket's "slot lookups... any
+  thing walking rt->slots by LmxMsgAddr" names a shape that does not
+  exist; every address resolution goes through lmx_msg_find_tree's walk
+  from rt->root (or rt\root in lm1), never a direct rt->slots index.
+
+--- lm1 (39 sites via lmx_msg_self_or_find, 35 functions; file
+    lmx_message.lm1) and lm2 (independently reverified: 39 sites via the
+    unprefixed msg_self_or_find, same 35 functions -- msg_find_tree,
+    msg_dest_from_src and msg_self_or_find are lm2's own names for
+    lm1's lmx_msg_find_tree, lmx_msg_dest_from_src and
+    lmx_msg_self_or_find; this reverifies SPINE's own "lm2 mirrors lm1"
+    claim rather than repeating it on trust)
+
+C1 the parent's child capability:
+  lmx_msg_handoff_supervision | h:681 | 3 | the old parent's child is C1,
+    the new parent's address is C3 (SPINE's own split; this file counts
+    all 3 sites under the function, not by which of the 3 is which,
+    since the design assigns the whole function's fate to the walk it
+    does under supervision)
+  lmx_msg_create_prepare  | h:1096 | 1
+  lmx_msg_settle_child    | h:1572 | 1
+  lmx_msg_dispose_child   | h:1608 | 1
+  lmx_msg_adopt_failed    | h:1626 | 1
+  lmx_msg_request_children_close | h:1711 | 1 (a `sub:` block; see the
+    boundary-tracking correction above)
+  lmx_msg_poll            | h:2188 | 1
+  lmx_msg_sched_step      | h:2581 | 1 | S2's green loses this with M
+    (run_child_turn and sched_step are part of C1 and deleted, not
+    threaded, per the design's own S2 closing note)
+
+C2 the turn's own Message:
+  lmx_msg_exec_is_runnable_locked | h:727 | 1 (the plain
+    lmx_msg_exec_is_runnable, h:744, is a lock-wrapper with 0 lookups of
+    its own -- correctly excluded, not a missing row)
+  lmx_msg_end_turn        | h:1729 | 1
+  lmx_msg_recv            | h:1948 | 1
+  lmx_msg_fail            | h:2066 | 1
+  lmx_msg_complete        | h:2882 | 1
+
+C3 the mailbox's admitted Message (a sender's held capability):
+  lmx_msg_send            | h:1238 | 1 (+1 more via dest_from_src, see
+    "Two more lookup sites" below)
+  lmx_msg_send_graph      | h:1299 | 1 (+1 more, same)
+  lmx_msg_send_owned      | h:1357 | 1 (+1 more, same)
+  lmx_msg_send_cap        | h:2930 | 1 (no dest_from_src call: send_cap
+    already receives its destination as a capability, `@: LmxMsg dest`,
+    not an address -- this is the one send-family function S2's design
+    already matches; the others still take an address for `to`)
+  lmx_msg_admit_one       | h:1849 | 1 | the transport's destination
+  lmx_msg_post_dead       | h:2045 | 1
+  lmx_msg_exec_ready      | h:759 | 1 | the sender readies the
+    destination (a `sub:` block; see the boundary-tracking correction)
+
+C4 the child's own parent capability (spec 19.28.R2.2 11442; FIELDS row
+   LmxMsg.parent_msg, ruled S2/S4; not one of the ticket's four names,
+   but a real, spec-named fifth capability, not a contradiction):
+  lmx_msg_parent_gone     | h:2140 | 1
+  lmx_msg_live_query      | h:2625 | 2
+  lmx_msg_live_handle     | h:2695 | 1
+  lmx_msg_live_check      | h:2782 | 2 | called from exec.c's
+    context_worker (C2 there for its own lookup; this function's 2 are
+    counted here, not double-counted at the call site)
+
+C5 R0's own record: no lm1 function uses self_or_find/find for this;
+  lmx_msg_orphan_sweep (h:1672) is R0's own sweep (SPINE: "drive's
+  sweep") and walks rt\root\first_child directly, the same shape as
+  exec.c's C5 functions reaching R0's child list without a capability
+  lookup at all. Listed for completeness, not counted in the 39.
+
+N queries from outside any Message (design's own resolution already
+   applies; not a contradiction):
+  lmx_msg_state, lmx_msg_inbox_n, lmx_msg_path_n, lmx_msg_path_seg,
+  lmx_msg_child_n, lmx_msg_child_at, lmx_msg_init_copy,
+  lmx_msg_live_test_set_seq, lmx_msg_live_test_set_wait_th,
+  lmx_msg_tracked, lmx_msg_endp_refs -- h:2323-2916ish, 1 each, 11
+  functions, 11 sites.
+
+--- Two more lookup sites, not covered by the primary four-name grep
+
+lmx_msg_dest_from_src (lm1 h:608, lm2 h:631 msg_dest_from_src): called
+  once each from lmx_msg_send, lmx_msg_send_graph and lmx_msg_send_owned
+  (h:1273, 1336, 1400) to resolve `to` from `src`'s own subtree first,
+  falling back to lmx_msg_find(rt, to). Its own body makes 1
+  lmx_msg_find_tree(src, to) call and 1 lmx_msg_find(rt, to) fallback --
+  a fifth lookup primitive, not msg_at_addr/rec_at_addr_locked/
+  msg_find_any_locked/self_or_find, so absent from the primary grep and
+  from LOCK_REMOVAL_SPINE.txt's own function list. Capability: C3, same
+  as its three callers (the sender resolving its own destination); the
+  send-family's real per-call lookup count is 2, not 1, for send/
+  send_graph/send_owned (send_cap is the one exception, already a pure
+  capability call). Not a contradiction: it is a helper inside the same
+  C3 mechanism its callers already use, just not named by SPINE's own
+  falsifier grep.
+lmx_msg_runtime_new (lm1 h:870, the runtime bootstrap: creates R0 at
+  address 1 and the UI lane at address 2) calls lmx_msg_find(rt, ui)
+  directly at h:897 to hand the freshly created UI-lane Message to
+  lmx_msg_exec_set_ui_lane -- bypassing self_or_find, since at this
+  point in construction there is no turn and no existing capability to
+  hold. Not in the design's own N enumeration (which lists lmx_msg_state,
+  inbox_n, etc., but not runtime_new). N-shaped by the same reasoning as
+  the rest of that class (outside any Message, no capability exists yet
+  because the runtime itself is mid-construction) but not literally
+  named -- worth the lead adding a line for, not a contradiction.
+
+--- On "contradiction"
+
+The ticket asks to flag any function whose lookup no capability covers,
+as a thing to stop on. Every function in this file's two full inventories
+(exec.c, lm1/lm2) lands in one of: C1/C2/C3/C5 (the four the ticket
+names), C4 (a real fifth capability, spec-ruled, with its own FIELDS
+row), Q (the design's own named open question, not new), X (the wrapper
+mechanism being deleted, not a caller), or N (the design's own named
+resolution, "a read on the owner's lane, or deleted"). Nothing found here
+is unnamed or unresolved by the existing design and spec text; this file
+adds two lookup sites the primary grep does not (dest_from_src,
+runtime_new) and one missing N-list name (runtime_new) worth the lead
+adding, but names no contradiction to stop on.
+
+--- Falsifier
+
+Per-function counts above sum to 88 (49 exec.c + 39 lm1), which is
+exactly the raw count of call sites (excluding the 2 exec.c forward
+declarations, the 3 exec.c definition-name occurrences, and the 1
+exec.c comment false positive) of the same four names
+LOCK_REMOVAL_SPINE.txt's own falsifier grep uses -- msg_at_addr,
+rec_at_addr_locked, msg_find_any_locked, lmx_msg_self_or_find --
+verified directly against the checked-out b4e1296d files with
+`grep -oE`, not asserted. This differs from SPINE's own count at
+c067bed9 (96, exec.c 57 + lm1 39): lm1's 39 is unchanged (S3 never
+touched lm1), and exec.c's 57 dropped to 49, an 8-site difference fully
+accounted for by S3's deletion of the wake/launch-retry machinery,
+confirmed by diffing exec.c at 7200294b (pre-S3) against b4e1296d
+site-by-site: 1 site in lmx_msg_exec_wake_addr_locked (the whole function
+deleted), 1 in exec_bind_mode's launch-generation retry branch (deleted
+with the launch wait), 1 in lmx_msg_map_child's retry-after-launch branch
+(deleted), and a matching net drop of exactly 7 rec_at_addr_locked(e,
+addr) call sites plus 1 msg_at_addr(rt, child) call site between the two
+files' sorted, grouped raw match text (`sort | uniq -c`, diffed) -- a
+precise, byte-level match to the 8-site total, not an estimate. lm2
+independently reverified at 39 sites in 35 functions using its own
+unprefixed name, matching lm1 exactly.

@@ -1,0 +1,323 @@
+LOCK_REMOVAL_Y_SITES: every site that reads or writes the mailbox rows (inbox,
+inbox_tail, mail the monitor, and the runtime's transport/transport_tail pair) at
+integration c063fd00, beside the S3 and M files (sonnet/y-sites, 2026-09-15,
+doc-only, no machine).
+
+Method: git grep at c063fd00 across l2src's implementation files (lmx_message.lm1,
+its lmx_message.lm2 mirror, lmx_message_exec.c, lmx_message_host.c -- host.c has
+no hits at all, confirmed below) and mixa_manager outside vendor/ (no hits there
+either: only prose in BACKEND_SEAM.txt/PROCESS_SEAM.txt/REVIEW_20260911.txt uses
+the word "inbox", no code). Rows per LOCK_REMOVAL_FIELDS.txt (current tip
+31348421, header at 23cda3c0): LmxMsg.inbox/.inbox_tail (h:126-127, MBOX, Y3/A3),
+LmxMsg.mail (h:180, MBOX, the monitor, Y2), LmxMsgRuntime.transport/.transport_tail
+(h:215-216, MBOX, host posts are admissions into R0's mailbox; the queue DEL,
+S5/Y3).
+
+Categories used below (the ticket's own three): OWNER = the Message's own thread,
+in its own round/turn, reading or taking its own inbox. ADMISSION = a write that
+adds an entry to a mailbox (inbox or transport), run by whichever thread is
+delivering (a sender's own turn, or the host outside any turn). HOST DRIVE = the
+host thread's between-turns maintenance step (drain, pump), outside any turn.
+Lock column: EXEC = lmx_msg_exec_lock/unlock (the executor's own table lock, a
+different lock from the mailbox monitor); MAIL = lmx_msg_mail_lock/unlock(m) (the
+per-Message monitor, m->mail); NONE = no lock at the site itself (the caller
+already holds one, noted inline).
+
+Line format: site | file:line range | thread | category | lock
+
+--- inbox / inbox_tail: the collection itself
+
+The six self-contained primitives in lmx_message_exec.c each lock m->mail on
+entry and unlock before return -- no caller ever holds the mail lock across one
+of these calls, confirmed by reading all six bodies (exec.c:524-985):
+
+site: lmx_msg_mail_inbox_empty
+file:line range: lmx_message_exec.c:551-560
+thread: whichever thread calls it (see callers below); the primitive itself is
+  thread-agnostic, correctness rests entirely on the internal MAIL lock
+category: read
+lock: MAIL (self-contained)
+callers found: lmx_msg_drive_one (lmx_message.lm1:2260, R0's maintenance driver
+  checking a candidate-for-close descendant's inbox -- see the HOST-DRIVE-ADJACENT
+  flag below), lmx_msg_endp_try_retire (lmx_message_exec.c:1175, a retire-eligibility
+  check, same family)
+
+site: lmx_msg_mail_inbox_n
+file:line range: lmx_message_exec.c:562-571
+thread: whichever thread calls it (public introspection)
+category: read
+lock: MAIL (self-contained)
+callers found: lmx_msg_inbox_n (lmx_message.lm1:2345-2364, a public API wrapper
+  with no turn/ownership guard at all -- callable by any thread holding an addr,
+  used by tests and mixa's harness to check queue depth from entirely outside the
+  Message's own turn)
+
+site: lmx_msg_mail_inbox_has_input
+file:line range: lmx_message_exec.c:580-590
+thread: whichever thread calls it
+category: read
+lock: MAIL (self-contained)
+callers found: lmx_msg_exec_is_runnable_locked (lmx_message.lm1:736, a scheduling
+  eligibility check, run under EXEC by whichever thread is picking work -- the
+  owner picking its next child, or R0 picking UI work), lmx_msg_sched_eligible
+  (lmx_message.lm1:2539, sched_step's own round-robin candidate check, run by the
+  parent on its own thread -- OWNER, picking among its children, each check reads
+  a CHILD's inbox, not the picker's own -- see the flag below), bind_kick_needed_locked
+  (lmx_message_exec.c:2262, exec.c) and take_this (lmx_message_exec.c:3030, a
+  worker's own address-scan checking its OWN bound record -- OWNER)
+
+site: lmx_msg_mail_inbox_pop_input
+file:line range: lmx_message_exec.c:592-616
+thread: OWNER (see caller)
+category: read+write (the owner's take)
+lock: MAIL (self-contained)
+callers found: lmx_msg_recv (lmx_message.lm1:1959, 1998 -- a Message pulling one
+  real input from its OWN inbox during its OWN turn; requires lmx_msg_require_turn,
+  so the caller must already be `who`). This is THE canonical owner's-take site.
+
+site: lmx_msg_mail_inbox_take_ingress
+file:line range: lmx_message_exec.c:621-660
+thread: HOST DRIVE
+category: read+write (removes every INGRESS-kind entry from root's inbox)
+lock: MAIL (self-contained)
+callers found: lmx_msg_host_drain (lmx_message.lm1:1000, see the transport section
+  below -- this is the first half of the host-drive relay: take INGRESS entries
+  back out of root's own inbox so they can be re-staged into rt.transport)
+
+site: lmx_msg_mail_inbox_take
+file:line range: lmx_message_exec.c:663-680
+thread: mixed -- see callers
+category: read+write (drains the whole inbox)
+lock: MAIL (self-contained)
+callers found:
+  - lmx_msg_release_slot (lmx_message.lm1:1482, draining a Message's own leftover
+    inbox at slot-release time; called by lmx_msg_settle_child (1605, the PARENT
+    disposing a finished child -- lmx_message.lm1:1575-1650), lmx_msg_reclaim_orphan
+    (1667, R0 reclaiming a failed orphan -- lmx_message.lm1:1651-1731), and
+    lmx_msg_end_turn's own inline dispose (1784, a parent disposing its own
+    just-finished child at its own turn's end -- lmx_message.lm1:1732-1850). In
+    all three, the thread draining m's inbox is the PARENT's or R0's own thread,
+    not m's -- see the flag below.
+  - lmx_msg_fail (lmx_message.lm1:2101, draining `who`'s OWN inbox as part of
+    failing itself; requires lmx_msg_require_turn(rt, who) -- OWNER, legitimate)
+
+site: lmx_msg_mail_inbox_prepend
+file:line range: lmx_message_exec.c:970-986
+thread: OWNER
+category: write (puts a drained chain back)
+lock: MAIL (self-contained)
+callers found: lmx_msg_fail (lmx_message.lm1:2116, restoring `who`'s own drained
+  inbox chain after a post_dead failure mid-walk -- OWNER, same call as above)
+
+site: lmx_msg_exec_ui_request_locked
+file:line range: lmx_message_exec.c:1532-1557
+thread: ADMISSION (a sender making a Message UI-affinity-ready reaches this
+  through the ready path, not the UI lane's own thread)
+category: write (pushes one node onto e->ui_lane's own inbox, inline, not through
+  a named inbox_* primitive)
+lock: MAIL, held on e->ui_lane specifically (lmx_msg_mail_lock/unlock(lane) --
+  not shown in the earlier grep window but present at the call; the push at
+  1547-1552 is the lane's own inbox chain, node->next / lane->inbox_tail->next /
+  lane->inbox, matching lmx_msg_mail_chain's shape by hand rather than by calling
+  the named helper)
+table row: this is a second collection (the UI lane's own inbox, itself an
+  ordinary LmxMsg.inbox/.inbox_tail pair) -- same rows as above, no separate row
+  needed.
+
+site: lmx_msg_exec_take_ui_locked
+file:line range: lmx_message_exec.c:1578-1632
+thread: OWNER (R0, since the UI lane is R0's own child and only R0's turn may
+  step it -- see LOCK_REMOVAL_M_FIELDS.txt's lmx_msg_exec_ui_step entry)
+category: read+write (the lane's own take, admission-order FIFO pop)
+lock: MAIL, held on e->ui_lane (lmx_msg_mail_lock/lmx_msg_mail_unlock(lane) around
+  the node = lane->inbox / lane->inbox = node->next pop at 1591-1596)
+
+site: lmx_msg_exec_ui_nrequests
+file:line range: lmx_message_exec.c:1713-1727
+thread: whichever thread calls it (introspection, same family as
+  lmx_msg_mail_inbox_n)
+category: read (walks e->ui_lane->inbox under EXEC, not MAIL -- see flag below)
+lock: EXEC (the walk at 1723 is inside the function's own
+  lmx_msg_exec_lock/unlock pair, not a MAIL lock on the lane -- this reads the UI
+  lane's inbox chain under a DIFFERENT lock than every other UI-lane inbox site
+  above)
+
+--- mail: the monitor itself (create/destroy/lock/unlock, and its reuse for outbox)
+
+site: lmx_msg_mail_lock / lmx_msg_mail_unlock
+file:line range: lmx_message_exec.c:524-548
+thread: n/a (the primitive)
+category: n/a (the lock/unlock pair every site above and below calls)
+lock: this IS the row
+
+site: lmx_msg_slot_new (creation of m->mail)
+file:line range: lmx_message_exec.c (the CRITICAL_SECTION/pthread_mutex_t alloc
+  and Initialize/Init call, part of slot construction; not separately listed in
+  the S3-fields survey since that ticket covered lmx_message_host.c's now-removed
+  h->wake/h->signaled, a different lock entirely from this one)
+thread: whichever thread creates the Message (its parent, in its own turn, or the
+  host bootstrapping R0)
+category: write (one-time init)
+lock: n/a (nothing to race against before the pointer is published)
+
+site: lmx_msg_mail_outbox_take (and lmx_msg_mail_outbox_empty)
+file:line range: lmx_message_exec.c:988-998ish (take), and the empty check listed
+  under inbox above at exec.c's outbox_empty (adjacent to the inbox primitives)
+thread: OWNER at every one of its six lm1 call sites (lmx_msg_end_turn:1824
+  draining its OWN outbox to relay to transport; lmx_msg_fail:2090 draining its
+  own; lmx_msg_release_slot:1484 and 1749/1773 (settle_child/reclaim_orphan) and
+  post-unbind teardown paths -- same third-party-at-disposal pattern as inbox_take
+  above, since release_slot drains both outbox and inbox of the Message being
+  disposed)
+category: read+write (the outbox's own take)
+lock: MAIL -- the SAME monitor (m->mail) that protects inbox. Worth stating
+  plainly: today's single per-Message lock already covers two different
+  collections (inbox and outbox), not just the one this ticket names. Y2's "one
+  reentrant lock" plan does not need to change this -- it is already exactly the
+  shape Y2 wants -- but the design note should say outbox explicitly, since this
+  ticket's own field list (inbox, inbox_tail, mail, transport pair) does not name
+  outbox and a reader could otherwise miss that mail already guards it too.
+
+--- transport / transport_tail: the runtime-wide host-relay queue
+
+site: lmx_msg_host_drain (first half: take from root's inbox)
+file:line range: lmx_message.lm1:984-1011 (mirror lmx_message.lm2:1041-1068ish)
+thread: HOST DRIVE (requires lmx_msg_require_owner(rt) and NOT holding any turn)
+category: read+write on root's INBOX (via lmx_msg_mail_inbox_take_ingress, MAIL
+  lock, see above) then WRITE onto transport (the re-stage loop at
+  lmx_message.lm1:1009, lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n))
+lock: the re-stage loop (1002-1012) runs under EXEC (lmx_msg_exec_lock/unlock
+  wraps the whole while loop); the inbox take itself is MAIL, on root, entered
+  and left before this loop starts. Two different locks, in sequence, never
+  nested.
+
+site: lmx_msg_pump (transport's own take)
+file:line range: lmx_message.lm1:1930-1949 (mirror lmx_message.lm2:2005ish)
+thread: OWNER or a thread holding some turn (lmx_msg_require_owner OR
+  lmx_msg_exec_holding_any); called at lmx_msg_host_drain's tail (HOST DRIVE
+  context) and directly by lmx_msg_send/send_graph/send_owned/send_cap's own
+  callers in some paths (not shown as a direct call in this grep; pump is a
+  public API, its own guard admits either)
+category: read+write (pops rt.transport under EXEC, then WRITEs the popped entry
+  into its real destination's inbox by calling lmx_msg_admit_one -- see below,
+  a nested but sequential, not overlapping, lock use: EXEC is released before
+  admit_one's own MAIL lock on the destination is taken)
+lock: EXEC (the while loop at lmx_message.lm1:1938-1946 wraps lock/pop/unlock
+  each iteration)
+
+site: lmx_msg_admit_one (transport/pump's payload, real admission into a
+  Message's own inbox)
+file:line range: lmx_message.lm1:1852-1927 (mirror lmx_message.lm2:1926-2004ish)
+thread: whichever thread calls it -- lmx_msg_pump (HOST DRIVE via host_drain, or
+  OWNER via a direct pump call)
+category: ADMISSION (the actual write into dest\inbox, lmx_message.lm1:1922-1924,
+  c.lmx_msg_mail_lock(dest) / lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, put)
+  / c.lmx_msg_mail_unlock(dest))
+lock: EXEC for the dest lookup and state checks (1860-1893), released, then MAIL
+  on dest for the actual inbox push (1922-1924) -- sequential, not nested,
+  same pattern as pump above.
+
+site: lmx_msg_host_post (root's own direct admission, bypassing transport)
+file:line range: lmx_message.lm1:921-978 (mirror lmx_message.lm2:977-1034ish)
+thread: HOST DRIVE (an external/foreign caller outside any turn -- this is the
+  function the S3-fields ticket's host_wake caller was inside)
+category: ADMISSION -- but directly into root's own inbox (lmx_message.lm1:972,
+  c.lmx_msg_mail_lock(root) / lmx_msg_q_push(@ root\inbox, @ root\inbox_tail,
+  node) / c.lmx_msg_mail_unlock(root)), NOT through rt.transport at all. This is
+  worth stating precisely since the FIELDS.txt row's own gloss ("host posts are
+  admissions into R0's mailbox") describes exactly this site, not the transport
+  queue -- transport is a SECOND, internal relay hop (root's inbox -> host_drain
+  -> transport -> pump -> the real destination's inbox), used only when the
+  posted envelope's real destination is NOT root itself. host_post's own write is
+  MAIL on root directly; nothing here touches transport.
+lock: MAIL (on root, directly)
+
+site: lmx_msg_end_turn (outbox-to-transport relay)
+file:line range: lmx_message.lm1:1732-1850ish, the relay loop at 1824-1828
+  (mirror lmx_message.lm2:1805ish)
+thread: OWNER (the Message ending its own turn)
+category: write onto transport (relaying its own just-taken outbox contents)
+lock: EXEC (the push loop at 1824-1828 is between lmx_msg_exec_lock/unlock,
+  entered right after re-acquiring the lock post the MAIL-protected outbox take)
+
+site: lmx_msg_post_dead
+file:line range: lmx_message.lm1:2048-2067 (mirror lmx_message.lm2:2125ish)
+thread: OWNER -- the function's own transport push (2066) carries NO lock of its
+  own; verified all three call sites (lmx_msg_fail:2090,2108,2129) hold EXEC at
+  the point of each call (lmx_msg_fail enters lmx_msg_exec_lock at its own top
+  and only releases it at specific early returns, never around a post_dead call)
+category: write onto transport
+lock: EXEC (held by the caller, lmx_msg_fail; post_dead itself takes none)
+
+site: lmx_msg_runtime_delete (transport teardown)
+file:line range: lmx_message.lm1:1014-1043ish (sub:), the free/reset at 1040-1042
+  (mirror lmx_message.lm2:1073ish)
+thread: whichever thread calls runtime_delete; the function itself requires
+  lmx_msg_host_is_owner(rt) first
+category: write (destroys the whole transport chain: lmx_msg_copy_free(rt\transport);
+  rt\transport: 0; rt\transport_tail: 0)
+lock: EXEC (inside the same lmx_msg_exec_lock section as the slot walk right
+  before it)
+
+--- host.c and mixa_manager (outside vendor/): no sites
+
+lmx_message_host.c has no reference to inbox, inbox_tail, mail, or transport at
+all (confirmed: git grep for all four at c063fd00 on that file alone returns
+nothing) -- it is exactly what its own header comment says, platform primitives
+only (owner id, mutex; S3-R9 already removed wake). mixa_manager outside vendor/
+has no code touching these rows either; only design-doc prose (BACKEND_SEAM.txt,
+PROCESS_SEAM.txt, PORT_OF_CLEARSHELL.txt, REVIEW_20260911.txt, QT_ASSESSMENT.txt)
+uses the word "inbox" or "transport" in English sentences, not code.
+
+--- Flags
+
+FLAG-1 (contradiction, matches the rule's second named case: "any read outside
+the owner and admission"): a whole family of disposal-time sites reads or drains
+a Message's inbox (and outbox) from a thread that is NOT that Message's own and
+is NOT performing an admission:
+  - lmx_msg_release_slot (lmx_message.lm1:1482) drains m's inbox and outbox at
+    slot-release time. Its three callers all run on a DIFFERENT Message's own
+    thread, disposing of m: lmx_msg_settle_child (1605, the PARENT disposing its
+    finished child), lmx_msg_reclaim_orphan (1667, R0 reclaiming a failed
+    orphan), and lmx_msg_end_turn's own inline dispose (1784, a parent disposing
+    its just-finished child inline at its own turn's end).
+  - lmx_msg_drive_one (lmx_message.lm1:2260) reads a candidate descendant's
+    lmx_msg_mail_inbox_empty before deciding to close it -- again the maintenance
+    DRIVER's thread (R0's, or whichever thread runs the drive sweep), not the
+    descendant's own.
+  - lmx_msg_endp_try_retire (lmx_message_exec.c:1175) reads a Message's inbox
+    emptiness as part of a retire-eligibility check, same driver-thread pattern.
+In every one of these, the Message being read is already stopped, failed, or
+finished -- never a live owner mid-turn -- so there is no actual concurrent
+access today (the MAIL lock makes each individual read/drain safe regardless,
+and reentrant locking, Y2's own model, tolerates this cleanly). This is not a
+correctness bug now and is not blocked by Y2's plan. It IS, precisely, a site
+whose category the ticket's own two named buckets (owner / admission) do not
+cover, so it is flagged as the rule asks rather than silently folded into
+"owner." Recommend Y's design note name a third category explicitly --
+"disposal" or "settle" -- for teardown-time reads of an already-stopped
+Message's mailbox by its parent or R0, distinct from both the owner's live take
+and a sender's admission.
+
+FLAG-2 (a smaller instance of the same shape, read-only): lmx_msg_inbox_n
+(lmx_message.lm1:2345) is a public API with no turn/ownership guard at all --
+any thread holding an address can call it to read another Message's inbox
+depth (used by tests and mixa's harness today). Same "read outside the owner"
+shape as FLAG-1 but read-only and guarded by MAIL internally, so lower severity;
+listed separately since it is a live-Message case (the target need not be
+stopped), unlike FLAG-1's disposal family.
+
+FLAG-3 (a lock inconsistency, not named by either of the rule's two cases but
+found while surveying "which lock covers it today" as the ticket asked):
+lmx_msg_exec_ui_nrequests (lmx_message_exec.c:1713-1727) walks e->ui_lane->inbox
+under the EXEC lock, not under the UI lane's own MAIL lock the way every other
+UI-lane inbox site (lmx_msg_exec_ui_request_locked, lmx_msg_exec_take_ui_locked)
+does. Since the UI lane's inbox chain is mutated only under MAIL elsewhere, a
+concurrent take (also under MAIL, not EXEC) is not excluded by this read holding
+only EXEC -- a lost-update-shaped read (the count could be read mid-mutation)
+unless EXEC happens to always be held by whoever else touches the lane at the
+same moment. Flagged for the design note to confirm or fix, not asserted as a
+live bug (this ticket's scope is doc-only; no build was run to reproduce it).
+
+--- Falsifier
+git show sonnet/y-sites:stg/l1_baseline/l2src/LOCK_REMOVAL_Y_SITES.txt | grep -c "inbox"
