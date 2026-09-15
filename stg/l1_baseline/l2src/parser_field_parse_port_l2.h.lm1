@@ -15,25 +15,58 @@ include: "l1src/p0.lm1.h"
 # into other units (p0_new_node, Stage c's l2src/parser_alloc_port.lm2;
 # p0_position_in_slice, Stage b's l2src/parser_scan_port.lm2) and four
 # still-oracle-native entries: lm_p0_append_field, lm_p0_document_
-# register_lazy_text, lm_p0_find_matching_bracket, lm_p0_scan_compact_
-# atom_piece (Stage e4, not yet ported), lm_p0_parse_fields_until
-# (Stage e6, not yet ported -- p0_append_compact_atom_pieces calls it
-# for bracketed sub-fields; the call retargets once e6 lands).
+# register_lazy_text, lm_p0_scan_compact_atom_piece (Stage e4, not yet
+# ported), lm_p0_parse_fields_until (Stage e6, not yet ported --
+# p0_append_compact_atom_pieces calls it for bracketed sub-fields; the
+# call retargets once e6 lands). lm_p0_find_matching_bracket was also
+# an e2-time oracle-native entry, REMOVED here since e3 ports it for
+# real in this same unit (no longer needs a prototype at all).
+#
+# Slice e3 removes lm_p0_indent_stack_delete's oracle-native entry
+# (ported for real this slice, same unit) and adds: three cross-unit
+# entries for Stage a functions (p0_is_horizontal_space, p0_is_line_
+# break, p0_line_break_width_at, p0_is_field_separator, p0_is_quoted_
+# token_boundary -- l2src/parser_text_port.lm2) and one for Stage b
+# (p0_indent_tab_column, l2src/parser_scan_port.lm2); plus nine
+# still-oracle-native entries: lm_p0_indent_stack_free_any (a fnptr
+# value passed to lm_own_delete, same shape as Stage c/d's own
+# delete-callback pattern), lm_p0_find_python_string_end, lm_p0_
+# consume_brace_mark, lm_p0_skip_brace_mark (both stay oracle-native;
+# they reach lm_p0_record_mix_mark, out of this port's scope --
+# see the capstone note above), lm_p0_starts_c_prefixed_quote, lm_p0_
+# scan_c_prefixed_quote, lm_p0_scan_c_char, lm_p0_starts_c_surface_
+# atom, lm_p0_scan_c_surface_atom (the last two are Stage e4, not yet
+# ported).
 
 prototype:
     fn: lm_own_new_zero (size_t: size) @: void
     sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
+    fn: lm_own_resize (@: void object; size_t: size) @: void
     sub: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item)
     sub: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack)
     fn: lm_own_ptr_stack_push (@: LmOwnPtrStack stack; @: void item) int
     sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))
-    sub: lm_p0_indent_stack_delete (@: LmP0IndentStack stack)
     fn: p0_new_node (@: LmP0Document document; LmP0NodeKind: kind) @: LmP0Node
     sub: p0_position_in_slice (const: @(char text); size_t: length; size_t: index; size_t: base_line; size_t: base_column; @: size_t out_line; @: size_t out_column)
     fn: p0_is_field_space (char: value) int
     fn: lm_p0_append_field (@: LmP0Document document; @: LmP0Structure structure; @: LmP0Node nd) int
     fn: lm_p0_document_register_lazy_text (@: LmP0Document document; const: @(char source); size_t: length; const: @@(char patch_slot); size_t: line; size_t: column) int
-    fn: lm_p0_find_matching_bracket (@: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
     fn: lm_p0_scan_compact_atom_piece (const: @(char text); size_t: end_index; size_t: start; int: allow_signed_number) size_t
     fn: lm_p0_parse_fields_until (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: initial_source_level; @: size_t index) int
+    fn: p0_is_horizontal_space (char: value) int
+    fn: p0_is_line_break (char: value) int
+    fn: p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
+    fn: p0_is_field_separator (char: value) int
+    fn: p0_is_quoted_token_boundary (char: value) int
+    fn: p0_starts_python_string (const: @(char text); size_t: length; size_t: index) int
+    fn: p0_indent_tab_column (size_t: column) size_t
+    sub: lm_p0_indent_stack_free_any (@: void object)
+    fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: start; @: size_t out_end) int
+    fn: lm_p0_consume_brace_mark (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
+    fn: lm_p0_skip_brace_mark (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
+    fn: lm_p0_starts_c_prefixed_quote (const: @(char text); size_t: end_index; size_t: start) int
+    fn: lm_p0_scan_c_prefixed_quote (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: lm_p0_starts_c_surface_atom (const: @(char text); size_t: end_index; size_t: start) int
+    fn: lm_p0_scan_c_surface_atom (const: @(char text); size_t: end_index; size_t: start) size_t
 end: prototype

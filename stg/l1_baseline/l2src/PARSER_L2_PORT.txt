@@ -625,6 +625,72 @@ e) field-parsing state machine -- l2src/parser_field_parse_port.lm2
    about the fixtures' shape, now measured rather than assumed.
    Reverted, clean diff, 36/36 restored, also cold.
 
+   e3 (field scanning primitives, 12 fns, IN PROGRESS, BLOCKED) --
+   l2src/parser_field_parse_port.lm2: p0_indent_stack_push, p0_indent_
+   stack_new_empty, p0_indent_stack_delete, p0_relaxed_level_from_
+   column, p0_source_level_after_line_break, p0_skip_field_space,
+   p0_scan_python_string, p0_scan_quoted, p0_require_quoted_token_
+   boundary, p0_find_matching_paren, p0_find_matching_bracket, p0_
+   field_start_looks_explicit_frame. Bodies written, transcribed
+   unedited from the oracle; three in-unit call-site spelling fixes
+   applied in already-committed e1/e2 code (p0_field_parse_loop_
+   frame_delete_any, p0_field_parse_fail, p0_append_compact_atom_
+   pieces) since this slice ports p0_indent_stack_delete/p0_find_
+   matching_bracket for real in the same unit -- the within-unit
+   spelling-consistency rule, distinct from the cross-stage retarget
+   rule above (l2trans resolves in-unit call names at translate time,
+   before any -D redirect exists).
+
+   Two genuine, separate l2trans gaps found while writing this slice,
+   both reported to d6 with minimal repros, both committed and
+   pushed as their own commits (not bundled into e3's, per d6's
+   request to unblock the fix before e3 itself can land):
+
+   1. `struct\field[index]: value` as an assignment target --
+      `stack\columns[idx]: column` in p0_indent_stack_push fails in
+      l2trans itself: "unsupported index, frame=stack\columns[idx]",
+      even though the same shape already works elsewhere in already-
+      landed d2 code (stack\parents[i]: 0 / stack\hard[i]: 0U). A
+      name-collision/shadowing hypothesis was tested and disproved.
+      STOPGAP applied and labeled at the site: read the field into a
+      local pointer first, then index the local (`cell: stack\
+      columns; cell[idx]: column;`) -- confirmed to translate cleanly
+      standalone. Repro: l2src/tests/repro_indexed_field_assign.lm2 +
+      .h.lm1, commit 23e2dbb7.
+
+   2. Bracket-character-literal codegen defect in p0_skip_field_space
+      -- NOT reformulatable in the source, no stopgap possible; this
+      one blocks e3's standalone translate test outright. l2trans
+      itself exits 0, but the generated .lm1's while loop (mirroring
+      p0_skip_field_space's own `while: (index[0] < length)`) emits,
+      right after the escape-poll check and before any of the loop's
+      own if-branches:
+          int: l2_t2
+          l2_t2: [
+          int: l2_t3
+          l2_t3: ]
+      -- a temp's whole right-hand side collapsing to a bare bracket
+      punctuation token instead of a value. l1trans then fails:
+      "parse error 5 ... unclosed index bracket form". Measured
+      minimal shape: the real own-pointer parameter set (document/
+      indent_stack/structure) together with the loop body's repeated
+      text[index[0]] reads across its branches (is_horizontal_space,
+      == '#', == '{', is_line_break); two smaller cut-downs (the
+      while condition alone; the same shape with every callee stubbed
+      but no own-pointer params) did NOT reproduce it. Root cause not
+      yet identified -- own-tracked-index-read CSE/hoisting interacting
+      with the checkpoint/escape-poll injection is a guess for d6 to
+      verify, not a measured finding. Repro: l2src/tests/repro_
+      bracket_char_literal.lm2 + .h.lm1, commit 7acecbbd.
+
+   e3 holds locally, uncommitted, until d6's fix for gap 2 lands (gap
+   1's stopgap is enough on its own; gap 2 has none). Once fixed:
+   standalone l2trans+l1trans translate test, add the e_field_scan
+   stage entry to run_port_parser.ps1, full cold pipeline (36/36
+   expected), falsifier (p0_skip_field_space forced to leave the
+   index unchanged), revert, re-confirm cold, this narrative replaced
+   with the landed one, commit, hold push per d6's standing rule.
+
 Remaining stages (e2's plan)
 -----------------------------
 c) COMPLETE -- allocation, dump-printer Slices 1-4 (leaves, frame/
@@ -632,7 +698,9 @@ c) COMPLETE -- allocation, dump-printer Slices 1-4 (leaves, frame/
 d) COMPLETE -- all 5 slices landed, see above. One open item: the
    int:/LmP0TrailerRole stopgap in p0_stream_apply_item_event, waiting
    on d6's l2trans fix (not a scope gap, a translator gap).
-e) field-parsing state machine
+e) field-parsing state machine -- e1/e2 landed and pushed; e3 written,
+   blocked on d6's fix for the bracket-char-literal l2trans defect
+   above (repro pushed, commit 7acecbbd).
 f) postprocess
 g) registry/diagnostics/validate
 

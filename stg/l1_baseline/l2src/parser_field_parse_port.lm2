@@ -17,7 +17,7 @@ sub: p0_field_parse_loop_frame_delete_any (@: void object)
     if: (frame = 0)
         return
     if: frame\indent_stack_owned
-        lm_p0_indent_stack_delete(frame\indent_stack)
+        p0_indent_stack_delete(frame\indent_stack)
     lm_own_delete(frame, 0)
 end: p0_field_parse_loop_frame_delete_any
 
@@ -73,7 +73,7 @@ end: p0_field_parse_loop_push
 
 fn: p0_field_parse_fail (@@: LmOwnPtrStack parse_stack; @@: LmP0IndentStack indent_stack; @: int indent_stack_owned) int
     if: ((((indent_stack_owned != 0) && indent_stack_owned[0]) && (indent_stack != 0)) && (indent_stack[0] != 0))
-        lm_p0_indent_stack_delete(indent_stack[0])
+        p0_indent_stack_delete(indent_stack[0])
         indent_stack[0]: 0
         indent_stack_owned[0]: 0
     if: (parse_stack != 0)
@@ -134,7 +134,7 @@ fn: p0_append_compact_atom_pieces (@: LmP0Document document; @: LmP0Structure st
             size_t: inner_index
             if: (p0_append_atom_slice(document, structure, text, length, line, column, offset, i, (i + 1U)) = 0)
                 return: 0
-            if: (lm_p0_find_matching_bracket(document, text, end_index, i, line, column, @ close_index) = 0)
+            if: (p0_find_matching_bracket(document, text, end_index, i, line, column, @ close_index) = 0)
                 return: 0
             inner_index: 0U
             if: (lm_p0_parse_fields_until(document, structure, ((text + i) + 1U), ((close_index - i) - 1U), line, ((column + i) + 1U), ((offset + i) + 1U), 0U, 0U, 0U, @ inner_index) = 0)
@@ -164,3 +164,386 @@ fn: p0_parse_append_node_and_update (@: LmP0Document document; @: LmP0Structure 
         headless_group_after_separator[0]: 1
     return: 1
 end: p0_parse_append_node_and_update
+
+# Slice e3: field scanning primitives -- the indent-stack lifecycle
+# functions this closure actually needs (not the full 9-function
+# family; init/new/copy/clone are used only elsewhere), plus the
+# text-scanning helpers the field-parsing loop calls directly.
+# Ported straight from the oracle; no fragment exists for any of
+# these. The oracle spells a few of its own forward-referenced calls
+# with a c. prefix (an L1 quirk for calls that textually precede
+# their own definition further down the file); irrelevant here since
+# every one of those names is reached through this header's own
+# prototype: block instead -- Stage A shape, called as a bare name,
+# never with a c. prefix.
+
+fn: p0_indent_stack_push (@: LmP0Document document; @: LmP0IndentStack stack; size_t: column; size_t: line; size_t: source_column) int
+    size_t: new_capacity
+    size_t: idx
+    @: size_t new_columns
+    # STOPGAP, not a rule: `stack\columns[idx]: column` (the direct
+    # struct-field-indexed-assignment form) fails in l2trans itself
+    # with "unsupported index, frame=stack\columns[idx]" -- a genuine
+    # l2trans gap, reported to d6 with a minimal repro (l2src/tests/
+    # repro_indexed_field_assign.lm2 + .h.lm1). `cell` below is the
+    # two-step workaround: read the field into a local pointer first,
+    # then index the local. Revert to the direct form once the gap is
+    # fixed.
+    @: size_t cell
+    if: stack\count = stack\capacity
+        if: stack\capacity = 0U
+            new_capacity: 8U
+        if: stack\capacity != 0U
+            new_capacity: stack\capacity * 2U
+        new_columns: (cast: (@: size_t) lm_own_resize(stack\columns, (new_capacity * c.sizeof(new_columns[0]))))
+        if: new_columns = 0
+            lm_p0_set_diagnostic(document, 1, line, source_column, "out of memory while storing indentation levels")
+            return: 0
+        stack\columns: new_columns
+        stack\capacity: new_capacity
+    idx: stack\count
+    cell: stack\columns
+    cell[idx]: column
+    stack\count: stack\count + 1U
+    return: 1
+end: p0_indent_stack_push
+
+fn: p0_indent_stack_new_empty () @: LmP0IndentStack
+    return: (cast: (@: LmP0IndentStack) lm_own_new_zero((1U * c.sizeof(c.LmP0IndentStack))))
+end: p0_indent_stack_new_empty
+
+sub: p0_indent_stack_delete (@: LmP0IndentStack stack)
+    lm_own_delete(stack, lm_p0_indent_stack_free_any)
+end: p0_indent_stack_delete
+
+fn: p0_relaxed_level_from_column (@: LmP0Document document; @: LmP0IndentStack stack; size_t: column; size_t: base_level; size_t: line; size_t: source_column; @: size_t out_level) int
+    size_t: i
+    size_t: parent_level
+    if: (column = 0U)
+        if: (base_level = 0U)
+            out_level[0]: 0U
+        else:
+            out_level[0]: 1U
+        return: 1
+    if: (base_level = 0U)
+        parent_level: 0U
+    else:
+        parent_level: (base_level - 1U)
+    if: (stack\count = 0U)
+        if: (p0_indent_stack_push(document, stack, column, line, source_column) = 0)
+            return: 0
+        out_level[0]: base_level
+        return: 1
+    if: (column > stack\columns[(stack\count - 1U)])
+        if: (p0_indent_stack_push(document, stack, column, line, source_column) = 0)
+            return: 0
+        out_level[0]: ((base_level + stack\count) - 1U)
+        return: 1
+    if: (column < stack\columns[0])
+        out_level[0]: parent_level
+        return: 1
+    while: ((stack\count > 0U) && (stack\columns[(stack\count - 1U)] > column))
+        stack\count: stack\count - 1U
+    if: (stack\count = 0U)
+        out_level[0]: parent_level
+        return: 1
+    i: 0U
+    while: (i < stack\count)
+        if: (stack\columns[i] = column)
+            out_level[0]: (base_level + i)
+            return: 1
+        i: i + 1U
+    lm_p0_set_diagnostic(document, 17, line, source_column, "unindent does not match any outer indentation level")
+    return: 0
+end: p0_relaxed_level_from_column
+
+fn: p0_source_level_after_line_break (@: LmP0Document document; @: LmP0IndentStack indent_stack; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column; size_t: base_level; @: size_t content_index; @: size_t out_level) int
+    size_t: p
+    size_t: indent_column
+    size_t: dot_level
+    p: index
+    if: ((((p < length) && (text[p] = '\r')) && ((p + 1U) < length)) && (text[(p + 1U)] = '\n'))
+        p: p + 2U
+    else:
+        if: ((p < length) && p0_is_line_break(text[p]))
+            p: p + 1U
+        ---
+    indent_column: 0U
+    while: ((p < length) && p0_is_horizontal_space(text[p]))
+        if: (text[p] = '\t')
+            indent_column: p0_indent_tab_column(indent_column)
+        else:
+            indent_column: indent_column + 1U
+        p: p + 1U
+    dot_level: 0U
+    while: ((p < length) && (text[p] = '.'))
+        dot_level: dot_level + 1U
+        p: p + 1U
+        while: ((p < length) && p0_is_horizontal_space(text[p]))
+            p: p + 1U
+        ---
+    content_index[0]: p
+    if: (dot_level > 0U)
+        out_level[0]: dot_level
+        return: 1
+    size_t: diagnostic_line
+    size_t: diagnostic_column
+    p0_position_in_slice(text, length, p, line, column, @ diagnostic_line, @ diagnostic_column)
+    return: p0_relaxed_level_from_column(document, indent_stack, indent_column, base_level, diagnostic_line, diagnostic_column, out_level)
+end: p0_source_level_after_line_break
+
+fn: p0_skip_field_space (@: LmP0Document document; @: LmP0IndentStack indent_stack; @: LmP0Structure structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column; unsigned: flags; size_t: short_source_level; size_t: layout_base_level; @: size_t current_source_level; @: int stopped_by_source_level) int
+    stopped_by_source_level[0]: 0
+    while: (index[0] < length)
+        if: p0_is_horizontal_space(text[index[0]])
+            index[0]: index[0] + 1U
+            continue
+        if: (text[index[0]] = '#')
+            while: ((index[0] < length) && (p0_is_line_break(text[index[0]]) = 0))
+                index[0]: index[0] + 1U
+            continue
+        if: (text[index[0]] = '{')
+            if: (lm_p0_consume_brace_mark(document, structure, text, length, index, line, column) = 0)
+                return: 0
+            continue
+        if: p0_is_line_break(text[index[0]])
+            size_t: content_index
+            size_t: next_level
+            if: (p0_source_level_after_line_break(document, indent_stack, text, length, index[0], line, column, layout_base_level, @ content_index, @ next_level) = 0)
+                return: 0
+            if: ((((((flags & c.LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL) != 0U) && (next_level < short_source_level)) && (content_index < length)) && (text[content_index] != ')')) && (text[content_index] != ']'))
+                size_t: diagnostic_line
+                size_t: diagnostic_column
+                p0_position_in_slice(text, length, content_index, line, column, @ diagnostic_line, @ diagnostic_column)
+                lm_p0_set_diagnostic(document, 13, diagnostic_line, diagnostic_column, "bounded form continuation must stay inside the form")
+                return: 0
+            if: (((flags & c.LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL) != 0U) && (next_level <= short_source_level))
+                stopped_by_source_level[0]: 1
+                return: 1
+            current_source_level[0]: next_level
+            index[0]: content_index
+            continue
+        break
+    return: 1
+end: p0_skip_field_space
+
+fn: p0_scan_python_string (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    size_t: end_index
+    if: (lm_p0_find_python_string_end(text, length, index[0], @ end_index) = 0)
+        size_t: diagnostic_line
+        size_t: diagnostic_column
+        p0_position_in_slice(text, length, index[0], line, base_column, @ diagnostic_line, @ diagnostic_column)
+        lm_p0_set_diagnostic(document, 4, diagnostic_line, diagnostic_column, "unterminated python-like string literal")
+        return: 0
+    index[0]: end_index
+    return: 1
+end: p0_scan_python_string
+
+fn: p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; char: quote; size_t: line; size_t: base_column) int
+    size_t: i
+    if: p0_starts_python_string(text, length, index[0])
+        return: p0_scan_python_string(document, text, length, index, line, base_column)
+    i: (index[0] + 1U)
+    while: (i < length)
+        if: (quote = '"')
+            if: (text[i] = '\\')
+                size_t: line_break_width
+                if: ((i + 1U) < length)
+                    line_break_width: p0_line_break_width_at(text, length, (i + 1U))
+                else:
+                    line_break_width: 0U
+                if: (line_break_width > 0U)
+                    i: i + (1U + line_break_width)
+                    continue
+                if: ((i + 1U) < length)
+                    i: i + 2U
+                else:
+                    i: i + 1U
+                continue
+            if: p0_is_line_break(text[i])
+                size_t: diagnostic_line
+                size_t: diagnostic_column
+                p0_position_in_slice(text, length, i, line, base_column, @ diagnostic_line, @ diagnostic_column)
+                lm_p0_set_diagnostic(document, 19, diagnostic_line, diagnostic_column, "unescaped newline in string literal")
+                return: 0
+            ---
+        if: ((quote = '`') && (text[i] = '\0'))
+            size_t: diagnostic_line
+            size_t: diagnostic_column
+            p0_position_in_slice(text, length, i, line, base_column, @ diagnostic_line, @ diagnostic_column)
+            lm_p0_set_diagnostic(document, 30, diagnostic_line, diagnostic_column, "NUL byte in exact quoted identifier")
+            return: 0
+        if: ((((quote = '`') && (text[i] = '`')) && ((i + 1U) < length)) && (text[(i + 1U)] = '`'))
+            i: i + 2U
+            continue
+        if: (text[i] = quote)
+            index[0]: (i + 1U)
+            return: 1
+        i: i + 1U
+    size_t: diagnostic_line
+    size_t: diagnostic_column
+    p0_position_in_slice(text, length, index[0], line, base_column, @ diagnostic_line, @ diagnostic_column)
+    lm_p0_set_diagnostic(document, 4, diagnostic_line, diagnostic_column, "unterminated quoted token")
+    return: 0
+end: p0_scan_quoted
+
+fn: p0_require_quoted_token_boundary (@: LmP0Document document; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column) int
+    size_t: diagnostic_line
+    size_t: diagnostic_column
+    if: ((index >= length) || p0_is_quoted_token_boundary(text[index]))
+        return: 1
+    p0_position_in_slice(text, length, index, line, column, @ diagnostic_line, @ diagnostic_column)
+    lm_p0_set_diagnostic(document, 18, diagnostic_line, diagnostic_column, "missing separator after quoted token")
+    return: 0
+end: p0_require_quoted_token_boundary
+
+fn: p0_find_matching_paren (@: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
+    size_t: i
+    size_t: depth
+    i: open_index
+    depth: 0U
+    while: (i < length)
+        if: (text[i] = '#')
+            while: ((i < length) && (p0_is_line_break(text[i]) = 0))
+                i: i + 1U
+            continue
+        if: p0_starts_python_string(text, length, i)
+            if: (p0_scan_python_string(document, text, length, @ i, line, base_column) = 0)
+                return: 0
+            continue
+        if: lm_p0_starts_c_prefixed_quote(text, length, i)
+            if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, base_column) = 0)
+                return: 0
+            continue
+        if: ((text[i] = '\'') && (p0_starts_python_string(text, length, i) = 0))
+            if: (lm_p0_scan_c_char(document, text, length, @ i, line, base_column) = 0)
+                return: 0
+            continue
+        if: ((text[i] = '"') || (text[i] = '`'))
+            if: (p0_scan_quoted(document, text, length, @ i, text[i], line, base_column) = 0)
+                return: 0
+            continue
+        if: (text[i] = '(')
+            depth: depth + 1U
+        else:
+            if: (text[i] = ')')
+                depth: depth - 1U
+                if: (depth = 0U)
+                    close_index[0]: i
+                    return: 1
+                ---
+            ---
+        i: i + 1U
+    size_t: diagnostic_line
+    size_t: diagnostic_column
+    p0_position_in_slice(text, length, open_index, line, base_column, @ diagnostic_line, @ diagnostic_column)
+    lm_p0_set_diagnostic(document, 5, diagnostic_line, diagnostic_column, "unclosed parenthesized form")
+    return: 0
+end: p0_find_matching_paren
+
+fn: p0_find_matching_bracket (@: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
+    size_t: i
+    size_t: bracket_depth
+    size_t: paren_depth
+    i: open_index
+    bracket_depth: 0U
+    paren_depth: 0U
+    while: (i < length)
+        if: (text[i] = '{')
+            if: (lm_p0_skip_brace_mark(document, text, length, @ i, line, base_column) = 0)
+                return: 0
+            continue
+        if: (text[i] = '#')
+            while: ((i < length) && (p0_is_line_break(text[i]) = 0))
+                i: i + 1U
+            continue
+        if: p0_starts_python_string(text, length, i)
+            if: (p0_scan_python_string(document, text, length, @ i, line, base_column) = 0)
+                return: 0
+            continue
+        if: lm_p0_starts_c_prefixed_quote(text, length, i)
+            if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, base_column) = 0)
+                return: 0
+            continue
+        if: ((text[i] = '\'') && (p0_starts_python_string(text, length, i) = 0))
+            if: (lm_p0_scan_c_char(document, text, length, @ i, line, base_column) = 0)
+                return: 0
+            continue
+        if: ((text[i] = '"') || (text[i] = '`'))
+            if: (p0_scan_quoted(document, text, length, @ i, text[i], line, base_column) = 0)
+                return: 0
+            continue
+        if: (text[i] = '(')
+            paren_depth: paren_depth + 1U
+        else:
+            if: ((text[i] = ')') && (paren_depth > 0U))
+                paren_depth: paren_depth - 1U
+            else:
+                if: (text[i] = '[')
+                    bracket_depth: bracket_depth + 1U
+                else:
+                    if: (text[i] = ']')
+                        if: (bracket_depth = 0U)
+                            break
+                        bracket_depth: bracket_depth - 1U
+                        if: ((bracket_depth = 0U) && (paren_depth = 0U))
+                            close_index[0]: i
+                            return: 1
+                        ---
+                    ---
+                ---
+            ---
+        i: i + 1U
+    size_t: diagnostic_line
+    size_t: diagnostic_column
+    p0_position_in_slice(text, length, open_index, line, base_column, @ diagnostic_line, @ diagnostic_column)
+    lm_p0_set_diagnostic(document, 5, diagnostic_line, diagnostic_column, "unclosed index bracket form")
+    return: 0
+end: p0_find_matching_bracket
+
+fn: p0_field_start_looks_explicit_frame (@: LmP0Document document; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column) int
+    size_t: i
+    size_t: head_end
+    size_t: close_index
+    if: (index >= length)
+        return: 0
+    i: index
+    if: (text[i] = '(')
+        if: (p0_find_matching_paren(document, text, length, i, line, column, @ close_index) = 0)
+            return: 0
+        return: (((close_index + 1U) < length) && (text[(close_index + 1U)] = ':'))
+    if: lm_p0_starts_c_surface_atom(text, length, i)
+        i: lm_p0_scan_c_surface_atom(text, length, i)
+        head_end: i
+    else:
+        if: lm_p0_starts_c_prefixed_quote(text, length, i)
+            if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, column) = 0)
+                return: 0
+            head_end: i
+        else:
+            if: ((p0_starts_python_string(text, length, i) || (text[i] = '"')) || (text[i] = '`'))
+                if: (p0_scan_quoted(document, text, length, @ i, text[i], line, column) = 0)
+                    return: 0
+                head_end: i
+            else:
+                if: (text[i] = '\'')
+                    if: (lm_p0_scan_c_char(document, text, length, @ i, line, column) = 0)
+                        return: 0
+                    head_end: i
+                else:
+                    while: ((((((((i < length) && (p0_is_field_space(text[i]) = 0)) && (p0_is_field_separator(text[i]) = 0)) && (text[i] != '(')) && (text[i] != ')')) && (text[i] != '#')) && (text[i] != '{')) && (text[i] != ':'))
+                        if: (text[i] = '[')
+                            size_t: bracket_close_index
+                            if: (p0_find_matching_bracket(document, text, length, i, line, column, @ bracket_close_index) = 0)
+                                return: 0
+                            i: (bracket_close_index + 1U)
+                            continue
+                        if: (text[i] = ']')
+                            break
+                        i: i + 1U
+                    head_end: i
+                ---
+            ---
+        ---
+    return: (((head_end > index) && (i < length)) && ((text[i] = ':') || (text[i] = '(')))
+end: p0_field_start_looks_explicit_frame
