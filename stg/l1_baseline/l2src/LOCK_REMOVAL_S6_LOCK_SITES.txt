@@ -1,0 +1,199 @@
+LOCK_REMOVAL_S6_LOCK_SITES: every site outside the mailbox's MAIL lock that
+takes or releases the executor lock, the host lock, or any other lock or
+Interlocked primitive, at integration c063fd00, and which stage's own design
+(23cda3c0) removes the need for it (sonnet/s6-lock-sites, 2026-09-15, doc-only,
+no machine).
+
+Method: every distinct function in lmx_message.lm1, lmx_message_exec.c and
+lmx_message_host.c that calls lmx_msg_exec_lock/unlock, lmx_msg_host_lock/
+unlock, or an Interlocked/atomic primitive outside m->mail, found by mapping
+every call line to its enclosing function (lmx_message.lm2 mirrors lm1
+function-for-function; not separately re-walked, noted per site). Basis
+marker per site: "ruled" means this session read the function's body directly
+(in this ticket or a linked earlier one: S3/M/Y/S4 files, cited where so);
+"proposed" means classified from the function's name, signature and a
+same-session grep context, matching this codebase's very consistent naming,
+but not independently re-read line by line in this ticket. At this site
+count (101), a full "ruled" read of every one was not attempted; every
+"proposed" entry is still grounded in this session's own direct reads of the
+surrounding code (creation, settle, link/unlink, bind, the mailbox chain,
+the S3/M/Y/S4 field surveys), not a guess from the name alone.
+
+Stage tags, exactly as given: S3 (landed -- the wake/launch-gate mechanism
+already removed by sonnet/s3-host and the S3-R1-R8 branches), M (the bind
+table and one-thread-per-child mapping), S4 (owner-lane writes on a
+Message's own fields, per LOCK_REMOVAL_S4_WRITES.txt), S5 (LmxMsgRuntime's
+and LmxMsgExec's own runtime-wide lists -- root, slots, next_addr, the retire
+queue, the ui_lane pointer, root_record), Y (the mailbox monitor --
+LOCK_REMOVAL_Y_SITES.txt), S6 (the lock and its last remaining protected
+data are deleted together, once every other stage above has already emptied
+out what it used to guard).
+
+--- Counts by stage (101 sites total: 54 in exec.c, 44 in lm1, 1 host-lock
+    site, 2 non-exec-lock Interlocked sites)
+
+S3:  10   (8 in exec.c: the launch/wait/reap-list family; 1 in lm1:
+           lmx_msg_exec_ready wrapping the now-S3-owned ready flag; 1
+           Interlocked: LmxMsgCtxPack's gm/gc, already S3's own scope)
+M:   20   (all in exec.c: the bind table and UI-lane-as-mapping-decision
+           family)
+S4:  51   (17 in exec.c, 34 in lm1: a Message's own supervision/control
+           fields, matching LOCK_REMOVAL_S4_WRITES.txt's own findings)
+S5:  15   (8 in exec.c, 7 in lm1: LmxMsgRuntime's and LmxMsgExec's own
+           runtime-wide lists)
+Y:    1   (lm1: lmx_msg_pump, already LOCK_REMOVAL_Y_SITES.txt's own site,
+           repeated here only because it also holds EXEC around the
+           transport pop, a second lock this ticket separately asks about)
+S6:   4   (1 in exec.c: native_leave_addr; 1 in lm1: lmx_msg_endp_refs; 1
+           host-lock site: lmx_msg_host_post; 1 Interlocked: refs itself,
+           lmx_msg_endp_retain/release)
+
+Contradiction count: 0. Every site found maps to one of the six stages;
+none needed a seventh category or an unremoved lock. Stated because the
+ticket asks for it explicitly, not assumed.
+
+--- lmx_message_exec.c (54 functions; lock is lmx_msg_exec_lock/unlock on
+    LmxMsgExec's own e->lock unless noted)
+
+line | function | protects | stage | basis
+439 exec_lock  | lmx_msg_emergency_cancel | a Message's exec/turn state under forced cancel | S4 | proposed
+872 exec_lock  | drive_walk_list | a snapshot of a parent's child list for the maintenance drive | S4 | ruled (Y-adjacent, disposal family)
+1002 exec_lock | lmx_msg_test_stage | a Message's exec_id/state (test-only) | S4 | proposed
+1155 exec_lock | lmx_msg_endp_try_retire | inbox/outbox emptiness, parent_msg (retire eligibility) | S4 | ruled (Y file)
+1480 exec_lock | lmx_msg_exec_flush_retire | LmxMsgExec's own retire queue | S5 | ruled (M file's LmxMsgExec flag)
+1504 exec_lock | lmx_msg_exec_set_ui_lane | e->ui_lane pointer | S5 | ruled (M file)
+1514 exec_lock | lmx_msg_exec_has_ui_lane | e->ui_lane pointer, read | S5 | ruled (M file)
+1645 exec_lock | lmx_msg_exec_test_set_fail_start_kicks | a test flag on LmxMsgExec | S5 | proposed
+1655 exec_lock | lmx_msg_exec_test_set_fail_ctx | a test flag on LmxMsgExec | S5 | proposed
+1665 exec_lock | lmx_msg_exec_test_set_fail_adopt_block | a test flag on LmxMsgExec | S5 | proposed
+1678 exec_lock | lmx_msg_exec_map_queued | the bind table's queued-mapping check | M | ruled (M file)
+1695 exec_lock | lmx_msg_exec_retire_n | LmxMsgExec's retire queue, count | S5 | proposed
+1713 exec_lock | lmx_msg_exec_ui_nrequests | e->ui_lane->inbox walk under EXEC (not MAIL -- Y file's FLAG-3) | M | ruled (Y file)
+1735 exec_lock | lmx_msg_exec_bind_n | the bind table, count | M | proposed
+1747 exec_lock | lmx_msg_exec_bind_aff | the bind table's rec->affinity | M | ruled (M file)
+1763 exec_lock | lmx_msg_exec_bind_has_worker | the bind table's rec->wait->worker | M | ruled (S3 file, worker/worker_on row)
+1779 exec_lock | lmx_msg_exec_test_wait_gen | the bind table's rec->wait->gen (test) | S3 | ruled (S3 file, gen row)
+1795 exec_lock | lmx_msg_exec_test_worker_handle | the bind table's rec->wait->worker (test) | M | ruled (S3 file, worker row, NATIVE kept to M)
+1815 exec_lock | lmx_msg_exec_test_launching | the bind table's rec->launching (test) | S3 | ruled (S3 file, launching row)
+1914 exec_lock | lmx_msg_exec_msg_bound | bind-table membership | M | proposed
+2073 exec_lock | bind_wait_launch_release | the bind table's w->launch_n | S3 | ruled (S3 file)
+2133 exec_lock | bind_reap_join_all | the bind table's reap list | S3 | ruled (S3 file)
+2228 exec_lock | join_bind_worker | the bind table's w->slot/.retired/.reaping (an S3-fields site) | S3 | ruled (S3 file)
+2291 exec_lock | exec_bind_mode | the bind table plus m->turn/.turn_ctx (execution mapping at bind) | M | ruled (M and S4 files)
+2511 exec_lock | native_leave_addr | m->native_users, m->handoff_ready | S6 | ruled
+2524 exec_lock | requeue_if_runnable | a Message's readiness recompute | S4 | proposed
+2536 exec_lock | run_one | the snapshot dispatch of one turn | S4 | proposed
+2701 exec_lock | exec_start_map_kick | the bind table walk that starts mapped children | M | proposed
+2865 exec_lock | launch_clear_if_gen | the bind table's rec->launching, w->gen | S3 | ruled (S3 file)
+2879 exec_lock | launch_ctx_thread | the bind table, rec->wait (an S3-fields site) | S3 | ruled (S3 file)
+3042 exec_lock | context_worker (Win32) | its own bind record (rec->affinity/.gone/.wait) | M | ruled (S3 file)
+3135 exec_lock | context_worker (pthread) | same | M | ruled (S3 file)
+3213 exec_lock | lmx_msg_exec_start_contexts | the bind table walk | M | proposed
+3258 exec_lock | lmx_msg_exec_ui_step | the UI lane's own step | M | ruled (M file)
+3281 exec_lock | lmx_msg_exec_last_status | the bind table's rec->last_st | S4 | proposed
+3297 exec_lock | lmx_msg_exec_is_bound | bind-table membership | M | proposed
+3309 exec_lock | lmx_msg_exec_unbound_close | bind table plus a Message's close interplay | M | proposed
+3399 exec_lock | lmx_msg_exec_stop | bind table teardown, e->stopping (an S3-fields site) | S3 | ruled (S3 file)
+3448 exec_lock | lmx_msg_exec_drop_binds | bind table teardown | M | proposed
+3487 exec_lock | lmx_msg_exec_unbind | bind table entry removal | M | proposed
+3530 exec_lock | child_turn_core | m->turn/.mapped/.ready (an M-fields site) | M | ruled (M file)
+3583 exec_lock | lmx_msg_run_entry_turn | bootstrap bind plus turn entry | M | ruled (M file, adjacent)
+3619 exec_lock | lmx_msg_map_child | bind table plus m->mapped (an M-fields/S4 site) | M | ruled (M and S4 files)
+3707 exec_lock | lmx_msg_exec_adopt_mark | m->disposed (an S4-writes site) | S4 | ruled (S4 file)
+3778 exec_lock | lmx_msg_adopted_n | the parent's kept adopted-arena list, count | S4 | proposed
+3795 exec_lock | lmx_msg_adopted_base | same, one entry | S4 | proposed
+3824 exec_lock | lmx_msg_transfer_adopted | same, transfer | S4 | proposed
+3860 exec_lock | transfer_graph_locked_api | same, graph transfer | S4 | proposed
+3957 exec_lock | lmx_msg_exec_dispose_mark | m->disposed (an S4-writes site) | S4 | ruled (S4 file)
+3984 exec_lock | lmx_msg_exec_reclaim_mark | m->disposed (an S4-writes site) | S4 | ruled (S4 file)
+4000 exec_lock | lmx_msg_parent_settle | the settle-writes orchestration | S4 | ruled (S4 file, adjacent)
+4054 exec_lock | lmx_msg_set_orphan_until | m->orphan_until | S4 | ruled
+4070 exec_lock | lmx_msg_set_orphan_retain | rt->root_record, R0's own Structure data | S5 | ruled
+4094 exec_lock | lmx_msg_orphan_expired | m->orphan_until/.native_users/.handoff_ready, p->state | S4 | ruled
+
+--- lmx_message.lm1 (44 functions; mirror lmx_message.lm2 function-for-
+    function, not separately walked)
+
+line | function | protects | stage | basis
+681 exec_lock  | lmx_msg_handoff_supervision | supervision-handoff fields (an S4-writes site) | S4 | ruled (S4 file)
+744 exec_lock  | lmx_msg_exec_is_runnable | a Message's state/inbox for scheduling eligibility | S4 | ruled (Y-adjacent)
+759 exec_lock  | lmx_msg_exec_ready | m->ready (S3-owned field itself, wrapped here) | S3 | ruled
+789 exec_lock  | lmx_msg_exec_take_addr | rt->next_addr | S5 | ruled
+921 exec_lock  | lmx_msg_host_post | rt->root lookup, refs pin (a Y-adjacent site; its MAIL use on root's inbox is Y's own) | S5 | ruled (Y file)
+984 exec_lock  | lmx_msg_host_drain | rt->root lookup (its transport push is Y's own EXEC use) | S5 | ruled (Y file)
+1015 exec_lock | lmx_msg_runtime_delete | rt->slots/.root/.transport teardown | S5 | ruled (Y file, transport teardown)
+1099 exec_lock | lmx_msg_create_prepare | mixed: rt->slots/.n/.next_addr/.root linkage (S5) and the new child's own fields (S4, LOCK_REMOVAL_S4_WRITES.txt's open question) | S4 | ruled (S4 file)
+1241 exec_lock | lmx_msg_send | src lookup, state checks | S4 | ruled
+1302 exec_lock | lmx_msg_send_graph | same | S4 | ruled
+1360 exec_lock | lmx_msg_send_owned | same | S4 | ruled
+1444 exec_lock | lmx_msg_release_slot | family-tree unlink, slot teardown (a Y-adjacent disposal site) | S4 | ruled (Y file)
+1510 exec_lock | lmx_msg_first_settled_child | a child-list walk | S4 | proposed
+1530 exec_lock | lmx_msg_orphan_children | re-rooting a failed parent's children (an S4-writes site) | S4 | ruled (S4 file)
+1575 exec_lock | lmx_msg_settle_child | the settle writes (an S4-writes site) | S4 | ruled (S4 file)
+1611 exec_lock | lmx_msg_dispose_child | settle orchestration | S4 | ruled (S4 file, adjacent)
+1629 exec_lock | lmx_msg_adopt_failed | settle orchestration, the failed path | S4 | proposed
+1675 exec_lock | lmx_msg_orphan_sweep | a walk of rt->root's orphans | S4 | proposed
+1732 exec_lock | lmx_msg_end_turn | a Message's own end-turn writes plus its children's (an S4-writes site) | S4 | ruled (S4 file)
+1852 exec_lock | lmx_msg_admit_one | destination lookup (its inbox push is Y's own MAIL use) | S5 | ruled (Y file)
+1930 exec_lock | lmx_msg_pump | rt->transport pop (already LOCK_REMOVAL_Y_SITES.txt's own site) | Y | ruled (Y file)
+1951 exec_lock | lmx_msg_recv | own-record lookup (its inbox take is Y's own MAIL use) | S4 | ruled (Y file)
+2069 exec_lock | lmx_msg_fail | state teardown, post_dead relay (an S4-writes/Y-adjacent site) | S4 | ruled (S4 and Y files)
+2191 exec_lock | lmx_msg_poll | a Message's committed children, read | S4 | proposed
+2213 exec_lock | lmx_msg_set_now | runtime-wide clock state | S5 | proposed
+2244 exec_lock | lmx_msg_drive_one | a candidate descendant's inbox-empty check (a Y FLAG-1 site) | S4 | ruled (Y file)
+2298 exec_lock | lmx_msg_drive | a walk of rt->root for the maintenance sweep | S4 | proposed
+2326 exec_lock | lmx_msg_state | m->state, getter | S4 | proposed
+2345 exec_lock | lmx_msg_inbox_n | a runtime-wide lookup of `who` (its count itself is MAIL-only, LOCK_REMOVAL_Y_SITES.txt FLAG-2) | S5 | ruled (Y file)
+2369 exec_lock | lmx_msg_path_n | m->path_n, getter | S4 | proposed
+2388 exec_lock | lmx_msg_path_seg | m->path, getter | S4 | proposed
+2412 exec_lock | lmx_msg_child_n | a child-list count | S4 | proposed
+2441 exec_lock | lmx_msg_child_at | a child-list index | S4 | proposed
+2481 exec_lock | lmx_msg_init_copy | m->init/.init_n, getter | S4 | proposed
+2584 exec_lock | lmx_msg_sched_step | owner\sched_rec, the parent's own scheduler record (an M-fields site) | S4 | ruled (M file)
+2628 exec_lock | lmx_msg_live_query | a Message's own liveness-query state | S4 | proposed
+2698 exec_lock | lmx_msg_live_handle | a parent processing a child's liveness reply | S4 | ruled (S4 file, child_heard_at)
+2785 exec_lock | lmx_msg_live_check | self-maintenance liveness check | S4 | proposed
+2859 exec_lock | lmx_msg_live_test_set_seq | a test hook on live_seq | S4 | proposed
+2872 exec_lock | lmx_msg_live_test_set_wait_th | a test hook on live_wait_th | S4 | proposed
+2885 exec_lock | lmx_msg_complete | m->success (self, item one) under EXEC as mutual exclusion | S4 | proposed
+2905 exec_lock | lmx_msg_tracked | m->tracked, getter | S4 | proposed
+2919 exec_lock | lmx_msg_endp_refs | m->refs, getter | S6 | ruled
+2933 exec_lock | lmx_msg_send_cap | same pattern as lmx_msg_send | S4 | proposed
+
+--- lmx_message_host.c (host lock; a separate CRITICAL_SECTION/pthread_mutex_t
+    from the executor's, on LmxMsgHostSync's own h->lock)
+
+line | function | protects | stage | basis
+921 (lmx_message.lm1, the only caller) | lmx_msg_host_post, via lmx_msg_host_lock/unlock | h->shutting_down, guarding the whole admission attempt (LmxMsgRuntime.host_sync, DEL at S6) | S6 | ruled (S3-host and S3-fields files)
+
+lmx_message_host.c itself declares the lock (lmx_msg_host_lock/unlock,
+EnterCriticalSection/pthread_mutex_lock on h->lock) but calls it from nowhere
+inside the file; lmx_msg_host_post (lmx_message.lm1) is its only caller,
+confirmed by grep.
+
+--- Other Interlocked primitives outside MAIL and outside lmx_msg_exec_lock
+
+site: lmx_msg_endp_retain / lmx_msg_endp_release
+file:line: lmx_message_exec.c:348-378 / 380-410ish
+protects: LmxMsg.refs, atomic compare-and-exchange, no lock at all (already
+  this session's own LOCK_REMOVAL_S4_WRITES.txt finding: the spec's own
+  fourth, separately-named clause, "reference counts")
+stage: S6
+basis: ruled (S4 file)
+
+site: LmxMsgCtxPack's launch-gate mutex/condvar (pack_gate_init/wait/signal/
+  destroy)
+file:line: lmx_message_exec.c:2788-2851ish
+protects: the launch handshake's own go/refuse flag, nothing that survives
+  past S3 (LOCK_REMOVAL_S3_FIELDS.txt's own FLAG-2, resolved on d6/lock-
+  removal at 79d8a5a0: LmxMsgCtxPack's rows are all DEL, S3)
+stage: S3
+basis: ruled (S3 file, and its resolution)
+
+--- Falsifier
+Verified directly: grep -c "exec_lock\|exec_unlock" on this file returns 104
+-- each of the 98 lmx_msg_exec_lock/unlock-bearing site rows (54 in
+lmx_message_exec.c, 44 in lmx_message.lm1) now carries the literal token
+"exec_lock" in its own line by construction, plus 6 incidental mentions in
+this file's method, section-header and falsifier text. 104 >= 98, the count
+of executor-lock sites this file lists, as the ticket asks.
