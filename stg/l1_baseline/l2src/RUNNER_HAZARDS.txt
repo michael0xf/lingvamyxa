@@ -189,6 +189,29 @@ Survey method (on d925e600)
     Message") moved at d1 (R0, +1) and d2 (the UI lane, +1). Fixed runner-only in 2c43c21f: the pin is 3 with
     each step named.
 
+(h) Decisions (6f, on the complete survey e0020ea8), in the order the fixes land; each fix a runner-only
+    commit with its red-then-green line, landed through the lead
+  1. (a)'s reuse sites first, since they are correctness:
+     - run_lmx L431-433, l2trans.exe by LastWriteTime (a stale translator is the worst of them);
+     - run_port_parser L134, p0_dump_alloc_counter.o by presence;
+     - run_l2trans L36-38, the STG printTree oracle by presence, and behind it run_parser's lm0 oracle: if no
+       tracked script builds it, the runner builds it or refuses with a line naming the missing step, and
+       never accepts a file of unknown origin;
+     - run_candidate_indent L525, L541: a missing golden is red with its name, never a pass.
+     Falsifier for each: a stale object (or missing golden) in the warm dir turns the runner red before the
+     fix and green after, where green is possible.
+  2. (e), the default set: the 18 port parity runners join run_gates' defaults (two were red unnoticed; a
+     parity gate that runs nowhere is not a gate), with run_entry_turn (stage 5's acceptance), run_graph_abi
+     (the emitted entry's shape) and run_turn_step_child_copies. The L1 module selftests stay opt-in, since
+     the port parity runners run the same selftests as their reference half; the note says per runner
+     whether that is exactly true, so the fully duplicated ones can be retired later under decision 12.
+     run_l2trans, run_port_parser and run_l2_message_root stay outside run_gates and required in the lead's
+     landing chains as now. The commit prints the new chain's cold time.
+  3. (b), the launches, to pay for 2: cmd /c with $LASTEXITCODE for the -Wait users in the defaults
+     (history_owned, roots_stale, visit, liveness, send_local, family_handoff) and the stage runners'
+     per-stage launches, heaviest first, each with its existing red line unchanged and its time before and
+     after.
+  (d)'s and (f)'s fixes are claude-0c/runner-fix-empty-args c373fd04, queued with the lead.
 (c) Cold run per runner
   Complete: 46 of 46 runners cold on d925e600 (every run_*.ps1 but run_gates, whose time is its defaults' sum),
   sequential in a fresh private worktree; the machine rebooted during row 20 and the batch resumed from
