@@ -3582,3 +3582,25 @@ timed pause bounding the latency of seeing new mail by the tick). Whether
 coordinator with (b) recommended; nothing of S3 coded until his answer;
 the S3 facts section goes on the branch with the point marked open; b5's
 host.c sub-ticket waits for the same answer.
+S3 section complete on d6/lock-removal 33b1b5bd (the lead, 2026-09-15; the
+coordinator checked on the branch that it cites 74146146 and carries the
+EMPTY-ROUND line and R1-R9): the (a) format, facts F1-F3, the acceptance
+fable/s3-acceptance 74146146 cited and never folded in, replacements R1-R9
+with callers grepped at c063fd00 over l2src and mixa_manager: R1
+lmx_msg_exec_wake_locked (run_one 2656); R2 lmx_msg_exec_wake_addr_locked
+(admission, lmx_message.lm1 775 and lm2 821); R3 exec_start_map_kick
+(3236); R4 the wait primitive and its gen/slot/launch_n/retired
+bookkeeping; R5 the reap list and the joins, the thread freeing its own
+state, the use-after-free risk named with the UAF kit and the executor's
+unbind/stop tests as the check; R6 the launch gate and the refusal join,
+the thread handle closed at once; R7 the stop event, the worker already
+reading e->stopping each round; R8 context_worker's WaitForMultipleObjects
+becoming the live check every round then the EMPTY-ROUND line; R9
+host_wake deleted with its lm1 974 / lm2 1030 callers, host_shutdown
+keeping shutting_down without its signal, host_wait becoming one
+EMPTY-ROUND step (callers keep the call; the vendored
+mixa_manager/vendor/lmx_msg_host_ingress_v0 snapshot untouched). Only the
+EMPTY-ROUND line in R8 and R9 waits on Mikhail ((a) nothing, (b)
+SwitchToThread/sched_yield, (c) a sleep tick). Green: -LaneCheck exit 0
+plus the plain run on the merge with 74146146, falsified per R by putting
+one signal back. b5's R9 sub-ticket goes out with his answer.
