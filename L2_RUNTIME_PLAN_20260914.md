@@ -2188,3 +2188,33 @@ the take cursor; admission the only mailbox write; nothing that waits), red
 to green, then the test joins run_mixa's gate; anything the lane's thread
 needs from the runtime that does not exist stops at that line and comes to
 the coordinator; stage O takes precedence when its rewrite lands.
+Stage O rewritten at d6/lock-removal d16bf30a on Mikhail's four sentences
+(delete whole; no stage before the core; steps with intermediate binaries;
+generated C never edited), approved 2026-09-15. Facts: F1, l2trans already
+emits the core's entry (runtime_new, create, run_entry_turn with the program
+as R0's turn, l2trans.lm1 14722-14779) but allocates with lm_own_new_zero
+on the heap, no lm_own_arena in l2trans, LmxMsg owning no LmOwnArena and
+the core having no accessor for the turn Message's arena, so the one thing
+the core must add is that arena; F2, the kept generated C (.gitignore
+70-83): trans.lm1.c 947 lm_message_thread_ matches, 98 of them the
+boilerplate by b5's count, the REST files 56 each, own/parser/l1trans/
+buildCore 0; F3, the lm2 chain's previous binary is CMake's trans.lm0 built
+from the kept trans.lm1.c with parser.lm1 and own.lm1 (CMakeLists 515-526,
+refresh targets 528-560, runBuildCore.lm0 with LM0_TRUSTED_DIR), L1_PIN's
+gen2 belonging to the stg/l1_baseline chain; F4, gate.ps1 runs
+buildCore.lm0.bat for the L1 chain only, so no gate self-builds the lm2
+chain on integration today. Stages and owners: O0 (b5, now, measurement
+only) the baseline fixed point of the lm2 chain, becoming a gate row of
+0c's; O1 (the lead, the core lane) the turn Message's arena in
+lmx_message.lm1/lm2 with its accessor, red-first (two Messages' turns with
+distinct arenas; the two-cycle balance), landed with the full gate before
+O2; O2 (b5) three steps each a full self-build with the fixed point as its
+green (O2.1 allocations onto the turn arena with the old scaffold still
+creating the thread, O2.2 the main scaffold as R0's entry turn, O2.3 the
+REST C regenerated), the lm_message_thread_ grep in lm1/build falling by
+the sites switched; O3 (b5) the deletions whole, each test named, the grep
+at 0 for the five prefixes and the chain self-building twice. The
+regeneration check (same sources, same previous binary, byte for byte) is
+the proof against a hand edit on every O commit. Allowlists: O0/O2/O3
+lm2/, stg/l1_baseline/lm2/, lm1/build/, tests/, CMakeLists.txt; O1
+lmx_message.lm1/lm2 and its test. b5's scheduler continues until O1 lands.
