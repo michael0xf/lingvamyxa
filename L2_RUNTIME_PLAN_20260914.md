@@ -2687,3 +2687,26 @@ green the eight committed with blob ids in the note and pushed, the
 landing separate; the driver reports how many files pass 1 changed from
 the committed C. Constraint for 0c's run_smoke fix: both hashes computed
 at run time, no pinned value, or the check reddens on (b) and (c).
+0c's contradiction on the run_smoke fix (2026-09-15): nothing records source
+hashes when an l1trans.exe is built (run_gen logs exe hashes only and
+keeps each gen's C in build/obj/l1trans/<gen>/l1trans.c); run_smoke
+defaults to gen0 and skips its newer checks there because gen0 is built
+from lm2/l1trans.lm2 by run_seed (L350-353); gate.ps1 builds the gen0 seed
+through the old chain and runs every suite on gen0 and gen2 with a gen0
+fail allowlist (L48-73); so the lm2 deletion removes the seed, run_smoke's
+default generation and gate.ps1's gen0 half. Ruled: option (a) with the
+seed re-based on Mikhail's "the previous binary always exists": run_seed
+builds gen0 by gcc from the committed lm1/build/l1trans.lm1.c (the eight
+committed files as the bootstrap, nothing from lm2, no trans.lm0, no
+oldchain archives), gen1-gen3 as now, the fixed point gen3 equal to gen2
+and after (b) gen2's C equal to the committed C; run_gen and run_seed
+write build/l1trans/<gen>/l1trans.sources.txt (SHA256 of l1src/l1trans.lm1
+and of the C the gen was compiled from), run_smoke compares at run time
+naming the changed file and failing on a missing record, its lm2 branch
+deleted, its default gen0 kept as the committed-C binary; gate.ps1's gen0
+half stays on the new gen0 with its allowlist re-measured; allowlist
+run_seed, run_gen, run_smoke, gate.ps1; red today (run_seed needs
+trans.lm0 and the archives), green cold in a fresh worktree with root lm2
+and the dead files aside. This is the runner half of (c), 0c's; the lead
+keeps stg's buildCore.lm0.bat rewrite and the slice refresh; both land
+together after (b) through the lead, then b5's branch.
