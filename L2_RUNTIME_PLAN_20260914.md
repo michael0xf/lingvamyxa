@@ -4267,3 +4267,22 @@ and the fix rides in ONE ROOT's landing as one more allowlisted file
 cause is a real refusal in take_ui_locked or the drain (a behaviour
 change from S3), stop and report with the measurement, since that would
 be S3's defect and not the test's.
+ONE ROOT landing #1 finished, not pushed (the lead, 2026-09-15), merge
+5cee1426 on b4e1296d. GREEN on the moved tree: allowlist R 598 / D 631 /
+M 85; stg/l1_baseline tracked 0; root buildCore, run_seed, run_gen;
+run_legacy_p0 n=131; run_self_build 8 of 8; p0_tree_contract n=36; cmake
+configure; the pin re-installed at build/l1trans/gen2 and gen3
+(0B3D85B3); run_gates -L2MessageRoot GREEN 33 of 33 in 535 s (logs now
+under the root's build/gates); run_l2trans gen2 ok; run_port_parser ok;
+run_port_message -LaneCheck PASS; run_mixa ok. RED: gate.ps1 at gen2
+run_lmx (the selftest's UI-step timing case, under measurement), and 6
+of the 7 mixa L2 parity runners the lead added to the set without a
+baseline (app_controller "unsupported body", app_panel "sched_ready
+translation failed", app_win32 "address of an Array element needs an
+explicit adapter", audio_mp3 "missing candidate L1 translator",
+backend_ctors_win32 and backend_win32 EXPECTED_CORE_BARRIER exit 2,
+run_mixa_l2_parity "missing mandatory parameter Module"): the lead's
+probe fault, named as such; the same 8 runners are baselined at
+b4e1296d in a fresh worktree with the stg paths, and only a runner green
+there and red on the moved tree counts against ONE ROOT; then the
+UI-step loop under load.
