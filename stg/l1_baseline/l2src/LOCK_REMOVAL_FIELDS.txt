@@ -90,7 +90,7 @@ LmxMsg.parent_msg | h:145 | pointer to the parent record | L3T (the parent capab
 LmxMsg.first_child | h:146 | head of the direct-child list | PAR (this Message's own Structure as a parent) | ruled (coordinator; 2.1 (2)) | S4
 LmxMsg.last_child | h:147 | its tail | PAR | ruled (coordinator) | S4
 LmxMsg.next_sibling | h:148 | link in the parent's child list | PAR (a link of the parent's list, not of the child) | ruled (coordinator) | S4
-LmxMsg.ready | h:154 | readiness flag set by senders | DEL | ruled (Mikhail: "готовность к чему?! Удаляй"; the 2026-09-14 readiness sentence and the ready clauses of ownership items (1) and (3) leave 19.28.R2.2 and the model) | S3
+LmxMsg.ready | h:154 | readiness flag set by senders | DEL | ruled (Mikhail: "готовность к чему?! Удаляй"; the 2026-09-14 readiness sentence and the ready clauses of ownership items (1) and (3) leave 19.28.R2.2 and the model) | M (staged S3 before; S3 as landed kept it: exec_ready marks it, take_this clears it)
 LmxMsg.sched_rec | h:160 | the scheduler record, already an L2 Structure in this arena | L3T | ruled (map 5.7: scheduler state as Structure data) | done (3c-2b)
 LmxMsg.ui_pending | h:164 | a UI mapping request outstanding | DEL (the UI lane is a full L3 Thread; the sequential mapping goes) | ruled (stage M, Mikhail "ДА") | M
 LmxMsg.retire_next | h:167 | link on the runtime's retire queue | DEL (the executor frees its own memory) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | S5
@@ -145,22 +145,24 @@ LmxMsgRuntime.next_addr | h:219 | address counter | L3T of R0 (R0's children's a
 LmxMsgRuntime.root_seq | h:220 | root segment counter | L3T of R0 | ruled (map 5.7) | S5
 LmxMsgRuntime.root_record | h:227 | R0's policy record, already Structure data in R0's arena | L3T of R0 | ruled (map 5.7; stage 5 (e)) | done
 
---- LmxMsgBindWait (lmx_message_exec.c 34-55): the worker's wait object. Goes (map 5.7: no wait, no notify)
-LmxMsgBindWait.wait_ev / .cv / .sig | c:36,39,40 | the wait primitive | DEL | ruled (map 5.7; S3) | S3
-LmxMsgBindWait.worker / .worker_on | c:37,41,42 | the worker thread handle | L3T (L1 data of the L3 Thread's code, like any other) | ruled (Mikhail struck the "native primitives" sentence: the L3 Thread too is written in L1, then L2, then L3, "а причем тут вообще Си?") | M/S3
-LmxMsgBindWait.gen, .slot, .launch_n | c:44,46,47 | wait generations and launch gate | DEL | ruled (map 5.7; S3 launch wake goes) | S3
-LmxMsgBindWait.retired | c:45 | a generation's stop flag, polled by the worker loop (exec.c 3063, 3078, 3156, 3170; set at 2123 join_bind_worker, 2241 stop_retire_walk, 3376 stop) | DEL; its stop role is MSG running = 0, the parent's stop request, which in the end leaves the L3 Thread's loop (polled while root executes; running is also set to 0 at exit) | ruled (coordinator, confirming b5 FLAG-1; with M there are no generations to retire; Mikhail: "Да, 0 это запрос остановки от родителя") | M/S3
-LmxMsgBindWait.reaping, .on_reap, .reap_next | c:48,49,51 | the reap list | DEL (each thread frees itself; no join) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | S3/S5
-LmxMsgBindWait.owner_tid | c:50 | the owning thread's id | L3T (L1 data of the L3 Thread's code) | ruled (Mikhail struck the "native primitives" sentence) | S3
-LmxMsgBindWait.rec | c:54 | back link to the bind record | DEL | ruled (map 5.7) | S3
+--- LmxMsgBindWait (lmx_message_exec.c 34-55 at 7200294b; 39-43 at b4e1296d after S3: {worker_on, retired, rec}): the
+    worker's record. Goes (map 5.7: no wait, no notify)
+LmxMsgBindWait.wait_ev / .cv / .sig | c:36,39,40 | the wait primitive | DEL | ruled (map 5.7; S3) | done (S3, b4e1296d)
+LmxMsgBindWait.worker | c:37,41 | the worker thread handle | DEL (S3 closes the handle at launch; nothing reads it) | ruled (S3 as coded, design "As coded" R4) | done (S3, b4e1296d)
+LmxMsgBindWait.worker_on | c:42 (40 at b4e1296d) | 1 while the worker thread is in its loop; S3 sets it before the thread exists and the worker clears it as it leaves | L3T (L1 data of the L3 Thread's code, like any other) | ruled (Mikhail struck the "native primitives" sentence: the L3 Thread too is written in L1, then L2, then L3, "а причем тут вообще Си?") | M
+LmxMsgBindWait.gen, .slot, .launch_n | c:44,46,47 | wait generations and launch gate | DEL | ruled (map 5.7; S3 launch wake goes) | done (S3, b4e1296d)
+LmxMsgBindWait.retired | c:45 (41 at b4e1296d) | since S3: the binding has let the record go (unbind, UI affinity); the worker frees a retired record as it leaves its loop | DEL; its stop role is MSG running = 0, the parent's stop request, which in the end leaves the L3 Thread's loop (polled while root executes; running is also set to 0 at exit) | ruled (coordinator, confirming b5 FLAG-1; with M there are no generations to retire; Mikhail: "Да, 0 это запрос остановки от родителя") | M
+LmxMsgBindWait.reaping, .on_reap, .reap_next | c:48,49,51 | the reap list | DEL (each thread frees itself; no join) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | done (S3, b4e1296d)
+LmxMsgBindWait.owner_tid | c:50 | the owning thread's id | DEL (S3: nothing reads it once no join compares threads) | ruled (S3 as coded, design "As coded" R4) | done (S3, b4e1296d)
+LmxMsgBindWait.rec | c:54 (42 at b4e1296d) | back link to the bind record, 0 once retired | DEL | ruled (map 5.7) | M
 
 --- LmxMsgCtxPack (lmx_message_exec.c 2788-2799 at 79871822): the launch handshake of a context worker. A sixth
     scaffolding type (b5 FLAG-2); it describes no Message
-LmxMsgCtxPack.rt | c:2789 | the runtime pointer handed to the worker | DEL (LmxMsgRuntime goes) | ruled (map 5.7) | S3/S5
-LmxMsgCtxPack.addr | c:2790 | the bound Message's address | DEL (a capability, S2) | ruled (coordinator) | S2/S3
-LmxMsgCtxPack.wait | c:2791 | the worker's LmxMsgBindWait | DEL | ruled (map 5.7: BindWait goes) | S3
-LmxMsgCtxPack.go | c:2792 | the launch gate's go/refuse decision | DEL | ruled (S3 deletion list: launch_gate_go, launch_gate_refuse) | S3
-LmxMsgCtxPack.gate / .gm / .gc | c:2794,2796,2797 | the launch gate's event or mutex and condition | DEL | ruled (S3 deletion list; no wait, no notify) | S3
+LmxMsgCtxPack.rt | c:2789 (2245 at b4e1296d) | the runtime pointer handed to the worker | DEL (LmxMsgRuntime goes) | ruled (map 5.7) | S5
+LmxMsgCtxPack.addr | c:2790 (2246 at b4e1296d) | the bound Message's address | DEL (a capability, S2) | ruled (coordinator) | S2
+LmxMsgCtxPack.wait | c:2791 (2247 at b4e1296d) | the worker's LmxMsgBindWait, freed by the worker's own leave | DEL | ruled (map 5.7: BindWait goes) | M
+LmxMsgCtxPack.go | c:2792 | the launch gate's go/refuse decision | DEL | ruled (S3 deletion list: launch_gate_go, launch_gate_refuse) | done (S3, b4e1296d)
+LmxMsgCtxPack.gate / .gm / .gc | c:2794,2796,2797 | the launch gate's event or mutex and condition | DEL | ruled (S3 deletion list; no wait, no notify) | done (S3, b4e1296d)
 
 --- LmxMsgExecBind (lmx_message_exec.c 57-74): the handler binding. Becomes the L3 Thread's or its parent's Structure data (map 5.7)
 LmxMsgExecBind.addr | c:58 | the bound Message's address | DEL (a capability, S2) | proposed | S2
@@ -169,10 +171,25 @@ LmxMsgExecBind.msg | c:61 | the record pointer | DEL (the L3 Thread is the recor
 LmxMsgExecBind.affinity | c:62 | mapping affinity | DEL (each L3 Thread on its own OS thread) | ruled (stage M) | M
 LmxMsgExecBind.held_by, .held | c:63-64 | a thread's claim on the binding | DEL (one thread per L3 Thread; no claim) | ruled (coordinator, Q4) | M
 LmxMsgExecBind.last_st | c:65 | last turn status | L3T | proposed | S4
-LmxMsgExecBind.launching | c:66 | launch in progress | DEL (the launch gate goes with no wake) | ruled (S3 deletion list: launch_gate_go/refuse) | S3
+LmxMsgExecBind.launching | c:66 | launch in progress | DEL (the launch gate goes with no wake) | ruled (S3 deletion list: launch_gate_go/refuse) | done (S3, b4e1296d)
 LmxMsgExecBind.gone | c:67 | unbound | DEL | proposed | M
 LmxMsgExecBind.wait | c:69 | its LmxMsgBindWait | DEL | ruled (map 5.7) | S3
 LmxMsgExecBind.in_table | c:73 | indexed in the executor's table | DEL (the executor's table goes) | proposed | S5
+
+--- LmxMsgExec (lmx_message_exec.c 86-119 at b4e1296d): the executor's runtime state. A seventh scaffolding type
+    (b5's M field survey sonnet/m-fields 18d5e3e2; the coordinator asked for its rows before M); it describes no Message
+LmxMsgExec.lock | c:88,91 | the executor's table lock (CRITICAL_SECTION / recursive pthread mutex) | DEL (no lock but the mailbox's) | ruled (Mikhail: no locks except the mailbox collection; census 2.6) | S6
+LmxMsgExec.tls | c:89,92 | the thread's current-turn identity (holding_turn) | L3T (the L3 Thread's own current turn, L1 data of its code) | proposed | S4
+LmxMsgExec.nworkers | c:94 | count of context workers in their loops (S3: stop's rounds read it) | L3T of R0 (R0's children still running, read from their running flags) | proposed | S4
+LmxMsgExec.stopping | c:95 | the stop request every worker reads at its round head | DEL; MSG running = 0 of each child, the parent's stop request | ruled (Mikhail: "Да, 0 это запрос остановки от родителя") | S4
+LmxMsgExec.stopped | c:96 | stop has completed | DEL (derived: the children read !running) | proposed | S4
+LmxMsgExec.no_retire | c:97 | runtime_delete's retire suppression | DEL (LmxMsgRuntime goes) | proposed | S5
+LmxMsgExec.contexts_live | c:98 | contexts started (start_contexts to stop) | DEL (each L3 Thread is launched by its parent) | ruled (coordinator: b5's S6 lock-site census 65a7ec63 places start_contexts' flags at S5) | S5
+LmxMsgExec.rt | c:99 | back pointer to the runtime | DEL (LmxMsgRuntime goes) | ruled (map 5.7) | S5
+LmxMsgExec.ui_lane | c:104 | the UI lane's record, stepped from R0's turn today | L3T of R0 (the UI lane is R0's child L3 Thread on its own thread) | ruled (Mikhail: "Полоса на экране не может не быть L3 Thread"; today's lane "это просто кривая реализация") | M/S5
+LmxMsgExec.retire_head, .retire_tail | c:105-106 | the deferred retire list flushed after turns | DEL (the parent's settle frees an ended child, 19.29.8) | proposed | S5
+LmxMsgExec.unbound_held | c:107 | the address whose close borrows an identity in unbound_close | DEL (the close of an unbound child is its parent's settle, no borrowed identity) | ruled (coordinator: census 65a7ec63 places exec_unbound_close at S5) | S5
+LmxMsgExec.test_fail_ctx, .test_fail_adopt_block, .test_boot_tid | c:109-116 | test-build failure injection and the lane tripwire's boot thread | DEL with the mechanisms they test (launch, adopt block, the host outside any turn) | proposed | M/S4
 
 --- Questions (the coordinator's answers, 2026-09-15; 162f38ec accepted as the table)
 Q1. RULED PAR. "Created but not committed" is the spec's reserved child (19.29.7.1: the child does not run before

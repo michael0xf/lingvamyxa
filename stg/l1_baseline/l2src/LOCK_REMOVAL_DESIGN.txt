@@ -134,15 +134,16 @@ KERNEL. What L1 is for (Mikhail, spec section 2 line 1078 and model section 2, m
       по success==1 ыикл прервется. От реализации зависит только в каком месте"; and, correcting the coordinator's
       gloss on how an ended L3 Thread reads: ""завершённый L3 Thread читается как success && !running" -- если
       пользовательский код не поставит success=1 то success останется 0 если running стал 0"
-    Of the 99 rows of LOCK_REMOVAL_FIELDS.txt, 16 are kernel:
+    Of the 112 rows of LOCK_REMOVAL_FIELDS.txt (99 until the S3 landing split BindWait.worker and added LmxMsgExec's
+    12), 16 are kernel:
     - 4 MSG: running, success, handoff_ready as handoff_safe, graph as root;
     - 7 arena rows inside root: init, init_n, blocks, ranges, eternal_ranges, method_ranges, roots;
     - 5 mailbox rows: inbox, inbox_tail, mail (the mailbox's monitor, the one lock: a kernel row), and the runtime's
       transport and transport_tail as admissions into R0's mailbox.
-    36 rows (26 L3T, 10 PAR) are functionality to be written on that kernel in the generated shape (a function with
+    38 rows (28 L3T, 10 PAR) are functionality to be written on that kernel in the generated shape (a function with
     arguments, hidden arguments and the graph node). They are listed as such, not carried as C fields. That includes
-    the thread handle and thread id rows: the thread and its loop are kernel code, their data is L3T. The other 47
-    rows are deleted.
+    the worker's in-loop flag and the thread's turn identity: the thread and its loop are kernel code, their data is
+    L3T. The other 58 rows are deleted.
     Stages S2-S6, M, Y and A stay as the lock removal that reduces today's C to that kernel.
 
 FIELDS. Every stage names its fields' owners (coordinator, 2026-09-15; map section 5.7, main 8c3d06bc). Mikhail,
@@ -485,10 +486,27 @@ M. The sequential mapping removed (X), after S3 and before S4.
     commit after reading it. The rule for the decision: a property of the sequential mapping itself (round-robin
     order, the cursor, the UI take) is deleted; a property of the child (its close, its settle, its mail) moves
     onto its own thread.
-    - Red: an S2-style test-build counter of step entries (child_turn_core with bootstrap = 0, sched_step,
-      exec_ui_step), nonzero over the executor selftest and the model tests today.
-    - Green: the functions deleted (grep at 0 for run_child_turn, sched_step, exec_ui_step, turn_step_child,
-      AFFINITY_UI), every converted test green on its own thread, run_port_message -LaneCheck with the S0 tripwire.
+    - Acceptance (the coordinator's, cited here and never folded in): fable/m-acceptance 03fc0f65 = b4e1296d plus
+      lmx_msg_test_map_site in the S3 oracle's shape, aborting "LANE MAP FAIL site=... owner=..." where a Message's
+      turn runs on another Message's lane: child_turn_core with bootstrap == 0 (site run_child_turn) and the UI step
+      from R0's turn (site ui_step). run_entry_turn's bootstrap is the host mapping and is not marked.
+    - Red, measured by the coordinator on b4e1296d with the pin: run_port_message -LaneCheck exit 1 in 15 s at
+      "site=ui_step owner=6"; the plain run parity PASS in 56 s.
+    - Green: M's branch merged with 03fc0f65 gives -LaneCheck exit 0 and the plain run PASS; the functions deleted
+      (grep at 0 for run_child_turn, sched_step, exec_ui_step, turn_step_child, AFFINITY_UI outside the oracle);
+      every converted test green on its own thread; the 33 gates.
+    - Falsifier: one site's mapping and its marker put back turns -LaneCheck red at that site.
+    - M keeps no Message's turn on a foreign lane. Mikhail's allowance that children may run on the parent's thread
+      is not used by M; a later stage that uses it names the site first, and the coordinator re-cuts the oracle.
+    - Fields (b5's survey sonnet/m-fields 18d5e3e2; every site it lists has a row in LOCK_REMOVAL_FIELDS.txt): M
+      deletes LmxMsg.mapped and .ui_pending, LmxMsgExecBind.affinity, .held/.held_by and .gone, and with the per-child
+      launch LmxMsgBindWait.retired and .rec and LmxMsgCtxPack.wait; LmxMsgBindWait.worker_on becomes the L3 Thread's
+      own L1 data; LmxMsgExec.ui_lane becomes R0's child L3 Thread. LmxMsgExecBind.launching and the wait generation
+      fields went at S3 (b4e1296d). LmxMsg.ready (DEL, Mikhail: "готовность к чему?! Удаляй") was staged at S3 in
+      the table and in b5's survey, but S3 as landed kept it: lmx_msg_exec_ready marks it and take_this clears it.
+      Once M removes the UI requests, the clear in take_this is its only reader left, so M deletes it too (the table
+      row now says M). LmxMsgExec's lock stays until S6 (census 65a7ec63). b5's survey found no site whose removal
+      needs a lock, a wait or a signal.
     Effect on the other stages: S2's green loses the C1 walks from run_child_turn and sched_step, which go with the
     mapping instead of being threaded. S4 no longer has a host arm or a UI take to decide, and C3/C4 are decided on
     own-thread children only. S5's ui_lane becomes R0's child L3 Thread on the UI thread, not an executor pointer.
