@@ -1856,3 +1856,28 @@ commit on the same branch, red-first by grep counts before and after (0
 across mixa_manager, SPEC_DIGEST's mention of the live API the one remaining
 match), mixa_manager's own gate cold and green; lands through the lead's
 chain.
+The lead's design at 5249bd82 (d6/lock-removal) carries the three stages
+from Mikhail's answers: M, the sequential mapping removed (after S3, before
+S4): run_child_turn and child_turn_core's step path, sched_step and the
+scheduler record's cursor, exec_bind_mode's host mapping, the UI lane's
+stepping (ui_step, take_ui, take_addr, the MAP request, AFFINITY_UI as a
+bind affinity) go; R0's own turn on the bootstrap thread and map_child (a
+child launched on its own thread) stay; the fourteen tests migrated onto
+turn_step_child in stage 5 (d) are decided per test in M's commit by one
+rule (a property of the mapping itself is deleted, a property of the child
+moves onto its own thread); red a test-build counter of step entries,
+green the grep at 0 with every converted test on its own thread and the
+lane oracle. D, create_id and the create-retry idempotence deleted with
+S1's dead-code kind (find_create, the tombstone rule, header 7, lm1 and
+lm2 18 each, tests 5; UI_LANE_ID with M), proof the grep at 0 and every
+runner building lmx_message green, each deleted check named. O, the
+lock-based message-thread runtime in lm2/own.lm2 deleted whole with
+own_abi.lm2 and its C tests, its inventory of builders and users the
+stage's first line. Open in M for Mikhail, put to him by the coordinator:
+the UI lane as an L3 Thread whose lane is the UI thread, taking its own
+Messages from its own mailbox, work for the UI thread being a Message sent
+to that lane (19.28.R2.2 11503-11506), no other Message's turn on the UI
+thread. The lead's order: S1's measure (24 of 28 runners green, gates
+last); S0 cf326822 lands; a quiet window for 57's lane_oracle and S3 red;
+S1 merges; S2's red measured; b5's mixa deletion; then M, D, O per the
+design; b5 holds the stage O inventory ticket after its current work.
