@@ -1,0 +1,111 @@
+Removing every lock but the message collection's own, and a full arena per Message (d6, draft, 2026-09-15, on c067bed9)
+
+SCOPE (Mikhail, 2026-09-15, verbatim, on main 657ce3f9/07ad3679/668a5347)
+- "Немедленно всё останавливайте и все усилия чтобы убрать эту общую блокировку. Она не нужна."
+- "блокировка только локальная у коллекции сообщений может быть, больше блокировокне требуется даже локальных -- их
+  в проекте не длолжно быть больше вообще"
+- "значит реализуйте полноценную арену для каждого MEssage, как описано в спеке. Без этого Message не имеет смысла"
+- On wait signals: "каких сигналов ожидания? снятие блокировки с сигналов ожидания чем-то может нарушить смысл этих
+  сигналов? очевидно нет"
+- "Message не имеет никаких ссылок на общие ресурсы кроме тех которые неизменяемые (independents: const: immutable:
+  хранятся в неизменяемых массивах у root), либо на атомарные, для которых очередность не важна; очередь сообщений --
+  синхронизированная коллекция"
+- "Исполнитель сам освобождает свою память"; "У нас у каждого L3 Thread свой планировщик и сборщик мусора"
+This file is a design, not the spec. Nothing in it is a rule until Mikhail agrees. The map's open questions 5.1 and
+5.3-5.6 are his (LOCK_REMOVAL_SPEC_MAP.txt on main); a stage that depends on one names it and waits.
+
+INPUTS (all on origin, all counted against a grep)
+- exec.c lock sites: d6/lock-removal 39435ed2, LOCK_REMOVAL_INVENTORY.txt, 165 lines, 30 silent.
+- exec.c allocations: 9e26a8c3, LOCK_REMOVAL_ALLOC_INVENTORY.txt, 75 lines, all on the C heap, none from an arena.
+- Lookup spine: 9e26a8c3, LOCK_REMOVAL_SPINE.txt. 97 address lookups (exec.c 58, lm1 39) by the capability the caller
+  holds: C1 the parent's child pointer, C2 the taking lane's own record, C3 a sender's held capability, C4 a child's
+  parent capability (spec 11442), C5 R0's child list. N: 24 address queries from outside any Message.
+- lm1/lm2 lock sites: sonnet/lock-inventory df360bb0, 72 sites (65 exec-lock family, 1 host_lock, 6 mail_lock), the
+  6 mail_lock sites allowed.
+- Tests, runners, oracle: claude-0c/lock-inventory e71e64b8, 34 lines. Measured: -LaneCheck does not go red when a
+  lane write moves to a thread with no turn; 57's tripwire closes that (ruled (b)).
+
+WHAT THE LOCK DOES TODAY (from the inventories, not from a rule)
+L1. Address resolution. A walk from rt->root through every child list turns an LmxMsgAddr into a record
+    (msg_find_any_locked, lmx_msg_find, self_or_find). The lock keeps the tree still under the walk. This is 35 of
+    exec.c's 41 silent 5.1 lines.
+L2. The family tree's own writes: child_link, child_chain_remove, the orphan re-rooting, the root-list unlink in
+    endp_try_retire and release_slot.
+L3. The execution mapping's cells: exec_bind record fields, mapped, launching, the bind wait's generation.
+L4. Control flags read and written across lanes: ready, closing, running, handoff_ready, native_users.
+L5. Runtime-level lists: rt->slots/n, e->retire_head, e->reap_head, rt->transport, e->ui_lane.
+L6. Wakes: exec_wake_locked signals every worker after any turn; exec_ready routes one wake.
+L7. Storage moves at settle: adopt_mark, dispose_mark, transfer_adopted, transfer_graph.
+L8. Test setters and counters.
+
+STAGES (each: red first, the change, green; the full gate on its integration merge)
+Every stage runs run_gates N of N, run_port_message (the executor selftest), run_model_scenario36 cold, and 57's lane
+tripwire once it is measured. A stage that removes lock calls also runs the UAF hunt kit's load shapes for 165 clean
+runs (the kit's number).
+
+S0. The proof tool (57): the lane tripwire red on a lane write from a thread with no turn. It is the proof for S2-S5
+    and lands first.
+
+S1. Dead code and the order's direct deletions (no question open).
+    - Delete adopt_push (exec.c 3628, unused; its only occurrence is its definition).
+    - Red: none needed for dead code. The proof is the grep at 0 and the gates green.
+    Pending Mikhail's answer, not in S1: lm2/own.lm2's unused native mutex/condition wrappers (9 lines).
+
+S2. Capabilities instead of address lookups inside the runtime (L1), locking unchanged.
+    Every call site of the spine's C1, C2 and C5 takes the record its caller already holds. The site no longer
+    resolves an address: run_one and the context worker use the record the take handed them (C2); bind, map, unbind,
+    settle and step use the parent's child pointer (C1); R0's sweep uses R0's child list (C5). C3 (send) and C4
+    (liveness toward the parent) change in S4, where the capability's form is decided.
+    - Red: a test-build counter in lmx_msg_find and msg_find_any_locked, reported per caller class. It runs the
+      executor selftest and the model tests, and asserts 0 lookups from C1/C2/C5 sites. Red today with the counts
+      per site; it gets a tripwire run with one site put back.
+    - Green: those counts at 0, the inventories' lookup lines for C1/C2/C5 gone, the lock still in place.
+
+S3. One wake per lane (L6), no lock around a signal (Mikhail on wait signals).
+    exec_wake_locked, which signals every worker after any turn, goes. A turn's end wakes only the lanes it readied,
+    through each readied Message's own wake primitive. exec_ready signals without taking the lock.
+    - Red: two mapped workers A and B. Readying A must not wake B. A test-build counter of wake returns that took
+      nothing is nonzero for B today (run_one 2587 wakes all).
+    - Green: B's empty-wake count at 0 over the same run; the executor selftest's wait tests green.
+
+S4. The family tree and the mapping written only on the owner's lane (L2, L3), then read without the lock.
+    Each tree cell and mapping cell has one writer by decision 18's ownership list (1)-(3), Mikhail's own
+    clarification: the parent for its child chain and the mapping, the Message itself for its own cells. A cell with
+    one writer and a reader on the same lane needs no lock. Cross-lane readers read only single-writer control flags,
+    atomic cells whose order does not matter (Mikhail).
+    Depends on 5.6 (a capability after its target closes) for C3/C4, and on N's per-query decision.
+    - Red: 57's tripwire on every tree and mapping write, run over the executor selftest and model tests. Red where
+      a write happens off the owner's lane today: endp_try_retire unlinking from any lane that drops the last
+      reference, orphan_children's re-rooting, the host arms of mapping_authority.
+    - Green: the tripwire green, then the lock calls around L2/L3 removed, the UAF kit clean.
+
+S5. The runtime-level lists (L5). Waits on 5.1.
+    rt->slots, rt->n, the retire queue, the reap queue, rt->transport and e->ui_lane each either go or become a cell in
+    a Message's arena, by Mikhail's answer to 5.1. With "the executor frees its own memory", reap and join go: each
+    worker frees its own wait state and ends. LmxMsgCtxPack, allocated on the parent's lane and freed by the child's
+    thread (alloc inventory 2868/2993/3086), becomes the child's own first state.
+    - Red: per list, a test that drops a Message's last reference on a lane other than its parent's, and checks with
+      the tripwire that its storage is freed by its parent's settle write on the parent's lane.
+
+S6. The lock deleted (L4, L7, L8 and what remains).
+    - Red: lmx_msg_exec_lock and unlock defined to abort() in a test build. Every remaining call site is red by name
+      in the executor selftest and model tests.
+    - Green: grep -c lmx_msg_exec_lock at 0 in exec.c, lm1 and lm2, and the host lock gone. The only lock left is
+      m->mail, the message collection's (lm1/lm2 mail_lock 6+6, exec.c mailbox functions). The gates and the UAF kit
+      are green.
+
+A1-A3. The arena (19.29.2), after S6 or interleaved where a stage touches the same record. Waits on 5.4.
+    A1. The Message's control record (LmxMsg, today calloc in slot_new 418) becomes a Structure in its own arena,
+        created on the launching parent's lane; lmx_sched_record and lmx_root_record already follow that pattern.
+    A2. The arena's bookkeeping (LmxOwnedRange and LmxMsgBlock records, calloc at 652/690/737/780/3633/3698) and the
+        Message's own arrays (path, init, done_*, roots) are allocated from that arena.
+    A3. An admitted copy's arena (5.4). Mailbox entries (LmxMsgCopy) follow his answer.
+    - Red for each: the balance test's two-cycle live count (ld --wrap) with the record's allocation counted as
+      heap. It is red while any such record comes from malloc, and green once the arena's blocks are the only heap
+      allocations.
+
+QUESTIONS (Mikhail's; the coordinator put 5.1 and 5.3-5.6 to him directly, so they are not repeated here)
+- The design's own: for N, the 24 address queries from outside any Message (state, inbox_n, path_n/seg, init_copy,
+  child_n/at, tracked, endp_refs, handoff_ready, native_users, adopted_*, exec_bind_*, is_bound, last_status,
+  map_queued, test_*), does each query become a read on the owner's lane (the test runs it inside that Message's
+  turn or its parent's), or is it deleted with the property it checked named? Proposed per query in S4's commit.
