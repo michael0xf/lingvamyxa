@@ -6111,3 +6111,17 @@ and start time, evidence FAIL with archiveMs 120052, no core.zip, 0
 git.exe afterwards. Real run: exit 0 in 23 s, "candidate scanner
 parity cases=130 freed=4316 PASS", archiveMs 212, coreCommit 11f581e0.
 Rides S6-1's landing allowlist as one runner file.
+e9's isolation harness ready (2026-09-15, scratchpad isolate_archive_hang.ps1,
+parse-clean, not run): -Stage A|B|C|D per GATE_ARCHIVE_HANG.txt
+(b919895a): A git archive via cmd /c, B line 49 in an EAP-Stop script
+under cmd /c powershell, C the runner itself, D A under a local
+detached checkout/commit loop in a load tree; per iteration ms times,
+exit, zip size, out/err, GIT_TRACE2_EVENT and _PERF; on watch expiry,
+before taskkill /T, the process tree with command lines, two CPU
+samples, gdb thread apply all bt per git.exe, the zip's existence,
+every *.lock and tmp_* under the common .git; exits 0 clean, 3 a hang
+captured (ends the isolation), 4 void (a ref other than the load
+tree's HEAD moved); planned A and B -N 200 -WatchSeconds 60, C -N 30
+-WatchSeconds 180, D -N 200 -WatchSeconds 60; runs only in the
+coordinator's git-freeze window after S6-1's cold gate record. The
+lead merges 3f131768 into d6/lock-s6 with the runner in the allowlist.
