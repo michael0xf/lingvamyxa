@@ -4634,3 +4634,10 @@ the real install exit 0, gen2 = gen3 = 0B3D85B3; the lead merges
 8479fdab instead of 4afe4ff5. Worktrees: wt0c_oneroot, wt0c_oneroot_gate
 (00b04751, pin installed) and the spare wt0c_runners on the branch,
 removed after the merge.
+Ticket to e9 (the coordinator, 2026-09-15), doc-only: the gate impact list
+for M, l2src/M_GATE_IMPACT.txt on claude-0c/m-gate-impact off 00b04751:
+for each of run_gates.ps1's 33 default gates, its runner and test files,
+and whether it is unaffected, asserts a mechanism M deletes (the
+assertion line named), or measures timing that own-thread children
+change; counts at the top; the lead's LOCK_REMOVAL_STAGE_M_TESTS.txt
+cited where the two meet.
