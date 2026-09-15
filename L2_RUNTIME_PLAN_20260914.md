@@ -5200,3 +5200,22 @@ l2trans.lm1 and S2's landing runs run_l2trans and the self-build as
 well; each C1 site takes the parent's child pointer its caller holds,
 stated per site. Order unchanged: D2 (b5), the coordinator's red
 re-measure on c8f9cb50, then S2's code.
+D2 done on b5's branch (2026-09-15): sonnet/d2-create-id 29f58f76 off
+d8f758e6 (checked by the coordinator: parent d8f758e6; no create_id
+left in code, headers, runners or tests). All five runners pass with
+the landed tip's counts: run_port_message plain PASS (97 methods),
+run_lmx -Suite Message ok, run_msg_send_local 122/0, run_msg_family_handoff
+67/0, run_l2_message_root green through the historical catalog audit
+(144 inputs). The grep over l2src, tests and mixa_manager outside
+vendor/ sums to 6, all in two dated history documents
+(LOCK_REMOVAL_M_FIELDS.txt, RUNTIME_L2_PORTS.txt), left by the
+"history keeps its text" convention and named. Three site classes the
+census missed, found only by building (none spelling create_id):
+l2trans.lm1's two emitted process-entry/library-open templates (every
+generated program would otherwise fail to compile), run_port_message.ps1's
+signature pin and its embedded warm-up C driver (two calls); all fixed.
+Lesson: a parameter census greps the emitting templates and the
+runners' signature pins and embedded drivers, not only the sources.
+The lead merges 29f58f76 with D2's landing (its section at 3833911b or
+later; the landing set: the self-build, the 31 gates, port_message,
+run_l2trans, run_mixa).
