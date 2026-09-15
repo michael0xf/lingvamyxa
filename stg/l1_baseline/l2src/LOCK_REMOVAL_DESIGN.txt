@@ -189,7 +189,7 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
     Every call site of the spine's C1, C2 and C5 takes the record its caller already holds. The site no longer
     resolves an address: run_one and the context worker use the record the take handed them (C2); bind, map, unbind,
     settle and step use the parent's child pointer (C1); R0's sweep uses R0's child list (C5). C3 (send) and C4
-    (liveness toward the parent) change in S4, where the capability's form is decided.
+    (the child's query to its parent, 19.29.7.1) change in S4, where the capability's form is decided.
     - Red: a test-build counter in lmx_msg_find and msg_find_any_locked, reported per caller class. It runs the
       executor selftest and the model tests, and asserts 0 lookups from C1/C2/C5 sites. Red today with the counts
       per site; it gets a tripwire run with one site put back.
@@ -217,8 +217,10 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
     Between turns, confirmed by Mikhail, verbatim: "никакого success у многих фоновых задач вообще нет, то есть это
     не может быть правилом ядра \"в ящике ничего нет поэтому ухожу\"" and "иначе не реализуешь цикл бесконечный --
     он тупо не будет проверять почту!!!". Final for S3 and Y (spec 19.28.R2.2, model sections 30 and 31):
-    - the owner thread runs turns over its mailbox: it does its self-maintenance (the liveness queries to its parent,
-      its timers), looks into its mailbox under synchronized, and runs a turn when there is a Message;
+    - the owner thread runs rounds: its end_turn work (the checks named in R8: closing itself after prolonged absence
+      of its parent, closing a child not heard from past the threshold), then a look into its mailbox under
+      synchronized, then a turn when there is a Message; no round is empty in the model (Mikhail: "L3 Thread нечего
+      делать на endturn???");
     - it never blocks on any primitive and never exits for lack of mail. By the model no turn of root repeats once
       success == 1 (where the return stands is implementation; the scheduler may still do something with its
       children, which stop with their parent, so the loop in the end breaks on success == 1, per KERNEL); its exit
@@ -269,7 +271,8 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
         generation bookkeeping, the launch gate (a launch does not wait for its thread), the unbind join and reap
         list (the thread frees itself), and the stop event.
     DECIDED (the coordinator, 2026-09-15; not a spec matter): (b), SwitchToThread on Win32 and sched_yield on
-        pthreads between empty rounds, no object, no signal, no timeout, the live check inside each round. The
+        pthreads after a round that found neither mail nor work, no object, no signal, no timeout; one implementation
+        line, not part of the model. The
         question should not have gone to Mikhail. His answer, verbatim: "уступка планировщику, тик сна,чтение почты,
         просмотр кино, выгул собакм -- ты издеваешься?". Standing rule from here on: anything that adds no lock, no
         wait on a primitive and no signal is decided by the lead and the coordinator and recorded as ours; only a
@@ -279,8 +282,10 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
         back to looking at it, one CPU core per L3 Thread while it has no mail. Options put: (a) pure spin; (b) a
         scheduler yield between empty rounds (SwitchToThread / sched_yield: no object, no signal); (c) a fixed sleep
         tick between empty rounds (no object, no signal, a timed pause bounding mail latency by the tick).
+        The premise was wrong. Mikhail, verbatim: "L3 Thread нечего делать на endturn???": in the model no round is
+        empty; a round is the L3 Thread's end_turn work, the look into its mailbox, and a turn (R8).
     Replacements (callers grepped at c063fd00 over l2src *.c/*.h/*.lm1/*.lm2/tests and mixa_manager; every line
-    below is decided by the rulings except the one marked EMPTY-ROUND, which takes Mikhail's answer):
+    below is decided by the rulings; the one implementation line, the yield, is the coordinator's decision):
     R1. lmx_msg_exec_wake_locked (exec.c 1459-1465, exec.h 54, its visitor ctx_visit_wake 1442-1449) and its one
         call in run_one (2656): deleted with nothing in their place. Fields: ExecBind.affinity read (DEL, M),
         ExecBind.wait (DEL, S3), the BindWait primitive (DEL, S3).
@@ -308,15 +313,25 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
     R7. The stop event: e->stop_ev (exec.c 108; CreateEventA 1245, CloseHandle 1248/1287, ResetEvent 3232, SetEvent
         3419 in lmx_msg_exec_stop) and ctx_visit_stop_retire_waits (3373-3382): deleted. The worker already reads
         e->stopping each round (3074); the stop writes it and returns without waiting.
-    R8. context_worker (Win32 3071-3132, pthread twin from 3135): the block at 3097-3131 (the two-handle
-        WaitForMultipleObjects with INFINITE or 20 ms) becomes, after a round with nothing taken: the live check
-        when live_wait_th != 0 (lmx_msg_live_check with lmx_msg_now, every round instead of by a timeout), then the
-        EMPTY-ROUND line, decided (b) by the coordinator: SwitchToThread() on Win32, sched_yield() on pthreads. The
-        loop's other checks stay as they are (e->stopping, the rec gone or UI).
+    R8. context_worker (Win32 3071-3132, pthread twin 3164-3198): each round is the L3 Thread's model round
+        (Mikhail, verbatim: "L3 Thread нечего делать на endturn???"): its end_turn work, then the look into its
+        mailbox, then a turn when there is a Message. The end_turn work it has today is lmx_msg_live_check
+        (lmx_message.lm1 2785-2857), which is two spec checks and is named by them, not by a timer:
+        (1) a Message whose own query to its parent (live_query_id, live_query_at) is older than the threshold marks
+            itself closing: a child closing itself after prolonged absence of its parent (19.28.R2.2; the child
+            polls its parent, 19.29.7.1);
+        (2) the Message, as a parent, marks closing each tracked, committed child that is not dead or stopped and
+            whose child_heard_at is older than the threshold (19.28.R2.2, removal on timeout).
+        The two-handle WaitForMultipleObjects with INFINITE or 20 ms (3097-3131) and the pthread cond wait
+        (3193-3196) go, and the 20 ms timer with them: the two checks run in every round when the threshold is set.
+        After a round that found neither mail nor work, one implementation line, the coordinator's and not part of
+        the model: SwitchToThread() on Win32, sched_yield() on pthreads. The loop's other checks stay (e->stopping,
+        the rec gone or UI).
     R9. host.c: lmx_msg_host_wake (148-168, host.h 13; callers lmx_message.lm1 974, lmx_message.lm2 1030) deleted
         with its callers; lmx_msg_host_shutdown keeps writing shutting_down under the host lock but its SetEvent /
         pthread_cond_broadcast (182, 187-188) go; lmx_msg_host_wait (194-, lmx_message.h 289) becomes one
-        EMPTY-ROUND step for the host drive instead of a wait on h->wake (decided (b): SwitchToThread / sched_yield) (its callers: lmx_message_host_selftest.c
+        round of R0's host drive (its end_turn work, the look into R0's mailbox, a turn; after a round with neither
+        mail nor work the coordinator's yield line) instead of a wait on h->wake (its callers: lmx_message_host_selftest.c
         133/238, lmx_message_selftest.lm1 642/646, mixa_manager/tests/mixa_ingress_host_harness.c 242/277 keep the
         call). The vendored snapshot mixa_manager/vendor/lmx_msg_host_ingress_v0 is not touched by S3.
     Red and green: red on record at 74146146 (-LaneCheck exit 1 at ctx_visit_wake). After R1-R9 merged with
