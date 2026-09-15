@@ -12631,7 +12631,12 @@ on its own lane (a host-run child stepped by the root's maintenance, a
 child on its own context on that context, a child with no handler closed
 by the maintenance's bookkeeping), settled children are reclaimed by the
 chain, and only then the root's own storage and the runtime go; nothing is
-freed as a slot of the runtime behind a Message's back. Once the root
+freed as a slot of the runtime behind a Message's back. The root's close adds
+no path of its own: it marks its children exactly as any closing end-turn
+does, running cleared and each child made ready, then the close request, and
+each child does the same to its own children at the end of its turn (Mikhail,
+2026-09-15: "running=0 is set, and at the end of its turn the closing Message
+does the same to its children; that is all"). Once the root
 closes no adopter remains, so a failed orphan retained under the
 orphan-retention timeout is reclaimed by the root's close without waiting
 for that timeout; storage still used by native code holds the close

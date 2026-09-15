@@ -1133,7 +1133,31 @@ prototype, largest first.
    and joins scenario36's defaults, so the wake it measured cannot regress
    unguarded. The lead's queue after the chain (sizeof, slots): 0c's step
    3, port-parser-cwd 673c3475, actuals ea7fa1ce, uchar 80b0a77b, then the
-   (f) implementation.
+   (f) implementation. Implementation notes before the code (10d313e7,
+   nothing measured): I0, Mikhail's correction of 2026-09-15 ("running=0
+   is set, and at the end of its turn the closing Message does the same to
+   its children; that is all"): R0's close adds no path of its own, it
+   marks its children exactly as end_turn's closing branch does (lm1
+   1781-1790, 1828-1837: running=0 and ready on each child, then
+   request_children_close), each child doing the same to its own children
+   at its turn's end; I1, Q2's wait is the worker's thread handle: take_this
+   refuses a STOPPED, DEAD or RELEASED Message (exec.c 2958), retiring the
+   wait early races the closing turn, so the worker exits on its own when
+   take_this refuses for that reason and the close blocks on the join
+   (INFINITE / pthread_join), no new object, no poll, no timeout; I2, the
+   wake probe committed as tests/lmx_model_close_wake_5f_selftest in the
+   defaults; I3, host_is_owner's remaining sites become lmx_msg_r0_lane
+   (mapping_authority_locked, exec_bind_mode, start_contexts,
+   unbound_close, exec_stop, run_entry_turn, set_orphan_retain,
+   require_owner, require_turn, set_now), the five lifecycle calls and
+   lifecycle_authority dropping the host branch; I4, the migration sites
+   by grep: the executor selftest 40 lines, the message selftest 12,
+   release_17 10, liveness_33 3, family_handoff 5, orphan_mapped_17,
+   scenario36 and runtime_close_5f 1 each; runtime_delete's 598 statement
+   calls keep their form; host_wait's four uses and runtime_shutdown's two
+   migrate to the refusal and host_post's STOPPED. Uchar merged as 85c6fd0e
+   (run_gates 11 of 11 in 222 s, the other runners still running), then a
+   quiet window for 0c's 32-gate cold timing.
 
 ## 4. Acceptance
 
