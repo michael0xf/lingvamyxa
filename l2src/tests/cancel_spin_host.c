@@ -27,13 +27,6 @@ typedef struct SpinCtx {
     int send_st;
 } SpinCtx;
 
-typedef struct CancelArg {
-    LmxMsgRuntime *rt;
-    LmxMsgAddr who;
-    Lmx *node;
-    volatile LONG fired;
-} CancelArg;
-
 static int fail_rt(LmxMsgRuntime *rt, const char *msg) {
     fprintf(stderr, "%s\n", msg);
     if (rt != 0) {
@@ -116,14 +109,29 @@ static int turn_child_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return 0;
 }
 
+/* S4, ruled 2026-09-15: no lane cancels R0 mid-turn; the fixture cancels
+ * R0's child. p here is R0 itself (spin_boot's first create on a fresh
+ * runtime, lmx_message.lm1:1198-1206): R0 has no parent, so mapping_
+ * authority_locked's only route to it is the host outside any turn, and
+ * the host is inside this very call for as long as it runs. A spawned
+ * thread can no longer cancel p mid-spin under S4's guard -- that was
+ * the old prototype's host cancel, not a model operation. The spin
+ * moves to a real child instead: spin_boot's own exec_bind (launch=1)
+ * never actually launches c's worker here, since contexts_live is 0
+ * (this file never calls exec_start_contexts) -- only lmx_msg_map_child
+ * calls launch_ctx_thread_rec unconditionally (exec.c:2635), and it
+ * requires holding_turn(parent), so p's own turn is where c actually
+ * gets mapped and launched, same act run_map's turn_map_child performs.
+ * The host cancels c once outside any turn, same as run_map's c. */
 static int turn_parent_spin(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     SpinCtx *c = (SpinCtx *)ctx;
     LmxMsgEnv got;
     memset(&got, 0, sizeof(got));
     lmx_msg_recv(rt, who, &got);
     lmx_msg_env_release(&got);
-    (void)l2_m1(c->node);
-    InterlockedIncrement(&c->done);
+    if (c == 0 || lmx_msg_map_child(rt, who, c->child) != LMX_MSG_OK) {
+        return 1;
+    }
     return 0;
 }
 
@@ -149,15 +157,6 @@ static int own_turn_entry(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgTurn turn,
     g_cell_parent[1] = (unsigned)LMX_MSG_INVALID;
     st = lmx_msg_run_entry_turn(rt, parent, turn, g_cell_parent);
     return st != LMX_MSG_OK ? st : (int)g_cell_parent[1];
-}
-
-static DWORD WINAPI cancel_after_settle(void *arg) {
-    CancelArg *a = (CancelArg *)arg;
-    Sleep(20);
-    if (lmx_msg_emergency_cancel(a->rt, a->who) == LMX_MSG_OK) {
-        InterlockedIncrement(&a->fired);
-    }
-    return 0;
 }
 
 static Lmx *make_int_node(void) {
@@ -346,12 +345,14 @@ static int run_nested(Lmx *node) {
     LmxMsgRuntime *rt;
     LmxMsgAddr p = 0, c = 0, sib = 0, g = 0;
     SpinCtx ctx;
-    CancelArg carg;
-    HANDLE th;
     int st;
     LmxMsgEnv e;
     uchar ini = 1;
-    if (reset_fields(node) != 0 || spin_boot(&rt, &p, &c, &sib, &g, &ctx, node, turn_child_end) != 0) {
+    /* p is R0 (spin_boot's first create on a fresh runtime); no lane cancels
+     * R0 mid-turn (turn_parent_spin's own comment), so c -- spin_boot's
+     * lawfully mapped child, bound with turn_spin -- carries the spin, and
+     * the host cancels c once p's own (now brief) entry turn returns. */
+    if (reset_fields(node) != 0 || spin_boot(&rt, &p, &c, &sib, &g, &ctx, node, turn_spin) != 0) {
         fprintf(stderr, "spin-nested boot\n");
         return 1;
     }
@@ -362,44 +363,92 @@ static int run_nested(Lmx *node) {
     if (lmx_msg_host_post(rt, p, &e) != LMX_MSG_STAGED) {
         return fail_rt(rt, "spin-nested post parent");
     }
-    memset(&carg, 0, sizeof(carg));
-    carg.rt = rt;
-    carg.who = p;
-    carg.node = node;
-    th = CreateThread(0, 0, cancel_after_settle, &carg, 0, 0);
-    if (th == 0) {
-        return fail_rt(rt, "spin-nested thread");
-    }
-    /* M: P's own turn spins (no child step inside it) and is cancelled. */
     st = lmx_msg_run_entry_turn(rt, p, turn_parent_spin, &ctx);
-    if (join_canceler(th, rt, "spin-nested join") != 0) {
-        return 1;
+    if (st != LMX_MSG_OK) {
+        return fail_rt(rt, "spin-nested entry turn");
     }
-    (void)st;
-    if (InterlockedCompareExchange(&carg.fired, 0, 0) < 1) {
-        return fail_rt(rt, "spin-nested cancel not fired");
+    /* p (R0) is never cancelled -- it just received its posted mail and
+     * returned, still running; only its lawfully mapped child c is
+     * cancelled below (check_aftermath's own expect_parent_live). */
+    /* M: yield rounds reading flags, no wall clock: the child's L2 loop is
+     * entered, then the cancel stops it (same pattern as run_map's own). */
+    fprintf(stderr, "reading: spin-nested: the child's inner loop entered\n");
+    fflush(stderr);
+    while (field_at(node, 0U) != 1) {
+        SwitchToThread();
     }
-    if (lmx_msg_state(rt, p) != LMX_MSG_STATE_STOPPED) {
-        fprintf(stderr, "spin-nested parent state=%d\n", lmx_msg_state(rt, p));
-        return fail_rt(rt, "spin-nested parent");
+    if (lmx_msg_emergency_cancel(rt, c) != LMX_MSG_OK) {
+        return fail_rt(rt, "spin-nested cancel");
     }
-    if (field_at(node, 0U) != 1 || field_at(node, 1U) != 0) {
-        fprintf(stderr, "spin-nested hit=%d after=%d\n", field_at(node, 0U), field_at(node, 1U));
-        return fail_rt(rt, "spin-nested graph");
+    fprintf(stderr, "reading: spin-nested: the cancelled child stopped\n");
+    fflush(stderr);
+    while (lmx_msg_state(rt, c) != LMX_MSG_STATE_STOPPED) {
+        SwitchToThread();
     }
-    if (InterlockedCompareExchange(&ctx.done, 0, 0) != 0) {
-        return fail_rt(rt, "spin-nested host wrapper");
-    }
-    memset(&e, 0, sizeof(e));
-    e.kind = LMX_MSG_KIND_BYTES;
-    e.n = 1;
-    e.bytes = &ini;
-    if (lmx_msg_host_post(rt, sib, &e) != LMX_MSG_STAGED) {
-        return fail_rt(rt, "spin-nested sibling");
+    if (check_aftermath(rt, p, c, sib, g, &ctx, node, "spin-nested", 1) != 0) {
+        return fail_rt(rt, "spin-nested aftermath");
     }
     lmx_msg_exec_stop(rt);
     lmx_msg_runtime_delete(rt);
-    fprintf(stderr, "cancel_spin_parent ok hit=1 after=0 parent_stopped=1\n");
+    fprintf(stderr, "cancel_spin_parent ok hit=%d after=%d parent_live=1\n",
+        field_at(node, 0U), field_at(node, 1U));
+    return 0;
+}
+
+/* S4 guard acceptance (LOCK_REMOVAL_S4_SITES.txt site 8): a lane that is
+ * neither the target's parent's own lane nor the host outside any turn --
+ * a spawned thread, settled onto neither -- must be refused. Written
+ * red-first against emergency_cancel's own missing caller-identity check;
+ * green now that the guard (mapping_authority_locked, reused directly)
+ * lands in lmx_msg_emergency_cancel. */
+typedef struct WrongLaneArg {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr who;
+    volatile LONG got;
+} WrongLaneArg;
+
+static DWORD WINAPI wrong_lane_cancel_worker(void *arg) {
+    WrongLaneArg *a = (WrongLaneArg *)arg;
+    InterlockedExchange(&a->got, (LONG)lmx_msg_emergency_cancel(a->rt, a->who));
+    return 0;
+}
+
+static int run_s4_guard_emergency_cancel(void) {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr p = 0, c = 0;
+    uchar ini = 1;
+    WrongLaneArg arg;
+    HANDLE th;
+    int got;
+    rt = lmx_msg_runtime_new();
+    if (rt == 0 || lmx_msg_create(rt, 0, &ini, 1, &p) != LMX_MSG_OK
+        || lmx_msg_create(rt, p, &ini, 1, &c) != LMX_MSG_OK
+        || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {
+        return fail_rt(rt, "s4 guard emergency_cancel: boot");
+    }
+    memset(&arg, 0, sizeof(arg));
+    arg.rt = rt;
+    arg.who = c;
+    arg.got = (LONG)LMX_MSG_INVALID;
+    /* This spawned thread is not c's parent p's own lane (p never runs a
+     * turn here) and not the host outside any turn (main() is a different
+     * thread): the guard's own two legitimate callers, neither. */
+    th = CreateThread(0, 0, wrong_lane_cancel_worker, &arg, 0, 0);
+    if (th == 0 || join_canceler(th, rt, "s4 guard emergency_cancel: thread") != 0) {
+        return 1;
+    }
+    got = (int)InterlockedCompareExchange(&arg.got, 0, 0);
+    lmx_msg_exec_stop(rt);
+    lmx_msg_runtime_delete(rt);
+    if (got != LMX_MSG_INVALID) {
+        fprintf(stderr,
+            "S4 guard check FAILED: emergency_cancel from neither the parent's lane nor "
+            "the host outside any turn returned %d, want LMX_MSG_INVALID=%d "
+            "(mapping_authority_locked's own guard missing or broken)\n",
+            got, LMX_MSG_INVALID);
+        return 1;
+    }
+    printf("s4 guard emergency_cancel ok (refused from a spawned thread)\n");
     return 0;
 }
 
@@ -411,7 +460,7 @@ int main(void) {
         g_graph_ranges = 0;
         return 1;
     }
-    if (run_map(node) != 0 || run_nested(node) != 0) {
+    if (run_map(node) != 0 || run_nested(node) != 0 || run_s4_guard_emergency_cancel() != 0) {
         (void)lmx_msg_blocks_dispose_all(&g_graph_blocks);
         g_graph_ranges = 0;
         return 1;

@@ -1318,6 +1318,86 @@ static int first_scenario_done(TurnCtx *slow, TurnCtx *fast, TurnCtx *uic, MassR
     return 1;
 }
 
+/* S4 guard-holds check (LOCK_REMOVAL_S4_SITES.txt site 5, corrected
+ * 2026-09-15): a lane that is neither the target's own parent's lane nor
+ * the host outside any turn must be refused. Written red-first against
+ * exec_bind_mode's own 1701-1715 shape checks, which have no caller-
+ * identity check of their own; measuring it on d8f758e6 found it already
+ * green, because exec_bind_mode calls mapping_authority_locked (exec.c
+ * 1686-1696), which is exactly this guard. Kept here, green, so a future
+ * change to mapping_authority_locked or its call at 1721 that drops the
+ * check is caught. */
+typedef struct S4BindGuardArg {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr child;
+    volatile LONG got;
+} S4BindGuardArg;
+
+static int s4_guard_bind_turn(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    (void)ctx;
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
+static DWORD WINAPI s4_guard_bind_worker(void *arg) {
+    S4BindGuardArg *a = (S4BindGuardArg *)arg;
+    InterlockedExchange(&a->got,
+        (LONG)lmx_msg_exec_bind(a->rt, a->child, s4_guard_bind_turn, 0, LMX_MSG_AFFINITY_ANY));
+    return 0;
+}
+
+static int run_s4_guard_exec_bind(void) {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr p = 0, c = 0;
+    uchar ini = 1;
+    S4BindGuardArg arg;
+    HANDLE th;
+    DWORD w;
+    int got;
+    rt = lmx_msg_runtime_new();
+    if (rt == 0 || lmx_msg_create(rt, 0, &ini, 1, &p) != LMX_MSG_OK
+        || lmx_msg_create(rt, p, &ini, 1, &c) != LMX_MSG_OK
+        || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {
+        fprintf(stderr, "s4 guard exec_bind: boot\n");
+        if (rt != 0) {
+            lmx_msg_runtime_delete(rt);
+        }
+        return 1;
+    }
+    memset(&arg, 0, sizeof(arg));
+    arg.rt = rt;
+    arg.child = c;
+    arg.got = (LONG)LMX_MSG_INVALID;
+    /* This spawned thread is not p's own lane (p never runs a turn here)
+     * and not the host outside any turn (main() is a different thread):
+     * the guard's own two legitimate callers, neither. */
+    th = CreateThread(0, 0, s4_guard_bind_worker, &arg, 0, 0);
+    if (th == 0) {
+        fprintf(stderr, "s4 guard exec_bind: thread\n");
+        lmx_msg_runtime_delete(rt);
+        return 1;
+    }
+    w = WaitForSingleObject(th, 3000);
+    CloseHandle(th);
+    if (w != WAIT_OBJECT_0) {
+        fprintf(stderr, "s4 guard exec_bind: join\n");
+        lmx_msg_runtime_delete(rt);
+        return 1;
+    }
+    got = (int)InterlockedCompareExchange(&arg.got, 0, 0);
+    lmx_msg_exec_stop(rt);
+    lmx_msg_runtime_delete(rt);
+    if (got != LMX_MSG_INVALID) {
+        fprintf(stderr,
+            "S4 guard-holds check FAILED: exec_bind from neither the parent's lane nor "
+            "the host outside any turn returned %d, want LMX_MSG_INVALID=%d "
+            "(mapping_authority_locked's own guard regressed)\n",
+            got, LMX_MSG_INVALID);
+        return 1;
+    }
+    printf("s4 guard exec_bind ok (refused from a spawned thread)\n");
+    return 0;
+}
+
 int main(int argc, char **argv) {
     LmxMsgRuntime *rt;
     LmxMsgAddr parent = 0, w1 = 0, w2 = 0, ui = 0, w3 = 0;
@@ -7577,6 +7657,9 @@ int main(int argc, char **argv) {
         lmx_msg_exec_stop(rti);
         fprintf(stderr, "exec wait: ready arrival at idle wait boundary delivered\n");
         lmx_msg_runtime_delete(rti);
+    }
+    if (run_s4_guard_exec_bind() != 0) {
+        return 1;
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
