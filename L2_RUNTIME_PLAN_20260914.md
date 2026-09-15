@@ -4210,3 +4210,17 @@ ruling on ready, DEL, holds). ONE ROOT landing still running (root chain
 green, gate.ps1 in progress). Note: d6/lock-removal still carries the
 design and tables under stg/l1_baseline/l2src; after ONE ROOT lands the
 branch is re-based and the files move with l2src.
+e9's install_pin.ps1 on claude-0c/oneroot-runners 4afe4ff5 (off d6/one-root
+6bfefa81; checked by the coordinator: one file added, l2src/install_pin.ps1,
+0 lines naming stg): -Tree defaults to the script's parent directory;
+the pin is the tree's l2src/L1_PIN.txt (exit 2 if missing or not 64
+hex); -Source defaults to build\pin_<hash>\l1trans.exe under the main
+checkout (the first entry of git worktree list); a source SHA256 that is
+not the pin exits 2 before any copy; copies into build\l1trans\gen2 and
+gen3, re-hashes each, exit 2 on a mismatch; pass line "install_pin ok:".
+The wrapper over wt0c_* trees stays in e9's scratchpad; land_seed.sh and
+the 76 one-off scripts are historical, unconverted. Nothing run before
+"landed"; at "landed" e9 runs the falsifier first (a scratch copy of the
+binary with one byte appended as -Source into wt0c_oneroot, expected exit
+2 with the gen2/gen3 hashes unchanged), then the real install. The
+branch lands on integration after ONE ROOT, merged by the lead.
