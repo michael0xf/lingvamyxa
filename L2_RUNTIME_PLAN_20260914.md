@@ -1419,3 +1419,20 @@ format, stage by stage, each stage red-first with the lane tripwire as its
 proof (every write the removed lock covered becomes a lane write on its
 owner's lane; -LaneCheck the oracle that no write moved off its lane); the
 mail queue's own collection lock is the one lock that remains.
+Added the same hour (Mikhail, verbatim, to the lead's line that children's
+threads still use shared memory inside rt): "значит реализуйте полноценную
+арену для каждого MEssage, как описано в спеке. Без этого Message не имеет
+смысла" (so implement a full arena for each Message, as described in the
+spec; without it a Message makes no sense). The two directives are one piece
+of work: the inventories' target-owner column names the Message's own arena
+where the state belongs, not "the Message's fields" in a calloc'd record.
+On the end of the process (Mikhail, verbatim, to the lead's note that
+children's closing turns still running are cut off with the process):
+"подобное завершение детей это всё равно аварийный выход. Утечка памяи из ОС
+будет или нет?" (such an ending of children is an abnormal exit anyway; will
+there be a memory leak from the OS or not?); the lead's answer, confirmed:
+no, the OS reclaims a process's memory, handles and threads at exit, so only
+the unfinished closing work is lost. The lead's exec.c counting unit: 77
+lmx_msg_exec_lock( acquisitions and 88 _locked( lines (22 helpers running
+under a caller's lock), 165 together, one inventory line per acquisition and
+one per helper.
