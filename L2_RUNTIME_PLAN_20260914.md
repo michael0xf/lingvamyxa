@@ -4918,3 +4918,12 @@ kinds and surfaced the gap, the corrected reconciliation matches the
 whole-file delta exactly (Sleep 39, event 12, go cell 4, GetTickCount
 77, exec_lock 0). The remaining test debt after M: 20 gated blocks (S4
 2, Y 6, S6 12 by the corrected column).
+Ticket to b5 (the coordinator, 2026-09-15), code, to start at M's "landed":
+D2 on sonnet/d2-create-id off the landed tip: the create_id (retry id)
+parameter dropped from the 3 declarations and every definition and call
+in LOCK_REMOVAL_D2_SITES.txt (l2src core, selftests, tests/, the two
+mixa calls, the __wrap_/__real_ pair kept consistent), no behaviour
+change, the two variable-id callers read and resolved; measure
+run_port_message plain, run_lmx -Suite Message, run_msg_send_local,
+run_msg_family_handoff, run_l2_message_root, and grep -c create_id at 0
+over l2src, tests and mixa_manager outside vendor/.
