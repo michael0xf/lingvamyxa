@@ -1954,3 +1954,27 @@ the pthread worker's cond wait on it, the pack gate mutex, the host lock,
 the mail lock allowed; own.lm2's 132 mutex lines and own_abi.lm2's 10
 counted for stage O, not examined). Falsifier held: the file has no "not a
 lock" row.
+Mikhail on the UI lane (2026-09-15, verbatim, to the coordinator's (a)/(b)
+question; on today's UI lane without a thread, stepped by R0's turn: "это
+просто кривая реализация"): "Полоса на экране не может не быть L3 Thread. Message без L3 Thread это просто письмо. Полоса же это полноценный объект. Объектов у нас не так много как в SmallTalk но все равно много. Поэтому реализация L3 Thread планировщика который не запускает потоки детей а бегает по ним сам -- ближайшая задача для myxa_manager" (a lane on the screen cannot
+fail to be an L3 Thread; a Message without an L3 Thread is just a letter; a
+lane is a full object; we do not have as many objects as Smalltalk, but
+still many; so the implementation of an L3 Thread scheduler that does not
+launch its children's threads but runs over them itself is the nearest task
+for mixa_manager). Read back to him and entered verbatim in spec
+19.28.R2.2 and the model's sections 25 (iv) and 29: (1) the UI lane is a
+full L3 Thread with its own thread (the UI thread) and its own mailbox;
+today's threadless lane stepped by R0 goes (stage M); (2) a scheduler that
+launches no threads for its children and runs over its attached Messages
+itself is not a core mechanism but a variety of L3 Thread, and its
+implementation is mixa_manager's nearest task, in L2, with the mailbox as
+its only synchronization. Tickets: the lead's stage M carries (1); b5's
+next ticket after the own.lm2 inventory is (2), design first.
+S0 landed on integration as e88dab64 (57's lane tripwire cf326822 merged into
+c067bed9): run_port_message plain and -LaneCheck parity PASS with 100
+methods redirected, run_lmx -Suite Exec ok plain and with LMX_LANE_CHECK=1,
+scenario36 core tests PASS (scenario36 49/0), run_gates 11 of 11 in 204 s,
+no LANE WRITE FAIL in any log. 57's quiet window off e88dab64 for
+lane_oracle and S3 red; then S1 aef95e1c lands on e88dab64, then S2's red is
+measured. 0c's inventory header fixed at a21fa962 (the column's five values;
+the "not a lock" grep prints nothing; the withdrawal record at L160 kept).

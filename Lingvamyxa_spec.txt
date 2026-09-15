@@ -11572,6 +11572,13 @@ Mikhail, 2026-09-15, verbatim: "Синхронизация только лока
 ресивера \"synchronized\")" (synchronization is only local, in the mailbox
 of each L3 Thread; there is none else in the project, except the support of
 the receiver "synchronized", 20.5.7).
+Mikhail, 2026-09-15, verbatim, on the UI lane (until then a Message without a
+thread of its own, stepped by the root's turn, which he called a crooked
+implementation): "Полоса на экране не может не быть L3 Thread. Message без L3 Thread это просто письмо. Полоса же это полноценный объект. Объектов у нас не так много как в SmallTalk но все равно много. Поэтому реализация L3 Thread планировщика который не запускает потоки детей а бегает по ним сам -- ближайшая задача для myxa_manager" (a lane on the screen cannot fail to be an
+L3 Thread; a Message without an L3 Thread is just a letter; a lane is a full
+object; we do not have as many objects as Smalltalk, but still many; so the
+implementation of an L3 Thread scheduler that does not launch its children's
+threads but runs over them itself is the nearest task for mixa_manager).
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
