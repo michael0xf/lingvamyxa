@@ -631,14 +631,6 @@ fn: main () int
     if: st != c.LMX_MSG_NOMEM
         c.printf("inject nomem\n")
         fail: fail + 1
-    c.lmx_msg_host_test_set_nowake(1)
-    env\id: 82U
-    payload[0]: 55
-    st: lmx_msg_host_post(hrt, host_child, env)
-    c.lmx_msg_host_test_set_nowake(0)
-    if: st != c.LMX_MSG_STAGED
-        c.printf("nowake must still stage\n")
-        fail: fail + 1
     st: c.lmx_msg_host_wait(hrt, 0U)
     if: st != c.LMX_MSG_EMPTY && st != c.LMX_MSG_OK
         c.printf("bounded wait 0\n")

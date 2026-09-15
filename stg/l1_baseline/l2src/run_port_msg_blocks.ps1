@@ -238,8 +238,9 @@ foreach ($i in 1, 2) {
     if ($exit -ne $refExit) { throw "parity run $i exit $exit, reference exit $refExit`n$text`n$errText" }
     if ($text.Trim() -ne $refOut.Trim()) { throw "parity run $i stdout differs from the reference`nreference: $($refOut.Trim())`nparity   : $($text.Trim())" }
     if ($errText -notmatch 'port pre_frees=(\d+)') { throw "parity run $i did not report the runtime's pre-test frees: $errText" }
-    # Pinned: one free before the test, the entry turn's bind-wait record (stage 5 (a), e64c8083).
-    if ([int]$Matches[1] -ne 1) { throw "the runtime freed $($Matches[1]) blocks before the test, expected 1" }
+    # Pinned: no free before the test. Stage 5 (a) (e64c8083) counted one, the entry turn's bind-wait record; since
+    # S3 the worker record is made only by a launch, and the entry turn binds without launching, so none is freed.
+    if ([int]$Matches[1] -ne 0) { throw "the runtime freed $($Matches[1]) blocks before the test, expected 0" }
 }
 if ($runs[0].stdout -ne $runs[1].stdout) { throw 'the two parity runs disagree' }
 $ev.parity = $runs
