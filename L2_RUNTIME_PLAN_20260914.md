@@ -5175,3 +5175,19 @@ counter keyed by the caller's return address, frame pointers,
 symbolized with addr2line on reference.exe), one reference build and
 one run after b5's D2 runs; the result becomes S2's site list in the
 design, each site threaded onto its capability or deleted.
+S2's 113 walks attributed (the lead, 2026-09-15): a never-committed
+RtlCaptureStackBackTrace print in c8f9cb50's counter hook, addresses
+relocated from the load base and mapped with nm -n on reference.exe
+(the same run reporting C1=112 C2=1; the scratch tree restored to a
+clean c8f9cb50). C1 by the asking function: is_runnable_locked 48
+(end_turn's runnable check on its children); exec_ready 24
+(request_children_close 9, end_turn 10, admit_one from pump 4,
+exec_unbound_close 1); launch_ctx_thread 15 (map_child 11,
+exec_bind_mode 4); map_child 12; exec_bind_mode 5; exec_unbind 4
+(release_slot from end_turn or settle_child); dispose_mark 2,
+dispose_child 1, settle_child 1. C2 1: a generated L2 program's turn
+(l2_u..._turn from run_one from entry_turn_core) resolving its own
+Message; the lead greps l2trans for the emitted call. The list goes
+into S2's section, each site threaded onto its capability (the parent's
+child capability for the end_turn family, the turn's own Message for
+the C2 site, the admitted Message for the pump path) or deleted.
