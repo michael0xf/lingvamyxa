@@ -3379,3 +3379,14 @@ model 31. The lead's kernel paragraph is to say the same: not "runs while
 success is 0", but the exit conditions and the finished state.
 Mikhail (2026-09-15, verbatim): "то есть цикл не бесконечный -- из него есть выход хоть по return хоть как" Entered after the previous sentence
 in spec 19.28.R2.2 and model 31.
+Mikhail (2026-09-15, in the lead's chat, verbatim): "L3 Thread это модель же а не реализация. Да, 0 это запрос остановки от родителя. Что значит "не выход из цикла"? Как можно остановить не выходя в конечном итоге из цикла?" So the phrase
+"not the loop's exit", which the coordinator used in messages to the lead
+and the lead carried into KERNEL, S3, Y3, the retired row and the FIELDS
+header, is wrong and removed there (4e492cfd and after); the spec and the
+model never carried it (checked by grep on main). The reading now in all
+documents: the L3 Thread is a model, so the kernel fixes no loop shape;
+the exit conditions exist (user code sets success; running is polled while
+root executes; the parent's running = 0 is the stop request that in the
+end leaves the loop; at the exit, by return or however, running is set to
+0); a finished L3 Thread reads success && !running. Entered verbatim in
+spec 19.28.R2.2 and model 31.

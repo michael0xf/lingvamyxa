@@ -11642,7 +11642,12 @@ exit conditions exist without fixing a particular scheduler's shape; user
 code sets success, running is polled while root executes, and at exit
 running is set to 0, so a finished L3 Thread reads success && !running. And:
 "то есть цикл не бесконечный -- из него есть выход хоть по return хоть как" (that is, the loop is not infinite: there is a way out of it,
-by return or however).
+by return or however). And, to the lead's "running = 0 is the parent's stop
+request, not the loop's exit", verbatim: "L3 Thread это модель же а не реализация. Да, 0 это запрос остановки от родителя. Что значит "не выход из цикла"? Как можно остановить не выходя в конечном итоге из цикла?" (the L3 Thread is a
+model, not an implementation; yes, 0 is the parent's stop request; what
+would "not the loop's exit" mean? how can one stop without, in the end,
+leaving the loop?): the parent's running = 0 is the stop request that in
+the end leaves the loop.
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
