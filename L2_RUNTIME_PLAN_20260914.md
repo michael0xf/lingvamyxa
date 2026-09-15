@@ -6094,3 +6094,20 @@ before the code; if a case cannot reach the parent's lane, the stage
 stops with it. set_orphan_until: the fixture puts orphan_until on R0
 itself, which the sweep never writes, so it stays as a test hook
 guarded like drive.
+e9's archive timeout landed on claude-0c/archive-timeout 3f131768 (one
+commit on 11f581e0, only l2src/run_candidate_c_scanners.ps1, +24 -3;
+checked by the coordinator): git runs as a child (Start-Process
+-PassThru, its own stdout/stderr files, the Handle read at once),
+WaitForExit(120000); on expiry taskkill /PID /T /F through cmd /c (under
+EAP Stop PowerShell 5.1 turns taskkill's stderr into a terminating
+error), a minimal evidence.json (FAIL, the failure line, archiveMs, the
+output paths; the runner's own evidence exists only from line 55), then
+"Archive timed out after 120 s (git pid N, started hh:mm:ss.fff)";
+archiveMs beside coreCommit in the evidence. Stub proof: a gcc-built
+git.exe sleeping 130 s first on PATH (a .cmd stub would not be picked,
+Start-Process with redirection resolves only .exe), the runner as
+run_gates launches it: exit 1 in 131 s, the timeout line with the pid
+and start time, evidence FAIL with archiveMs 120052, no core.zip, 0
+git.exe afterwards. Real run: exit 0 in 23 s, "candidate scanner
+parity cases=130 freed=4316 PASS", archiveMs 212, coreCommit 11f581e0.
+Rides S6-1's landing allowlist as one runner file.
