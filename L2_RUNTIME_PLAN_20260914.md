@@ -5465,3 +5465,14 @@ unbind, adopt_mark and dispose_mark, then launch_ctx_thread, map_child
 and exec_bind_mode; every address form stays as a wrapper, no signature
 changes. Next: run_port_message plain, then the S2 counter merged in a
 scratch tree; "ready for re-measure" with a tip hash.
+S2's first cut (the lead, 2026-09-15): d6/lock-s2 ab04de0e (checked on
+origin): run_port_message plain parity PASS in 48 s with 102 methods (97
+plus five record forms); a local scratch merge with c8f9cb50's counter
+parity PASS; reference.exe twice with LMX_LOOKUP_COUNT=1: "lookup
+walks: C1=0 C2=1 turn_other=17" (host 2830688 and 2611038); 0 report
+lines without the variable. The remaining C2 is the generated
+l2_program_turn's own lookup; uncommitted: l2trans.lm1 emitting
+lmx_msg_turn_self, the driver's mode 3 wrap and run_l2_message_root's
+wrap list on it; the lead checks whether committed generated units
+carry the old emitted text, then run_l2trans, run_l2_message_root, the
+self-build and the counter again; the falsifier after C2=0.
