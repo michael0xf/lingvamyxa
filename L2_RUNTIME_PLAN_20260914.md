@@ -5609,3 +5609,29 @@ base and the UAF kit over runtime_delete; falsifier one item put back.
 S5's code is the lead's ticket (core surgery: the root list, R0's
 record), on d6/lock-s5 off c9ac4dda, edits now, builds after S4 lands;
 b5 stays on S4 then the S6 census re-base.
+S5 item (b) stopped on a finding against the coordinator's premise (the
+lead, 2026-09-15; checked: lmx_root_record.lm2's contract says R0's
+record is "written only on R0's lane"): rt\next_addr++ and the slots
+push happen in create_prepare, which for parent != 0 requires that
+parent's turn, so every parent's lane writes them; slots and n are
+unlinked in endp_try_retire (exec.c 1155-1209) from endp_release on
+whichever lane drops the last reference; so moving them into R0's
+record would put foreign-lane writes into R0's Structure data. Readers
+beyond the core: the slots port module (slots_n/slots_at, the D1
+enumeration behind tab_n_locked/tab_addr_locked, its runners) and
+about 80 test reads of rt\n. root_seq is written once, in assign_path
+for p = 0, R0's own creation before R0 exists, always 1 with one root.
+The coordinator's ruling of (d) is withdrawn as wrong on its premise.
+Ruling now (no lock, wait or signal): S5 = (a) the retire queue
+deleted, (c) the root list collapsed to R0, (i) root_seq the constant 1
+(R0's path is [1]) and the field gone, (ii) next_addr an order-free
+atomic counter (unique addresses, order irrelevant, within Mikhail's
+allowance of order-free atomic state) recorded in the design and the
+FIELDS row; (iii) slots and n wait for S6 with refs (once refs goes,
+the releasing parent frees a released child at settle and the
+teardown list has nothing to hold; the slots module and the test reads
+change then). The alternative, R0 owning them through messages, would
+be a wait and is not taken. S5's acceptance: the probe's counts become
+retire_queue, root_seq present, next_addr non-atomic increments,
+root_list_loops; green 0/0/0/0; the red re-measured on the updated
+probe (a new commit on d6/lock-s5-red).
