@@ -32,13 +32,13 @@
 # mixa_file_manager.h.lm1/.lm1 and every real dependency (mixa_dir_
 # win32.h.lm1/.lm1, mixa_dir.h.lm1, mixa_selection.h/.lm1) are the
 # parity oracle (or real, unmodified dependencies) and are never
-# touched. Nothing under stg/l1_baseline is modified, only read. Every
+# touched. Nothing under l1src or l2src is modified, only read. Every
 # input is built fresh in a unique run directory -- no stale objects.
 param()
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root

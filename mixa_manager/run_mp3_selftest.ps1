@@ -32,7 +32,7 @@ $ActualCompilerHash = ""
 # hashed below so the evidence records both.
 $CompilerHash = "24A1B57B6C831C7B45630DF8CA61A7441376B4EB8EF946B1F08FC41957290B09"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
-$StableHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+$StableHash = Get-L1Pin -L1Root $RepoRoot
 $ActualStableHash = ""
 $RunDir = ""
 $LogDir = ""
@@ -100,7 +100,7 @@ try {
 
     # stable65D5 must still be exactly what it was. This run does not use
     # it, but a silently changed stable compiler is worth failing on.
-    $StableCompiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+    $StableCompiler = Join-Path $RepoRoot "build\l1trans\gen2\l1trans.exe"
     if (Test-Path $StableCompiler) {
         $ActualStableHash = (Get-FileHash -LiteralPath $StableCompiler -Algorithm SHA256).Hash
         if ($ActualStableHash -ne $StableHash) {
