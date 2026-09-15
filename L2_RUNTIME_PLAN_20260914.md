@@ -6306,3 +6306,17 @@ landing scripts are the same idea applied to our own tooling.
 Mikhail (2026-09-15): "не runnable а running": his sentence's word is
 running, the Message's own flag; corrected in the quote in spec section
 2, model section 2 and the plan entry above.
+Mikhail (2026-09-15, verbatim): "в конце концов по таймауту сработает корневой поток и тупо выйдет из процесс ОС. " -- то есть я выше просил заглушку "родитель корневого L3 Thread" Read by the coordinator with the
+docs: the spec's "Host/system parent anchors roots" (13178) and the
+model's 2026-09-14 sentence (the root's only parent is the virtual
+grandparent at the OS-process level, a refusing stub until World Wide
+Mix and the transport exist) name the same thing: the stub "parent of
+the root L3 Thread" is a kernel item: it holds the parent's timeout on
+R0 (the parent's side of the mutual poll) and, on expiry, leaves the OS
+process; R0 polls it as any child polls its parent, and it is alive
+while the process lives. Entered verbatim in the spec's liveness
+paragraph and the model's stub sentence. Placed in the order as its
+own small stage after S6-2 and before Y ("R0P: the root's parent stub"),
+designed by the lead in the (a) format with its acceptance (a root that
+stops answering is left by the process at the timeout; red today, the
+process hangs); the forced thread kill is Mikhail's "later".

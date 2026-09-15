@@ -13176,7 +13176,14 @@ periodically checks its parent. If the parent is absent, DEAD,
 STOPPED, RELEASED, or sustained-nonresponsive while in a handler,
 the child requests its own orderly close (same end_turn path as
 stop). A live idle parent keeps children alive. Host/system parent
-anchors roots. Cadence and timeout are host settings, not language
+anchors roots. (Mikhail, 2026-09-15, verbatim, on his sentence that in the
+end the root thread's timeout fires and leaves the OS process: "в конце концов по таймауту сработает корневой поток и тупо выйдет из процесс ОС. " -- то есть я выше просил заглушку "родитель корневого L3 Thread";
+that is, the stub "parent of the root L3 Thread" he asked for is this
+host/system parent: it holds the parent's timeout on the root and, on
+expiry, leaves the OS process; the model's section 19.29.7.1 records his
+2026-09-14 sentence that the root's only parent is the virtual grandparent
+at the OS-process level, a stub until World Wide Mix and the transport
+exist.) Cadence and timeout are host settings, not language
 constants and not the mail-watcher interval. The child's own scheduling/lifecycle
 mechanism owns the cadence, pending query and timeout decision. Platform clock
 and wake primitives support it; no global scan owns this responsibility.
