@@ -2671,3 +2671,19 @@ never run there (the oldchain archives exist only in the main checkout)
 and stg's bootstrap need for the old binaries, which (c) removes; so b5
 reports greps and file lists per group and the lead's landing chain
 measures the gates in a warm worktree after (c), the branch landing whole.
+The 32-gate set merged as 88934463 on c94d3e31, its gates running; D1 next,
+then probe (a). (b)'s driver: the root's buildCore.lm0 is not a fixed-point
+driver (its output_dir is build/lm0/next, 436-439, but both generate_all
+calls use build/lm0/l1trans.lm0 at 825, 833 and 878, so its second pass
+reruns the previous binary, and it compares nothing), so (b) uses a thin
+driver regen_root.sh on d6/root-regen in a fresh worktree: T0 from gcc on
+the committed lm1/build/l1trans.lm1.c; three passes, each translating the
+eight files in place in lm_build_generate_all's order (p0.h.lm1 first,
+since own and parser include l1src/p0.lm1.h from lm1/build) and building
+the next T; green: pass 3 equal to pass 2 byte for byte on all eight, the
+other tools compiling from the new C with buildCore's flags, root
+tests/l1/run_gen.ps1 green, git status naming only the eight paths; on
+green the eight committed with blob ids in the note and pushed, the
+landing separate; the driver reports how many files pass 1 changed from
+the committed C. Constraint for 0c's run_smoke fix: both hashes computed
+at run time, no pinned value, or the check reddens on (b) and (c).
