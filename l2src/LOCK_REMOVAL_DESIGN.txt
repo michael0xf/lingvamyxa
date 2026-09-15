@@ -1431,6 +1431,14 @@ S5. The runtime-level lists (L5). Waits on 5.1.
       Rule (the coordinator): every landing step runs under a timeout that turns the landing red. land_base3.sh
       prints the step timeouts in its header: self_build 600, gates 1200, port_message 300 each, l2trans 900,
       port_parser 900, mixa/ingress/lmx_cancel 180.
+    - LANDED 2026-09-15: merge 7985e2a2 (6 M) on 3e6fc02a. On the merge:
+      - run_self_build PASS 8 of 8;
+      - gates GREEN 31 of 31 in 540 s;
+      - run_port_message plain and -LaneCheck parity PASS (102 methods);
+      - run_l2trans ok in 279 s;
+      - run_port_parser, run_mixa, run_ingress_harness and run_lmx -Suite Cancel ok.
+      Tag selfbuild/7985e2a2 and log commit 8eeb094f are on d6/lock-s5-landing-7985e2a2.
+      integration/main-absorbs-core is 8eeb094f. The probe branch d6/lock-s5-red is not folded in.
     - UAF kit for S5's green, rebuilt in scratch (never committed):
       - q_alloc.c: a poisoning quarantine allocator (0xDD, 8192 blocks, 256 MB, free-site frames, eviction and
         atexit checks, double free);
