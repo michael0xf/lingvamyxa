@@ -3092,3 +3092,14 @@ goldens replace it; the rerun going, with a baseline of root buildCore
 plus run_gen on the unchanged 7200294b beside it to confirm the gap
 predates (b). Read-only: b5's da7d61f1 trial-merges onto 7200294b with 0
 conflicts (171 clean deletions).
+Mikhail (2026-09-15, verbatim): "если myxa_manager, к примеру, нужен почтовый сервис как место где перемешиваются все письма и клиенты забирают что хотят -- он может его сделать его для себя базовыми механизмами. Для ядра такое не нужно. Согласен?" (if mixa_manager, say,
+needs a mail service as a place where all letters mix and clients take what
+they want, it can build it for itself from the basic mechanisms; the core
+does not need such a thing; agree?). Agreed by the coordinator: such a
+service is an ordinary application L3 Thread built from the basic
+mechanisms (its own mailbox under synchronized, sends as admissions into
+other mailboxes), which the spec already says (19.28.R2.2: an optional
+router is itself a Message, not a substitute for parent-owned scheduling; a
+coordinator Message owns its state exclusively and receives requests); the
+core carries no broker, exchange or topic service. Entered in the model's
+section 25.
