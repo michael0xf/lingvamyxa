@@ -3885,3 +3885,18 @@ paths, the 33 gates, l2trans, port_parser, port_message -LaneCheck,
 run_mixa; falsifier: run_msg_send_local's archive set left unedited turns
 send_local red. No code before S3 lands (2 of 5 cold -LaneCheck runs
 green so far, no CRASH).
+b5's S6 census landed on sonnet/s6-lock-sites ac82045e
+(LOCK_REMOVAL_S6_LOCK_SITES.txt; checked by the coordinator): 101 sites,
+98 functions calling lmx_msg_exec_lock/unlock (54 exec.c, 44 lm1, lm2
+mirrors 1:1) plus host_post's host lock plus two Interlocked sites (refs'
+retain/release, CtxPack's launch-gate mutex, both resolved by the S3/S4
+files); per stage S3 10, M 20, S4 51, S5 15, Y 1, S6 4; zero
+contradictions. b5's own depth note: rows are "ruled" (read in this or an
+earlier file, cited) or "proposed" (classified from name, signature and
+context, not re-read), most S4/S5 proposed rows being single-field getters
+or runtime-list bookkeeping; and a draft falsifier line had asserted "at
+least 108" before the check was run (real count 6), corrected by adding
+the token to every site row (final 104 against 98) and reported, not
+patched over. Ruling: the proposed rows are confirmed when each stage's
+note names them, as with the FIELDS table; b5's next ticket re-reads the
+S4 and S5 proposed rows function by function.
