@@ -1,0 +1,45 @@
+# Stage M: first read of the stepped tests (grep on d6/lock-s2-red = cf326822 + counter; not yet decided)
+
+The rule (design 997de734): a property of the sequential mapping itself (round-robin order, the cursor, the UI take)
+is deleted; a property of the child (its close, its settle, its mail, its collection) moves onto the child's own
+thread through map_child.
+
+Each test's step uses, and a first guess to be confirmed by reading every check label before M's commit:
+- lmx_model_ui_lane_3d_selftest: exec_ui_step 12 checks of serving order ("readiness order, not family order",
+  "A once then B", stale request dropped). These are properties of the UI take: deleted. The UI lane as an L3 Thread
+  on the UI thread, taking its own mailbox FIFO, needs its own new test.
+- lmx_msg_adopt_unrooted_selftest (read 80-146): step_in_root(receiver) x5 drives the receiver's real end_turn
+  collection ("run real end_turn with interior graph root", "another turn still retains the graph", "collect after
+  dropping the last graph root", "unrooted adopted graph freed by end_turn, not teardown", "next end_turn does not
+  free twice"). A child property: convert to the receiver on its own thread, with each turn triggered by a posted
+  input and awaited. Also found: between turns, main writes the receiver's storage directly
+  (probe_adopt_unrooted(recipient, ...) at 120/137, lmx_msg_set_graph(recipient, 0) at 131) and reads its
+  blocks/ranges (127/136/141). Off the receiver's lane. In the conversion the adopt and set_graph move inside the
+  receiver's own turn (driven by the input's kind), and the checks read counters the turn publishes.
+- lmx_model_liveness_33_selftest (read 275-320): step_from_root(p, d) and (p, e) at 278/283 run D's and E's turns
+  ("D's next turn still consumes P's answer, then stops at its end-turn"; "E finished its current turn on the input
+  it had"; "E stopped at its end-turn, not inside the turn"). step_in_root(z) at 301/310 runs Z's liveness query
+  toward R0 and its handling of R0's answer ("Z's turn polls its parent R0"; "Z's next turn handles R0's answer").
+  All child properties: convert, with D, E and Z on their own threads and each turn awaited by its effect. Also
+  found: main acts as P's turn (live_check(rt, p, ...) at 275; stop(rt, p, e) and end_turn(rt, p, 1) at 281/288-290).
+  That is the host arm S4/M remove, so those calls move into P's own turn.
+- lmx_model_family_release_17_selftest (read 50-89, 230-274): step_from_root(r, p4/p5) runs P4's and P5's closing
+  turns; step_in_root(c4/c5) runs C4's and C5's closing turns as orphans ("C4 ran its closing turn as an orphan";
+  "C5 ran its closing turn as a failed orphan: handoff-safe, re-rooted under R0, still held"). Child properties:
+  convert. Ordering point: the check at 242 ("C4 has not yet run its closing turn") and "R releases P4 at once, with
+  C4 still to run its closing turn" hold today because nothing runs C4 until the host steps it. On its own thread
+  C4 is woken by its closing flag, so the test must hold C4 inside its turn body until a go cell flips (the
+  runtime_close_5f pattern, an order-free atomic cell). Otherwise the property is restated as "the release does not
+  wait for C4". g_step / turn_root_step (57-65, 270-274): R0's turn stepping R so that R0's settle runs. The
+  property "R0's settle never takes a failed orphan" stays, moved into R0's own turn calling its settle directly,
+  with no child step.
+- lmx_model_family_close_32, root_record_5e, root_ingress_5b, orphan_mapped_17, scenario36, family_handoff: one
+  turn_step_child helper each (the stage-5 (d) migration), used to map or step. Read each use site.
+- lmx_msg_send_local_selftest: run_child_turn helper plus sched_step (111), the parent's scheduler step. The
+  sched_step checks are mapping properties and go; the send/admission checks convert.
+- lmx_sched_record_selftest: sched_step at 73 and the cursor. The scheduler record's cursor is the mapping: the test
+  is deleted, with the property named (round-robin cursor persistence). Check whether any policy cell survives.
+- lmx_message_exec_selftest.c: 24 turn_step_child, 5 run_child_turn, 14 root_turn, 3 sched_step, 2 exec_ui_step,
+  31 AFFINITY_UI. Read by section; the UI-affinity sections are the largest deletion.
+- tests/cancel_spin_host.c: 4 turn_step_child, 2 sched_step. Read.
+- run_turn_step_child_copies.ps1: the runner that checks the helper's copies agree. Goes with the helper.
