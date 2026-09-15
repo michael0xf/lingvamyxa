@@ -94,7 +94,13 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       m->mail, the message collection's (lm1/lm2 mail_lock 6+6, exec.c mailbox functions). The gates and the UAF kit
       are green.
 
-A1-A3. The arena (19.29.2), after S6 or interleaved where a stage touches the same record. Waits on 5.4.
+A1-A3. The arena (19.29.2), after S6 or interleaved where a stage touches the same record.
+    Mikhail on 5.4, verbatim (2026-09-15): "какая копия? У нас нет никаких копий message -- выше же с тобой обсуждали.
+    Есть только он сам и у него своя арена. Пускай это будет один alloc но это его собственный. При получении Message
+    который не L3 Thread присоединяется к арене получателя. Всё". So A3 no longer waits: the mailbox holds Messages,
+    each with its own arena, and a received Message that is not an L3 Thread joins the recipient's arena. The
+    envelope copy made at admission (LmxMsgCopy: calloc in host_post, send, send_graph, send_owned, send_cap,
+    post_dead, copy_dup, ui_request) is today's artefact and goes.
     A1. The Message's control record (LmxMsg, today calloc in slot_new 418) becomes a Structure in its own arena,
         created on the launching parent's lane; lmx_sched_record and lmx_root_record already follow that pattern.
     A2. The arena's bookkeeping (LmxOwnedRange and LmxMsgBlock records, calloc at 652/690/737/780/3633/3698) and the
