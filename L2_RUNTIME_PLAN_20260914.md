@@ -4035,3 +4035,20 @@ hangs again it stops and bisects the archive step in isolation.
 Coordinator's note for that bisect: the coordinator's docs commits and
 pushes run git on the same shared .git (docs-tmp worktree) throughout,
 so a repeat is to be timed against the plan's commit times on main.
+b5's ONE ROOT edit list for mixa_manager landed on sonnet/one-root-mixa
+f122adbe (ONE_ROOT_MIXA_EDITS.txt; checked): 179 lines across 75 .ps1
+files (74 matching, F4's count) plus 6 non-.ps1 lines (4 .lm2, run.sh,
+mixa_backend.h), every line quoted verbatim; grouped into 6 shapes: one
+shared definition (lib_l2_runtime_support.ps1's Add-L2RuntimeSupport, 4
+lines fixing 6 callers), four mechanical rules (shape A 70 lines, the
+A-climb 2 lines via $PSScriptRoot + "..\stg\l1_baseline", shape B 51
+lines, prose 45 lines), and one functional shape: $env:L2_RUNTIME_ROOT
+(7 lines), the switch that makes l2trans itself emit the stg-shaped
+#include lines in generated code, so it changes with O1, not on the O5
+text schedule. Flag: run_mixa_backend_win32_l2_parity.ps1 does not use
+the shared helper; its own copy reads a translation at a stg-relative
+path under Push-Location $RepoRoot (line 218), which breaks the moment
+O1/O2 land; ruled: it is pointed at Add-L2RuntimeSupport in the same
+landing rather than patched by three lines. b5 also reported that its
+first draft used condensed lists and scored 38 on its own falsifier, and
+was rewritten to quote every line before sending.
