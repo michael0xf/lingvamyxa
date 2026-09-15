@@ -99,10 +99,14 @@ M. The sequential mapping removed (X), after S3 and before S4.
     - What stays: R0's own turn on the bootstrap thread (lmx_msg_root_turn, lmx_msg_run_entry_turn). R0 is the
       bootstrap thread's own L3 Thread, not a child stepped by another thread; lmx_msg_map_child, which launches a
       child on its own thread.
-    The UI lane without stepping: an L3 Thread whose lane is the UI thread, which takes its own Messages from its own
-    mailbox. 19.28.R2.2 as written: "A request to another lane (mapping a child onto the UI lane) is a Message to that
-    lane's mailbox" (11503-11506). Work a Message wants done on the UI thread is a Message sent to the UI lane. No
-    other Message's turn runs on the UI thread. Proposed here, for Mikhail's agreement before any doc carries it.
+    The UI lane, Mikhail verbatim (2026-09-15): "Полоса на экране не может не быть L3 Thread. Message без L3 Thread это
+    просто письмо. Полоса же это полноценный объект. Объектов у нас не так много как в SmallTalk но все равно много.
+    Поэтому реализация L3 Thread планировщика который не запускает потоки детей а бегает по ним сам -- ближайшая
+    задача для myxa_manager"; on today's threadless lane stepped by R0: "это просто кривая реализация". So the UI
+    lane is a full L3 Thread with its own thread (the UI thread) and its own mailbox, launched by R0 like any child.
+    The sequential scheduler is not a core mechanism: a scheduler that runs over its attached Messages itself is a
+    variety of L3 Thread built in L2, first in mixa_manager (b5's ticket, design first). The runtime keeps nothing of
+    the sequential mapping and provides what any L3 Thread needs: a thread, a mailbox, launch and close of children.
     Tests migrated onto turn_step_child / run_child_turn in stage 5 (d), by name (grep counts of
     turn_step_child / run_child_turn / root_turn):
       lmx_model_family_close_32_selftest (3/1/1), lmx_model_family_release_17_selftest (7/2/4),
@@ -138,6 +142,13 @@ D. create_id and create-retry idempotence deleted (X), with S1's dead-code kind.
 
 O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced by the one core (X).
     Mikhail, verbatim (2026-09-15), to its real extent: "3- да, удаляйте целиком".
+    STOPPED 2026-09-15 under his standing rule (a contradiction, sent through the coordinator): b5's inventory
+    (sonnet/lock-inventory 19a95a26, LOCK_REMOVAL_OWN_INVENTORY.txt) finds the lm2 translator's code generator
+    (lm2/trans_l1_statement.lm2) emitting lm_message_thread_new/_begin_turn/_end_turn and
+    lm_own_arena_new_zero(thread, lm_message_thread_owner(thread), ...) in every translated program's main and every
+    heap allocation (123 matches), parser.lm2's per-thread registry component, and the REST providers'
+    runtime_admit_lmx / set_rest_lmx_provider. Whole deletion breaks every lm2-translated program, and the one core
+    has no lm2 entry point today. The stage waits for his word; nothing is deleted.
     Inventory, the stage's first line: who builds and uses it, by grep on cf326822.
     - lm2/own.lm2 (and its stg/l1_baseline/lm2 copy): the externals lm_message_thread_* (43: runtime_new/delete,
       pool_new/pump/delete/request_stop, new/start/join/destroy, send_lmx, begin_turn/end_turn, component_*,
