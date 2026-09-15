@@ -1000,6 +1000,14 @@ S4. The family tree and the mapping written only on the owner's lane (L2, L3), t
       change already ruled.
     - Two corrections to carry into this text when S4 starts: end_turn's committed/tracked walk is two loops at
       different lines, and the liveness reply's child_heard_at write is in lmx_msg_live_handle.
+    - Correction (b5 while writing the red-first checks; the coordinator, 2026-09-15): orphan_sweep's chain has no
+      public entry except lmx_msg_drive. Its lmx_msg_require_owner (lmx_message.lm1 2264-2265 at d8f758e6: the
+      attaching thread's id) already refuses a foreign thread, so no red case exists. By Mikhail's rule against
+      checks the spec does not require, there is no third guard. S4's code list is two guards: the caller-identity
+      guard in lmx_msg_exec_bind, and emergency_cancel's. The red-first acceptance is b5's two checks on
+      sonnet/s4-guard-checks a3576110, each calling from a spawned thread and expecting INVALID:
+      run_s4_guard_exec_bind in the exec selftest and run_s4_guard_emergency_cancel in cancel_spin_host.c. They are
+      measured red after the struct-field fix and D2 land.
 
 S5. The runtime-level lists (L5). Waits on 5.1.
     rt->slots, rt->n, the retire queue, the reap queue, rt->transport and e->ui_lane each either go or become a cell in
