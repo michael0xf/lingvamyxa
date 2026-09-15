@@ -1,0 +1,185 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# Stage 5 step (e) acceptance (L2_RUNTIME_PLAN_20260914.md item 5, step e;
+# spec 19.28.R2.2: one arena, one lane, one writer, and 19.29.6 stage-5
+# clarification (i): R0's management state lives in its own arena). The host
+# setters of runtime-level policy, lmx_msg_set_now (the logical clock) and
+# lmx_msg_set_orphan_retain (the orphan-retention policy), write R0's own
+# cells, so only R0's lane writes them: R0's own turn, or the host outside
+# any turn while the bootstrap is the host. A turn of any other Message, on
+# the host thread (a child stepped from R0's turn) or on a context worker,
+# is refused with INVALID and the value is unchanged. Written before the code
+# (2026-09-14): on today's runtime set_now checks host_is_owner alone, so a
+# child's turn on the host thread passes and the clock moves, and
+# set_orphan_retain checks nothing, so it passes from any thread; those lines
+# are red. The cells' location in R0's arena (owned ranges, rooted) is
+# checked through the record's accessors once (e)'s header exists; the lead
+# adds those lines in the (e) commit. Opt-in in run_model_scenario36.ps1
+# (-Tests) until (e) lands.
+#
+# Host-driven: R0 has P (created without a parent, host-run) and D (created
+# without a parent, mapped onto its own context by R0's turn).
+
+int: checks 0
+int: failures 0
+int: g_child_now 0
+int: g_child_retain 0
+int: g_worker_now 0
+int: g_worker_retain 0
+int: g_worker_done 0
+int: g_root_now 0
+int: g_root_retain 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+# P's turn on the host thread, stepped from R0's turn: it tries both setters
+# and records their statuses.
+fn: turn_child_setters (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    g_child_now: lmx_msg_set_now(rt, 9999U)
+    g_child_retain: lmx_msg_set_orphan_retain(rt, 55U)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# D's turn on its own context worker: the same two attempts, recorded under
+# the executor's lock, then done.
+fn: turn_worker_setters (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    int: a
+    int: b
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 1
+    if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
+        lmx_msg_env_release(got)
+    ---
+    c.free((cast: (@: void) got))
+    a: lmx_msg_set_now(rt, 8888U)
+    b: lmx_msg_set_orphan_retain(rt, 66U)
+    lmx_msg_exec_lock(rt)
+    g_worker_now: a
+    g_worker_retain: b
+    g_worker_done: 1
+    lmx_msg_exec_unlock(rt)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# R0's own turn: the setters succeed on R0's lane.
+fn: turn_root_setters (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    g_root_now: lmx_msg_set_now(rt, 6000U)
+    g_root_retain: lmx_msg_set_orphan_retain(rt, 120U)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# R0's own turn maps its child D onto a context; ctx is the test's cell, [0]
+# the child to map, [1] map_child's status.
+fn: turn_map_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_map_child(rt, who, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+[]: unsigned step_cell 2
+[]: unsigned map_cell 2
+
+# One input posted by the host thread.
+fn: post (@: LmxMsgRuntime rt; LmxMsgAddr: to; unsigned: id) int
+    @: LmxMsgEnv env
+    int: ok
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: 0
+    env\id: id
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: (cast: (int) id)
+    ok: lmx_msg_host_post(rt, to, env) = c.LMX_MSG_STAGED
+    c.free((cast: (@: void) env))
+    return: ok
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    unsigned: p 0U
+    unsigned: d 0U
+    unsigned: deadline
+    int: done 0
+    int: st
+    uchar: ini 1
+
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_root_addr(rt) != 0U, "the runtime and its root R0 exist")
+    if: rt = 0
+        return: 2
+
+    # --- (1) the host outside any turn is R0's lane while the bootstrap is
+    # the host: both setters succeed and the clock reads back.
+    check(lmx_msg_set_now(rt, 5000U) = c.LMX_MSG_OK && lmx_msg_now(rt) = 5000U, "from main the clock is set and reads 5000")
+    check(lmx_msg_set_orphan_retain(rt, 100U) = c.LMX_MSG_OK, "from main the orphan-retention policy is set")
+
+    # --- (2) a child's turn on the host thread, stepped from R0's turn, is
+    # not R0's lane: both setters refuse and the clock is unchanged.
+    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, p, turn_child_setters, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "P created as R0's child and bound")
+    step_cell[0]: p
+    step_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell))
+    check(st = c.LMX_MSG_OK && (cast: (int) step_cell[1]) = c.LMX_MSG_OK, "R0's turn stepped P's turn")
+    check(g_child_now = c.LMX_MSG_INVALID, "set_now from a child's turn on the host thread refuses")
+    check(g_child_retain = c.LMX_MSG_INVALID, "set_orphan_retain from a child's turn refuses")
+    check(lmx_msg_now(rt) = 5000U, "the clock is unchanged by the refused write")
+
+    # --- (3) a turn on a context worker is not R0's lane either.
+    check(lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, d, turn_worker_setters, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && post(rt, d, 7U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "D created as R0's child, bound, given an input")
+    map_cell[0]: d
+    map_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_map_child, (cast: (@: void) map_cell))
+    check(st = c.LMX_MSG_OK && (cast: (int) map_cell[1]) = c.LMX_MSG_OK, "R0's turn mapped D onto its own context")
+    deadline: c.GetTickCount() + 5000U
+    while: done = 0 && c.GetTickCount() < deadline
+        lmx_msg_exec_lock(rt)
+        done: g_worker_done
+        lmx_msg_exec_unlock(rt)
+        if: done = 0
+            c.Sleep(2U)
+        ---
+    ---
+    check(done != 0, "D's turn ran on its worker")
+    check(g_worker_now = c.LMX_MSG_INVALID, "set_now from a worker's turn refuses")
+    check(g_worker_retain = c.LMX_MSG_INVALID, "set_orphan_retain from a worker's turn refuses")
+    check(lmx_msg_now(rt) = 5000U, "the clock is still 5000")
+
+    # --- (4) R0's own turn is R0's lane: both setters succeed there.
+    st: lmx_msg_root_turn(rt, turn_root_setters, 0)
+    check(st = c.LMX_MSG_OK && g_root_now = c.LMX_MSG_OK && g_root_retain = c.LMX_MSG_OK && lmx_msg_now(rt) = 6000U, "from R0's own turn both setters succeed and the clock reads 6000")
+
+    deadline: c.GetTickCount() + 5000U
+    while: lmx_msg_exec_workers(rt) != 0 && c.GetTickCount() < deadline
+        lmx_msg_drive(rt, 6000U, 0U)
+        c.Sleep(2U)
+    ---
+    lmx_msg_exec_stop(rt)
+    lmx_msg_runtime_delete(rt)
+    c.printf("root record 5e: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0
