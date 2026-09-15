@@ -785,9 +785,29 @@ try {
                 $rec.cSHA256 = (Get-FileHash -LiteralPath $cpath).Hash
                 $ctext = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $cpath).ProviderPath)
                 $flags = $cflags
-                if ($ctext.IndexOf('l1src/p0.lm1.h') -ge 0) { $flags += ' -I lm1/build' }
+                # A fixture's own test header (run_l2trans translates it into
+                # lm1\build before the case) is translated here into this run's
+                # directory and searched first, so no leftover is ever read.
+                # The include decisions below read the C and these headers: a
+                # header that includes l1src/p0.lm1.h needs -I lm1/build too.
+                $includeText = $ctext
+                $testHeaders = @([regex]::Matches($ctext, '#include "(l2src/tests/[A-Za-z0-9_]+)\.lm1\.h"') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+                if ($testHeaders.Count -gt 0) {
+                    $caseHdrs = Join-Path $out ($case.stem + '_headers')
+                    foreach ($th in $testHeaders) {
+                        $thSource = $th + '.h.lm1'
+                        if (-not (Test-Path -LiteralPath $thSource)) { throw "missing test header source $thSource" }
+                        $thOut = Join-Path $caseHdrs ($th + '.lm1.h')
+                        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $thOut) | Out-Null
+                        $code = Invoke-Native ((Q $outputL1trans) + ' ' + (Q $thSource) + ' ' + (Q $thOut)) (Join-Path $out ($case.stem + '.header.log'))
+                        if ($code -ne 0) { throw "test header $thSource exit $code" }
+                        $includeText += [IO.File]::ReadAllText($thOut)
+                    }
+                    $flags = '-I ' + (Q $caseHdrs) + ' ' + $flags
+                }
+                if ($includeText.IndexOf('l1src/p0.lm1.h') -ge 0) { $flags += ' -I lm1/build' }
                 $support = 'l2src/lmx_poll_stub.c'
-                if ($ctext.Contains('"l2src/lmx_message.h"')) { $support = $objList; $flags += ' -I ' + (Q $hdrs) }
+                if ($includeText.Contains('"l2src/lmx_message.h"')) { $support = $objList; $flags += ' -I ' + (Q $hdrs) }
                 $code = Invoke-Native ("gcc $flags " + (Q $cpath) + ' ' + $support + ' -o ' + (Q $exe)) (Join-Path $out ($case.stem + '.gcc.log'))
                 if ($code -ne 0) { throw "gcc exit $code" }
                 $stdoutPath = Join-Path $out ($case.stem + '.stdout.txt')
