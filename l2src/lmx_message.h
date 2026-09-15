@@ -148,10 +148,6 @@ typedef struct LmxMsg {
      * requester, the bind kick); the lane that takes this Message's turn
      * clears it. Nothing is appended to a parent's cells from another lane. */
     int ready;
-    /* Allocation-free retire drain. Linked on LmxMsgExec.retire_head while
-     * eligible; not a ready queue. */
-    struct LmxMsg *retire_next;
-    int retire_queued;
     LmxMsgTurn turn;
     void *turn_ctx;
     /* Stage 3a (L2_RUNTIME_PLAN_20260914.md): the executor's bind record is
@@ -203,7 +199,6 @@ struct LmxMsgRuntime {
     void *host_sync;
     void *exec;
     unsigned next_addr;
-    unsigned root_seq;
     /* Stage 5 (e): R0's policy record (l2src/lmx_root_record.lm2), Structure data
      * in R0's arena: the clock, its test flag and a failed orphan's retention
      * (decision 17, LMX_MSG_ORPHAN_RETAIN by default), written only on R0's lane.
@@ -302,6 +297,8 @@ int lmx_msg_live_test_set_seq(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned v);
 int lmx_msg_live_test_set_wait_th(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned th);
 int lmx_msg_set_orphan_retain(LmxMsgRuntime *rt, unsigned retain);
 unsigned lmx_msg_now(LmxMsgRuntime *rt);
+/* S5: the next Message address from the runtime's order-free atomic counter. */
+LmxMsgAddr lmx_msg_addr_take(LmxMsgRuntime *rt);
 int lmx_msg_endp_retain(LmxMsg *m);
 void lmx_msg_endp_release(LmxMsg *m);
 int lmx_msg_child_unlink(LmxMsg *parent, LmxMsg *child);
