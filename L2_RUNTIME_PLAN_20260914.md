@@ -1743,3 +1743,14 @@ FAIL" in the gate log (the tripwire's abort line reaches the console log,
 two lines in runs C and F); then S3's red test (one wake per lane,
 test-only, 0c's, stacked on cf326822); step 2's default-set commit merges
 over lane_oracle afterwards.
+Mikhail confirmed the coordinator's reading of 5.5 (2026-09-15, "ДА"): for
+now every L3 Thread runs on its own OS thread, and the sequential mapping
+(children without a thread of their own, stepped by the parent's thread:
+run_child_turn, sched_step, the host lane, the UI lane's stepping) is
+removed from the runtime until the core is exact by the spec. Entered in
+spec 19.28.R2.2 (after his 2026-09-15 clarification) and the model's
+section 29 with his sentence verbatim. For the lock-removal design this is
+a stage of its own, larger than S4: the host-run mapping and its tests
+(stage 5 (d)'s turn_step_child migrations, the sequential scheduler
+record's cursor, the UI lane as a stepped lane) are X; a child is launched
+on its own thread or not at all; the lead re-plans S4-S6 on it.

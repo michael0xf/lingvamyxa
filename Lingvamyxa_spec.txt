@@ -11544,6 +11544,22 @@ as described in the spec (19.29.2); without it a Message makes no sense).
 Deleted the same day by his order: the former item (5) of the ownership list
 above (runtime-level structures kept under the executor's lock), written
 2026-09-14 by the review chat as its own consequence, never his words.
+Clarification (2026-09-15, Mikhail). On closing a parent whose children have no
+thread of their own, verbatim: "Закрытие родителя это авария. Каждый ребенок
+закрывает себя сам и для его детей это такая же авария. Если дети L3 Thread
+но реализация такая что у них нет своего потока, а они последовательно
+выполняются, то это нюансы реализации. Разумеется в этом случае закрытие
+родителя затягивается так как планировщик должен пройтись и выполнить чужую
+работу -- но зачем вам вообще сейчас такие потоки если вы не можете даже ядро
+архитектуры запилить точно по спеке?" (closing a parent is an emergency; each
+child closes itself, and for its children it is the same emergency; children
+that are L3 Threads without a thread of their own, run sequentially, are an
+implementation nuance that drags the parent's close out with others' work; but
+why have such threads at all now, when the core is not yet built exactly by the
+spec?). Confirmed by him the same day ("да") in this wording: for now every L3
+Thread runs on its own OS thread, and the sequential mapping (children without
+a thread of their own, stepped by the parent's thread) is removed from the
+runtime until the core is exact by the spec.
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
