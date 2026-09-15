@@ -2512,3 +2512,18 @@ and the source deletions proceed, the CMake and generated-C groups stay
 held on the tree question. 0c's strict wake probe (inbox beside admits, up
 to 1024 pairs with a cap line, both variants) is ready and runs in a slot
 after O1's measure.
+Mikhail on the two trees (2026-09-15, verbatim): "stg/l1_baseline был у них
+стабильной сборкой на которой они пилили stg\l1_baseline\l2src то есть и
+stg\l1_baseline\l1src был стабильной самосборкой. А lingvamyxa\l1src была
+разработка текущего L1. lingvamyxa\lm1 \lm2 это по-моему устаревшие
+исходники" (stg/l1_baseline was their stable build on which they developed
+stg/l1_baseline/l2src, so stg/l1_baseline/l1src was a stable self-build
+too; lingvamyxa/l1src was the development of the current L1;
+lingvamyxa/lm1 and lm2 are, in my opinion, obsolete sources). Measured
+alongside: the root has l1src (the current L1), lm1/build (its generated C
+plus the dead chain's trans, trans_library, rest and vcpkgFetch files) and
+lm2/; stg/l1_baseline has its own l1src and lm1/build, l2src (the core,
+l2trans, every gate), gate.ps1, buildCore.lm0.bat, oldchain/ and
+README.snapshot-origin.txt; every runner references stg/l1_baseline's
+l1src. The consequence is put to him for confirmation before anything
+moves.
