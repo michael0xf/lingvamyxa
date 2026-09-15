@@ -8,6 +8,11 @@ predef: "l2src/tests/repro_foreign_int_alias_local.h.lm1"
 # porting l1src/parser.lm1's lm_p0_stream_apply_item_event (parser-l2
 # Stage d Slice 5), which declares `LmP0TrailerRole: trailer_role` as
 # its first local.
+#
+# d6 (6f's review): a second int alias from the same header, l1src/p0.h
+# `typedef int LmP0NodeKind;`, so the fix is shown to be l2trans's alias
+# table (l2_int_alias) and not the one name: removing either entry makes
+# only that alias's local fail.
 
 fn: probe_foreign_int_alias_local () int
     LmP0TrailerRole: trailer_role
@@ -15,6 +20,12 @@ fn: probe_foreign_int_alias_local () int
     return: trailer_role
 end: probe_foreign_int_alias_local
 
+fn: probe_foreign_int_alias_node_kind () int
+    LmP0NodeKind: node_kind
+    node_kind: 0
+    return: node_kind
+end: probe_foreign_int_alias_node_kind
+
 fn: main () int
-    return: probe_foreign_int_alias_local()
+    return: probe_foreign_int_alias_local() + probe_foreign_int_alias_node_kind()
 end: main

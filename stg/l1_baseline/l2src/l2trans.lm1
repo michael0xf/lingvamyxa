@@ -1997,6 +1997,31 @@ fn: l2_frame_head (const: @(LmP0Node node); const: @(char name)) int
         return: 0
 return: l2_text_eq(node\as\frame\head, name)
 
+# Foreign int aliases L2 declares by name: one table, one entry per alias with
+# the C header line it comes from. An own local of any alias is int storage in
+# the arena (int's own code 3), read and stored as int. The value is the alias's
+# own formal and return code when it has one (10: LmP0TrailerRole, emitted by
+# name), else 3; 0 means not an alias. A formal or return of an alias without an
+# own code stays on the by-value foreign path (l2_foreign_byvalue).
+# If this table grows past a handful, the form to move to is a declaration in the
+# unit's predef header naming the alias's storage (the unit tells the translator;
+# no knowledge of C headers inside l2trans), a language surface for Mikhail.
+fn: l2_int_alias (const: @(LmP0Text t)) int
+    if: t = 0
+        return: 0
+    # l1src/p0.h: typedef int LmP0TrailerRole;
+    if: l2_text_eq(t, "LmP0TrailerRole")
+        return: 10
+    # l1src/p0.h: typedef int LmP0NodeKind;
+    if: l2_text_eq(t, "LmP0NodeKind")
+        return: 3
+return: 0
+
+fn: l2_int_alias_head (const: @(LmP0Node node)) int
+    if: node = 0 || node\kind != c.LM_P0_NODE_FRAME || node\as = 0 || node\as\frame = 0
+        return: 0
+return: l2_int_alias(node\as\frame\head)
+
 fn: l2_empty_struct (const: @(LmP0Node node)) int
     if: node = 0 || node\kind != c.LM_P0_NODE_STRUCTURE || node\as = 0
         return: 0
@@ -5247,7 +5272,7 @@ fn: l2_is_asgn (const: @(LmP0Node stmt)) int
     h: stmt\as\frame\head
     if: h = 0 || l2_ident(h) = 0
         return: 0
-    if: l2_frame_head(stmt, "if") || l2_frame_head(stmt, "else") || l2_frame_head(stmt, "while") || l2_frame_head(stmt, "for") || l2_frame_head(stmt, "return") || l2_frame_head(stmt, "fn") || l2_frame_head(stmt, "sub") || l2_frame_head(stmt, "end") || l2_frame_head(stmt, "char") || l2_frame_head(stmt, "int") || l2_frame_head(stmt, "size_t") || l2_frame_head(stmt, "unsigned") || l2_frame_head(stmt, "ulong") || l2_frame_head(stmt, "LmP0TrailerRole") || l2_frame_head(stmt, "@")
+    if: l2_frame_head(stmt, "if") || l2_frame_head(stmt, "else") || l2_frame_head(stmt, "while") || l2_frame_head(stmt, "for") || l2_frame_head(stmt, "return") || l2_frame_head(stmt, "fn") || l2_frame_head(stmt, "sub") || l2_frame_head(stmt, "end") || l2_frame_head(stmt, "char") || l2_frame_head(stmt, "int") || l2_frame_head(stmt, "size_t") || l2_frame_head(stmt, "unsigned") || l2_frame_head(stmt, "ulong") || l2_int_alias_head(stmt) != 0 || l2_frame_head(stmt, "@")
         return: 0
     if: l2_find_method(h) >= 0 || l2_is_known(h)
         return: 0
@@ -6978,10 +7003,8 @@ fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
         ty: 6
     if: l2_frame_head(stmt, "ulong")
         ty: 36
-    # l1src/p0.h: `typedef int LmP0TrailerRole;`. As a formal or return it keeps
-    # its own code (10); as an own local it is int storage in the arena, so it
-    # takes int's own code and reads and stores as int.
-    if: l2_frame_head(stmt, "LmP0TrailerRole")
+    # A foreign int alias (l2_int_alias's table) is int storage as an own local.
+    if: l2_int_alias_head(stmt) != 0
         ty: 3
     if: ty = 0
         return: 0
@@ -9289,7 +9312,7 @@ fn: l2_int_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text ou
     \out_name: 0
     if: node = 0 || node\as = 0
         return: l2_error(path, node, "incompatible entry signature")
-    if: l2_frame_head(node, "int") = 0 && l2_frame_head(node, "char") = 0 && l2_frame_head(node, "size_t") = 0 && l2_frame_head(node, "unsigned") = 0 && l2_frame_head(node, "ulong") = 0 && l2_frame_head(node, "LmP0TrailerRole") = 0
+    if: l2_frame_head(node, "int") = 0 && l2_frame_head(node, "char") = 0 && l2_frame_head(node, "size_t") = 0 && l2_frame_head(node, "unsigned") = 0 && l2_frame_head(node, "ulong") = 0 && l2_int_alias_head(node) != 10
         return: l2_error(path, node, "incompatible entry signature")
     if: node\as\frame\trailer != 0
         return: l2_error(path, node, "unsupported trailer")
@@ -9329,7 +9352,7 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
     if: l2_frame_head(node, "ulong")
         \out_ty: 36
         return: l2_int_formal(node, path, out_name)
-    if: l2_frame_head(node, "LmP0TrailerRole")
+    if: l2_int_alias_head(node) = 10
         \out_ty: 10
         l2_need_p0: 1
         return: l2_int_formal(node, path, out_name)
@@ -9635,7 +9658,7 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     # The Message address of the Message runtime adapter, unsigned.
     if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "LmxMsgAddr")
         l2_m_ret[l2_m_n]: 30
-    if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "LmP0TrailerRole")
+    if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_int_alias(field\value\as\atom) = 10
         l2_m_ret[l2_m_n]: 10
         l2_need_p0: 1
     if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_FRAME && field\value\as != 0 && field\value\as\frame != 0
@@ -9713,7 +9736,7 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     ---
     # Any other return type name is a by-value foreign type (Stage B), spelled
     # as written, `T` or `c.T`.
-    if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "int") = 0 && l2_text_eq(field\value\as\atom, "size_t") = 0 && l2_text_eq(field\value\as\atom, "unsigned") = 0 && l2_text_eq(field\value\as\atom, "ulong") = 0 && l2_text_eq(field\value\as\atom, "void") = 0 && l2_text_eq(field\value\as\atom, "LmP0TrailerRole") = 0 && l2_text_eq(field\value\as\atom, "LmxMsgAddr") = 0
+    if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "int") = 0 && l2_text_eq(field\value\as\atom, "size_t") = 0 && l2_text_eq(field\value\as\atom, "unsigned") = 0 && l2_text_eq(field\value\as\atom, "ulong") = 0 && l2_text_eq(field\value\as\atom, "void") = 0 && l2_int_alias(field\value\as\atom) != 10 && l2_text_eq(field\value\as\atom, "LmxMsgAddr") = 0
         l2_m_ret[l2_m_n]: l2_foreign_byvalue(field\value\as\atom)
         if: l2_m_ret[l2_m_n] < 100
             return: l2_error(path, fn_node, "incompatible entry signature")
