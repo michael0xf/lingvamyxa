@@ -137,7 +137,7 @@ fn: p0_append_compact_atom_pieces (@: LmP0Document document; @: LmP0Structure st
             if: (p0_find_matching_bracket(document, text, end_index, i, line, column, @ close_index) = 0)
                 return: 0
             inner_index: 0U
-            if: (lm_p0_parse_fields_until(document, structure, ((text + i) + 1U), ((close_index - i) - 1U), line, ((column + i) + 1U), ((offset + i) + 1U), 0U, 0U, 0U, @ inner_index) = 0)
+            if: (p0_parse_fields_until(document, structure, ((text + i) + 1U), ((close_index - i) - 1U), line, ((column + i) + 1U), ((offset + i) + 1U), 0U, 0U, 0U, @ inner_index) = 0)
                 return: 0
             if: (p0_append_atom_slice(document, structure, text, length, line, column, offset, close_index, (close_index + 1U)) = 0)
                 return: 0
@@ -1189,3 +1189,28 @@ fn: p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0IndentSt
         return: p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
     return: 0
 end: p0_parse_fields_until_with_layout
+
+# Slice e6: thin wrappers around e5's own main loop. Ported straight
+# from the oracle, unedited. l1src/parser.lm1:3022-3038. Both calls
+# to p0_parse_fields_until_with_layout are in-unit (e5, same file),
+# so this doesn't reach it through a prototype: -- translating the
+# whole unit hits e5's own already-reported blocker (10f294a2) first,
+# at p0_stream_event_new(), regardless of e6's own correctness.
+
+fn: p0_parse_fields_until (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: initial_source_level; @: size_t index) int
+    @: LmP0IndentStack indent_stack
+    int: status
+    indent_stack: p0_indent_stack_new_empty()
+    if: (indent_stack = 0)
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating indentation stack")
+        return: 0
+    status: p0_parse_fields_until_with_layout(document, indent_stack, structure, text, length, line, column, offset, flags, short_source_level, initial_source_level, initial_source_level, index)
+    p0_indent_stack_delete(indent_stack)
+    return: status
+end: p0_parse_fields_until
+
+fn: p0_parse_fields_into (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset) int
+    size_t: index
+    index: 0U
+    return: p0_parse_fields_until(document, structure, text, length, line, column, offset, c.LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR, 0U, 0U, @ index)
+end: p0_parse_fields_into

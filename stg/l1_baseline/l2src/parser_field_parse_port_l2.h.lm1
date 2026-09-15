@@ -69,6 +69,11 @@ include: "l1src/p0.lm1.h"
 # prototype above -- e5 never calls scan_compact_atom_piece or any of
 # e4b's blocked predicates directly. child_indent_stack (a bare
 # LmP0IndentStack local) needs the IndentStack-foreign translator.
+#
+# Slice e6, the p0_parse_fields_until/_into wrappers, removes lm_p0_
+# parse_fields_until's oracle-native entry (ported for real this
+# slice, same unit as e5 which calls it) -- no other change to this
+# header.
 
 prototype:
     fn: lm_own_new_zero (size_t: size) @: void
@@ -84,7 +89,6 @@ prototype:
     fn: lm_p0_append_field (@: LmP0Document document; @: LmP0Structure structure; @: LmP0Node nd) int
     fn: lm_p0_document_register_lazy_text (@: LmP0Document document; const: @(char source); size_t: length; const: @@(char patch_slot); size_t: line; size_t: column) int
     fn: lm_p0_scan_compact_atom_piece (const: @(char text); size_t: end_index; size_t: start; int: allow_signed_number) size_t
-    fn: lm_p0_parse_fields_until (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: initial_source_level; @: size_t index) int
     fn: p0_is_horizontal_space (char: value) int
     fn: p0_is_line_break (char: value) int
     fn: p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
