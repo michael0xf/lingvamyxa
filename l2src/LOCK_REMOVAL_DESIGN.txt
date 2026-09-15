@@ -515,8 +515,10 @@ M. The sequential mapping removed (X), after S3 and before S4.
       bootstrap == 0 (site run_child_turn) and the UI step from R0's turn (site ui_step). run_entry_turn's bootstrap
       is the host mapping and is not marked. It re-cuts fable/m-acceptance 03fc0f65 (the same two edits on b4e1296d).
     - Red: on 03fc0f65 the coordinator measured run_port_message -LaneCheck exit 1 in 15 s at "site=ui_step owner=6"
-      and the plain run parity PASS in 56 s; the red on 199dab84 is measured by the coordinator after e9's cold gate
-      record on 80101431 and is recorded here when it arrives.
+      and the plain run parity PASS in 56 s. On 199dab84 (exec-3a, the pin at build/l1trans/gen2, after e9's cold
+      gate record on 80101431: 298 s, 27 of 27, tag selfbuild/80101431) the coordinator measured run_port_message
+      -LaneCheck exit 1 in 14 s at "LANE MAP FAIL site=ui_step owner=6" and the plain run exit 0 in 52 s, parity PASS,
+      101 methods redirected. Falsify: git ls-remote origin fable/m-acceptance-oneroot prints 199dab84.
     - Green: M's branch merged with 199dab84 gives -LaneCheck exit 0 and the plain run PASS; the functions deleted
       (grep at 0 for run_child_turn, sched_step, exec_ui_step, turn_step_child, AFFINITY_UI outside the oracle);
       every converted test green on its own thread; the 33 gates.
