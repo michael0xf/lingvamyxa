@@ -314,19 +314,35 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
         3419 in lmx_msg_exec_stop) and ctx_visit_stop_retire_waits (3373-3382): deleted. The worker already reads
         e->stopping each round (3074); the stop writes it and returns without waiting.
     R8. context_worker (Win32 3071-3132, pthread twin 3164-3198): each round is the L3 Thread's model round
-        (Mikhail, verbatim: "L3 Thread нечего делать на endturn???"): its end_turn work, then the look into its
-        mailbox, then a turn when there is a Message. The end_turn work it has today is lmx_msg_live_check
-        (lmx_message.lm1 2785-2857), which is two spec checks and is named by them, not by a timer:
-        (1) a Message whose own query to its parent (live_query_id, live_query_at) is older than the threshold marks
-            itself closing: a child closing itself after prolonged absence of its parent (19.28.R2.2; the child
-            polls its parent, 19.29.7.1);
-        (2) the Message, as a parent, marks closing each tracked, committed child that is not dead or stopped and
-            whose child_heard_at is older than the threshold (19.28.R2.2, removal on timeout).
+        (Mikhail, verbatim: "L3 Thread нечего делать на endturn???"; and "Сборщик мусора в графе на endturn
+        отрабатывает -- это есть в спеке"). Its end_turn work, in this order:
+        (1) the local collection of the Message's arena. 19.29.8 (spec line 13367): "The local collection schedule is
+            not open: it runs at the common end-turn boundary fixed by section 19.29.4." Today lmx_msg_arena_collect
+            (lmx_message.lm1 326) runs inside lmx_msg_end_turn (lm1 1732; calls 1800, 1847), which run_one reaches
+            at exec.c 2571/2601/2634. S3 keeps it at that boundary, unchanged.
+        (2) the query to its parent when due, and the reading of the reply from its own mailbox. The spec's child
+            poll paragraph (after 19.29.8, lines 13147-13195): "The child's end_turn is the check/send opportunity";
+            the pending query and the timeout decision are the child's own; a parent sends no automatic polls. Today
+            lmx_msg_live_query (lm1 2628) sends it and lmx_msg_live_handle (lm1 2698) takes the reply, but only
+            tests call them (lmx_message_selftest.lm1, lmx_model_liveness_33_selftest.lm1, the executor selftest
+            1185). Calling them from the round is functionality on the kernel (L3T rows) and belongs to S4, where
+            the parent capability (C4) is decided; S3 does not add it.
+        (3) the timeout evaluation, lmx_msg_live_check (lm1 2785-2857), two spec checks named by what they do:
+            (a) a Message whose own query to its parent (live_query_id, live_query_at) is older than the threshold
+                marks itself closing: a child closing itself after prolonged absence of its parent (19.28.R2.2;
+                the child polls its parent, 19.29.7.1);
+            (b) the Message, as a parent, marks closing each tracked, committed child that is not dead or stopped
+                and whose child_heard_at is older than the threshold (19.28.R2.2, removal on timeout).
+            Today the runtime calls it only from context_worker (exec.c 3126), driven by the 20 ms timeout; from S3
+            it runs in every round when the threshold is set, and the timer goes.
+        (4) the inspection of its children's control flags during its own turns (the child poll paragraph: "inspecting
+            their local Message control flags during its own turns is permitted and required").
+        (5) closing and settling (19.29.8), as lmx_msg_end_turn does them today.
+        Then the look into its mailbox under synchronized, and a turn when there is a Message (take_this, run_one).
         The two-handle WaitForMultipleObjects with INFINITE or 20 ms (3097-3131) and the pthread cond wait
-        (3193-3196) go, and the 20 ms timer with them: the two checks run in every round when the threshold is set.
-        After a round that found neither mail nor work, one implementation line, the coordinator's and not part of
-        the model: SwitchToThread() on Win32, sched_yield() on pthreads. The loop's other checks stay (e->stopping,
-        the rec gone or UI).
+        (3193-3196) go. After a round that found neither mail nor work, one implementation line, the coordinator's
+        and not part of the model: SwitchToThread() on Win32, sched_yield() on pthreads. The loop's other checks
+        stay (e->stopping, the rec gone or UI).
     R9. host.c: lmx_msg_host_wake (148-168, host.h 13; callers lmx_message.lm1 974, lmx_message.lm2 1030) deleted
         with its callers; lmx_msg_host_shutdown keeps writing shutting_down under the host lock but its SetEvent /
         pthread_cond_broadcast (182, 187-188) go; lmx_msg_host_wait (194-, lmx_message.h 289) becomes one
