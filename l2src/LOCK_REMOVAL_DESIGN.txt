@@ -492,7 +492,11 @@ M. The sequential mapping removed (X), after S3 and before S4.
       946-949), create_prepare's UI_LANE_ID refusal (lm1 1108, lm2 1168), lmx_msg_sched_step (lm1 2581, lm2 2678).
     - l2src/lmx_message.h: LMX_MSG_UI_LANE_ID, LMX_MSG_AFFINITY_UI, lmx_msg_exec_has_ui_lane, lmx_msg_exec_ui_step,
       lmx_msg_sched_step, lmx_msg_run_child_turn; l2src/lmx_message_exec.h: its copies and take_ui/ui_request.
-    - l2src/lmx_sched_record.lm2 and .h.lm1: lmx_sched_record_cursor / set_cursor.
+    - l2src/lmx_sched_record.lm2 and .h.lm1: lmx_sched_record_cursor / set_cursor. Decided at the cut (lead; no lock,
+      wait or signal; the coordinator recorded it): the unit goes whole, not only the cursor. sched_step was the only
+      creator of LmxMsg.sched_rec and nothing reads the policy cell, so the record, sched_rec, its header
+      declarations, run_sched_record.ps1 with its selftest and gate row, and l2units_build's -Exclude go.
+    Core commit: d6/m-sequential 793c267f. The default gate set is 30 rows (sched_record and turn_step_child gone).
     - Fields (the table's stage M): LmxMsg.mapped, .ui_pending, .ready; LmxMsgExecBind.affinity, .held/.held_by,
       .gone; LmxMsgBindWait.retired, .rec; LmxMsgCtxPack.wait.
     - l2src/run_turn_step_child_copies.ps1 and its run_gates.ps1 row go with the helper.

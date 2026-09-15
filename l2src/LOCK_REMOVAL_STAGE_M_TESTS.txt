@@ -10,6 +10,19 @@ test. An ordering claim between two lanes is not made; what one lane has done is
 Message's flags (running, success, handoff_safe) at the moment the acting call returns, and a later effect is read on
 later rounds.
 
+Rulings for the conversions (the coordinator, 2026-09-15, after the core commit d6/m-sequential 793c267f):
+1. A test's observation loop is yield rounds: SwitchToThread between reads, no Sleep, no wall clock, no round bound.
+   The runner's timeout is the one place "too long" is decided; the test prints the property it is reading when the
+   loop starts, so a hang names itself in the log.
+2. Every pre-existing go cell in a test M converts (orphan_mapped_17's g_go and the like) goes in the same commit,
+   the property restated by flag reads as in family_release_17.
+Split (accepted): d6 the core, lmx_message_exec_selftest.c and tests/cancel_spin_host.c, the runners and the landing;
+b5 the send_local, family_handoff and adopt_unrooted tests; e9 the run_model_scenario36 set (liveness_33,
+family_close_32, family_release_17, orphan_mapped_17, scenario36, root_ingress_5b, root_record_5e), whose rt\n pins
+counting the UI lane shift by one. Each branches from 793c267f, measures its own runner and pushes a branch for d6.
+Also in the core commit: entry_turn's two UI lane checks (87/88) become "the runtime creates R0 alone, no UI lane:
+one slot"; lmx_model_ui_lane_3d_selftest and lmx_sched_record_selftest are deleted.
+
 Each test's step uses, and a first guess to be confirmed by reading every check label before M's commit:
 - lmx_model_ui_lane_3d_selftest: exec_ui_step 12 checks of serving order ("readiness order, not family order",
   "A once then B", stale request dropped). These are properties of the UI take: deleted. The UI lane as an L3 Thread
