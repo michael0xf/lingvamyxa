@@ -268,6 +268,15 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       - lmx_msg_exec_dispose_mark finds p and c with lmx_msg_self_or_find (2), and dispose_child and settle_child
         (1 each) likewise.
         Plan: p is the turn's own record, c comes from p's child list, and the chain passes c down.
+      First cut measured (2026-09-15, d6/lock-s2 ab04de0e; scratch merge 22975ab1 = ab04de0e + c8f9cb50, never
+      pushed):
+      - run_port_message plain on ab04de0e: parity PASS in 48 s, 102 methods (97 plus five record-form methods);
+      - with the counter built in: parity PASS;
+      - reference.exe twice with LMX_LOOKUP_COUNT=1: "lookup walks: C1=0 C2=1 turn_other=17 host=2830688", then
+        "... host=2611038" (red on c8f9cb50: C1=112 C2=1 turn_other=38);
+      - without the variable: 0 report lines.
+      The remaining C2 is the generated l2_program_turn's own lookup. Its emitter moves to lmx_msg_turn_self next,
+      together with the mode 3 retarget.
       What the green then measures: no walk of the runtime's tree from a turn's C1/C2 site. A scan of the caller's
       own child list for a child address is not a lookup the counter hooks, and it is the design's "parent's child
       pointer"; stated here so that nobody reads the green as more than that.
