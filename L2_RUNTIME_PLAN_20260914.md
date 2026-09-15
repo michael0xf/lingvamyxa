@@ -5514,3 +5514,15 @@ and S2 landed (no wake, wait or join; no sequential mapping or core UI
 lane; no create_id; no address lookup on the C1/C2 paths). Next: main,
 then S4 (b5's emergency_cancel guard with its checks re-cut off
 952d8e31), e9's gate record on 952d8e31 first.
+Main 31866fdb = 92645e94 + integration 952d8e31 (the lead, 2026-09-15; 8
+files, no conflict); the S2 scratch trees removed. A crossing: the lead
+began S4's guard as code on d6/lock-s4 while b5 had the same guard as
+its ticket on sonnet/s4-guard; ruled by the coordinator: b5 codes the
+guard (its checks are there), the lead drops d6/lock-s4's code, writes
+S4's section (site list 108e340a, the one guard through
+mapping_authority_locked's contract, the acceptance b5's red check
+turning green plus the exec_bind guard-holds check, the falsifier the
+inverted condition), lands b5's branch with land_base2.sh when green,
+and meanwhile writes S5's design on the S5 lists (f86a85ad) and the S6
+census (65a7ec63), S5's acceptance defined with the coordinator before
+its code.
