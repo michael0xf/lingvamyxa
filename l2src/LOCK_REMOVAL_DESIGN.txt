@@ -1637,6 +1637,39 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         of 12766-12771's bookkeeping, so (a) keeps the mechanism and deletes only what S6 is about, the exec lock.
         If the impersonation is what is objected to, the honest S6-1 change writes that bookkeeping without
         borrowing the identity, rather than removing the close.
+    - RESOLVED (2026-09-15, the coordinator on d6's measurement): the mechanism stays; S6-1 does the spec's "later"
+      and writes it as R0's maintenance acting as itself.
+      - lmx_msg_end_turn's guard takes a second branch, lmx_msg_maintenance_close_ok (lm1 and lm2): the host is
+        owner, the Message is unbound, closing and not exec_live. That guard was the ONLY thing the TLS borrow
+        served: everything past it works on the record (self_or_find falls back to the tree walk,
+        request_children_close re-finds by address, arena_collect takes the record). exec_unbound_close therefore
+        no longer borrows the turn identity. require_turn itself is untouched, since widening it would have
+        loosened send, recv, fail, live_query and live_handle too.
+      - Rule (1) as first ruled -- a parent refuses to bind a child whose close it requested -- is WITHDRAWN, and
+        the refutation is a measurement, not an argument: implemented literally, port_message did not go red, it
+        HUNG at the executor selftest's close-path case (the 300 s watchdog). That fixture binds uc after its close
+        is requested (stop, end_turn, pump set closing, then exec_bind + start_contexts) precisely so the closing
+        Message runs its closing turn on its own context, which is spec 12762-12765: "a child on its own context
+        runs its closing turn there".
+      - unbound_held stays, as an atomic cell with one writer, R0's maintenance: __atomic_store_n around the close,
+        __atomic_load_n in exec_bind_mode, no lock, refusing a bind only while the cell names that exact address.
+        The probe is unaffected by construction: exec_fields counts "->unbound_held" lines without "__atomic_", and
+        all 25 field lines carry it (measured 0).
+      - Scope of the maintaining lane (the coordinator's addition, checked against the fixtures rather than
+        assumed): it is the unbound closing Messages whose parent has no lane; a live parent's unbound closing
+        child is the parent's own act on the parent's lane. Measured on the fixtures, the two do not yet divide
+        anything, because in every case with a LIVE parent that parent is itself unbound, so its lane IS the host,
+        and drive runs on that same thread:
+        - close-path: pc is R0's child and is never bound (uc is the case's only bind), so cc's parent has no lane
+          of its own; main runs pc's turns;
+        - exec selftest 7458: g is unbound and its live parent P is unbound too;
+        - family_close_32 and family_release_17: every Message is bound, and the fixtures unbind the child before
+          drive, so the parent is stopped and the child has no lane -- squarely the maintaining lane's scope;
+        - liveness_33: F is unbound under a stopped Q, likewise.
+        No case has two lanes acting on one child. The division becomes real only when parents have their own
+        threads; until then the cell is defence, as the coordinator put it, not the ordering itself.
+      - Measured after the rewrite: run_port_message green, "lmx_message parity PASS ... 103 methods redirected"
+        (102 before; the new method is lmx_msg_maintenance_close_ok).
     - Red measured by d6 (2026-09-15, d6/lock-s6-red 695d54fc = 8eeb094f plus l2src/run_lock_s6_probe.ps1; builds
       nothing): -Part all exits 1 with "S6 probe: exec_lock_calls=601 exec_lock_decl=11 host_lock=43 exec_fields=27
       | refs=349 runtime_lists=36", S6-1 RED, S6-2 RED.
