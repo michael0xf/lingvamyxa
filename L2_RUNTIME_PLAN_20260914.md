@@ -5837,3 +5837,13 @@ landing red on expiry, never a bare wait; and the coordinator checks a
 landing's gate-log mtimes itself once it runs past its expected time,
 instead of waiting on the lead's message; e9 gets the archive-hang
 isolation ticket if the hand re-run reproduces it.
+S5's relaunch up (the lead, 2026-09-15, about 19:10): land_s5.sh 3e6fc02a
+1f5b0c82, the old tree killed, nothing pushed; the same git archive
+finished by hand in 1 s (a 1.38 MB zip), so the hang is intermittent; a
+watchdog prints the live git/powershell processes and exits the landing
+if nothing under wti/build is written for 15 min. The coordinator's
+check of its own git activity: no docs commit within a minute of either
+hang's start (16:37:05 today: the nearest at 16:33:01; 08:31:13 at S3's
+landing #3: the nearest at 08:29:10 and 08:33:44), so a coincident
+docs push is not the cause on the evidence; the cause stays open for
+e9's isolation if it recurs.
