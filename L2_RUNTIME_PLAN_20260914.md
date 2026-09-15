@@ -4023,3 +4023,15 @@ and mixa_backend.h comments), file:line, current text, replacement with
 the root-relative path, grouped by the variable or helper carrying the
 path where one exists; any runner that copies or builds under stg
 flagged.
+S3 landing #3 (merge e9d43e0c) stopped by an environment hang (the lead,
+2026-09-15): port_message twice, run_lmx Message, scenario36 green; gates
+reached c_scanners (11 of 33 logged, all prior PASS) and hung in
+run_candidate_c_scanners.ps1:49's git -C wti archive (git.exe one thread,
+wait reason Executive, 0.016 s CPU over 5 min, no zip); no other git
+process seen, no gc or lock files in the shared .git; the same gate
+passed in 22 s on landing #2. The lead killed that git.exe, the landing
+exits unpushed, land_s3.sh c063fd00 51219ff9 relaunches; if c_scanners
+hangs again it stops and bisects the archive step in isolation.
+Coordinator's note for that bisect: the coordinator's docs commits and
+pushes run git on the same shared .git (docs-tmp worktree) throughout,
+so a repeat is to be timed against the plan's commit times on main.
