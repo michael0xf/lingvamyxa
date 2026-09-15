@@ -4328,3 +4328,11 @@ measured commit, the pin, the fixed-point line, the eight generated-C
 blob ids, who measured), committed and pushed right after on the same
 branch, so the mark travels with the checkout and with merges. Both are
 done by the landing scripts and e9's gate record after every PASS.
+Mikhail (2026-09-15, verbatim): "то есть чтобы в коммитах было понятно где исходники успешно собрали сами себя" (so that the commits show where the
+sources built themselves successfully). Hence the mark's form in the
+history: the measured commit is never amended; right after it, on the
+same branch, the log commit whose subject is "SELF-BUILD OK <hash>:
+fixed point 8 of 8, pin <pin>" and whose only change is the appended
+SELF_BUILD_LOG.txt line, plus the tag selfbuild/<hash> on the measured
+commit, so git log --decorate reads the mark at the commit itself and
+the next commit's subject says it in words.
