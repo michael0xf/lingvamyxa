@@ -196,3 +196,33 @@ Q5. R0's lane predicate. host_is_owner is a thread identity (the bootstrap threa
     (bootstrap thread && holding_any == 0)), used by the calls of 5; (b) any thread outside any turn is R0's lane.
     Recommend (a): (b) would let a second OS thread run R0's maintenance concurrently with the bootstrap.
 Q6. Main-callable set as in 5: confirm, or name a call that must move into R0's turn (and the acceptance moves with it).
+
+IMPLEMENTATION NOTES (d6, 2026-09-15, read on 402b2919 before writing the code; nothing here is measured yet)
+I0. No new close path (Mikhail, 2026-09-15: "running=0 is set, and at the end of its turn the closing Message does the
+    same to its children; that is all"). R0's close marks its children exactly as end_turn's closing branch does
+    (lm1 1781-1790, 1828-1837): running=0 and ready on each child, then request_children_close. Each child's worker
+    sees it at its turn boundary, ends its turn, and does the same to its own children. I1 is only the host thread's
+    join before free(rt), not a design point.
+I1. Q2's wait is the worker's thread handle. The context worker loop (exec.c 3002-3063 Win32, 3095-3129 pthread) checks
+    stopping, then retired, then take_this. take_this refuses a STOPPED, DEAD or RELEASED Message (2958), so once a
+    mapped child's closing turn has ended, its worker idles on its wait forever with nothing left to take. Retiring the
+    wait early instead (join_bind_worker, 2159) races the closing turn: a worker that sees retired before take_this
+    exits without running it, against 995ff339's "a child on its own context [runs its closing turn] on that context".
+    So the worker exits on its own when take_this refuses because its Message is STOPPED, DEAD or RELEASED, and the
+    close blocks on the join (bind_wait_join: WaitForSingleObject INFINITE / pthread_join). That needs no new wait
+    object, no poll and no timeout, and a turn that never reads its flag holds the close (Q2's falsifier). A STOPPED
+    Message never takes another turn, so no idle worker is lost. Falsifier for the note: without the exit, the
+    acceptance's C (inside its turn, reads closing) holds runtime_delete after its closing turn ends.
+I2. The wake probe is committed with (f) as tests/lmx_model_close_wake_5f_selftest (6f's ruling): its header names the
+    exec_live predicate and the falsifier's "held" line, and it joins run_model_scenario36's defaults with the two
+    acceptances. Before (f) lands, a default run (no -Tests) must print its name among the core tests.
+I3. host_is_owner's remaining sites become lmx_msg_r0_lane (Q5): exec.c mapping_authority_locked 2209, exec_bind_mode
+    2232, start_contexts 3151, unbound_close 3249, exec_stop 3337, run_entry_turn 3518, set_orphan_retain 4028;
+    lm1/lm2 require_owner, require_turn (852), set_now (2208). lifecycle_authority (3646) and the five lifecycle
+    calls drop the host branch (design 4). exec_unbound_close and exec_stop are called from R0's internal close turn
+    on the host thread, so the r0_lane predicate's holding_turn(R0) arm admits them.
+I4. Migration sites (grep on 402b2919): executor selftest lifecycle calls 177, 751, 859, 901, 3674-3697, 3757, 3817,
+    4176, 4394-4755, 5747-6341, 8581-8925 (40 lines, the design's 36 sites plus multi-call lines); message selftest
+    lm1 12; release_17 10; liveness_33 3; family_handoff 5; orphan_mapped_17, scenario36, runtime_close_5f 1 each.
+    runtime_delete's 598 statement calls in the executor selftest keep their form (status ignored). host_wait's four
+    test uses and runtime_shutdown's two migrate per Q4 (a): the refusal and host_post's STOPPED at the close.
