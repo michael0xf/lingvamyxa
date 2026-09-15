@@ -5668,3 +5668,13 @@ merge with 85953500 plus parity, the union base, the UAF kit's 165 runs
 and the falsifier, after S4's landing. Meanwhile the lead rebuilds the
 UAF kit's sources (the quarantine allocator, the crash driver) in
 scratch, no builds.
+The lead's read of b5's 2d9cf5fa (2026-09-15): the guard is right; the
+cancel fixture at that commit still cancels from a spawned thread after
+Sleep(20), so the union base would be red at lmx_cancel; that commit
+predates the coordinator's retarget ruling, which b5 implements: p's
+entry turn creates and maps a child C whose turn is the spin on C's
+own thread; the cancel of C comes from p's own turn, run by the host
+thread through run_entry_turn and so holding C's parent's turn, which
+mapping_authority_locked admits; the host reads C's flags in yield
+rounds after p's turn returns; "spin-nested cancel not fired" becomes
+that read. The lead lands nothing until b5 reports green.
