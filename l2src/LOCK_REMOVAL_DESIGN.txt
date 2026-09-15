@@ -1313,6 +1313,17 @@ S5. The runtime-level lists (L5). Waits on 5.1.
       The probe (85953500) run on the e75263d7 tree, via a temporary copy, prints 0/0/0/0. That is a text count,
       not the green. A first run printed next_addr_nonatomic=2 from new comments naming the field; the comments
       were reworded and the probe left as accepted.
+    - UAF kit for S5's green, rebuilt in scratch (never committed):
+      - q_alloc.c: a poisoning quarantine allocator (0xDD, 8192 blocks, 256 MB, free-site frames, eviction and
+        atexit checks, double free);
+      - uaf_run.sh: rebuilds the executor selftest from a run_port_message evidence directory. It takes the
+        support modules, lmx_message.c, exec.c, host.c and the selftest at -g -O0 with -Dmalloc/calloc/realloc/free
+        mapped to q_*, keeps history_owned's own mapping, reuses the l2units objects, and links the repo's crash
+        report main (l2src/tests/lmx_exec_crash_report.c with -DLMX_EXEC_CRASH_REPORT_MAIN). It then runs N times,
+        alternating plain runs with a slow stderr reader, and optional HOGS=1 busy loops.
+      A run is clean on: exit 0, "lmx_message_exec ok", no STALE WRITE or DOUBLE FREE, and a zero sweep.
+      The detectors are proven first by q_alloc_tripwire.c: mode 0 is clean (sweep 0 stale); mode 1 fires
+      "STALE WRITE at payload+10"; mode 2 fires "DOUBLE FREE"; mode 3's sweep reports 1 stale write.
 
 S6. The lock deleted (L4, L7, L8 and what remains).
     - Red: lmx_msg_exec_lock and unlock defined to abort() in a test build. Every remaining call site is red by name
