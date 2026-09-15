@@ -4901,3 +4901,20 @@ his converted exec selftest on d6/m-sequential, read its diff against
 793c267f and check that the converted blocks are the 4 M blocks of the
 census and that no block outside them lost or gained a gate, as
 LOCK_REMOVAL_M_EXEC_REVIEW.txt on sonnet/exec-gates.
+b5's review of the lead's exec selftest conversion (sonnet/exec-gates
+30e1bff4, 793c267f against the lead's tip 219b2672; checked by the
+coordinator): the lead touched 29 of the 49 gated blocks, not only the
+4 M-tagged ones; the other 25 had been tagged S6 by b5's keyword rule
+but their gates were, every one, the shape M replaces (bind,
+start_contexts, GetTickCount-deadline Sleep-polls for a child's own
+turn), so b5 corrects its own stage column for those 25, no defect in
+the diff; 0 gates added; all 132 removed gate-pattern lines accounted
+for (4 M blocks: Sleep 2, event 1, GetTickCount 9; 25 re-tagged
+blocks: Sleep 34, event 6, go cell 2, GetTickCount 62; pre-main
+helpers: Sleep 3, event 2, go cell 2, GetTickCount 6; 3 connective
+event lines); exec_lock 5 of 5 unchanged, the one kind outside M's
+reach; the literal falsifier (the 4 blocks only) failed for 4 of 5
+kinds and surfaced the gap, the corrected reconciliation matches the
+whole-file delta exactly (Sleep 39, event 12, go cell 4, GetTickCount
+77, exec_lock 0). The remaining test debt after M: 20 gated blocks (S4
+2, Y 6, S6 12 by the corrected column).
