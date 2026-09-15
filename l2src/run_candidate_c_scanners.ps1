@@ -46,13 +46,34 @@ try {
     Set-Location $savedLocation
 }
 $l2exe=$currentL2Exe
-git -C $repo archive --format=zip "--output=$run/core.zip" HEAD -- l1src l2src lm1/build/l1src/p0.lm1.h
-if($LASTEXITCODE -ne 0){throw 'Archive failed'}
+# The archive has hung intermittently (GATE_ARCHIVE_HANG.txt): run it as a child with its own output
+# files and a 120 s bound, so a stall fails this gate with its name instead of holding the chain.
+$archiveOut=Join-Path $run 'archive_core.stdout.txt'
+$archiveErr=Join-Path $run 'archive_core.stderr.txt'
+$archiveArgs=@('-C',"`"$repo`"",'archive','--format=zip',"`"--output=$run/core.zip`"",'HEAD','--','l1src','l2src','lm1/build/l1src/p0.lm1.h')
+$archiveStart=Get-Date
+$archive=Start-Process -FilePath 'git' -ArgumentList $archiveArgs -NoNewWindow -PassThru -RedirectStandardOutput $archiveOut -RedirectStandardError $archiveErr
+# Read the handle now, so ExitCode is still valid after the process has exited.
+$null=$archive.Handle
+if(-not $archive.WaitForExit(120000)){
+    $archiveMs=[int]((Get-Date)-$archiveStart).TotalMilliseconds
+    $timeoutLine=('Archive timed out after 120 s (git pid {0}, started {1:HH:mm:ss.fff})' -f $archive.Id,$archiveStart)
+    # cmd /c: under EAP Stop, taskkill's stderr (a process already gone) would throw here instead.
+    cmd /c "taskkill /PID $($archive.Id) /T /F >nul 2>&1"
+    [ordered]@{result='FAIL';failure=$timeoutLine;archiveMs=$archiveMs;archiveStdout=$archiveOut;archiveStderr=$archiveErr} | ConvertTo-Json | Set-Content "$run/evidence.json" -Encoding utf8
+    throw ($timeoutLine+'; evidence '+$run)
+}
+$archive.WaitForExit()
+$archiveMs=[int]((Get-Date)-$archiveStart).TotalMilliseconds
+if($archive.ExitCode -ne 0){
+    Get-Content -LiteralPath $archiveOut,$archiveErr
+    throw ('Archive failed with exit {0}' -f $archive.ExitCode)
+}
 Expand-Archive -LiteralPath "$run/core.zip" -DestinationPath $sourceRoot
 $work=$sourceRoot
 $out='build/c_scanners'
 New-Item -ItemType Directory -Path (Join-Path $work $out) -Force | Out-Null
-$evidence=[ordered]@{result='FAIL';stages=@();compiler=$l1trans;compilerSHA256=$pin;l2Compiler=$l2exe;coreCommit=((git -C $repo rev-parse HEAD) -join '');currentL2TranslatorSourceSHA256=(Get-FileHash (Join-Path $PSScriptRoot 'l2trans.lm1')).Hash;sources=@{};reusedObjects=$runtimeObjectHashes}
+$evidence=[ordered]@{result='FAIL';stages=@();compiler=$l1trans;compilerSHA256=$pin;l2Compiler=$l2exe;coreCommit=((git -C $repo rev-parse HEAD) -join '');archiveMs=$archiveMs;currentL2TranslatorSourceSHA256=(Get-FileHash (Join-Path $PSScriptRoot 'l2trans.lm1')).Hash;sources=@{};reusedObjects=$runtimeObjectHashes}
 $inputs=@('parser_c_quoted.lm2','parser_c_surface.lm2','parser_text_predicates.lm2','parser_position.lm2','parser_c_quote_diagnostics.lm2','parser_python_string.lm2','parser_python_diagnostics.lm2','parser_quoted_diagnostics.lm2','parser_dash_fence.lm2','parser_matching_paren.lm2','parser_matching_bracket.lm2','lmx.h','lmx_message.h','lmx_array_ref_owned.h.lm1','tests/l2_c_scanners_parse_driver.lm1','run_candidate_c_scanners.ps1')
 foreach($file in $inputs){
     $src=Join-Path $PSScriptRoot $file
