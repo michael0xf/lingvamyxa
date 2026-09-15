@@ -1243,6 +1243,19 @@ S5. The runtime-level lists (L5). Waits on 5.1.
       - The UAF kit runs over runtime_delete for (c), because a changed walk changes free order.
     - Open, for the coordinator: whether (d)'s wait for S6 is accepted, or slots should move into R0's record now as
       b5's list proposed. That move keeps the same teardown walk under a different owner, and adds nothing.
+    - Answered (the coordinator, 2026-09-15):
+      (1) slots and n move into R0's record now, under S5, as b5's list proposed and as ruled ("L3T of R0").
+          S5 is "runtime lists go" and the slot list is the last runtime list; the teardown walk stays the same
+          under R0, so S6 is left with the lock alone. transport stays Y's. S5's code is therefore (a), (b) with
+          slots and n added, and (c).
+      (2) Acceptance follows the S2 pattern. The probe is a runner committed on its own branch, d6/lock-s5-red off
+          952d8e31, printing the three counts: the retire queue, the fields still in LmxMsgRuntime (next_addr,
+          root_seq, slots, n), and the root-list loops, each loop pattern named exactly so the count is
+          reproducible. d6 measures the red and the coordinator re-measures it. Green is 0/0/0 on the S5 branch
+          merged with the probe, with the union base and the UAF kit over runtime_delete for (c) (165 clean runs,
+          the kit's bar). The falsifier is one item put back. The probe is never folded in.
+      (3) The S6 census re-base onto 952d8e31 is b5's next doc ticket after S4 lands: deleted functions dropped,
+          line numbers renewed, the lock-site count re-tallied.
 
 S6. The lock deleted (L4, L7, L8 and what remains).
     - Red: lmx_msg_exec_lock and unlock defined to abort() in a test build. Every remaining call site is red by name
