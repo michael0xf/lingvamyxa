@@ -91,8 +91,13 @@ HELD 2026-09-15 under Mikhail's standing rule, a contradiction sent through the 
     admission go together in S3: run_one's wake-all, exec_start_map_kick (its extra wake of admitted lanes and its
     kick of empty ones), and the launch's wake. "Under Y a worker takes from its mailbox before its first wait" covers
     the map kick and the launch alike.
-    S3's green: the probe without the credit prints 0 violation lines (every lane wakes == admits, inbox == admits),
-    keeps its cap-reached line, and the oracle runs in the defaults.
+    The rule is wakes <= admits per lane, cumulative: several admissions coalescing into one wake pass (3 admits,
+    1 wake is green). inbox == admits is not a green condition, since every take shrinks the inbox; it was used only
+    on a violating lane's first line, to tell a kick's extra wake (inbox == admits, wakes > admits) from a miscount
+    (inbox > admits).
+    S3's green (57, as 6f recorded): the wake oracle in the defaults with no LANE WAKE FAIL (lane_oracle's
+    -LaneCheck), and the strict probe with the credit dropped printing 0 LANE WAKE PROBE lines and no cap line; no
+    lane reaches wakes > admits at any site.
 
 S0. The proof tool (57): the lane tripwire red on a lane write from a thread with no turn. It is the proof for S2-S5
     and lands first.
