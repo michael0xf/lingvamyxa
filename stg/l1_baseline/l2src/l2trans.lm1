@@ -10791,6 +10791,10 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
     int: depth
     int: i
     size_t: out_end
+    # A bare type atom names the same type as its parenthesized spelling: the
+    # oracle's `(cast: uchar c)` is `(cast: (uchar) c)` (UCHAR_LOCAL_DESIGN).
+    if: node != 0 && dest != 0 && node\kind = c.LM_P0_NODE_ATOM && node\as != 0 && node\as\atom != 0 && (l2_ident(node\as\atom) || l2_text_eq(node\as\atom, "int") || l2_text_eq(node\as\atom, "char") || l2_text_eq(node\as\atom, "size_t") || l2_text_eq(node\as\atom, "unsigned") || l2_text_eq(node\as\atom, "void"))
+        return: l2_tok_text(node\as\atom, dest, 256U)
     if: node = 0 || dest = 0 || node\kind != c.LM_P0_NODE_STRUCTURE || node\as = 0 || node\as\structure = 0
         return: 1
     f: l2_next_active(node\as\structure\first_field)
