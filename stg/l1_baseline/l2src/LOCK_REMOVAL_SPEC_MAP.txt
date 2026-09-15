@@ -1,0 +1,570 @@
+Removing the executor's shared lock: the spec and model map (6f, 2026-09-15)
+
+Purpose. Mikhail's order of 2026-09-15 stops everything else and puts all effort into removing
+every lock in the project except the message collection's own, LmxMsgExec's shared lock first,
+together with a full arena per Message. This file says, by line, where Lingvamyxa_spec.txt and
+L2_CORE_AND_MESSAGE_MODEL_20260912.md (origin/main 07ad3679, after the deletion of decision 18's item
+(5)) already fix who owns each piece of runtime state, gives the census of every lock, event and atomic
+primitive in the project by file, lists today's state that lives outside any Message's arena (structs on
+integration c067bed9, each with the call that allocates it, so a wrong line is refutable by one grep),
+and names the points where the spec is silent or contradicts the order. The three inventories
+(LOCK_REMOVAL_INVENTORY.txt for exec.c, LOCK_REMOVAL_INVENTORY_LM1.txt, LOCK_REMOVAL_INVENTORY_TESTS.txt)
+cite this map's owner codes in their target-owner column.
+
+0. MIKHAIL'S WORDS (2026-09-15, relayed by the lead, verbatim)
+- "Stop everything immediately and put all effort into removing this shared lock. It is not needed."
+- "There must be no shared locks. The mail queue has only its own internal collection lock, that's all."
+- "each L3 Thread has its own scheduler and GC"; "the executor frees its own memory".
+- Later the same day, the scope (spec 11535-11540 on 07ad3679, model section 29, plan section 7):
+  "блокировка только локальная у коллекции сообщений может быть, больше блокировок не требуется даже
+  локальных -- их в проекте не должно быть больше вообще" (only the message collection may have a lock,
+  a local one; no other locks are needed, not even local ones; there must be no more of them in the
+  project at all). So the target is every lock in the project, not only the executor's.
+- His question to the coordinator on item (5), "from which of my words did you conclude that a shared
+  lock is needed?", answered: from none; the coordinator wrote the L1 runtime's implementation state (the root list,
+  the slot list and the retire queue under the executor's lock) into the spec as an exception to his
+  rule, which his rule excludes; item (4) is of the same nature.
+- On shared memory inside rt used by children's threads: "значит реализуйте полноценную арену для
+  каждого MEssage, как описано в спеке. Без этого Message не имеет смысла" (so implement a full arena for
+  each Message, as described in the spec; without it a Message makes no sense).
+- On the 2026-09-14 ownership clause (5), "runtime-level structures under the executor's lock belong to
+  no Message" (spec 11529-11530, model section 29 (5); written by the review chat, the coordinator's
+  session, in 0c875197 as a consequence, never his words): "1) попробуй определить кто и когда сделал
+  это уточнение 2) удаляй это уточнение немедленно 3) дополняй все доки, но только согласованными со
+  мной инструкциями, после дополнения пушай и коммить" (find out who made that clarification and when;
+  delete it immediately; add to all docs only instructions agreed with him, then commit and push). The
+  lead deleted it from both copies in 657ce3f9 and 07ad3679; this map cites it only as deleted history.
+- On item (4) and the "references" (2026-09-15, verbatim): "Каких сигналов ожидания? Снятие блокировки с
+  сигналов ожидания чем-то может нарушить смысл этих сигналов? Очевидно нет. Снимать всё и никогда
+  больше не редактируй спеку своими выводами -- всё спрашивай и только согласованное вноси в документы.
+  Каких ссылок? 1)Message не имеет никаких ссылок на общие ресурсы кроме тех которые неизменемые
+  (independents: const: immutable: хранятся в неизменяемых массивах у root). Либо на атомарные для
+  которых очередность не важна 2) Очередь сообщений -- синхронизированная коллекция" (what wait
+  signals? can removing the lock from them break their meaning? obviously not; remove everything and
+  never again edit the spec with your conclusions, ask everything, enter only what is agreed; what
+  references? a Message has no references to shared resources except immutable ones, independents in
+  the root's immutable arrays, or atomic ones for which ordering does not matter; the message queue is
+  a synchronized collection). Done in 668a5347: item (4), the (f) consequences and the 19.29.8 line gone
+  from both copies; his sentences stay.
+- On children cut off by the end of the process: "подобное завершение детей это всё равно аварийный
+  выход. Утечка памяи из ОС будет или нет?" (such an ending of children is an abnormal exit anyway; will
+  there be a memory leak from the OS or not?). Answer, the lead's, confirmed: no; the OS reclaims the
+  process's memory, handles and threads; only unfinished closing work is lost.
+
+1. OWNER CODES (the target-owner column of every inventory line takes one of these)
+  M  the Message's own arena: its management state as Structure data, written only on its own lane.
+  P  the parent's arena: the parent's scheduler and supervision state about its direct children.
+  Q  a mailbox admission under that mailbox's own collection lock, the one cross-lane synchronization.
+  T  thread-local state of the OS thread running a lane (the turn identity); nothing shared, no lock.
+  X  goes away: it existed only for the shared lock, a host form, or a runtime-level list the target
+     does not have.
+  S  silent: the spec names no owner, or its text contradicts the order; the line names the question
+     (section 5 below) and is decided by Mikhail through the lead before it is coded.
+
+2. WHAT THE SPEC ALREADY SAYS, BY LINE (origin/main 07ad3679)
+
+2.1 19.28.R2.2 Message Thread (11430-11596).
+  11432-11435: "An inactive Message becomes an L3 Thread when explicitly launched. Its management state
+    is ordinary Structure data, to be implemented in L2, not an external C control model. Native handles
+    may back the Message mechanism; they do not replace its ownership and protocols."
+  11438-11440: "Every L3 Thread has a FIFO inbox/outbox. It executes at most one turn at a time,
+    consuming at most one admitted input per turn. Serial turns make ordinary mutation of its arena safe
+    without a source-visible lock."
+  11442-11443: "Each live Message context owns that mailbox, a parent capability (except the root), and
+    the list of its direct children. Supervision is local to that list."
+  11452-11456: "Each parent Message contains the scheduler for its direct children: its policy and
+    management state are ordinary private Structure data. Each child may choose a different scheduling
+    implementation for its own children. There is no separate language scheduler above Messages, no
+    shared global Message registry, and no shared global management lock."
+  11470-11474: "A running L3 Thread is a logical serial execution lane, not a promise of a dedicated OS
+    thread. Physical workers are an implementation mapping of the parent's scheduler; the OS still
+    schedules its threads. Native thread, wait/wake and per-mailbox synchronization primitives support
+    Message and do not own its scheduling policy or family tree."
+  11492-11506 (Mikhail, 2026-09-14): "one arena, one lane, one writer. A Message's scheduler and
+    management state is written only on that Message's own lane; no other thread writes into a
+    Message's data, and this holds for the C runtime exactly as for L2 ... A child's readiness is the
+    child's own control flag ... A parent therefore keeps no list that another thread appends to ...
+    A request to another lane (mapping a child onto the UI lane) is a Message to that lane's mailbox;
+    the mailbox's admission lock is the one cross-lane synchronization the model permits."
+  11507-11534, ownership of cells (2026-09-14, the review chat's consequences, 0c875197; (5) deleted
+  657ce3f9, his 2026-09-15 words recorded after the list at 11535-11540):
+    (1) "a Message owns its arena, its scheduler record and cursor, the clearing of its ready flag, its
+        mailbox except admission, its native users and handoff-safe marks, its success, and its own
+        running clear at end_turn; its lane is whichever thread holds its turn" -> code M.
+    (2) "The parent owns the supervision cells about its direct children wherever they sit physically:
+        committed, tracked, the last-heard time, the execution mapping written at bind ..., the family
+        chain (first and last child, siblings' links, the parent link ...), and the settle writes" ->
+        code P.
+    (3) "Control flags are single cells with one designated cross-lane writer ...: the parent writes a
+        child's running=0 and closing (stop); the sender writes the destination's ready at admission;
+        the lane that takes a Message's turn ... clears its ready flag; a late read changes nothing"
+        -> the flag is M storage with a named cross-lane writer; no lock.
+    (4) "Primitives: mailbox admission under its lock, reference counts, wait signals." (11528-11529;
+        the coordinator's sentence, open for Mikhail through the lead) -> Q for admission; reference
+        counts and wait signals: S, question 5.2.
+    (5) "Runtime-level structures under the executor's lock belong to no Message: the root list, the
+        slot list, the retire queue, a lane's own queue." -> DELETED by Mikhail's order of 2026-09-15
+        (section 0); it was the coordinator's sentence, not his. The four structures it named need
+        owners: question 5.1. No inventory line cites (5).
+  11582-11587: "low-level synchronization is used only inside the Message mechanism, for example to admit
+    concurrent sends to a recipient's FIFO safely. Other components ... coordinate through Messages, not
+    their own locks, atomics, shared mutable management tables or private worker schedulers."
+  11590-11594: "Necessary thread, wait/wake and synchronized-mailbox primitives belong to the Message
+    implementation in L2 (temporarily L1/native bootstrap). ... This does not permit a hidden C Message
+    registry or dispatcher. A coordinator Message owns its state exclusively: other Messages send
+    requests, not read or mutate its private tables directly."
+
+2.2 19.29.2 One Message Arena and Allocation Domains (12279-12337), the arena's full description:
+  12281-12283: "Every Message, inactive or running, owns one logical arena throughout its turns and
+    worker migration. L3 source does not select it, and Lmx has no arena field. The arena may contain
+    multiple non-overlapping blocks/address domains."
+  12285-12289: "Adopting a non-executing Message or a handoff-safe failed child adds its blocks and
+    registered domains to this same logical arena (19.29.7--8). It creates no new source arena kind,
+    relocates no native node and clones no graph. Ownership and auxiliary domain metadata move
+    together; the former owner cannot free the adopted storage."
+  12291-12298: adoption is not lexical reparenting; one arena may hold several lexical trees;
+    "Reachability, not membership in the arena's block list, determines what survives end-turn
+    collection (19.29.4)."
+  12306-12310: "Its mutable storage includes Lmx nodes, child payloads, persistent own fields,
+    non-interned primitives, Array descriptors/backing and runtime merge results. Immutable primitive
+    pools, linked method code/records and explicitly foreign L2 resources follow their own domain
+    contracts. Runtime helpers may derive the arena from a node address and its registered range."
+  12312-12324: the recommended bump allocator over a backing-block list; "Filling a block preserves
+    existing pointers; allocation fails only if the host refuses another block. Nodes may span blocks
+    and a physical domain may span registered ranges."
+  12326-12337: "Growth factors, block sizes, free lists and collector algorithms are physical choices;
+    the one logical arena and end-turn collection boundary are fixed. ... Parser P0 nodes and derived
+    runtime Structures allocate in the owning Message arena like other Structures. A microscopic
+    Message whose payload is a string still owns one logical arena."
+  Consequence for the map: every record that is "management state" of a Message (its control record,
+  mailbox queues, scheduler record, roots, range and block bookkeeping) is arena data of that Message,
+  allocated by the arena's own allocator, and freed when that arena goes; a calloc'd C record hanging
+  off a pointer is the bootstrap's substitute for it.
+
+2.3 19.29.6 Running Message (12480-12542 before the 2026-09-14 clarifications):
+  12482-12488: "It owns exactly one logical arena, a FIFO inbox/outbox, one serial execution lane, a
+    parent capability (except the root) and the list of its direct children. ... It contains scheduling
+    policy/state for its own direct children; except at the root, its parent contains the scheduler
+    responsible for it."
+  12489-12492: "No dedicated OS thread per Message is required. Physical execution resources and narrow
+    mailbox wait/wake primitives implement that choice, not an external L1/C scheduler, shared global
+    Message table or global management lock."
+  12495-12505, the components: "the Message's Lmx graph and its one arena; FIFO incoming and staged
+    outgoing message queues; selected handler callable Structures and their published-state
+    Structures; ... parent-owned scheduler policy/state for direct children."
+  12520-12522: "Any Registry, cache or Table of a Message is ordinary Lmx data reachable from explicit
+    Message roots in that Message's one arena."
+  12524-12531: "Ordinary owned Lmx references inside one Message address its own LMX storage. A boundary
+    operation may transfer storage and its range metadata to a new owner without relocation. Such a
+    transfer does not itself grant simultaneous aliases to ordinary owned storage, even if immutable."
+  12533-12542: "Releasing one Message does not require stopping or scanning every Message in the
+    process. Different Messages may execute concurrently on different workers because their mutable
+    arenas are isolated. Each Message serializes its own turns; ordinary L3 code therefore requires no
+    shared-memory lock for its own graph. Concurrent senders are linearized at the recipient's FIFO
+    admission by the Message mechanism. ... Parent supervision uses its own child list, not a scan of a
+    shared process-wide Message table."
+  12595-12640, the stage-5 clarifications (2026-09-14): the top level is one (Messages created without
+    a parent are R0's children; orphans re-root under R0); the host outside a turn has no authority
+    left, everything the L1 bootstrap gave the host belongs to R0's turns; the settling lane writes a
+    settled Message's cells (the endpoint step).
+  12641-12674, stage 5 (f) (2026-09-15): his three sentences under his name (the root's close is its own
+    closing end-turn, "running=0 is set, and at the end of its turn the closing Message does the same to
+    its children; that is all"; "the executor frees its own memory"; "each of our L3 Threads has its own
+    scheduler and garbage collector") and, around them, the coordinator's consequences marked "Mikhail
+    may overrule", which are open for him through the lead and are not cited by this map as owners.
+
+2.4 The model.
+  Section 25 (1186-1247): a Message is the unit of ownership of an ordinary graph, of the serial execution
+    of its turns and of interaction by messages; its control policy is the state of an L2 Structure; the
+    native part supplies atomic operations, queues, locks, wait/wake and execution; the four relations
+    (Structure.node, the data graph, arena ownership, the Message family) and the fifth, execution
+    mapping. Stage-5 items (i)-(v): a runtime without a root does not exist; the entry runs in R0's
+    turns; nothing of the host remains outside a turn; the top level is one; the World Wide Mix stub.
+  Section 29 (1325-1396): each parent services its direct children; no global walker of all Messages;
+    P may run A on its own thread while A spreads A1/A2 over others; then the Russian text of the
+    one-arena-one-lane-one-writer clarification and the ownership items (1)-(5), identical to 2.1.
+  Section 30 (1397-1417): "Message internally synchronizes its mailbox, execution tables, lifecycle and
+    ownership transfer. Application modules need no second scheduler or global lock. A short lock of
+    the execution table must not cover a wait on another's mailbox or the execution of a user
+    handler." Written for the L1 implementation; under the order the "execution tables" and their short lock go
+    with the rest, and only the mailbox's own lock stays: S, question 5.3 (the section's rewrite).
+
+2.5 THE CENSUS OF LOCKS, EVENTS AND ATOMICS IN THE PROJECT (git grep -c on c067bed9; refutable by the
+    same grep). Runtime: lmx_message_exec.c has the executor's CRITICAL_SECTION/pthread mutex (2 Enter,
+    4 pthread_mutex_lock, 2 Initialize), 3 CreateEvent/SetEvent/WaitForSingleObject, 10 pthread_cond_,
+    2 Interlocked, 4 __atomic_; lmx_message_host.c has the host lock and wake (2 Enter, 3 pthread lock,
+    1 event, 6 pthread_cond_); lmx.h 1 __atomic_ (the running/success loads); the mailbox lock
+    (mail_lock) is called 6 times in lmx_message.lm1 (lm2 the same) and 14 in exec.c, and it is the one
+    lock the order keeps. The executor lock's callers: lmx_message.lm1 60 (lm2 60), exec.c 77, exec.h 1,
+    the executor selftest 5, model tests 19 (checks_19_29_6 10, orphan_mapped_17 5, root_ingress_5b 2,
+    root_record_5e 2; the lead's count of 29 includes runtime_close_5f 6, 5f_turn 2 and
+    l2_and_foreign_call_own_local 2 on branches). Tests and harnesses: the executor selftest 29
+    CreateEvent, 38 SetEvent, 29 WaitForSingleObject, 385 Interlocked; lmx_message_host_selftest 4
+    pthread lock, 3 cond, 1 Interlocked; tests/cancel_spin_host.c 20 Interlocked. mixa_manager:
+    mixa_process_win32.lm1 1 WaitForSingleObject (a process wait, not a lock), tests/mixa_share_native_
+    smoke.lm1 11 WaitForSingleObject, the ingress and win32 harnesses 2-4 events and 4 Interlocked, and a
+    vendored copy of the host ingress V0 (mixa_manager/vendor/lmx_msg_host_ingress_v0) carrying the host
+    lock again (3 host_lock calls, 2 Enter, 3 pthread lock, 6 cond). No __sync_ anywhere. l1src and lm1:
+    none. Every entry outside the mailbox's own lock is in the order's scope; the test-side primitives are
+    0c's inventory, the vendored copy goes with the host forms.
+
+
+2.6 RECOUNT (5e, sonnet/lock-census-2, da7d61f1, git grep -c; refutable by the
+    same grep; every number below is the delta from 2.5's c067bed9 baseline,
+    with the reason for each change and the stage that claims each remaining
+    primitive, or "silent" where none does)
+
+Runtime: lmx_message_exec.c, lmx_message_host.c, lmx.h -- UNCHANGED from 2.5,
+  every number identical (grep-verified, not assumed; no stage in this
+  branch, the mixa ingress ticket, or O touches these files):
+  - lmx_message_exec.c: EnterCriticalSection 2, InitializeCriticalSection 2,
+    pthread_mutex_lock 4; CreateEvent 3, SetEvent 3, WaitForSingleObject 3;
+    pthread_cond_ 10; Interlocked 2; __atomic_ 4 (of which __atomic_load_n/
+    __atomic_store_n on m->running/m->success are the same 4, not a
+    separate category -- the "atomic_load/store/fetch" pattern this
+    ticket added matches nothing __atomic_ does not already match).
+    NEW FINDING, not in 2.5's prose: exec.c's 2 EnterCriticalSection/2
+    InitializeCriticalSection are not one lock counted twice -- they are
+    two different locks, one call each. Line 493/522: m->mail (the
+    mailbox's own collection lock, the one the order keeps). Line
+    1237/1297: e->lock (the executor's shared lock, S6 removes it). 2.5's
+    combined "2 Enter... 2 Initialize" phrasing did not distinguish them;
+    this recount does, since the ticket asks each primitive's fate named.
+    - m->mail's Enter/Initialize: ALLOWED, the message collection's own lock.
+    - e->lock's Enter/Initialize: to go, S6 ("the lock deleted... the only
+      lock left is m->mail").
+    - pthread_mutex_lock (4, the non-Windows branch of the same two locks):
+      same split as above by the code path, not separately counted here.
+    - CreateEvent/SetEvent/WaitForSingleObject (3/3/3) and pthread_cond_
+      (10): silent. S3 ("one wake per lane") changes exec_wake_locked's
+      broadcast into a per-readied-Message wake "through each readied
+      Message's own wake primitive (an implementation detail of this
+      runtime, not agreed wording)" -- S3's own text does not say whether
+      the event/condvar primitive itself goes or stays narrowed to one
+      per lane; 19.28.R2.2 11470-11474 permits "native thread, wait/wake
+      and per-mailbox synchronization primitives" explicitly, so these
+      may be exactly that, not something S3 deletes. No stage's text
+      commits either way; not decided here.
+    - Interlocked (2): silent, no stage names the refcount primitives
+      specifically (S3's text names refs/endp_retain/release as going
+      "with" S6 in prose, not by this exact call-site count).
+    - __atomic_ (4, m->running/m->success loads/stores): silent. 2.1(3)
+      names running/success as "single-writer flags... a late read
+      changes nothing," which argues these specific atomics may be the
+      named exception (2.1 "atomic cells whose order does not matter"),
+      not a to-go primitive -- but no stage's own text states this as a
+      decision, so silent, not assumed.
+  - lmx_message_host.c: EnterCriticalSection 2, pthread_mutex_lock 3,
+    CreateEvent 1, SetEvent 2, WaitForSingleObject 1, pthread_cond_ 6, all
+    unchanged. To go: S5 ("that is a lock outside any mailbox, so it goes
+    (X) with the pack" -- the launch gate's pthread_mutex_t gm cited by
+    name in the design's S5 section is this file's own lock) for the
+    lock/Enter pair; the wait/wake primitives here are the same silent
+    case as exec.c's, above.
+  - lmx.h: __atomic_ 1 (the running/success loads for a foreign read),
+    unchanged, silent, same reasoning as exec.c's own atomics above.
+
+mail_lock( and lmx_msg_exec_lock( callers -- UNCHANGED from 2.5:
+  - mail_lock(: lmx_message.lm1 6, lmx_message.lm2 6 (the L1/L2 mirror
+    pair in stg/l1_baseline/l2src -- not the now-deleted top-level lm2/
+    self-hosting tree; a different, unrelated thing sharing a filename
+    suffix, named here so the two are not confused), exec.c 14. ALLOWED,
+    all 26 -- the order's own exception.
+  - lmx_msg_exec_lock(: lmx_message.lm1 60, lmx_message.lm2 60, exec.c 77,
+    exec.h 1. To go, S6 (and the earlier stages -- S2/S4/M/S5 -- that each
+    remove specific call sites before S6 removes what is left; this
+    branch's own sonnet/lock-inventory df360bb0 already classified each
+    of the 65 lmx_message.lm1 sites, per that inventory not repeated here).
+  - lmx_msg_host_lock(: lmx_message.lm1 1, lmx_message.lm2 1, host.c 1
+    (its own definition), host.h 1 (its own prototype) -- 4 in stg, plus
+    5 in the still-present vendored copy (lm1 3 calls, host.c 1
+    definition, host.h 1 prototype) = 9 whole-tree, matching the total
+    below exactly (grep-verified, corrected here after first counting
+    only the three stg call sites and missing the two declarations).
+    To go, same S5 citation as host.c's lock above (the same host lock
+    named there); the vendored copy's 5 go with the mixa ingress ticket,
+    as below.
+
+Tests and harnesses (stg/l1_baseline/l2src) -- UNCHANGED from 2.5:
+  - lmx_message_exec_selftest.c: CreateEvent 29, SetEvent 38,
+    WaitForSingleObject 29, Interlocked 385.
+  - lmx_message_host_selftest.c: pthread_mutex_lock 4, pthread_cond_ 3,
+    Interlocked 1.
+  - tests/cancel_spin_host.c: Interlocked 20.
+  - lmx_msg_exec_lock( in lmx_message_exec_selftest.c: 5; in the model
+    test files under l2src/tests: 19 (unchanged, not re-broken-down by
+    individual test file here, since 2.5's own per-file breakdown -- 10/
+    5/2/2 -- was not independently re-verified this pass and nothing in
+    this branch or the mixa ingress ticket touches those files).
+  All of the above: 0c's own inventory per 2.5's own text ("the test-side
+  primitives are 0c's inventory"), not this map's to-go/silent
+  classification.
+
+mixa_manager -- CHANGED, but not yet on this tip:
+  - mixa_process_win32.lm1: WaitForSingleObject 1 (a process wait, not a
+    lock, per 2.5's own words), unchanged.
+  - tests/mixa_share_native_smoke.lm1: WaitForSingleObject 11, unchanged.
+  - tests/mixa_ingress_host_harness.c: CreateEvent 2, SetEvent 2,
+    WaitForSingleObject 3, Interlocked 4 (2.5's "2-4 events and 4
+    Interlocked" was a loose range across both harnesses combined; this
+    recount gives the exact per-file split, not a new number).
+  - tests/mixa_win32_smoke_harness.c: CreateEvent 0, SetEvent 0,
+    WaitForSingleObject 3, Interlocked 0 -- its own WaitForSingleObject
+    is window/thread coordination unrelated to any Message lock, per this
+    branch's own earlier HOST_INGRESS_V0_INVENTORY.txt finding.
+  - mixa_manager/vendor/lmx_msg_host_ingress_v0: STILL PRESENT on
+    da7d61f1 -- host_lock( 3, EnterCriticalSection 2,
+    InitializeCriticalSection 1, pthread_mutex_lock 3, pthread_cond_ 6,
+    every number identical to 2.5. The deletion (sonnet/mixa-ingress-
+    inventory, 1a9f1ca8, this branch's own author) removed the vendor
+    directory, its harness and its runner, but that branch has not merged
+    into main or into this stage-O branch's own history -- da7d61f1 does
+    not include it. To go: the mixa ingress ticket, 1a9f1ca8, once it
+    lands; not yet reflected in this count, named here so the discrepancy
+    between "should be 0" and "is still 6/3/2/1/3" is not silently
+    smoothed over.
+
+The now-deleted lm2/ self-hosting tree (root lm2/ and its
+stg/l1_baseline/lm2 mirror, both whole) -- CHANGED to 0, this branch:
+  - Every primitive this ticket's patterns match: 0 (grepped directly,
+    both paths do not exist -- `ls lm2 stg/l1_baseline/lm2` both "No such
+    file or directory"). 2.5 did not count lm2/'s own primitives at all
+    (own.lm2's lock-based message-thread runtime was not part of the
+    lock/event/atomic families 2.5 grepped for -- it used its own
+    lm_mutex_*/lm_condition_*/lm_host_thread_* names, covered by this
+    branch's own LOCK_REMOVAL_OWN_INVENTORY.txt and
+    LOCK_REMOVAL_O0_MEASUREMENT.txt, not repeated here). Named as a
+    reason for completeness: stage O (this branch, e88dab64..da7d61f1).
+
+l1src (root and stg/l1_baseline), root lm1/ (non-build, tracked generated
+C) -- UNCHANGED from 2.5, "none": every pattern 0 in both l1src copies and
+in lm1/ (EnterCriticalSection, pthread_mutex_lock, CreateEvent/SetEvent/
+WaitForSingleObject, pthread_cond_, Interlocked, __atomic_, all checked
+directly, not assumed from 2.5's prose).
+
+__sync_: 0 tree-wide, unchanged ("No __sync_ anywhere," 2.5).
+
+Whole tree, once, each pattern (git grep -c, build/ excluded; includes
+every file above plus anything 2.5 did not itemize by name -- Qt app,
+cmake/, third_party/, etc., which match 0 for all of these except as
+already counted):
+  EnterCriticalSection 6, InitializeCriticalSection 4, pthread_mutex_lock
+  14, CreateEvent 39, SetEvent 50, WaitForSingleObject 70, pthread_cond_
+  27, Interlocked 414, __sync_ 0, __atomic_ 6, lmx_msg_exec_lock( 222,
+  mail_lock( 27, lmx_msg_host_lock( 9.
+  Falsify: each whole-tree number equals the sum of every per-file count
+  named above in this section (e.g. EnterCriticalSection 6 = exec.c 2 +
+  host.c 2 + vendored host.c 2; lmx_msg_exec_lock( 222 = lm1 60 + lm2 60 +
+  exec.c 77 + exec.h 1 + selftest 5 + model tests 19; mail_lock( 27 = lm1
+  6 + lm2 6 + exec.c 14 + 1 -- the +1 checked directly and found to be
+  lmx_message.h:344's own prototype declaration, `void lmx_msg_mail_lock
+  (LmxMsg *m);`, not a call site at all and not the vendored copy, which
+  has zero mail_lock( matches, checked directly; named here rather than
+  left as an unexplained gap between the per-file sum and the whole-tree
+  total).
+
+SUMMARY, by class:
+  ALLOWED (the message collection's own lock): m->mail's Enter/
+    Initialize/pthread_mutex_lock pair in exec.c, and mail_lock( 27
+    total across all copies (the vendored copy has none of its own --
+    checked directly). Not to go.
+  TO GO, stage named: e->lock (exec.c's own CRITICAL_SECTION/pthread
+    pair) and lmx_msg_exec_lock( everywhere -- S6, with S2/S4/M/S5
+    removing specific call sites first. The host lock (host.c's own
+    Enter/Initialize/pthread pair and lmx_msg_host_lock( everywhere) --
+    S5. The vendored ingress copy's whole primitive set (host_lock 3,
+    Enter 2, Initialize 1, pthread lock 3, cond 6) -- the mixa ingress
+    ticket, 1a9f1ca8, not yet landed on this tip.
+  TO GO, this branch already (0 today): every primitive of the deleted
+    lm2/ self-hosting tree -- stage O, da7d61f1.
+  SILENT (no stage's own text commits either way): the wait/wake event
+    and condition-variable primitives in exec.c and stg's own host.c
+    (CreateEvent/SetEvent/WaitForSingleObject/pthread_cond_ in both
+    files -- not the vendored copy's, which already has a named fate,
+    below), the Interlocked refcount primitives, and the __atomic_
+    running/success flag loads/stores.
+  SILENT COUNT (distinct primitive-category lines marked silent above,
+  each citing a file or file-pair, not summed by raw call count): 5 --
+  exec.c's events+cond (1 line, the CreateEvent/SetEvent/
+  WaitForSingleObject/pthread_cond_ family together), exec.c's
+  Interlocked (1), exec.c's __atomic_ (1), lmx.h's __atomic_ (1), stg's
+  own host.c's events+cond (1, same 4-primitive grouping as exec.c's;
+  host.c has no Interlocked calls of its own, so that is not a 6th line).
+  The vendored copy's own events/cond/Interlocked (it has none of the
+  latter either) are not counted here -- its whole primitive set already
+  has a named fate, the mixa ingress ticket, not silent. Test-side
+  primitives (executor selftest, host selftest, cancel_spin_host.c) are
+  explicitly 0c's inventory per 2.5's own text, not counted into this
+  silent total either.
+
+3. TODAY'S STATE OUTSIDE ANY MESSAGE'S ARENA (structs on c067bed9; the allocation named so the line is
+   refutable by one grep)
+
+3.1 The Message record itself, struct LmxMsg (lmx_message.h 118-210): calloc in lmx_msg_slot_new (exec.c
+    418), with its mailbox lock object m->mail calloc'd there too (427/434); a delivery record by
+    lmx_msg_delivery_new (lm1 410). Target: M, the Message's control record is a Structure in its own
+    arena (the pattern lmx_sched_record and lmx_root_record already follow), created on the launching
+    parent's lane and reached from the parent's child list (P).
+    Its fields by owner:
+    - addr, create_id, state, init/init_n, exec_id/exec_corr/exec_from/exec_reply/exec_live, last_beat,
+      path/path_n/path_cap (path_grow), child_seq, sched_rec (already an Lmx in its arena), ui_pending,
+      turn/turn_ctx, mapped, running/success (own clear), handoff_ready, native_users, graph, roots
+      (LmxMsgRoot, malloc in lmx_msg_root_attach lm1 267), blocks/ranges/eternal_ranges/method_ranges
+      (LmxMsgBlock and LmxOwnedRange records, calloc in adopt_push exec.c 3633, the bootstrap admits at
+      652/690, the clones at 737/780): M. The block and range records are the arena's own bookkeeping
+      and belong inside it.
+    - inbox/inbox_tail/outbox/outbox_tail (LmxMsgCopy, calloc at admission: host_post lm1 934, send
+      1238, send_graph 1299, send_owned 1361, send_cap 2930, post_dead 2049, copy_dup 471; ui_request
+      exec.c 1471): the queues are M (19.29.6 components); their admission is Q. Which arena holds an
+      admitted copy: S, question 5.4.
+    - done_from/done_id/done_n/done_cap (malloc in lmx_msg_done_grow lm1 810/813): the parent's record
+      of its children's completions: P.
+    - parent, parent_msg, first_child, last_child, next_sibling, committed, tracked, child_heard_at,
+      live_wait_th, live_query_*, live_seq: the family chain and supervision cells: P (2.1 (2)); the
+      liveness timers of the Message's own queries toward its parent: M.
+    - ready: M storage with the sender as its one cross-lane writer (2.1 (3)); closing, the running
+      clear by the parent: the same.
+    - exec_bind (LmxMsgExecBind, calloc in exec_bind_mode exec.c 2350: affinity, held, held_by, last_st,
+      launching, gone, wait, in_table): the execution mapping written at bind, the parent's (2.1 (2)):
+      P. The plan's stage 3a wording ("bind state moves onto the child Message") is corrected by this
+      line: the child's record may carry it physically only if the parent's lane is its only writer.
+    - refs (reference count), retire_next/retire_queued (the shared retire queue), alloc_next (the slot
+      list), orphan, orphan_until, disposed: refs and the retire queue: S (5.2, 5.1); alloc_next: X (the
+      slot list goes with runtime_delete's slot loop, stage 5 (f)); orphan/orphan_until/disposed: P
+      (R0's supervision of its re-rooted orphans; the disposing parent's settle write).
+    - owner_rt: X once nothing runtime-level remains to point at.
+
+3.2 struct LmxMsgRuntime (lmx_message.h 212-229), calloc in lmx_msg_runtime_new (lm1 860):
+    - root (the root list; since stage 5 (d) R0 with its children): P of R0 (R0's child list in R0's
+      arena); the list of roots as a runtime object: X.
+    - slots, n (every record in allocation order): X (exists for runtime_delete's slot loop and
+      lmx_msg_slots enumeration; the target has no registry, 2.1 11455 and 2.3 12522).
+    - transport/transport_tail (LmxMsgCopy nodes staged by the host pump between publish and
+      delivery): each sender's staged outgoing queue is M (2.3 components); the runtime-level list is a
+      host form: X.
+    - host_sync: X (stage 5 (f), the host forms retire).
+    - exec: the LmxMsgExec below.
+    - next_addr, root_seq: R0's counters for the addresses and paths it hands out: P of R0.
+    - root_record: already an Lmx in R0's arena (stage 5 (e)): M of R0.
+
+3.3 struct LmxMsgExec (exec.c 105-135), calloc in lmx_msg_exec_attach (1166):
+    - lock (the shared lock): X, the order.
+    - stop_ev (one event every worker waits on), tls (the key of the turn identity): stop_ev is a wake
+      primitive shared by all lanes: S (5.2, wait signals); the identity itself is T.
+    - nworkers, contexts_live: the count of physical workers a parent mapped its children onto: P (the
+      parent's scheduler state, 2.1 11468-11473); as a runtime total: X.
+    - reap_head (LmxMsgBindWait, calloc in bind_wait_new 1899) and the join of reaped workers: X under
+      "the executor frees its own memory" and stage 5 (f) as overruled: each thread frees its own wait
+      state and ends.
+    - stopping, stopped, no_retire, unbound_held, wait_serial: R0's close state and the delete loop's
+      flag: X with stage 5 (f) (the close is R0's own end-turn) or M of R0 where a cell survives.
+    - ui_lane: R0's child at address 2: P of R0.
+    - retire_head/retire_tail (the shared retire queue of released Messages): S (5.1): under 19.29.4
+      each Message's reclaim is its own end-turn work, and a released child's storage is its parent's
+      settle write (2.1 (2)); a process-wide queue has no owner.
+    - test_fail_*: test hooks, follow the lock they instrument: X.
+    - The bind table and the per-owner ready lists the plan's stage 3 already removed or per-parented
+      (L2_RUNTIME_PLAN section 3, steps 3a-3c) are P; what remains of them under the lock is listed in
+      the exec.c inventory line by line.
+
+3.4 Thread-local state (exec.c 160-166): lmx_turn_msg, lmx_turn_root, lmx_turn_running are per OS
+    thread: T. They are shared with no one and need no lock; a nested foreign-runtime turn saves and
+    restores them (restore_turn), which stays.
+
+3.5 Runtime-local scratch: drive_walk_list's table (malloc 822), exec_start_map_kick's arrays
+    (2651-2658), parent_settle's buffer (3963): the caller's lane's own temporaries, freed on the same
+    path: M of the lane that runs the step, or X where the step goes. launch_ctx_thread's LmxMsgCtxPack
+    (2868) is NOT same-path: allocated on the parent's lane and freed by the child's thread
+    (context_worker 2993/3086), a cross-lane free found by the lead's allocation inventory (9e26a8c3)
+    and a design item of its own: the pack becomes the child's own (its arena, freed by its thread) or
+    the parent's (freed on the parent's lane after the child's thread has read it), never handed across.
+    The pack also carries the launch gate (found by 0c): on POSIX a pthread_mutex_t gm with a condition
+    variable around the go flag (exec.c 2789-2832, pack_gate_wait / pack_gate_signal), on Win32 a one-shot
+    event. A mutex outside any mailbox: X under the order, no question open; the launched Message's own
+    mailbox replaces it (the launch parameters are the child's first Message, and its thread waits on its
+    own mailbox's wake), so the gate, its mutex and its event go with the pack. The host lock
+    LmxMsgHostSync.lock (host.c 31/40, taken by host_post around shutdown ordering) is the X of 3.2's
+    host_sync, stage 5 (f).
+
+4. RULE FOR THE INVENTORIES
+  A line's target owner is M, P, Q, T or X only if the section quoted in 2 names it (cite the line);
+  otherwise S with the question number from 5. A lock site whose state is M or P and whose lane today
+  is the owner's lane loses the lock and keeps the write (the lane tripwire lmx_msg_test_lane_write
+  proves the lane); a site whose lane today is not the owner's lane is a write that must move: either
+  to the owner's lane (the parent's step reads the child's own cells, 2.1 11504-11509) or into a
+  mailbox admission (Q). No site is removed by making its state atomic; atomics are not in the model
+  (2.1 11566-11571) except the named single-writer flags of (3).
+
+5. QUESTIONS FOR MIKHAIL, THROUGH THE LEAD (each with the coordinator's proposed answer first)
+  5.1 ANSWERED by Mikhail, 2026-09-15 ("зачем вам список корней?"; "откуда ты взял обход при удалении?";
+      then "да" to this wording, now in spec 19.28.R2.2 and the model's section 29): no root list (the root
+      is one, R0, its children an ordinary child list in R0's arena); no walk at deletion; the slot list
+      goes without replacement; the retire queue goes (a closed child's storage is the parent's settle
+      write); a lane's own queue is that Message's mailbox. The original question and proposal, kept for
+      the record: the root list is R0's child list in R0's arena; the slot list goes (no
+      registry; address resolution is a walk from R0 through child lists, or a capability the caller
+      holds); the retire queue goes (a released Message's storage is its parent's settle write on the
+      parent's lane, and a Message reclaims its own at its end-turn); a lane's own queue is that
+      lane's Message's mailbox. Alternative: the runtime record keeps them for the bootstrap only, which keeps the lock
+      they need and so contradicts "there must be no shared locks".
+  5.2 ANSWERED by Mikhail, 2026-09-15 (verbatim in the plan's section 7 and in section 0 above): the lock's
+      removal cannot touch a wait signal's meaning; a Message has no references to shared resources except
+      immutable ones (independents, const:, immutable:, in the root's immutable arrays) or atomic ones for
+      which ordering does not matter; the message queue is a synchronized collection. The "reference
+      counts" were the C record's refs pins (walks and waits under the executor's lock), the lock's
+      companion, and go with it. The original question, kept for the record: do reference counts and
+      wait signals survive as primitives? Proposed: a wait
+      signal is a lane's own wake primitive, paired with its mailbox (19.28.R2.2 11468-11473, "narrow
+      mailbox wait/wake primitives"), one per lane, never one event for all workers (today's stop_ev);
+      a reference count on a Message record is replaced by ownership (the parent's child list holds
+      the child; a capability held by another Message is a mailbox address, not a pointer that pins
+      storage), so refs goes. Alternative: keep refs as the one atomic cell that guards a record's
+      free across lanes, which is a shared-memory protocol the model does not name.
+  5.3 Model section 30 speaks of "execution tables" and their short lock. Proposed: rewrite to "Message
+      internally synchronizes its mailbox's admission; lifecycle and ownership transfer are writes on
+      the owner's lane; there are no execution tables", keeping the snapshot rule for a parent reading
+      its children's cells. Alternative: leave the section as a description of the L1 implementation, marked
+      historical.
+  5.4 ANSWERED by Mikhail, 2026-09-15, verbatim: "какая копия? У нас нет никаких копий message -- выше же с
+      тобой обсуждали. Есть только он сам и у него своя арена. Пускай это будет один alloc но это его
+      собственный. При получении Message который не L3 Thread присоединяется к арене получателя. Всё"
+      (what copy? there are no copies of a message; only the message itself with its own arena, be it one
+      alloc; on receipt a Message that is not an L3 Thread attaches to the recipient's arena; that is all).
+      So the mailbox is a synchronized collection of Messages, each with its own arena; LmxMsgCopy,
+      copy_bytes and copy_dup are today's artefact, X; the 3.1 inbox/outbox lines read "M: the queue
+      holds Messages; their admission Q; no copy". The original question, kept for the record: which
+      arena holds an admitted copy (a sender's envelope queued in the recipient's inbox)?
+      Proposed: the recipient's arena, allocated under the recipient's admission lock (the one
+      permitted cross-lane operation makes the one cross-lane allocation), so the queue and its
+      entries die with the recipient and 19.29.6's "arenas are isolated" holds; the payload's bytes are
+      copied (19.29.7.1's copy-only slice) or transferred handoff-safe (12506-12513). Alternative: the
+      sender's arena with the entry transferred at admission, which makes the recipient's inbox point
+      into many arenas.
+  5.5 ANSWERED by Mikhail, 2026-09-15, verbatim (in the plan's section 7): closing a parent is an
+      emergency; each child closes itself and for its children it is the same emergency; children run
+      sequentially without a thread of their own are an implementation nuance that drags the parent's
+      close out with others' work, "but why do you need such threads at all now, when you cannot even
+      build the core architecture exactly by the spec?"; the coordinator's reading (every L3 Thread on
+      its own OS thread for now; the sequential mapping removed) awaits his one-word confirmation.
+      The original question, kept for the record: does R0's own scheduler step its threadless children (P1 on
+      the host lane, a retained orphan, the UI-bound child, the UI lane) to their settle before R0's
+      thread frees what is R0's, or does R0 leave them ready with no scheduler? Proposed: the former,
+      as R0 finishing its own work (each L3 Thread has its own scheduler), not a wait on any thread.
+
+  5.6 (added after the lead's exec.c inventory, 39435ed2: 35 of its 41 silent 5.1 lines are address
+      resolution, a tree walk from rt->root under the lock, replaced by a capability the caller already
+      holds, 19.28.R2.2 11447.) ANSWERED by Mikhail, 2026-09-15, "давай так" to the proposal below, now in
+      spec 19.29.7 and the model's section 27. The original question: what is a capability held by a
+      non-parent worth after its target closes?
+      The spec says nothing about a send to a released Message (R2.4, R2.5 and 19.29.7 name no
+      undeliverable case). Proposed: a capability is the target's mailbox handle, and a closing
+      Message's mailbox is settled into its parent with the rest of its storage (the parent's settle
+      write, 2.1 (2)), so a late send reaches a mailbox the parent owns and is refused there on the
+      parent's lane with the sender's own status, one owner and no reference count; today's post_dead
+      through the slot table is the X form of this. Alternative: mailbox records kept alive by a count
+      of their holders, which is the atomic cell of 5.2.
+
+6. WHAT THIS MAP DOES NOT DECIDE
+  The removal's stages, their order and their reds are the lead's design in the (a) format after the
+  three inventories are in; the gate per stage is 0c's; the map is amended by line when Mikhail answers
+  5.1-5.6, and every answer goes into the spec and the model the same hour, in his words only.
