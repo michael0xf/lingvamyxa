@@ -465,8 +465,9 @@ int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who) {
 /* S5: the runtime's address counter is one order-free atomic cell with no owner
  * lane. Every create takes the next value; addresses are unique and their order
  * does not matter. */
+typedef char lmx_msg_addr_counter_is_4_bytes[sizeof(((LmxMsgRuntime *)0)->next_addr) == 4U ? 1 : -1];
 LmxMsgAddr lmx_msg_addr_take(LmxMsgRuntime *rt) {
-    return (LmxMsgAddr)__atomic_fetch_add_n(&rt->next_addr, 1U, __ATOMIC_RELAXED);
+    return (LmxMsgAddr)__atomic_fetch_add_4(&rt->next_addr, 1U, __ATOMIC_RELAXED);
 }
 
 /* Stage 5 (e): the clock is R0's management state, read from R0's policy record
