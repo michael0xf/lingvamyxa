@@ -4772,3 +4772,11 @@ passes a non-zero value except two passing a variable id
 wrap pass-through). D2 is therefore mostly mechanical (the parameter
 dropped from 3 declarations and every call), the two wrap sites to be
 read by the lead. b5 moves to sonnet/m-tests-send on 793c267f.
+Ruling 2's reach inside lmx_message_exec_selftest.c (about 120 scenario
+blocks in one main; the coordinator, 2026-09-15): the unit is the block;
+a block M deletes or converts loses its go cells and wall-clock loops in
+the same commit; a block M does not touch keeps its gates for now, as
+recorded test debt: a list in LOCK_REMOVAL_STAGE_M_TESTS.txt (block, the
+gate's kind, the stage whose subject the block is: S2, S4, S5, S6 or Y),
+each later stage converting its own blocks under the same rulings, so
+the file's wait count goes down by stage and reaches 0 at S6.
