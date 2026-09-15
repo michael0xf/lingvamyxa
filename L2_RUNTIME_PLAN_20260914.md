@@ -4224,3 +4224,10 @@ the 76 one-off scripts are historical, unconverted. Nothing run before
 binary with one byte appended as -Source into wt0c_oneroot, expected exit
 2 with the gen2/gen3 hashes unchanged), then the real install. The
 branch lands on integration after ONE ROOT, merged by the lead.
+Mikhail (2026-09-15, verbatim, on the coordinator's host note): "ну так для того и существует отличие ядра Message, которое полностью подн контролем языка, от платформенных реализаций L3 Thread! Просто положите Win32 GetMessage в потомка L3 Thread (потомки у нас создаются merge) и все, в чем проблема? Будет заполнять inbox который свой поток будет читать."
+So the Win32 message pump is a descendant L3 Thread of the UI's, created
+by merge, whose platform loop blocks in GetMessage and admits each Win32
+message as a Message into the inbox its own parent thread reads; nothing
+of Win32 touches the kernel. Entered verbatim in spec 19.28.R2.2 (after
+the mixa_manager sentence) and model section 25; the mixa_manager host
+takes this shape after the lock work.

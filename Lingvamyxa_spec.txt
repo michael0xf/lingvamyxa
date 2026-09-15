@@ -11624,6 +11624,13 @@ L3 Thread; a Message without an L3 Thread is just a letter; a lane is a full
 object; we do not have as many objects as Smalltalk, but still many; so the
 implementation of an L3 Thread scheduler that does not launch its children's
 threads but runs over them itself is the nearest task for mixa_manager).
+Mikhail, 2026-09-15, verbatim, on the host's Win32 message loop (the
+coordinator had called its blocking GetMessage a property of Win32 outside
+the model): "ну так для того и существует отличие ядра Message, которое полностью подн контролем языка, от платформенных реализаций L3 Thread! Просто положите Win32 GetMessage в потомка L3 Thread (потомки у нас создаются merge) и все, в чем проблема? Будет заполнять inbox который свой поток будет читать." (that is what the difference between the Message
+kernel, wholly under the language's control, and the platform
+implementations of L3 Thread is for: put Win32 GetMessage into a descendant
+L3 Thread, descendants being created by merge, and that is all; it fills an
+inbox that its own thread reads).
 Mikhail, 2026-09-15, verbatim, on the mailbox's synchronization: "тупейший вложенный synchronized по локу на чтение и запись как в Java, без остальных усложнений вообще. "notify получает не «поток», а поток-владелец ящика" -- ну а смысл его нотифицировать если он занят в turn?!!! Выйдет и посмотрит" (the
 dumbest nested synchronized on the lock for reading and writing, as in Java,
 with no other complications at all; what is the point of notifying the owner
