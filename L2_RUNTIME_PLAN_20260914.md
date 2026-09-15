@@ -3044,3 +3044,24 @@ run_self_build (required "committed generated C 8 of 8"), run_slice_equal
 (recorded, not required until (c)) and the 32 gates. 0c's goldens and seed
 red-first done, lines coming. b5 holds for the landing and recounts the
 lock census on da7d61f1 (a doc ticket, section 2.6 of the map).
+0c's seed branch red-first on the local commit 4a08a0dc (scratch tree,
+cold): run_seed "l1trans gen0 seed ok" in 2 s; run_smoke red with the
+record moved aside ("stale check: no build record ...l1trans.sources.txt")
+and red with l1src/l1trans.lm1 edited ("stale l1trans.exe: l1src\l1trans.lm1
+changed since gen0 was built (recorded F2B61C7F..., now 1A87F4D7...)"), the
+same edit passing unnoticed with the record check cut out (the ticket's
+red); run_parser red before the goldens ("missing golden directory");
+run_gen red on the new check ("gen2 C (7ccb37c0...) differs from the
+committed lm1/build/l1trans.lm1.c (a978175a...): regenerate and commit it"),
+gen1 == gen2 already holding, so (b) turns it green; run_c_array,
+run_define and run_ifdef green on the new gen0 (the committed-C gen0
+already meeting gen2's stricter diagnostic). The goldens generated once
+from printTree.lm0.exe (505210 bytes, sha256 8FA2A403...E29D37717, checked
+first): 134 distinct fixtures (run_parser 21, the manifest 131), 103 exits
+0 and 31 exits 1 each with a P0 location, 301 files, 103 .stdout files
+carrying CRLF so the nested "* -text" is load-bearing; run_parser on gen0
+against them green in 24 s; the README's lines split by PowerShell's comma
+precedence, rewritten before the local commit. Falsifiers run: the
+goldens directory deleted, run_parser "missing golden directory"; the
+record removed, run_smoke "stale check: no build record". Green of the
+whole chain waits for (b).
