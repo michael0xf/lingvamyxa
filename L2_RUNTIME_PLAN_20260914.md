@@ -1531,3 +1531,20 @@ not applicable, 6 fitting the map's M or P, all grep-verified against the
 file's own fields. Next for b5 on the same branch: the allocation inventory
 of lmx_message.lm1 (every calloc, malloc, realloc and free site with the
 record, the lane and the owner code), the arena half of the order.
+Inventory 3 of 3 (the lead, 2026-09-15): d6/lock-removal 39435ed2,
+l2src/LOCK_REMOVAL_INVENTORY.txt, 165 lines equal to the grep (77 LOCK
+acquisitions, 24 DEF lines of *_locked helpers, 64 CALL lines), every line
+with an owner code from the map: first codes M 25, P 58, Q 5, T 2, X 45;
+30 lines silent alone (3 of them acquisitions), 50 naming a question: 5.1
+on 41 lines, 5.2 on 13, 5.4 on 1. The one fact behind 35 of 5.1's 41 lines:
+address resolution. msg_at_addr, self_or_find, msg_find_any_locked and
+rec_at_addr_locked walk rt->root and every child list, and the lock exists
+so that the tree does not change under the walk; the target reaches a
+Message only through a capability the caller already holds (the parent's
+child pointer, the taking lane's own record, the sender's capability,
+19.28.R2.2 11447), so the design names that capability per call site. The
+other six 5.1 lines: the root list in drive_walk_list, the retire queue
+(try_retire, flush_retire, retire_n) and slot_free. 5.2 is the wake:
+exec_wake_locked wakes every worker after any turn (run_one 2587),
+exec_ready routes one wake, and walks take refs. Next for the lead on the
+same branch: the exec.c allocation inventory, the arena half.
