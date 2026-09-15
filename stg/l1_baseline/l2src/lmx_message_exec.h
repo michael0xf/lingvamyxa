@@ -51,8 +51,6 @@ int lmx_msg_exec_msg_bound(LmxMsg *m);
 int lmx_msg_exec_adopt_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_exec_dispose_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_exec_reclaim_mark(LmxMsgRuntime *rt, LmxMsg *m);
-void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt);
-void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 /* D1 allocation walk of rt->slots. */
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt);
 LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i);
@@ -60,7 +58,6 @@ unsigned lmx_msg_exec_take_addr(LmxMsgRuntime *rt);
 #if defined(LMX_MSG_EXEC_TEST)
 void lmx_msg_exec_test_set_fail_ctx(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_test_set_fail_adopt_block(LmxMsgRuntime *rt, int v);
-void lmx_msg_exec_test_set_fail_start_kicks(LmxMsgRuntime *rt, int v);
 int lmx_msg_exec_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ui_nrequests(LmxMsgRuntime *rt);
 int lmx_msg_exec_retire_n(LmxMsgRuntime *rt);
@@ -68,8 +65,6 @@ int lmx_msg_exec_retire_n(LmxMsgRuntime *rt);
 #if defined(LMX_MSG_EXEC_TEST)
 extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 extern void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
-extern void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr addr, int after_create);
-extern void (*lmx_msg_exec_test_during_reap_kept)(LmxMsgRuntime *rt);
 extern void (*lmx_msg_exec_test_during_release_tree)(LmxMsgRuntime *rt, LmxMsg *m);
 extern void (*lmx_msg_test_mail_locked)(LmxMsg *m);
 extern void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
@@ -81,15 +76,6 @@ int lmx_msg_test_stage(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, unsign
 int lmx_msg_exec_bind_n(LmxMsgRuntime *rt);
 int lmx_msg_exec_bind_aff(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_bind_has_worker(LmxMsgRuntime *rt, LmxMsgAddr addr);
-unsigned lmx_msg_exec_test_wait_gen(LmxMsgRuntime *rt, LmxMsgAddr addr);
-void *lmx_msg_exec_test_worker_handle(LmxMsgRuntime *rt, LmxMsgAddr addr);
-int lmx_msg_exec_test_launching(LmxMsgRuntime *rt, LmxMsgAddr addr);
-void *lmx_msg_exec_test_launch_cap(void);
-unsigned lmx_msg_exec_test_launch_cap_gen(void);
-unsigned lmx_msg_exec_test_wait_gen_raw(const void *cap);
-int lmx_msg_exec_test_wait_launch_n(const void *cap);
-unsigned lmx_msg_exec_test_wait_destroy_n(void);
-unsigned lmx_msg_exec_test_wait_destroy_last_gen(void);
 #endif
 
 #endif

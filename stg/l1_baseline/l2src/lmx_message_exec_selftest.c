@@ -274,48 +274,6 @@ static int turn_self_rebind(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return lmx_msg_end_turn(rt, who, 1);
 }
 
-static LmxMsgAddr g_launch_unb;
-static int g_launch_phase;
-static TurnCtx g_stale_g2;
-static unsigned g_stale_gen;
-static unsigned g_stale_old_gen;
-static void *g_stale_wh;
-static int g_stale_launching;
-static int g_stale_workers;
-static int g_stale_alive;
-static int g_stale_launch_n;
-static unsigned g_stale_destroy_at_unbind;
-static int g_stale_want_ui;
-static void launch_unbind_hook(LmxMsgRuntime *rt, LmxMsgAddr addr, int after) {
-    if (addr == g_launch_unb && after == g_launch_phase) {
-        (void)lmx_msg_exec_unbind(rt, addr);
-    }
-}
-static void stale_launch_hook(LmxMsgRuntime *rt, LmxMsgAddr addr, int after) {
-    void *cap;
-    unsigned gen;
-    if (addr != g_launch_unb || after != 0) {
-        return;
-    }
-    lmx_msg_exec_test_during_launch = 0;
-    cap = lmx_msg_exec_test_launch_cap();
-    gen = lmx_msg_exec_test_launch_cap_gen();
-    g_stale_old_gen = gen;
-    (void)lmx_msg_exec_unbind(rt, addr);
-    g_stale_alive = (cap != 0 && lmx_msg_exec_test_wait_gen_raw(cap) == gen);
-    g_stale_launch_n = lmx_msg_exec_test_wait_launch_n(cap);
-    g_stale_destroy_at_unbind = lmx_msg_exec_test_wait_destroy_n();
-    if (g_stale_want_ui != 0) {
-        (void)lmx_msg_exec_bind(rt, addr, turn_recv_end, &g_stale_g2, LMX_MSG_AFFINITY_UI);
-    } else {
-        (void)lmx_msg_exec_bind(rt, addr, turn_recv_end, &g_stale_g2, LMX_MSG_AFFINITY_ANY);
-    }
-    g_stale_gen = lmx_msg_exec_test_wait_gen(rt, addr);
-    g_stale_wh = lmx_msg_exec_test_worker_handle(rt, addr);
-    g_stale_launching = lmx_msg_exec_test_launching(rt, addr);
-    g_stale_workers = lmx_msg_exec_workers(rt);
-}
-
 static LmxMsgRuntime *g_reap_rt;
 
 static HANDLE g_cleanup_seen;
@@ -6423,25 +6381,20 @@ int main(int argc, char **argv) {
         }
         ma = lmx_msg_find(rtk, a);
         if (ma == 0) {
-            fprintf(stderr, "exec_start kicks-fail find\n");
+            fprintf(stderr, "exec_start map find\n");
             lmx_msg_runtime_delete(rtk);
             return 1;
         }
-        lmx_msg_exec_test_set_fail_start_kicks(rtk, 1);
-        if (lmx_msg_exec_start_contexts(rtk) != LMX_MSG_NOMEM || ma->mapped != 0) {
-            fprintf(stderr, "exec_start kicks-fail did not stop clean\n");
-            lmx_msg_exec_stop(rtk);
-            lmx_msg_runtime_delete(rtk);
-            return 1;
-        }
+        /* S3 (R3): the start maps its bound children in one lock hold; the
+         * kick collection and its allocation failure are gone. */
         if (lmx_msg_exec_start_contexts(rtk) != LMX_MSG_OK || ma->mapped == 0) {
-            fprintf(stderr, "exec_start kicks-fail retry\n");
+            fprintf(stderr, "exec_start map claims child\n");
             lmx_msg_exec_stop(rtk);
             lmx_msg_runtime_delete(rtk);
             return 1;
         }
         lmx_msg_exec_stop(rtk);
-        fprintf(stderr, "exec_start: kick-calloc fail stops pool; retry claims child\n");
+        fprintf(stderr, "exec_start: start maps the bound child\n");
         lmx_msg_runtime_delete(rtk);
     }
     {
@@ -8204,209 +8157,9 @@ int main(int argc, char **argv) {
             fprintf(stderr, "exec wait: UI unbind does not undercount live ANY workers\n");
             lmx_msg_runtime_delete(rti);
         }
-        rti = lmx_msg_runtime_new();
-        {
-            LmxMsgAddr p = 0, a = 0;
-            int phase;
-            memset(&any_ctx, 0, sizeof(any_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec launch-gate create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            for (phase = 0; phase < 2; phase++) {
-                InterlockedExchange(&any_ctx.done, 0);
-                g_launch_unb = a;
-                g_launch_phase = phase;
-                lmx_msg_exec_test_during_launch = launch_unbind_hook;
-                (void)lmx_msg_exec_bind(rti, a, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY);
-                lmx_msg_exec_test_during_launch = 0;
-                g_launch_unb = 0;
-                if (lmx_msg_exec_bind(rti, a, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                    || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
-                    || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
-                    fprintf(stderr, "exec launch-gate rebind phase=%d\n", phase);
-                    lmx_msg_exec_stop(rti);
-                    lmx_msg_runtime_delete(rti);
-                    return 1;
-                }
-                dl = GetTickCount() + 2000;
-                while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
-                    Sleep(10);
-                }
-                if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
-                    fprintf(stderr, "exec launch-gate done phase=%d v=%ld\n", phase,
-                        (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
-                    lmx_msg_exec_stop(rti);
-                    lmx_msg_runtime_delete(rti);
-                    return 1;
-                }
-                if (lmx_msg_exec_unbind(rti, a) != LMX_MSG_OK) {
-                    fprintf(stderr, "exec launch-gate cleanup unbind\n");
-                    lmx_msg_exec_stop(rti);
-                    lmx_msg_runtime_delete(rti);
-                    return 1;
-                }
-            }
-            lmx_msg_exec_stop(rti);
-            fprintf(stderr, "exec wait: unbind during launch both sides; same-addr rebind exact-once\n");
-            lmx_msg_runtime_delete(rti);
-        }
-        rti = lmx_msg_runtime_new();
-        {
-            LmxMsgAddr p = 0, a = 0;
-            int w0;
-            memset(&any_ctx, 0, sizeof(any_ctx));
-            memset(&g_stale_g2, 0, sizeof(g_stale_g2));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec stale-launch create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            g_launch_unb = a;
-            g_stale_gen = 0U;
-            g_stale_old_gen = 0U;
-            g_stale_wh = 0;
-            g_stale_launching = -1;
-            g_stale_workers = 0;
-            g_stale_alive = 0;
-            g_stale_launch_n = 0;
-            g_stale_destroy_at_unbind = 0U;
-            g_stale_want_ui = 0;
-            lmx_msg_exec_test_during_launch = stale_launch_hook;
-            (void)lmx_msg_exec_bind(rti, a, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY);
-            lmx_msg_exec_test_during_launch = 0;
-            g_launch_unb = 0;
-            w0 = lmx_msg_exec_workers(rti);
-            if (w0 != 1 || w0 != g_stale_workers
-                || g_stale_gen == 0U || g_stale_wh == 0
-                || g_stale_alive == 0 || g_stale_launch_n < 1
-                || lmx_msg_exec_test_wait_destroy_n() != g_stale_destroy_at_unbind + 1U
-                || lmx_msg_exec_test_wait_destroy_last_gen() != g_stale_old_gen
-                || lmx_msg_exec_test_wait_gen(rti, a) != g_stale_gen
-                || lmx_msg_exec_test_worker_handle(rti, a) != g_stale_wh
-                || lmx_msg_exec_test_launching(rti, a) != 0
-                || g_stale_launching != 0
-                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0) {
-                fprintf(stderr, "exec stale-launch workers=%d hookw=%d gen=%u alive=%d ln=%d dn=%u last=%u launching=%d olddone=%ld\n",
-                    w0, g_stale_workers, g_stale_gen, g_stale_alive, g_stale_launch_n,
-                    lmx_msg_exec_test_wait_destroy_n(), lmx_msg_exec_test_wait_destroy_last_gen(),
-                    lmx_msg_exec_test_launching(rti, a),
-                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
-                lmx_msg_exec_stop(rti);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec stale-launch post\n");
-                lmx_msg_exec_stop(rti);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            dl = GetTickCount() + 2000;
-            while (InterlockedCompareExchange(&g_stale_g2.done, 0, 0) == 0 && GetTickCount() < dl) {
-                Sleep(10);
-            }
-            if (InterlockedCompareExchange(&g_stale_g2.done, 0, 0) != 1
-                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
-                || lmx_msg_exec_workers(rti) != 1
-                || lmx_msg_exec_test_wait_gen(rti, a) != g_stale_gen
-                || lmx_msg_exec_test_worker_handle(rti, a) != g_stale_wh) {
-                fprintf(stderr, "exec stale-launch g2=%ld old=%ld workers=%d\n",
-                    (long)InterlockedCompareExchange(&g_stale_g2.done, 0, 0),
-                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
-                    lmx_msg_exec_workers(rti));
-                lmx_msg_exec_stop(rti);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            lmx_msg_exec_stop(rti);
-            if (lmx_msg_exec_workers(rti) != 0) {
-                fprintf(stderr, "exec stale-launch stop residue workers=%d\n", lmx_msg_exec_workers(rti));
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            fprintf(stderr, "exec wait: stale launcher aborts; G2 exact-once; worker count exact\n");
-            lmx_msg_runtime_delete(rti);
-        }
-        rti = lmx_msg_runtime_new();
-        {
-            LmxMsgAddr p = 0, a = 0;
-            unsigned dn0;
-            memset(&any_ctx, 0, sizeof(any_ctx));
-            memset(&g_stale_g2, 0, sizeof(g_stale_g2));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec stale-launch ui-g2 create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            g_launch_unb = a;
-            g_stale_gen = 0U;
-            g_stale_old_gen = 0U;
-            g_stale_wh = (void *)1;
-            g_stale_launching = -1;
-            g_stale_workers = -1;
-            g_stale_alive = 0;
-            g_stale_launch_n = 0;
-            g_stale_destroy_at_unbind = 0U;
-            g_stale_want_ui = 1;
-            lmx_msg_exec_test_during_launch = stale_launch_hook;
-            (void)lmx_msg_exec_bind(rti, a, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY);
-            lmx_msg_exec_test_during_launch = 0;
-            g_launch_unb = 0;
-            g_stale_want_ui = 0;
-            dn0 = g_stale_destroy_at_unbind;
-            if (g_stale_alive == 0 || g_stale_launch_n < 1
-                || lmx_msg_exec_test_wait_destroy_n() != dn0 + 1U
-                || lmx_msg_exec_test_wait_destroy_last_gen() != g_stale_old_gen
-                || lmx_msg_exec_is_bound(rti, a) == 0
-                || lmx_msg_exec_bind_aff(rti, a) != LMX_MSG_AFFINITY_UI
-                || lmx_msg_exec_test_launching(rti, a) != 0
-                || g_stale_launching != 0
-                || lmx_msg_exec_bind_has_worker(rti, a) != 0
-                || g_stale_wh != 0
-                || lmx_msg_exec_workers(rti) != 0
-                || lmx_msg_exec_test_wait_gen(rti, a) == 0U
-                || lmx_msg_exec_test_wait_gen(rti, a) == g_stale_old_gen
-                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
-                || InterlockedCompareExchange(&g_stale_g2.done, 0, 0) != 0) {
-                fprintf(stderr, "exec stale-launch ui-g2 alive=%d ln=%d dn=%u last=%u aff=%d launch=%d wr=%d w=%d gen=%u old=%u\n",
-                    g_stale_alive, g_stale_launch_n, lmx_msg_exec_test_wait_destroy_n(),
-                    lmx_msg_exec_test_wait_destroy_last_gen(), lmx_msg_exec_bind_aff(rti, a),
-                    lmx_msg_exec_test_launching(rti, a), lmx_msg_exec_bind_has_worker(rti, a),
-                    lmx_msg_exec_workers(rti), lmx_msg_exec_test_wait_gen(rti, a), g_stale_old_gen);
-                lmx_msg_exec_stop(rti);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            lmx_msg_exec_stop(rti);
-            if (lmx_msg_exec_workers(rti) != 0) {
-                fprintf(stderr, "exec stale-launch ui-g2 stop residue workers=%d\n", lmx_msg_exec_workers(rti));
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            fprintf(stderr, "exec wait: stale launcher keeps G wait until release; UI G2 untouched\n");
-            lmx_msg_runtime_delete(rti);
-        }
+        /* S3 (R4, R6): the launch-gate and stale-launch cases tested the unbind that
+         * interleaved with a launch outside the exec lock and the wait generation that
+         * guarded it; the launch now runs in one lock hold, so both are gone. */
         /* Retired with the bind/unbind authority (19.28.R2.2 (2) with 19.29.6): the reap-kept
          * race case unbound A from a turn-less thread while the host sat inside its own bind's
          * launch, and the reap it guarded ran only in that thread's unbind (bind_reap_join_all

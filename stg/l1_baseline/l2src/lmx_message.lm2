@@ -817,9 +817,7 @@ sub: msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
     ---
     m\ready: 1
     bound: c.lmx_msg_exec_route_locked(m, @ ui, @ pool)
-    if: bound != 0 && ui = 0
-        c.lmx_msg_exec_wake_addr_locked(rt, addr)
-    ---
+    # S3 (no wake): admission into the mailbox is all; the owner looks into it in its own round.
     # Stage 3d: a Message its parent's policy maps to UI (today its bind
     # affinity) asks the UI lane for its turn, once per request: an admission
     # into the UI lane's mailbox, sent by the writer of its readiness.
