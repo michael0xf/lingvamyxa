@@ -6026,3 +6026,36 @@ incomplete; each outcome mapped to a hypothesis (a hang first in A is
 H1, only in B H2, only in C the runner's surroundings, only in D H3,
 all clean "not reproduced" with the chance figures, H4 read from the
 capture). e9 now on claude-0c/archive-timeout off 11f581e0.
+S6-1 in progress (the lead, 2026-09-15): d6/lock-s6 at 11f581e0, edits. (b)
+done in exec.c: no_retire, stopping, stopped and contexts_live through
+__atomic_load_n/store_n (the host, or for no_retire the test before the
+run, the one writer; readers order-free); nworkers through
+__atomic_add_fetch_4/sub_fetch_4 with a sizeof(int)==4 check;
+worker_round's "if (nworkers > 0)" before the decrement gone (the
+leaving worker counted itself at launch); unbound_held untouched
+(exec_unbound_close writes it, exec_bind_mode checks and acts on it,
+order-dependent). (c) is not a pure flag: lmx_msg_host_post (lm1
+910-955; checked, the host lock and unlock at 910 and 955) holds the
+host lock across the whole admission (the shutting_down check, the root
+lookup and endp_retain(root), calloc, the push into R0's inbox under
+R0's mail lock), ordering a foreign poster against runtime_shutdown and
+runtime_delete; an atomic shutting_down alone is check-then-act; under
+R0's own mailbox monitor the check and the set are ordered; R0's
+lifetime against a foreign thread that read rt\root before
+runtime_delete is today the host lock plus refs (S6-2 removes refs).
+Ruling (coordinator, no new primitive): (c) as the lead's candidate:
+shutting_down lives with R0's mailbox and is checked and set under its
+monitor (the one allowed lock; a late post is refused there, as 5.6
+says of a late send); runtime_delete's contract is the model's own
+cascade, R0 ends only after its children have stopped, and every
+poster is a child (Mikhail: the Win32 pump is a descendant L3 Thread
+filling an inbox), so no foreign poster survives R0; today's external
+host posters (the ingress harness's threads) are the test's to stop
+before delete, test-side. unbound_held: the pre-read marks
+exec_unbound_close's hold clean (host-only), so the field has one
+writer (the host) and a reader on the parent's lane; the rule for it:
+if a stale read costs only a refused bind that the next round
+retries (a late read changes nothing), it is a control flag, one
+writer, order-free atomic, and the hold goes; if a stale read can
+bind into an unbound close's teardown, that is a contradiction and
+the stage stops; the lead states which by reading exec_bind_mode's act.
