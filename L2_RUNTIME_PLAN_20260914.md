@@ -2827,3 +2827,15 @@ from it (333, 753-759), so it goes in b5's CMake group and printTree.lm1.c
 stays as the live chain's generated C; the root's gen0 skips (run_c_array
 97-98, run_define 109-110, run_ifdef 108-109, run_smoke 347-349) are the
 set 0c deletes and re-measures, stg's replaced by the refresh.
+The 32-gate default set landed on integration as 88934463 (ad3fc6b8 merged
+onto c94d3e31; "gates GREEN: 32 of 32 in 520s"); from now on every landing
+runs the 32 and reports the time. D1 (45f5e82c) landing on 88934463. The
+design at 20ee4228 carries "synchronized only, no wait/notify", S3 as "no
+wake" with the oracle red on any wake site, Y2 reentrant enter/leave only,
+Y3 the mailbox's reads and writes under it, the wake-matching rules
+superseded; the between-turns loop, marked OPEN there, is now answered by
+Mikhail (the infinite loop) and the lead updates it. d6/stg-buildcore moved
+onto 88934463 (29b739eb the bat rewrite, e5da89f5 oldchain/ deleted), to be
+measured cold after D1's gates and pushed for 0c. For (b) the lead needs
+0c's goldens path under tests/l1 (the staged-test script's change in the
+root's l1src/buildCore.lm1); 0c names it before writing.
