@@ -1639,3 +1639,14 @@ own arena, A3 waiting on 5.4 (red: the two-cycle balance with heap
 allocations counted). Reviewed and approved 2026-09-15 to start S1 and S2's
 red on a branch off c067bed9, with S0 landing first and every landing from
 S2 on running run_gates and run_port_message -LaneCheck with the tripwire.
+Mikhail on the map's question 5.3 (2026-09-15, verbatim, to the proposed
+rewrite of the model's section 30 as "Message synchronizes only the admission
+of its mailbox; there are no execution tables", keeping the snapshot rule for
+a parent reading its children's cells): "да, все описания L1 промежуточны и
+их нужно приводить к спецификации L2" (yes, all L1 descriptions are interim
+and must be brought to the L2 specification). Section 30 rewritten the same
+hour as agreed, his words quoted in it; the lock-inversion test paragraph
+and the prototype-locks paragraph, both descriptions of the L1
+implementation, removed. Standing rule from his sentence: every description
+of the L1 implementation in the model is interim and is brought to the L2
+specification, never the reverse.
