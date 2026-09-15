@@ -5635,3 +5635,18 @@ be a wait and is not taken. S5's acceptance: the probe's counts become
 retire_queue, root_seq present, next_addr non-atomic increments,
 root_list_loops; green 0/0/0/0; the red re-measured on the updated
 probe (a new commit on d6/lock-s5-red).
+S5 red re-measured on the four-count probe (2026-09-15): d6/lock-s5-red
+85953500 (parent 7ae76896, off 952d8e31), by the lead and by the
+coordinator in exec-3a: "S5 probe: retire_queue=28 root_seq=7
+next_addr_nonatomic=4 root_list_loops=14", exit 1 in 1 s. root_seq
+counts lines naming it in lmx_message.h (1), lm1 (3), lm2 (3);
+next_addr_nonatomic counts lines naming next_addr except the struct
+declaration, the one-time "rt\next_addr: 1U" and any line with
+__atomic_ (the four: "slot\addr: rt\next_addr" and "rt\next_addr:
+rt\next_addr + 1U" in create_prepare, lm1 and lm2). S5's acceptance
+record: red 85953500 (28/7/4/14); green 0/0/0/0 on the S5 tip merged
+with it, parity PASS, the union base, the UAF kit; falsifier one item
+put back. S5 (a) committed on d6/lock-s5 8e528532 off c9ac4dda: the
+retire queue deleted, 58 lines across exec.c, exec.h, lmx_message.h,
+lm1 and lm2, 0 retire names left in the core; edits only; (c), (i) and
+(ii) next.
