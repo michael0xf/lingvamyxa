@@ -1,0 +1,19 @@
+structure fields=3
+  frame head="call" body=structure fields=2
+    structure fields=3
+      atom "1"
+      atom "+"
+      structure fields=1
+        atom "-1"
+    atom "-1"
+  frame head="call" body=structure fields=1
+    structure fields=4
+      atom "1"
+      atom "+"
+      atom "--"
+      atom "i"
+  frame head="call" body=structure fields=1
+    structure fields=3
+      atom "1"
+      atom "+"
+      atom "-1"

@@ -1,2 +1,0 @@
-predef: "lm2/own_abi.lm2"
-predef: "fixtures/message_thread_source_predef.lm2"

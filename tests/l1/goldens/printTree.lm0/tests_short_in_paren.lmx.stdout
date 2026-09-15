@@ -1,0 +1,14 @@
+structure fields=2
+  frame head="f" body=structure fields=6
+    atom "a"
+    atom "b"
+    atom "c"
+    atom "d"
+    frame head="e" body=structure fields=2
+      atom "hello"
+      atom "world"
+    atom "f"
+  frame head="g" body=structure fields=1
+    frame head="e" body=structure fields=2
+      atom "hello"
+      atom "world"

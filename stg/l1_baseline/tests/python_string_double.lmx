@@ -1,7 +1,0 @@
-pythonstring: """double # not a comment
-colon: stays data
-paren ) stays data
-backslash is raw: \" \n
-same quote run: """"
-"""
-next: ok

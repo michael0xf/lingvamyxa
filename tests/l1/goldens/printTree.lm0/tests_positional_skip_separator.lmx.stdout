@@ -1,0 +1,12 @@
+structure fields=3
+  frame head="call" body=structure fields=3
+    atom "a"
+    PositionalSkip atom ""
+    atom "c"
+  frame head="call" body=structure fields=3
+    atom "a"
+    PositionalSkip atom ""
+    atom "c"
+  frame head="call" body=structure fields=2
+    PositionalSkip atom ""
+    atom "a"

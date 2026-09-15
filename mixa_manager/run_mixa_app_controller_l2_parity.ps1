@@ -31,14 +31,14 @@
 #
 # mixa_app_controller.h/_impl.h/.lm1 and every real dependency listed
 # above are the parity oracle (or real, unmodified dependencies) and
-# are never touched. Nothing under stg/l1_baseline is modified, only
+# are never touched. Nothing under l1src or l2src is modified, only
 # read. Every input is built fresh in a unique run directory -- no
 # stale objects.
 param()
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root
@@ -239,7 +239,7 @@ $acSrc = "mixa_manager\mixa_app_controller.lm2"
 $acOut = Join-Path $RunDir "mixa_app_controller_l2.lm1"
 $acStdout = Join-Path $RunDir "ac_stdout.log"
 $acStderr = Join-Path $RunDir "ac_stderr.log"
-$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+$env:L2_RUNTIME_ROOT = "l2src/"
 $AcExit = Invoke-Cmd "`"$l2exe`"" "`"$acSrc`" `"$acOut`"" $acStdout $acStderr
 Pop-Location
 
@@ -282,7 +282,7 @@ if ($AcExit -ne 0 -and $KnownBarrier) {
         $l2AcO = Join-Path $RunDir "mixa_app_controller_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2ac_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2ac_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2AcC`" -o `"$l2AcO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$L1Root`" -c `"$l2AcC`" -o `"$l2AcO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"

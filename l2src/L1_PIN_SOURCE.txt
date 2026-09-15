@@ -1,0 +1,8 @@
+pin=0B3D85B36E72A5935CA43D76B71B8CBBB060AF041CBB6FAE805796595810B2A2
+root_l1trans_lm1_c=7ccb37c04b0e885e00e8ba4a02a21e1643e4812d
+c_fixed_point=CBC779B1DF8716D06CB632512DC2C33FEE1AB23C45E6FE906205F102EB83CEEA
+built_by=refresh 0b2f631593f5ae113ffe419c15a7f8277c87f605 (stg tests/l1/run_gen.ps1 gen3 binary, gen2 C == gen3 C)
+bytes=298308
+date=2026-09-15T08:29:00Z
+distributed=main checkout build/pin_0B3D85B36E72A5935CA43D76B71B8CBBB060AF041CBB6FAE805796595810B2A2/l1trans.exe (hash-checked copy into each worktree's build/l1trans/gen2/ since ONE ROOT; before it, the slice's build/l1trans/gen2/)
+previous_pin=722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466 (kept at build/pin_722AC86E/l1trans.exe for rollback)

@@ -1,0 +1,85 @@
+Stage O0: the lm2 chain's baseline fixed point, measured (5e, 2026-09-15, on e88dab64)
+==================================================
+Ticket (6f, relaying the lead's rewritten stage O, d6/lock-removal d16bf30a):
+build trans.lm0 from the kept lm1/build/trans.lm1.c, use it to regenerate
+trans.lm1.c, rest_lmx_http_client.lm1.c and rest_lmx_http_server.lm1.c,
+rebuild and regenerate once more, and both outputs must equal the kept
+files (the fixed point). Measurement only; nothing in the tree is changed
+by this file.
+
+Method: CMake preset lmx-debug (MinGW Makefiles, gcc 13.1.0, the project's
+own CMakeLists.txt targets trans.lm0 / refresh_trans_lm1 /
+refresh_rest_lmx_http_client_lm1 / refresh_rest_lmx_http_server_lm1,
+515-604), configured fresh (lmx-debug-config/, no prior cache), built with
+`cmake --build lmx-debug-config --target trans.lm0 -j4`.
+
+--- Result: the baseline does not build. Measurement stops here. ---
+
+trans.lm0 fails to compile from the committed lm1/build/trans.lm1.c. Two
+consecutive runs, same command, same result: exit code 2, 2011 compile
+errors each time, byte-identical logs (diff -q confirms), build time
+~38s both runs (37.050s, 38.971s). Since trans.lm0 never links, no
+regeneration, no second self-build, and no byte-for-byte comparison of
+trans.lm1.c / rest_lmx_http_client.lm1.c / rest_lmx_http_server.lm1.c
+against the kept files is possible -- the fixed-point question this
+stage asks cannot be answered until trans.lm0 itself builds.
+
+The 2011 errors fall into two distinct, precisely counted patterns:
+
+(1) 443 distinct symbols, each "redeclared as different kind of symbol"
+    (gcc's own diagnostic wording). Example, the first in the log
+    (trans.lm1.c:2685 vs. its own earlier declaration at 2183):
+      trans.lm1.c:2183: void * (lm_own_new_zero)(size_t size);
+      trans.lm1.c:2685: typedef struct lm_own_new_zeroClosure *lm_own_new_zero;
+    trans.lm1.c declares lm_own_new_zero once as an ordinary extern
+    function prototype, and later, under the identical name, as a typedef
+    for a closure/callable-capture struct pointer -- gcc reports the
+    second as incompatible with the first. This pattern repeats for 443
+    distinct names; the alphabetically-sorted list mixes own.lm1's own
+    plain functions (lm_own_new_zero, lm_own_resize, lm_own_copy_bytes,
+    lm_own_delete, lm_own_delete_plain, lm_own_pointer_array_delete,
+    lm_own_ptr_stack_init/_destroy/_push/_pop, and more) together with
+    the message-thread family (lm_condition_*, lm_host_thread_*,
+    lm_message_thread_*, and by the same alphabetical run presumably
+    lm_mutex_*/lm_native_*, not individually re-verified past the first
+    15 names checked). 21 of the 443 names match l1src/own.lm1's own 24
+    fn:/sub: definitions exactly (grep-verified: comm -12 against
+    l1src/own.lm1's own function-name list). This pattern is not
+    lock-related on its face -- it is a name collision in trans.lm1.c's
+    own generated closure-typedef emission, present in the committed file
+    before this stage touched anything. Not diagnosed further or fixed
+    here, per this ticket's "measurement only, nothing changed in the
+    tree" -- named as a chain bug for whoever's red-first fix takes it,
+    exactly the case this stage's own text anticipates ("a chain bug
+    found before O, fixed red-first, not lock-related").
+
+(2) 504 "expected expression before <name>" errors (plus a further ~1064
+    cascading errors of other shapes -- "expected ')' before ',' token"
+    and similar -- not separately categorized here), all in the
+    main()-lifecycle scaffold region of the file, first appearing at
+    trans.lm1.c:68890 ("expected expression before
+    'lm_message_thread_set_execution_context'") and continuing through
+    68987 ("expected expression before 'lm_message_thread_delete'"). This
+    is the already-known absence: own.lm1 (linked into trans.lm0 per
+    CMakeLists.txt 523-526) declares no lm_message_thread_* symbol
+    (confirmed earlier, sonnet/lock-inventory's LOCK_REMOVAL_OWN_INVENTORY.txt),
+    so by the point in the file where the earlier extern prototype (if
+    any survived pattern (1)'s collision) is no longer in scope, the
+    parser has nothing to resolve these identifiers against.
+
+Falsify: `grep -c "error:" ` on both captured build logs = 2011, byte-
+identical (diff -q, confirmed); `grep -oE "error: '[a-zA-Z0-9_]+'
+redeclared" | sort -u | wc -l` = 443; `grep -c "error: expected
+expression before" ` (the subset with this exact wording, excluding the
+"expected ')' before" variant) = 504; both counts sum with the remainder
+to 2011 (443 + 504 + 1064 = 2011, the remainder not further broken down).
+comm -12 against l1src/own.lm1's own fn:/sub: name list = 21 of 443.
+
+--- What this measurement does not decide ---
+Whether pattern (1) (the closure-typedef collision) is itself lock-related,
+a pre-existing translator bug from before this whole order, or something
+this stage's own O2 steps will incidentally fix by changing the emission
+that produces it, is not determined here. O0's job was to measure the
+baseline; it is not buildable as committed, so there is no fixed point to
+report and no regeneration to compare. Reported to 6f/the lead for the
+next decision.

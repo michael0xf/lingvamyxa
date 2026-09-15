@@ -1,11 +1,11 @@
 # App-only FILE_SEAM section 3.5 selftest (Windows).
-# Translator: stable stg\l1_baseline\build\l1trans\gen2\l1trans.exe (full SHA256).
+# Translator: pinned build\l1trans\gen2\l1trans.exe (full SHA256).
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
-$ExpectedTransSha = Get-L1Pin -L1Root (Join-Path $PSScriptRoot "..\stg\l1_baseline")
+$ExpectedTransSha = Get-L1Pin -L1Root (Join-Path $PSScriptRoot "..")
 Set-Location (Join-Path $PSScriptRoot "..")
 
-$trans = "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+$trans = "build\l1trans\gen2\l1trans.exe"
 if ($env:MIXA_L1TRANS -and $env:MIXA_L1TRANS.Trim().Length -gt 0) {
     $trans = $env:MIXA_L1TRANS.Trim()
 }

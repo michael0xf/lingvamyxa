@@ -39,13 +39,13 @@
 # mixa_audio_mp3.lm1/.h.lm1 and the real, unmodified chain it predefs
 # (mixa_audio_scan, mixa_audio_launch, and everything they in turn
 # predef) are the parity oracle and are never touched. Nothing under
-# stg/l1_baseline or build/codex is modified, only read. Every input is
+# l1src, l2src or build/codex is modified, only read. Every input is
 # built fresh in a unique run directory -- no stale objects.
 param()
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root
@@ -192,7 +192,7 @@ $mpSrc = "mixa_manager\mixa_audio_mp3.lm2"
 $mpOut = Join-Path $RunDir "mixa_audio_mp3_l2.lm1"
 $mpStdout = Join-Path $RunDir "mp_stdout.log"
 $mpStderr = Join-Path $RunDir "mp_stderr.log"
-$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+$env:L2_RUNTIME_ROOT = "l2src/"
 $MpExit = Invoke-Cmd "`"$l2exe`"" "`"$mpSrc`" `"$mpOut`"" $mpStdout $mpStderr
 Pop-Location
 
@@ -243,7 +243,7 @@ if ($MpExit -ne 0 -and $KnownBarrier) {
         $l2MpO = Join-Path $RunDir "mixa_audio_mp3_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2mp_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2mp_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2MpC`" -o `"$l2MpO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$L1Root`" -c `"$l2MpC`" -o `"$l2MpO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"

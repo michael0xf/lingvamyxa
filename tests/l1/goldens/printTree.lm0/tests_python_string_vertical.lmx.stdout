@@ -1,0 +1,7 @@
+structure fields=1
+  frame head="doc" body=structure fields=1
+    atom """"
+column zero python-like string
+""""
+    Tail cutter trailer spelling="end" fields=1
+      atom "doc"

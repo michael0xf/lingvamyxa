@@ -1,0 +1,222 @@
+structure fields=1
+  frame head="L2" body=structure fields=10
+    frame head="predef" body=structure fields=1
+      atom ""fixtures/registry_view_parity_base.lm2""
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "`registry.view.parity.lookup`"
+      frame head="columns" body=structure fields=2
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "value"
+      frame head="rows" body=structure fields=10
+        atom "default"
+        atom "localDefault"
+        atom "localExact"
+        atom "localExactValue"
+        atom "shadow"
+        atom "localShadowValue"
+        atom "duplicate"
+        atom "localDuplicateFirst"
+        atom "duplicate"
+        atom "localDuplicateLast"
+      Tail cutter trailer spelling="end" fields=1
+        atom "`registry.view.parity.lookup`"
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "`registry.view.parity.multi`"
+      frame head="columns" body=structure fields=3
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "left"
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "right"
+      frame head="rows" body=structure fields=9
+        atom "localMulti"
+        atom "localLeft"
+        atom "localRight"
+        atom "sharedMulti"
+        atom "localSharedLeft"
+        atom "None"
+        atom "noneLeft"
+        atom "None"
+        atom "rightSurvives"
+      Tail cutter trailer spelling="end" fields=1
+        atom "`registry.view.parity.multi`"
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "`registry.view.parity.keyonly`"
+      frame head="columns" body=structure fields=1
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+      frame head="rows" body=structure fields=3
+        atom "localKeyOnly"
+        atom "duplicateKeyOnly"
+        atom "None"
+      Tail cutter trailer spelling="end" fields=1
+        atom "`registry.view.parity.keyonly`"
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "`registry.view.parity.allnone`"
+      frame head="columns" body=structure fields=4
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "left"
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "middle"
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "right"
+      frame head="rows" body=structure fields=12
+        atom "localAllNone"
+        atom "None"
+        atom "None"
+        atom "None"
+        atom "duplicateAllNone"
+        atom "None"
+        atom "None"
+        atom "None"
+        atom "duplicateAllNone"
+        atom "None"
+        atom "None"
+        atom "None"
+      Tail cutter trailer spelling="end" fields=1
+        atom "`registry.view.parity.allnone`"
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "`registry.view.parity.duplicateColumns`"
+      frame head="columns" body=structure fields=3
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "value"
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "value"
+      frame head="rows" body=structure fields=6
+        atom "localDuplicateColumns"
+        atom "localFirst"
+        atom "localSecond"
+        atom "partialDuplicate"
+        atom "survives"
+        atom "None"
+      Tail cutter trailer spelling="end" fields=1
+        atom "`registry.view.parity.duplicateColumns`"
+    frame head="join" body=structure fields=3
+      structure fields=2
+        atom "registryViewParityWideA"
+        atom "registryViewParityWideB"
+      atom "registryViewParityWideJoined"
+      structure fields=3
+        atom "source"
+        frame head="columns" body=structure fields=4
+          structure fields=1
+            frame head="class" body=structure fields=1
+              atom "class"
+          structure fields=1
+            frame head="@" body=structure fields=2
+              atom "char"
+              atom "left"
+          structure fields=1
+            frame head="@" body=structure fields=2
+              atom "char"
+              atom "middle"
+          structure fields=1
+            frame head="@" body=structure fields=2
+              atom "char"
+              atom "right"
+        frame head="rows" body=structure fields=12
+          atom "localWide"
+          atom "localLeft"
+          atom "None"
+          atom "localRight"
+          atom "localWideNone"
+          atom "None"
+          atom "None"
+          atom "None"
+          atom "sharedWide"
+          atom "localLast"
+          atom "localMiddle"
+          atom "None"
+      Tail cutter trailer spelling="end" fields=1
+        atom "registryViewParityWideJoined"
+    frame head="join" body=structure fields=3
+      structure fields=1
+        atom "registryViewParityJoinBase"
+      atom "registryViewParityJoined"
+      structure fields=3
+        atom "source"
+        frame head="columns" body=structure fields=2
+          structure fields=1
+            frame head="class" body=structure fields=1
+              atom "class"
+          structure fields=1
+            frame head="@" body=structure fields=2
+              atom "char"
+              atom "value"
+        frame head="rows" body=structure fields=2
+          atom "localJoin"
+          atom "localJoinValue"
+      Tail cutter trailer spelling="end" fields=1
+        atom "registryViewParityJoined"
+    frame head="join" body=structure fields=3
+      structure fields=1
+        atom "registryViewParityNamespaceBase"
+      atom "namespace"
+      structure fields=3
+        atom "source"
+        frame head="columns" body=structure fields=2
+          structure fields=1
+            frame head="class" body=structure fields=1
+              atom "class"
+          structure fields=1
+            frame head="class" body=structure fields=1
+              atom "`receiver.type`"
+        frame head="rows" body=structure fields=0
+      Tail cutter trailer spelling="end" fields=1
+        atom "namespace"
+    frame head="external" body=structure fields=1
+      frame head="fn" body=structure fields=4
+        atom "main"
+        structure fields=0
+        atom "int"
+        structure fields=2
+          frame head="registryViewParityAssert" body=structure fields=3
+            atom "1"
+            atom "="
+            atom "1"
+          frame head="return" body=structure fields=1
+            atom "0"
+        Tail cutter trailer spelling="end" fields=1
+          atom "main"
+      Tail cutter trailer spelling="end" fields=1
+        atom "external"
+    Tail cutter trailer spelling="end" fields=1
+      atom "L2"

@@ -1,3 +1,0 @@
-fn: hb () int
-    return: 22
-end: hb

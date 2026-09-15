@@ -1,0 +1,36 @@
+structure fields=4
+  frame head="function" body=structure fields=5
+    atom "1"
+    atom "2"
+    atom "3"
+    structure fields=2
+      atom "hello"
+      atom "world"
+    atom "last_arg"
+  frame head="return" body=structure fields=1
+    structure fields=3
+      atom "1"
+      atom "2"
+      atom "3"
+  frame head="index_target" body=structure fields=9
+    atom "array"
+    atom "["
+    atom "index"
+    atom "-"
+    atom "other"
+    atom "["
+    frame head="nested" body=structure fields=2
+      atom "1"
+      atom "2"
+    atom "]"
+    atom "]"
+  frame head="multiline" body=structure fields=1
+    structure fields=6
+      atom "index"
+      atom "-"
+      atom "other"
+      atom "["
+      frame head="nested" body=structure fields=2
+        atom "1"
+        atom "2"
+      atom "]"

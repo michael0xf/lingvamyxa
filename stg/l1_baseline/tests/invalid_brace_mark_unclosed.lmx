@@ -1,4 +1,0 @@
-root:
-{outer {inner}
-    child: bad
-end: root

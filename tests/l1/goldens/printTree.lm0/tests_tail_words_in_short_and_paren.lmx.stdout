@@ -1,0 +1,15 @@
+structure fields=2
+  frame head="box" body=structure fields=1
+    frame head="end" body=structure fields=2
+      atom "value"
+      frame head="return" body=structure fields=2
+        atom "item"
+        frame head="until" body=structure fields=1
+          atom "done"
+  frame head="line" body=structure fields=1
+    frame head="end" body=structure fields=2
+      atom "value"
+      frame head="return" body=structure fields=2
+        atom "item"
+        frame head="until" body=structure fields=1
+          atom "done"

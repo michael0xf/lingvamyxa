@@ -1,0 +1,2985 @@
+predef: "lmx_msg_visit.h.lm1" "lmx_msg_liveness.h.lm1" "lmx_message_graph_copy.h.lm1" "lmx_chars_owned.h.lm1"
+include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exec.h" "l2src/lmx.h" "l2src/lmx_msg_visit.lm1.h" "l2src/lmx_msg_liveness.lm1.h" "<stdlib.h>" "<string.h>" "<limits.h>"
+
+prototype:
+    fn: lmx_msg_mark_array (@: LmxMsg m; @: LmxArrayDesc desc; @: LmxVisit seen) int
+    fn: lmx_msg_mark_child_value (@: LmxMsg m; @: void p; @: LmxVisit seen) int
+    fn: lmx_msg_mark_children_range (@: LmxMsg m; @: LmxOwnedRange rg; @: LmxVisit seen) int
+    fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
+    fn: lmx_msg_mark_classifier (@: LmxOwnedRange ranges; @: LmxVisit seen) int
+    fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
+    fn: lmx_msg_seen_holds_block (@: LmxVisit seen; @: LmxMsgBlock b) int
+    fn: lmx_msg_collect_block (@: LmxMsg m; @: LmxMsgBlock b) int
+    fn: lmx_msg_arena_collect (@: LmxMsg m) int
+    fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
+    fn: lmx_msg_root_release (@: LmxMsg m; @: void p) int
+    fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
+    fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
+    fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
+    fn: lmx_msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
+    fn: lmx_msg_child_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    fn: lmx_msg_child_at (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i) unsigned
+    fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    fn: lmx_msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEnv env)) int
+    fn: lmx_msg_live_check (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned: threshold) int
+    fn: lmx_msg_drive_tree (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    fn: lmx_msg_drive_walk_children (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    fn: lmx_msg_drive_walk_roots (@: LmxMsgRuntime rt) int
+    fn: lmx_msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
+end: prototype
+
+fn: lmx_msg_mark_array (@: LmxMsg m; @: LmxArrayDesc desc; @: LmxVisit seen) int
+    @: LmxOwnedRange rg
+    @@: Lmx nodes 0
+    @@: LmxArrayDesc descs 0
+    @@: LmxMethod methods 0
+    @: Lmx node
+    @: LmxArrayDesc inner
+    @: LmxMethod rec
+    size_t: i 0U
+    if: m = 0 || desc = 0 || seen = 0 || seen\oom != 0
+        return: 0
+    if: c.lmx_msg_visit_has_ptr(seen, desc) != 0
+        return: 0
+    c.lmx_msg_visit_add_ptr(seen, desc)
+    if: seen\oom != 0
+        return: 0
+    if: desc\data != 0
+        c.lmx_msg_visit_add_ptr(seen, desc\data)
+        if: seen\oom != 0
+            return: 0
+        ---
+    ---
+    rg: c.lmx_owned_ranges_find(m\ranges, desc)
+    if: rg = 0 || desc\data = 0
+        return: 0
+    if: rg\type = c.LMX_TYPE_ARRAY_OF_LMX
+        nodes: (cast: (@@: Lmx) desc\data)
+        while: i < desc\len
+            node: nodes[i]
+            if: node != 0
+                lmx_msg_mark_from(m, node, seen)
+            ---
+            i: i + 1U
+        ---
+    ---
+    if: rg\type = c.LMX_TYPE_ARRAY_OF_DESC
+        descs: (cast: (@@: LmxArrayDesc) desc\data)
+        while: i < desc\len
+            inner: descs[i]
+            if: inner != 0
+                lmx_msg_mark_array(m, inner, seen)
+            ---
+            i: i + 1U
+        ---
+    ---
+    if: rg\type = c.LMX_TYPE_ARRAY_OF_METHOD
+        methods: (cast: (@@: LmxMethod) desc\data)
+        while: i < desc\len
+            rec: methods[i]
+            if: rec != 0
+                c.lmx_msg_visit_add_ptr(seen, rec)
+            ---
+            i: i + 1U
+        ---
+    ---
+return: 0
+
+fn: lmx_msg_mark_child_value (@: LmxMsg m; @: void p; @: LmxVisit seen) int
+    @: LmxOwnedRange rg
+    if: m = 0 || p = 0 || seen = 0 || seen\oom != 0
+        return: 0
+    rg: c.lmx_owned_ranges_find(m\ranges, p)
+    if: rg = 0
+        c.lmx_msg_visit_add_ptr(seen, p)
+        return: 0
+    ---
+    if: rg\kind = c.LMX_KIND_STRUCT
+        lmx_msg_mark_from(m, (cast: (@: Lmx) p), seen)
+        return: 0
+    ---
+    if: rg\kind = c.LMX_KIND_ARRAY
+        lmx_msg_mark_array(m, (cast: (@: LmxArrayDesc) p), seen)
+        return: 0
+    ---
+    c.lmx_msg_visit_add_ptr(seen, p)
+return: 0
+
+# A RETAIN root may be the CHILDREN allocation itself rather than its owning
+# Structure. The range is the only complete shape available in that case, so
+# traverse every registered slot in the half-open range. This preserves all
+# referents exactly as rooting the owning Structure would, without recovering
+# a header by pointer arithmetic or imposing a slot-count limit.
+fn: lmx_msg_mark_children_range (@: LmxMsg m; @: LmxOwnedRange rg; @: LmxVisit seen) int
+    @@: void slots 0
+    size_t: bytes
+    size_t: count
+    size_t: i 0U
+    if: m = 0 || rg = 0 || seen = 0 || seen\oom != 0
+        return: 0
+    if: rg\kind != c.LMX_KIND_CHILDREN || rg\lo = 0 || rg\hi = 0 || rg\stride != c.sizeof(@: void)
+        return: 0
+    if: (cast: (uintptr_t) rg\hi) <= (cast: (uintptr_t) rg\lo)
+        return: 0
+    bytes: (cast: (size_t) ((cast: (uintptr_t) rg\hi) - (cast: (uintptr_t) rg\lo)))
+    if: bytes % rg\stride != 0U
+        return: 0
+    count: bytes / rg\stride
+    slots: (cast: (@@: void) rg\lo)
+    while: i < count && seen\oom = 0
+        lmx_msg_mark_child_value(m, slots[i], seen)
+        i: i + 1U
+    ---
+return: 0
+
+fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
+    @: LmxOwnedRange rg
+    @@: void slots 0
+    @: void child
+    size_t: i 0U
+    if: m = 0 || x = 0 || seen = 0 || seen\oom != 0
+        return: 0
+    if: c.lmx_msg_visit_has(seen, x) != 0
+        return: 0
+    c.lmx_msg_visit_add(seen, x)
+    if: seen\oom != 0
+        return: 0
+    if: x\node != 0
+        lmx_msg_mark_child_value(m, (cast: (@: void) x\node), seen)
+    ---
+    if: x\data = 0
+        return: 0
+    c.lmx_msg_visit_add_ptr(seen, x\data)
+    if: seen\oom != 0
+        return: 0
+    rg: c.lmx_owned_ranges_find(m\ranges, x\data)
+    if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN && x\len > 0
+        slots: (cast: (@@: void) x\data)
+        while: i < x\len
+            child: slots[i]
+            lmx_msg_mark_child_value(m, child, seen)
+            i: i + 1U
+        ---
+    ---
+    if: rg != 0 && rg\kind = c.LMX_KIND_ARRAY
+        lmx_msg_mark_array(m, (cast: (@: LmxArrayDesc) x\data), seen)
+    ---
+    if: rg != 0 && rg\kind = c.LMX_KIND_METHOD
+        c.lmx_msg_visit_add_ptr(seen, x\data)
+    ---
+return: 0
+
+# Eternal branches and shared METHOD records are roots for their owning
+# Message even when they are not reachable from the current graph. Imported
+# classifier entries may name foreign storage; recording those addresses is
+# harmless because collection only compares them with this Message's blocks.
+fn: lmx_msg_mark_classifier (@: LmxOwnedRange ranges; @: LmxVisit seen) int
+    @: LmxOwnedRange r ranges
+    if: seen = 0 || seen\oom != 0
+        return: 0
+    while: r != 0 && seen\oom = 0
+        if: r\lo != 0
+            c.lmx_msg_visit_add_ptr(seen, r\lo)
+        ---
+        r: r\next
+    ---
+return: 0
+
+fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
+    @: LmxMsgRoot r
+    @: LmxOwnedRange rg
+    if: m = 0 || seen = 0 || seen\oom != 0
+        return: 0
+    r: m\roots
+    while: r != 0
+        if: r\p != 0
+            rg: c.lmx_owned_ranges_find(m\ranges, r\p)
+            if: rg != 0 && rg\kind = c.LMX_KIND_ARRAY
+                lmx_msg_mark_array(m, (cast: (@: LmxArrayDesc) r\p), seen)
+            ---
+            if: rg != 0 && rg\kind = c.LMX_KIND_STRUCT
+                lmx_msg_mark_from(m, (cast: (@: Lmx) r\p), seen)
+            ---
+            if: rg != 0 && (rg\kind = c.LMX_KIND_PRIMITIVE || rg\kind = c.LMX_KIND_METHOD)
+                c.lmx_msg_visit_add_ptr(seen, r\p)
+            ---
+            if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN
+                c.lmx_msg_visit_add_ptr(seen, r\p)
+                if: seen\oom = 0
+                    lmx_msg_mark_children_range(m, rg, seen)
+                ---
+            ---
+        ---
+        r: r\next
+    ---
+return: 0
+
+fn: lmx_msg_seen_holds_block (@: LmxVisit seen; @: LmxMsgBlock b) int
+    size_t: i 0U
+    @: Lmx x
+    if: seen = 0 || b = 0 || seen\oom != 0 || seen\n > seen\cap || seen\pn > seen\pcap
+        return: 1
+    if: (seen\n != 0U && seen\v = 0) || (seen\pn != 0U && seen\p = 0)
+        return: 1
+    while: i < seen\n
+        x: seen\v[i]
+        if: x = 0
+            return: 1
+        if: c.lmx_msg_ptr_in_block(x, b) != 0
+            return: 1
+        if: c.lmx_msg_ptr_in_block(x\data, b) != 0
+            return: 1
+        if: c.lmx_msg_ptr_in_block(x\node, b) != 0
+            return: 1
+        i: i + 1U
+    ---
+    i: 0U
+    while: i < seen\pn
+        if: c.lmx_msg_ptr_in_block(seen\p[i], b) != 0
+            return: 1
+        i: i + 1U
+    ---
+return: 0
+
+fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
+    @: LmxOwnedRange rg
+    @: LmxMsgRoot n
+    @: LmxMsgRoot cur
+    if: m = 0 || p = 0
+        return: c.LMX_MSG_INVALID
+    rg: c.lmx_owned_ranges_find(m\ranges, p)
+    if: rg = 0 || (rg\kind != c.LMX_KIND_PRIMITIVE && rg\kind != c.LMX_KIND_METHOD && rg\kind != c.LMX_KIND_ARRAY && rg\kind != c.LMX_KIND_CHILDREN && rg\kind != c.LMX_KIND_STRUCT)
+        return: c.LMX_MSG_INVALID
+    cur: m\roots
+    while: cur != 0
+        if: cur\p = p
+            if: (cur\roles & c.LMX_MSG_ROOT_RETAIN) != 0U
+                return: c.LMX_MSG_DUPLICATE
+            ---
+            cur\roles: cur\roles | c.LMX_MSG_ROOT_RETAIN
+            return: c.LMX_MSG_OK
+        ---
+        cur: cur\next
+    ---
+    if: c.lmx_msg_test_root_alloc_should_fail() != 0
+        return: c.LMX_MSG_NOMEM
+    ---
+    n: (cast: (@: LmxMsgRoot) c.malloc(c.sizeof(c.LmxMsgRoot)))
+    if: n = 0
+        return: c.LMX_MSG_NOMEM
+    n\p: p
+    n\roles: c.LMX_MSG_ROOT_RETAIN
+    n\next: m\roots
+    m\roots: n
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_root_release (@: LmxMsg m; @: void p) int
+    @: LmxMsgRoot cur
+    @: LmxMsgRoot prev 0
+    if: m = 0 || p = 0
+        return: c.LMX_MSG_INVALID
+    cur: m\roots
+    while: cur != 0
+        if: cur\p = p
+            if: (cur\roles & c.LMX_MSG_ROOT_RETAIN) = 0U
+                return: c.LMX_MSG_INVALID
+            ---
+            cur\roles: cur\roles - c.LMX_MSG_ROOT_RETAIN
+            if: cur\roles = 0U
+                if: prev != 0
+                    prev\next: cur\next
+                ---
+                if: prev = 0
+                    m\roots: cur\next
+                ---
+                c.free((cast: (@: void) cur))
+            ---
+            return: c.LMX_MSG_OK
+        ---
+        prev: cur
+        cur: cur\next
+    ---
+return: c.LMX_MSG_INVALID
+
+fn: lmx_msg_collect_block (@: LmxMsg m; @: LmxMsgBlock b) int
+    @: LmxOwnedRange r
+    @: LmxOwnedRange rn
+    @: LmxMsgBlock tmp 0
+    if: m = 0 || b = 0
+        return: 0
+    r: m\ranges
+    while: r != 0
+        rn: r\next
+        if: c.lmx_msg_ptr_in_block(r\lo, b) != 0
+            c.lmx_owned_ranges_remove(@ m\ranges, r)
+        ---
+        r: rn
+    ---
+    if: c.lmx_msg_blocks_remove(@ m\blocks, b) = c.LMX_MSG_BLOCKS_OK
+        tmp: 0
+        if: c.lmx_msg_blocks_push(@ tmp, b) = c.LMX_MSG_BLOCKS_OK
+            c.lmx_msg_blocks_dispose_all(@ tmp)
+        ---
+    ---
+return: 0
+
+fn: lmx_msg_arena_collect (@: LmxMsg m) int
+    LmxVisit: seen
+    @: LmxVisit sp (@ seen)
+    @: LmxMsgBlock b
+    @: LmxMsgBlock nxt
+    if: m = 0
+        return: 0
+    c.lmx_msg_visit_init(sp)
+    if: m\graph != 0
+        # A graph root is an address-classified value. Failure transport may
+        # carry a primitive-only graph, so do not dereference it as Structure
+        # before classification.
+        lmx_msg_mark_child_value(m, (cast: (@: void) m\graph), sp)
+        if: sp\oom != 0
+            c.lmx_msg_visit_dispose(sp)
+            return: 0
+        ---
+    ---
+    lmx_msg_mark_roots(m, sp)
+    if: sp\oom != 0
+        c.lmx_msg_visit_dispose(sp)
+        return: 0
+    ---
+    lmx_msg_mark_classifier(m\eternal_ranges, sp)
+    lmx_msg_mark_classifier(m\method_ranges, sp)
+    if: sp\oom != 0
+        c.lmx_msg_visit_dispose(sp)
+        return: 0
+    ---
+    b: m\blocks
+    while: b != 0
+        nxt: b\next
+        if: c.lmx_msg_block_has_range(m\ranges, b) != 0
+            # The completed mark contains graph, explicit roots and the two
+            # classifier root sets. Its result is therefore authoritative even
+            # when graph = 0 and there are no ordinary roots.
+            if: lmx_msg_seen_holds_block(sp, b) = 0
+                lmx_msg_collect_block(m, b)
+            ---
+        ---
+        b: nxt
+    ---
+    c.lmx_msg_visit_dispose(sp)
+return: 0
+
+# Copy-only Message mailbox. Spec 19.29.7.1.
+# Send stages a transport-owned copy. Admission enqueues a fresh copy on the
+# recipient inbox. Handler materialization is recv at turn entry.
+
+fn: lmx_msg_copy_bytes (const: @(uchar src); size_t: n) @: uchar
+    @: uchar p
+    if: n = 0U
+        return: 0
+    if: src = 0
+        return: 0
+    if: c.lmx_msg_test_copy_should_fail() != 0
+        return: 0
+    p: (cast: (@: uchar) c.malloc(n))
+    if: p = 0
+        return: 0
+    c.memcpy(p, src, n)
+return: p
+
+# O1 (lock removal, 2026-09-15): an allocation in the turn Message's own arena,
+# reached without a runtime handle. The arena is the Message's blocks list (spec
+# 19.29.2): one zeroed block pushed onto it, written on the Message's own lane.
+# 0 outside any turn; on refusal nothing is pushed. Freed with the arena: the
+# slot's free at its release, or its parent's settle write when adopted.
+fn: lmx_msg_turn_new_zero (size_t: size) @: void
+    @: LmxMsg m
+    @: LmxMsgBlock b
+    @: void p
+    m: c.lmx_msg_turn_current()
+    if: m = 0 || size = 0U
+        return: 0
+    b: (cast: (@: LmxMsgBlock) c.calloc(1U, c.sizeof(c.LmxMsgBlock)))
+    if: b = 0
+        return: 0
+    p: c.calloc(1U, size)
+    if: p = 0
+        c.free((cast: (@: void) b))
+        return: 0
+    b\base: p
+    b\n: size
+    if: c.lmx_msg_blocks_push(@ m\blocks, b) != c.LMX_MSG_BLOCKS_OK
+        c.free(p)
+        c.free((cast: (@: void) b))
+        return: 0
+return: p
+
+fn: lmx_msg_turn_copy_bytes (const: @(char source); size_t: length) @: char
+    @: char copy
+    if: length = (cast: (size_t) -1)
+        return: 0
+    copy: (cast: (@: char) lmx_msg_turn_new_zero(length + 1U))
+    if: copy = 0
+        return: 0
+    if: source != 0 && length > 0U
+        c.memcpy(copy, source, length)
+return: copy
+
+# Ordinary delivery (SPEC 19.29.7, model §23/§27, decision 15): the delivered
+# Message is created by the copier in its own arena, one copy by the same
+# traversal as create, and moves from the sender's outbox through the
+# transport into the recipient's inbox without a second clone. It has no turn
+# and no mailbox of its own: a Message, not an L3 Thread.
+# Frees a delivery that never reached its handler (a failed sending turn, a
+# dropped admission). Range records live inside the blocks.
+sub: lmx_msg_delivery_dispose (@: LmxMsg d)
+    if: d = 0
+        return
+    c.lmx_msg_blocks_dispose_all(@ d\blocks)
+    d\ranges: 0
+    d\graph: 0
+    c.free((cast: (@: void) d))
+end: lmx_msg_delivery_dispose
+
+fn: lmx_msg_delivery_new (@: Lmx graph; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges) @: LmxMsg
+    @: LmxMsg d
+    @: char chars
+    if: graph = 0 || src_ranges = 0
+        return: 0
+    d: (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
+    if: d = 0
+        return: 0
+    chars: lmx_chars_new_owned(@ d\blocks, @ d\ranges)
+    if: chars = 0
+        lmx_msg_delivery_dispose(d)
+        return: 0
+    if: lmx_msg_graph_copy_install(d, graph, src_ranges, eternal_ranges, method_ranges, chars) != c.LMX_MSG_OK
+        lmx_msg_delivery_dispose(d)
+        return: 0
+    d\state: c.LMX_MSG_STATE_INACTIVE
+    c.lmx_msg_running_store(d, 1)
+    c.lmx_msg_success_store(d, 0)
+return: d
+
+# Recv-side materialization of a delivery: its blocks and ranges join the
+# handler's one arena at their addresses; nothing is relocated or rewritten.
+fn: lmx_msg_delivery_receive (@: LmxMsg m; @: LmxMsgCopy node; @: LmxMsgEnv out) int
+    @: LmxMsg d
+    if: m = 0 || node = 0 || out = 0
+        return: c.LMX_MSG_INVALID
+    d: node\delivered
+    if: d = 0
+        return: c.LMX_MSG_OK
+    if: c.lmx_msg_storage_can_move(@ m\blocks, @ m\ranges, @ d\blocks, @ d\ranges) != c.LMX_MSG_STORAGE_OK
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_storage_move_all(@ m\blocks, @ m\ranges, @ d\blocks, @ d\ranges) != c.LMX_MSG_STORAGE_OK
+        return: c.LMX_MSG_INVALID
+    out\graph: d\graph
+    d\graph: 0
+    node\delivered: 0
+    lmx_msg_delivery_dispose(d)
+return: c.LMX_MSG_OK
+
+sub: lmx_msg_copy_free (@: LmxMsgCopy node)
+    @: LmxMsgCopy next
+    while: node != 0
+        next: node\next
+        if: node\bytes != 0
+            c.free((cast: (@: void) node\bytes))
+        ---
+        if: node\delivered != 0
+            lmx_msg_delivery_dispose(node\delivered)
+            node\delivered: 0
+        ---
+        if: node\dest_msg != 0
+            c.lmx_msg_endp_release(node\dest_msg)
+            node\dest_msg: 0
+        ---
+        c.free((cast: (@: void) node))
+        node: next
+    ---
+end: lmx_msg_copy_free
+
+fn: lmx_msg_copy_dup (const: @(LmxMsgCopy src)) @: LmxMsgCopy
+    @: LmxMsgCopy n
+    if: src = 0
+        return: 0
+    # A delivered Message is moved, never duplicated (SPEC 19.29.7).
+    if: src\delivered != 0
+        return: 0
+    n: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: n = 0
+        return: 0
+    n\id: src\id
+    n\correlation: src\correlation
+    n\reply_to: src\reply_to
+    n\from: src\from
+    n\to: src\to
+    n\kind: src\kind
+    n\number: src\number
+    n\n: src\n
+    n\next: 0
+    n\bytes: lmx_msg_copy_bytes(src\bytes, src\n)
+    if: src\n != 0U && n\bytes = 0
+        c.free((cast: (@: void) n))
+        return: 0
+    if: src\dest_msg != 0
+        if: c.lmx_msg_endp_retain(src\dest_msg) = 0
+            if: n\bytes != 0
+                c.free((cast: (@: void) n\bytes))
+            ---
+            c.free((cast: (@: void) n))
+            return: 0
+        ---
+        n\dest_msg: src\dest_msg
+    ---
+return: n
+
+sub: lmx_msg_q_push (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @: LmxMsgCopy node)
+    @: LmxMsgCopy current_tail
+    if: node = 0
+        return
+    node\next: 0
+    if: \head = 0
+        \head: node
+        \tail: node
+        return
+    current_tail: \tail
+    current_tail\next: node
+    \tail: node
+end: lmx_msg_q_push
+
+fn: lmx_msg_q_pop (@@: LmxMsgCopy head; @@: LmxMsgCopy tail) @: LmxMsgCopy
+    @: LmxMsgCopy n
+    n: \head
+    if: n = 0
+        return: 0
+    \head: n\next
+    if: \head = 0
+        \tail: 0
+    ---
+    n\next: 0
+return: n
+
+fn: lmx_msg_find_tree (@: LmxMsg m; LmxMsgAddr: addr) @: LmxMsg
+    @: LmxMsg ch
+    @: LmxMsg f
+    if: m = 0 || addr = 0U
+        return: 0
+    if: m\addr = addr && m\state != c.LMX_MSG_STATE_RELEASED
+        return: m
+    ch: m\first_child
+    while: ch != 0
+        f: lmx_msg_find_tree(ch, addr)
+        if: f != 0
+            return: f
+        ch: ch\next_sibling
+    ---
+return: 0
+
+fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
+    @: LmxMsg fam
+    @: LmxMsg f
+    if: rt = 0 || addr = 0U
+        return: 0
+    fam: rt\root
+    while: fam != 0
+        f: lmx_msg_find_tree(fam, addr)
+        if: f != 0
+            return: f
+        fam: fam\next_sibling
+    ---
+return: 0
+
+fn: lmx_msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @: LmxMsg
+    @: LmxMsg d
+    if: to = 0U
+        return: 0
+    if: src != 0
+        d: lmx_msg_find_tree(src, to)
+        if: d != 0
+            return: d
+        ---
+        if: src\parent_msg != 0 && src\parent_msg\addr = to && src\parent_msg\state != c.LMX_MSG_STATE_RELEASED
+            return: src\parent_msg
+        ---
+    ---
+return: lmx_msg_find(rt, to)
+
+fn: lmx_msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
+    @: LmxMsg m
+    m: c.lmx_msg_turn_self(rt)
+    if: m != 0 && m\addr = addr && m\state != c.LMX_MSG_STATE_RELEASED
+        return: m
+    ---
+return: lmx_msg_find(rt, addr)
+
+fn: lmx_msg_turn_slot (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
+    @: LmxMsg m
+    if: rt = 0 || who = 0U
+        return: 0
+    m: c.lmx_msg_turn_self(rt)
+    if: m != 0 && m\addr = who && m\state != c.LMX_MSG_STATE_RELEASED
+        return: m
+    ---
+return: 0
+
+sub: lmx_msg_child_link (@: LmxMsg parent; @: LmxMsg child)
+    if: parent = 0 || child = 0
+        return
+    child\parent_msg: parent
+    child\next_sibling: 0
+    if: parent\first_child = 0
+        parent\first_child: child
+        parent\last_child: child
+        return
+    parent\last_child\next_sibling: child
+    parent\last_child: child
+end: lmx_msg_child_link
+
+fn: lmx_msg_child_chain_remove (@: LmxMsg parent; @: LmxMsg child) int
+    @: LmxMsg p
+    @: LmxMsg n
+    p: 0
+    n: parent\first_child
+    while: n != 0
+        if: n = child
+            if: p = 0
+                parent\first_child: child\next_sibling
+            ---
+            if: p != 0
+                p\next_sibling: child\next_sibling
+            ---
+            if: parent\last_child = child
+                parent\last_child: p
+            ---
+            child\next_sibling: 0
+            return: 1
+        ---
+        p: n
+        n: n\next_sibling
+    ---
+return: 0
+
+fn: lmx_msg_child_unlink (@: LmxMsg parent; @: LmxMsg child) int
+    if: parent = 0 || child = 0
+        return: c.LMX_MSG_OK
+    # Stage 3b-8: a bound child cannot leave its family; unbind it first.
+    if: c.lmx_msg_exec_msg_bound(child) != 0
+        return: c.LMX_MSG_INVALID
+    if: lmx_msg_child_chain_remove(parent, child) != 0
+        child\parent_msg: 0
+    ---
+return: c.LMX_MSG_OK
+
+# Decision 17 rule 4 (Mikhail, 2026-09-14): a running Message survives its
+# parent's closing only by a handoff of supervision to another live parent.
+# The child keeps its arena, mailbox, turn, record, path (its genesis) and its
+# ready flag (decision 18). Its parent capability (parent_msg and the address
+# parent) and its liveness window move to the new parent, all under the exec
+# lock (3b-9). Addresses are the bootstrap's capabilities: "the new
+# parent is live in the same runtime" is the check until 19.28.R2.
+fn: lmx_msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsgAddr: child; LmxMsgAddr: new_parent) int
+    @: LmxMsg p
+    @: LmxMsg ch
+    @: LmxMsg q
+    @: LmxMsg a
+    if: rt = 0 || old_parent = 0U || child = 0U || new_parent = 0U
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, old_parent) = 0
+        if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    p: lmx_msg_self_or_find(rt, old_parent)
+    ch: lmx_msg_self_or_find(rt, child)
+    q: lmx_msg_self_or_find(rt, new_parent)
+    # A root has no parent to hand over from: its only new parent would be the
+    # World Wide Mix ancestor, a stub until stage 5.
+    if: ch != 0 && ch\parent_msg = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    if: p = 0 || ch = 0 || q = 0 || ch\parent_msg != p || q = p || q = ch
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    if: q\state = c.LMX_MSG_STATE_STOPPED || q\state = c.LMX_MSG_STATE_DEAD || q\state = c.LMX_MSG_STATE_RELEASED || q\closing != 0 || q\disposed != 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    # The new parent inside the child's subtree would cut the family off rt->root.
+    a: q\parent_msg
+    while: a != 0
+        if: a = ch
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_INVALID
+        ---
+        a: a\parent_msg
+    ---
+    lmx_msg_child_chain_remove(p, ch)
+    lmx_msg_child_link(q, ch)
+    ch\parent: q\addr
+    ch\child_heard_at: c.lmx_msg_now(rt)
+    ch\live_query_id: 0U
+    ch\live_query_pend_id: 0U
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_exec_flush_retire(rt)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
+    @: LmxMsg m
+    if: rt = 0 || addr = 0U
+        return: 0
+    m: lmx_msg_self_or_find(rt, addr)
+    if: m = 0
+        return: 0
+    if: m\state = c.LMX_MSG_STATE_STOPPED || m\state = c.LMX_MSG_STATE_DEAD || m\state = c.LMX_MSG_STATE_RELEASED
+        return: 0
+    if: c.lmx_msg_mail_inbox_has_input(m) != 0
+        return: 1
+    ---
+    if: m\closing != 0 && m\state != c.LMX_MSG_STATE_STOPPED
+        return: 1
+    ---
+return: 0
+
+fn: lmx_msg_exec_is_runnable (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
+    int: r
+    if: rt = 0 || addr = 0U
+        return: 0
+    c.lmx_msg_exec_lock(rt)
+    r: lmx_msg_exec_is_runnable_locked(rt, addr)
+    c.lmx_msg_exec_unlock(rt)
+return: r
+
+# Decision 18 (2026-09-14): readiness is the Message's own control flag
+# (class 3), set here by its designated writers: the sender at admission, the
+# closing requester, the bind kick. A bound Message on a context is signalled
+# through its own wait (a primitive); a Message the host maps is found by its
+# parent's scheduler step or by the UI take, which read the flag. Nothing is
+# appended to a parent's cells.
+sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
+    @: LmxMsg m
+    int: bound 0
+    int: ui 0
+    int: pool 0
+    if: rt = 0 || addr = 0U
+        return
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, addr)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return
+    ---
+    m\ready: 1
+    bound: c.lmx_msg_exec_route_locked(m, @ ui, @ pool)
+    # S3 (no wake): admission into the mailbox is all; the owner looks into it in its own round.
+    # Stage 3d: a Message its parent's policy maps to UI (today its bind
+    # affinity) asks the UI lane for its turn, once per request: an admission
+    # into the UI lane's mailbox, sent by the writer of its readiness.
+    if: bound != 0 && ui != 0 && m\ui_pending = 0
+        m\ui_pending: 1
+        if: c.lmx_msg_exec_ui_request_locked(rt, addr) != c.LMX_MSG_OK
+            m\ui_pending: 0
+        ---
+    ---
+    c.lmx_msg_exec_unlock(rt)
+end: lmx_msg_exec_ready
+
+fn: lmx_msg_exec_take_addr (@: LmxMsgRuntime rt) unsigned
+    unsigned: a
+    if: rt = 0
+        return: 0U
+    c.lmx_msg_exec_lock(rt)
+    a: c.lmx_msg_exec_take_ui_locked(rt)
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_exec_flush_retire(rt)
+return: a
+
+fn: lmx_msg_done_has (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
+    int: i 0
+    if: m = 0
+        return: 0
+    while: i < m\done_n
+        if: m\done_from[i] = from && m\done_id[i] = id
+            return: 1
+        i: i + 1
+return: 0
+
+fn: lmx_msg_done_grow (@: LmxMsg m) int
+    @: unsigned next_from
+    @: unsigned next_id
+    int: next_cap 8
+    size_t: bytes
+    if: m = 0 || m\done_n < 0 || m\done_cap < 0 || m\done_n > m\done_cap
+        return: 1
+    if: m\done_n < m\done_cap
+        return: 0
+    if: m\done_cap != 0
+        if: m\done_cap > c.INT_MAX / 2
+            return: 1
+        next_cap: m\done_cap * 2
+    ---
+    if: (cast: (size_t) next_cap) > ((cast: (size_t) -1) / c.sizeof(unsigned))
+        return: 1
+    bytes: (cast: (size_t) next_cap) * c.sizeof(unsigned)
+    next_from: (cast: (@: unsigned) c.malloc(bytes))
+    if: next_from = 0
+        return: 1
+    next_id: (cast: (@: unsigned) c.malloc(bytes))
+    if: next_id = 0
+        c.free((cast: (@: void) next_from))
+        return: 1
+    if: m\done_n != 0
+        c.memcpy((cast: (@: void) next_from), (cast: (@: void) m\done_from), (cast: (size_t) m\done_n) * c.sizeof(unsigned))
+        c.memcpy((cast: (@: void) next_id), (cast: (@: void) m\done_id), (cast: (size_t) m\done_n) * c.sizeof(unsigned))
+    ---
+    c.free((cast: (@: void) m\done_from))
+    c.free((cast: (@: void) m\done_id))
+    m\done_from: next_from
+    m\done_id: next_id
+    m\done_cap: next_cap
+return: 0
+
+fn: lmx_msg_done_add (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
+    if: m = 0
+        return: 1
+    if: lmx_msg_done_has(m, from, id) != 0
+        return: 0
+    if: lmx_msg_done_grow(m) != 0
+        return: 1
+    m\done_from[m\done_n]: from
+    m\done_id[m\done_n]: id
+    m\done_n: m\done_n + 1
+return: 0
+
+fn: lmx_msg_require_owner (@: LmxMsgRuntime rt) int
+    if: rt = 0
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_host_is_owner(rt) = 0
+        return: c.LMX_MSG_INVALID
+    return: c.LMX_MSG_OK
+
+fn: lmx_msg_require_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    if: rt = 0 || who = 0U
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, who) != 0
+        return: c.LMX_MSG_OK
+    if: c.lmx_msg_host_is_owner(rt) != 0 && c.lmx_msg_exec_workers(rt) = 0 && c.lmx_msg_exec_contexts_live(rt) = 0
+        return: c.LMX_MSG_OK
+    return: c.LMX_MSG_INVALID
+
+fn: lmx_msg_runtime_new () @: LmxMsgRuntime
+    @: LmxMsgRuntime rt
+    unsigned: r0 0U
+    unsigned: ui 0U
+    rt: (cast: (@: LmxMsgRuntime) c.calloc(1U, c.sizeof(c.LmxMsgRuntime)))
+    if: rt = 0
+        return: 0
+    rt\next_addr: 1U
+    if: c.lmx_msg_host_attach(rt) != 0
+        c.free((cast: (@: void) rt))
+        return: 0
+    if: c.lmx_msg_exec_attach(rt) != 0
+        c.lmx_msg_host_detach(rt)
+        c.free((cast: (@: void) rt))
+        return: 0
+    # Stage 5 (d1), spec 19.29.6 stage-5 clarification (i): creating the runtime
+    # creates its root Message R0, address 1, the only Message without a parent.
+    if: lmx_msg_create_prepare(rt, 0U, 1U, 0, 0, 0, 0, 0, 0U, @ r0) != c.LMX_MSG_OK
+        c.lmx_msg_exec_detach(rt)
+        c.lmx_msg_host_detach(rt)
+        c.free((cast: (@: void) rt))
+        return: 0
+    # Stage 5 (d2), clarification (iv): the UI lane of 19.28.R2.2 is R0's child,
+    # created with the runtime at address 2; its slot is the executor's UI lane.
+    if: lmx_msg_create_prepare(rt, 0U, c.LMX_MSG_UI_LANE_ID, 0, 0, 0, 0, 0, 0U, @ ui) != c.LMX_MSG_OK
+        lmx_msg_runtime_delete(rt)
+        return: 0
+    c.lmx_msg_exec_set_ui_lane(rt, lmx_msg_find(rt, ui))
+return: rt
+
+fn: lmx_msg_runtime_shutdown (@: LmxMsgRuntime rt) int
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    return: c.lmx_msg_host_shutdown(rt)
+
+# Stage 5 (d1): the ingress root is R0, the runtime's only root. Exec lock held.
+fn: lmx_msg_ingress_root (@: LmxMsgRuntime rt) @: LmxMsg
+return: rt\root
+
+# Stage 5 (d1): R0's address; 0 for a runtime without one.
+fn: lmx_msg_root_addr (@: LmxMsgRuntime rt) unsigned
+    if: rt = 0 || rt\root = 0
+        return: 0U
+return: rt\root\addr
+
+# Stage 5 (b): a host post is an admission into the root Message's mailbox, an
+# internal INGRESS envelope that the root's drain forwards between its turns (spec
+# 19.29.6 stage-5 clarification (iii)). Any OS thread may post; the host lock
+# orders a post against runtime_shutdown. No root: GONE, never a silent drop.
+fn: lmx_msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv env)) int
+    @: LmxMsgCopy node
+    @: uchar bytes
+    @: LmxMsg root
+    int: pin 0
+    if: rt = 0 || env = 0 || dest = 0U
+        return: c.LMX_MSG_INVALID
+    if: env\n != 0U && env\bytes = 0
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_host_lock(rt) != 0
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_host_is_shutdown(rt) != 0
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_STOPPED
+    if: c.lmx_msg_host_test_get_nomem() != 0
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_NOMEM
+    c.lmx_msg_exec_lock(rt)
+    root: lmx_msg_ingress_root(rt)
+    if: root != 0
+        pin: c.lmx_msg_endp_retain(root)
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    if: root = 0
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_GONE
+    if: pin = 0
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_NOMEM
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        c.lmx_msg_endp_release(root)
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_NOMEM
+    bytes: lmx_msg_copy_bytes(env\bytes, env\n)
+    if: env\n != 0U && bytes = 0
+        c.free((cast: (@: void) node))
+        c.lmx_msg_endp_release(root)
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_NOMEM
+    node\id: env\id
+    node\correlation: env\correlation
+    node\reply_to: env\reply_to
+    node\from: c.LMX_MSG_HOST_FROM
+    node\to: dest
+    node\kind: c.LMX_MSG_KIND_INGRESS
+    node\ingress_kind: env\kind
+    node\number: env\number
+    node\bytes: bytes
+    node\n: env\n
+    c.lmx_msg_mail_lock(root)
+    lmx_msg_q_push(@ root\inbox, @ root\inbox_tail, node)
+    c.lmx_msg_mail_unlock(root)
+    c.lmx_msg_endp_release(root)
+    c.lmx_msg_host_unlock(rt)
+return: c.LMX_MSG_STAGED
+
+# Stage 5 (b): the root's between-turns work on the root's lane: forward every
+# INGRESS envelope in admission order, its own kind restored, then pump. While the
+# bootstrap is the host that lane is the host outside any turn; from another thread
+# or from inside any turn, the root's own included, it refuses (the loop's shape:
+# one input per turn, the drain between turns).
+fn: lmx_msg_host_drain (@: LmxMsgRuntime rt) int
+    @: LmxMsg root
+    @: LmxMsgCopy n 0
+    @: LmxMsgCopy nxt
+    int: pin 0
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK || c.lmx_msg_exec_holding_any(rt) != 0
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
+    root: lmx_msg_ingress_root(rt)
+    if: root != 0
+        pin: c.lmx_msg_endp_retain(root)
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    if: root != 0 && pin = 0
+        return: c.LMX_MSG_NOMEM
+    if: root != 0
+        c.lmx_msg_mail_inbox_take_ingress(root, @ n)
+        c.lmx_msg_endp_release(root)
+    ---
+    c.lmx_msg_exec_lock(rt)
+    while: n != 0
+        nxt: n\next
+        n\next: 0
+        n\kind: n\ingress_kind
+        n\ingress_kind: 0
+        lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)
+        n: nxt
+    ---
+    c.lmx_msg_exec_unlock(rt)
+return: lmx_msg_pump(rt)
+
+sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
+    @: LmxMsg m
+    @: LmxMsg nxt
+    @: LmxMsgCopy inb 0
+    @: LmxMsgCopy outb 0
+    if: rt = 0
+        return
+    if: c.lmx_msg_host_is_owner(rt) = 0
+        return
+    c.lmx_msg_host_shutdown(rt)
+    c.lmx_msg_exec_stop(rt)
+    c.lmx_msg_exec_drop_binds(rt)
+    c.lmx_msg_exec_lock(rt)
+    c.lmx_msg_exec_set_no_retire(rt, 1)
+    m: rt\slots
+    while: m != 0
+        nxt: m\alloc_next
+        c.lmx_msg_exec_unlock(rt)
+        c.lmx_msg_mail_inbox_take(m, @ inb)
+        lmx_msg_copy_free(inb)
+        c.lmx_msg_mail_outbox_take(m, @ outb)
+        lmx_msg_copy_free(outb)
+        c.lmx_msg_exec_lock(rt)
+        m: nxt
+    ---
+    lmx_msg_copy_free(rt\transport)
+    rt\transport: 0
+    rt\transport_tail: 0
+    m: rt\slots
+    while: m != 0
+        nxt: m\alloc_next
+        if: m\init != 0
+            c.free((cast: (@: void) m\init))
+        ---
+        if: m\path != 0
+            c.free((cast: (@: void) m\path))
+        ---
+        c.lmx_msg_slot_free(m)
+        m: nxt
+    ---
+    rt\slots: 0
+    rt\n: 0
+    c.lmx_msg_exec_set_no_retire(rt, 0)
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_exec_detach(rt)
+    c.lmx_msg_host_detach(rt)
+    c.free((cast: (@: void) rt))
+end: lmx_msg_runtime_delete
+
+fn: lmx_msg_grow (@: LmxMsgRuntime rt) int
+    if: rt = 0
+        return: 1
+    return: c.lmx_msg_tab_grow(rt)
+
+fn: lmx_msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; @: LmxMsg p) int
+    int: i 0
+    int: st
+    if: rt = 0 || slot = 0
+        return: c.LMX_MSG_INVALID
+    if: p = 0
+        if: rt\root_seq + 1U = 0U
+            return: c.LMX_MSG_NOMEM
+        st: c.lmx_msg_path_grow(@ slot\path, @ slot\path_cap, 1)
+        if: st != c.LMX_MSG_OK
+            return: st
+        rt\root_seq: rt\root_seq + 1U
+        slot\path[0]: rt\root_seq
+        slot\path_n: 1
+        return: c.LMX_MSG_OK
+    if: p\path_n < 1 || p\path_n = 2147483647
+        return: c.LMX_MSG_NOMEM
+    if: p\child_seq + 1U = 0U
+        return: c.LMX_MSG_NOMEM
+    st: c.lmx_msg_path_grow(@ slot\path, @ slot\path_cap, p\path_n + 1)
+    if: st != c.LMX_MSG_OK
+        return: st
+    p\child_seq: p\child_seq + 1U
+    while: i < p\path_n
+        slot\path[i]: p\path[i]
+        i: i + 1
+    slot\path[p\path_n]: p\child_seq
+    slot\path_n: p\path_n + 1
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+    @: LmxMsg slot
+    @: LmxMsg ch
+    @: LmxMsg p 0
+    @: uchar initp 0
+    @: char dst_chars 0
+    int: st
+    int: top 0
+    if: out = 0 || create_id = 0U || (source != 0 && src_ranges = 0)
+        return: c.LMX_MSG_INVALID
+    # Stage 5 (d2): the UI lane's create_id is reserved; only runtime_new's create,
+    # made before the executor has its lane, uses it.
+    if: create_id = c.LMX_MSG_UI_LANE_ID && c.lmx_msg_exec_has_ui_lane(rt) != 0
+        return: c.LMX_MSG_INVALID
+    if: parent = 0U
+        if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    if: parent != 0U
+        if: lmx_msg_require_turn(rt, parent) != c.LMX_MSG_OK
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    # Stage 5 (d1), spec 19.29.6 stage-5 clarification (iv): R0 is the one top
+    # level, so once R0 exists a create without a parent makes R0's child. The
+    # host authority checked above stays until stage 5 (d3).
+    if: parent = 0U && rt\root != 0
+        p: rt\root
+        top: 1
+    ---
+    if: parent != 0U
+        p: lmx_msg_self_or_find(rt, parent)
+        if: p = 0
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    initp: lmx_msg_copy_bytes(init, n)
+    if: n != 0U && initp = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_NOMEM
+    slot: c.lmx_msg_slot_new()
+    if: slot = 0
+        if: initp != 0
+            c.free((cast: (@: void) initp))
+        ---
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_NOMEM
+    slot\owner_rt: rt
+    if: source != 0
+        dst_chars: lmx_chars_new_owned(@ slot\blocks, @ slot\ranges)
+        if: dst_chars = 0
+            c.lmx_msg_slot_free(slot)
+            if: initp != 0
+                c.free((cast: (@: void) initp))
+            ---
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_NOMEM
+        ---
+        st: lmx_msg_graph_copy_install(slot, source, src_ranges, eternal_ranges, method_ranges, dst_chars)
+        if: st != c.LMX_MSG_OK
+            c.lmx_msg_slot_free(slot)
+            if: initp != 0
+                c.free((cast: (@: void) initp))
+            ---
+            c.lmx_msg_exec_unlock(rt)
+            return: st
+        ---
+        st: c.lmx_msg_eternal_clone(slot, eternal_ranges)
+        if: st != c.LMX_MSG_OK
+            c.lmx_msg_slot_free(slot)
+            if: initp != 0
+                c.free((cast: (@: void) initp))
+            ---
+            c.lmx_msg_exec_unlock(rt)
+            return: st
+        ---
+        st: c.lmx_msg_method_clone(slot, method_ranges)
+        if: st != c.LMX_MSG_OK
+            c.lmx_msg_slot_free(slot)
+            if: initp != 0
+                c.free((cast: (@: void) initp))
+            ---
+            c.lmx_msg_exec_unlock(rt)
+            return: st
+        ---
+    ---
+    st: lmx_msg_assign_path(rt, slot, p)
+    if: st != c.LMX_MSG_OK
+        c.lmx_msg_slot_free(slot)
+        if: initp != 0
+            c.free((cast: (@: void) initp))
+        ---
+        c.lmx_msg_exec_unlock(rt)
+        return: st
+    slot\addr: rt\next_addr
+    rt\next_addr: rt\next_addr + 1U
+    slot\parent: parent
+    if: top != 0
+        slot\parent: p\addr
+    ---
+    slot\state: c.LMX_MSG_STATE_INACTIVE
+    slot\committed: 0
+    if: parent = 0U
+        slot\committed: 1
+        slot\state: c.LMX_MSG_STATE_RUNNING
+        slot\next_sibling: 0
+    ---
+    slot\init_n: n
+    slot\init: initp
+    slot\alloc_next: rt\slots
+    rt\slots: slot
+    rt\n: rt\n + 1
+    if: parent = 0U && top = 0
+        if: rt\root = 0
+            rt\root: slot
+        else:
+            ch: rt\root
+            while: ch\next_sibling != 0
+                ch: ch\next_sibling
+            ch\next_sibling: slot
+        ---
+    ---
+    if: p != 0
+        lmx_msg_child_link(p, slot)
+    ---
+    \out: slot\addr
+    c.lmx_msg_exec_unlock(rt)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+    return: lmx_msg_create_prepare(rt, parent, create_id, 0, 0, 0, 0, init, n, out)
+end: lmx_msg_create
+
+fn: lmx_msg_create_graph (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+    if: source = 0 || src_ranges = 0
+        return: c.LMX_MSG_INVALID
+    return: lmx_msg_create_prepare(rt, parent, create_id, source, src_ranges, eternal_ranges, method_ranges, init, n, out)
+end: lmx_msg_create_graph
+
+fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @(LmxMsgEnv env)) int
+    @: LmxMsg src
+    @: LmxMsg destn
+    @: LmxMsgCopy node
+    if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U || to = 0U
+        return: c.LMX_MSG_INVALID
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\id: env\id
+    node\correlation: env\correlation
+    node\reply_to: env\reply_to
+    node\from: from
+    node\to: to
+    node\kind: env\kind
+    node\number: env\number
+    node\n: env\n
+    node\bytes: lmx_msg_copy_bytes(env\bytes, env\n)
+    if: env\n != 0U && node\bytes = 0
+        c.free((cast: (@: void) node))
+        return: c.LMX_MSG_NOMEM
+    c.lmx_msg_exec_lock(rt)
+    src: lmx_msg_self_or_find(rt, from)
+    if: src = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_INVALID
+    if: src\state = c.LMX_MSG_STATE_DEAD
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_DEAD
+    if: src\state = c.LMX_MSG_STATE_STOPPED
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_STOPPED
+    destn: lmx_msg_dest_from_src(src, to, rt)
+    if: destn != 0
+        if: c.lmx_msg_endp_retain(destn) = 0
+            c.lmx_msg_exec_unlock(rt)
+            lmx_msg_copy_free(node)
+            return: c.LMX_MSG_NOMEM
+        ---
+        node\dest_msg: destn
+    ---
+    if: c.lmx_msg_endp_retain(src) = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_lock(src)
+    lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+    c.lmx_msg_mail_unlock(src)
+    c.lmx_msg_endp_release(src)
+return: c.LMX_MSG_STAGED
+
+# Ordinary delivery of a graph (SPEC 19.29.7): the sending turn stages a
+# Message created by the copier in its own arena; the sender keeps its
+# original, the copy is independently transferable. Publication, FIFO
+# admission and dedup are those of send; recv moves the copy's storage into
+# the handler's arena and hands over its root as env.graph.
+fn: lmx_msg_send_graph (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @(LmxMsgEnv env); @: Lmx graph) int
+    @: LmxMsg src
+    @: LmxMsg destn
+    @: LmxMsgCopy node
+    if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U || to = 0U || graph = 0
+        return: c.LMX_MSG_INVALID
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\id: env\id
+    node\correlation: env\correlation
+    node\reply_to: env\reply_to
+    node\from: from
+    node\to: to
+    node\kind: c.LMX_MSG_KIND_GRAPH
+    node\number: env\number
+    node\n: 0U
+    node\bytes: 0
+    c.lmx_msg_exec_lock(rt)
+    src: lmx_msg_self_or_find(rt, from)
+    if: src = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_INVALID
+    if: src\state = c.LMX_MSG_STATE_DEAD
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_DEAD
+    if: src\state = c.LMX_MSG_STATE_STOPPED
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_STOPPED
+    node\delivered: lmx_msg_delivery_new(graph, src\ranges, c.lmx_msg_eternal_ranges(src), c.lmx_msg_method_ranges(src))
+    if: node\delivered = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    destn: lmx_msg_dest_from_src(src, to, rt)
+    if: destn != 0
+        if: c.lmx_msg_endp_retain(destn) = 0
+            c.lmx_msg_exec_unlock(rt)
+            lmx_msg_copy_free(node)
+            return: c.LMX_MSG_NOMEM
+        ---
+        node\dest_msg: destn
+    ---
+    if: c.lmx_msg_endp_retain(src) = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_lock(src)
+    lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+    c.lmx_msg_mail_unlock(src)
+    c.lmx_msg_endp_release(src)
+return: c.LMX_MSG_STAGED
+
+fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @: LmxMsgEnv env) int
+    @: LmxMsg src
+    @: LmxMsg destn
+    @: LmxMsgCopy node
+    if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U || to = 0U
+        return: c.LMX_MSG_INVALID
+    if: env\kind != c.LMX_MSG_KIND_BYTES && env\kind != c.LMX_MSG_KIND_NUMBER
+        return: c.LMX_MSG_INVALID
+    if: env\n != 0U && env\bytes = 0
+        return: c.LMX_MSG_INVALID
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\id: env\id
+    node\correlation: env\correlation
+    node\reply_to: env\reply_to
+    node\from: from
+    node\to: to
+    node\kind: env\kind
+    node\number: env\number
+    node\n: env\n
+    node\bytes: (cast: (@: uchar) env\bytes)
+    node\owned: 1
+    env\bytes: 0
+    env\n: 0U
+    c.lmx_msg_exec_lock(rt)
+    src: lmx_msg_self_or_find(rt, from)
+    if: src = 0
+        env\bytes: node\bytes
+        env\n: node\n
+        node\bytes: 0
+        c.lmx_msg_exec_unlock(rt)
+        c.free((cast: (@: void) node))
+        return: c.LMX_MSG_INVALID
+    if: src\state = c.LMX_MSG_STATE_DEAD || src\state = c.LMX_MSG_STATE_STOPPED
+        env\bytes: node\bytes
+        env\n: node\n
+        node\bytes: 0
+        c.lmx_msg_exec_unlock(rt)
+        c.free((cast: (@: void) node))
+        if: src\state = c.LMX_MSG_STATE_DEAD
+            return: c.LMX_MSG_DEAD
+        return: c.LMX_MSG_STOPPED
+    destn: lmx_msg_dest_from_src(src, to, rt)
+    if: destn != 0
+        if: c.lmx_msg_endp_retain(destn) = 0
+            env\bytes: node\bytes
+            env\n: node\n
+            node\bytes: 0
+            c.lmx_msg_exec_unlock(rt)
+            c.free((cast: (@: void) node))
+            return: c.LMX_MSG_NOMEM
+        ---
+        node\dest_msg: destn
+    ---
+    if: c.lmx_msg_endp_retain(src) = 0
+        env\bytes: node\bytes
+        env\n: node\n
+        node\bytes: 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_lock(src)
+    lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+    c.lmx_msg_mail_unlock(src)
+    c.lmx_msg_endp_release(src)
+return: c.LMX_MSG_STAGED
+
+fn: lmx_msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
+    @: LmxMsgEnv env
+    int: st
+    if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: c.LMX_MSG_NOMEM
+    env\kind: c.LMX_MSG_KIND_STOP
+    env\reply_to: from
+    st: lmx_msg_send(rt, from, to, env)
+    c.free((cast: (@: void) env))
+return: st
+
+sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
+    @: LmxMsg ch
+    @: LmxMsgCopy inb 0
+    @: LmxMsgCopy outb 0
+    int: ust
+    if: m = 0
+        return
+    # Stage 3b-8: unbind while m is still in its family, so a bound Message is
+    # never outside its family tree; unbind cannot retire m while parent_msg is set.
+    # The unbind is the settling lane's write of the parent's mapping cell
+    # (19.28.R2.2 (2), 19.29.6), so it cannot be refused here; a TEST tripwire
+    # makes a wrong-lane release loud under the lane check.
+    ust: c.lmx_msg_exec_unbind(rt, m\addr)
+    c.lmx_msg_test_unbind_refused(rt, m, ust, "release_slot")
+    # Stage 3b-9: every family-tree reader holds the exec lock, so the tree
+    # changes under it. Unbind stays outside: it joins reaps on the host.
+    c.lmx_msg_exec_lock(rt)
+    c.lmx_msg_test_release_tree(rt, m)
+    if: m\parent_msg != 0
+        lmx_msg_child_unlink(m\parent_msg, m)
+    ---
+    if: rt != 0 && m\parent = 0U
+        if: rt\root = m
+            rt\root: m\next_sibling
+        else:
+            ch: rt\root
+            while: ch != 0
+                if: ch\next_sibling = m
+                    ch\next_sibling: m\next_sibling
+                    ch: 0
+                else:
+                    ch: ch\next_sibling
+                ---
+            ---
+        ---
+        m\next_sibling: 0
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_inbox_take(m, @ inb)
+    lmx_msg_copy_free(inb)
+    c.lmx_msg_mail_outbox_take(m, @ outb)
+    lmx_msg_copy_free(outb)
+    if: m\init != 0
+        c.free((cast: (@: void) m\init))
+    ---
+    m\init: 0
+    m\init_n: 0U
+    if: m\path != 0
+        c.free((cast: (@: void) m\path))
+    ---
+    m\path: 0
+    m\path_n: 0
+    m\path_cap: 0
+    m\state: c.LMX_MSG_STATE_RELEASED
+    m\committed: 0
+    c.lmx_msg_endp_release(m)
+end: lmx_msg_release_slot
+
+# Decision 17 with spec 19.29.8: settling a direct child into its parent,
+# bottom-up. The child's own settled children are settled into it first (a
+# descendant still running, not handoff-ready, is re-rooted at the runtime as
+# an orphan). Then a failed child with storage is adopted into the parent, and
+# any other child's storage is reclaimed. Then its slot is released. A refused
+# adopt (storage_can_move INVALID, history prepare NOMEM) returns that status
+# with nothing half-moved; children already settled stay settled, and the
+# retry is the caller's. Authority is checked once, by the public entry.
+fn: lmx_msg_first_settled_child (@: LmxMsgRuntime rt; @: LmxMsg m) @: LmxMsg
+    @: LmxMsg ch
+    @: LmxMsg found 0
+    c.lmx_msg_exec_lock(rt)
+    ch: m\first_child
+    while: ch != 0 && found = 0
+        # Stage 5 (d1b), spec 19.29.8: an orphan is settled only by the sweep.
+        if: ch\handoff_ready != 0 && ch\native_users = 0 && ch\disposed = 0 && ch\orphan = 0 && c.lmx_msg_running_load(ch) = 0
+            found: ch
+        ---
+        ch: ch\next_sibling
+    ---
+    c.lmx_msg_exec_unlock(rt)
+return: found
+
+# Decision 17 with spec 19.29.6 (iii) and stage-5 clarification (iv): a child
+# of x still running when x is settled is re-rooted under R0 as an orphan,
+# closing by the chain. Its genesis (path, arena, mailbox, record, ready flag)
+# stays; its supervision (parent_msg, parent) goes to R0. x is
+# settled, so the lane that settles it writes x's family cells.
+sub: lmx_msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
+    @: LmxMsg g
+    int: wake
+    int: more 1
+    unsigned: a
+    while: more != 0
+        c.lmx_msg_exec_lock(rt)
+        g: x\first_child
+        if: g = 0
+            more: 0
+            c.lmx_msg_exec_unlock(rt)
+        else:
+            lmx_msg_child_chain_remove(x, g)
+            g\parent: rt\root\addr
+            g\orphan: 1
+            lmx_msg_child_link(rt\root, g)
+            wake: 0
+            if: g\state != c.LMX_MSG_STATE_DEAD && g\state != c.LMX_MSG_STATE_RELEASED && g\state != c.LMX_MSG_STATE_STOPPED
+                g\closing: 1
+                wake: 1
+            ---
+            a: g\addr
+            c.lmx_msg_exec_unlock(rt)
+            if: wake != 0
+                lmx_msg_exec_ready(rt, a)
+            ---
+        ---
+    ---
+end: lmx_msg_orphan_children
+
+# An orphan whose turn has left run_one: not running, handoff-ready, unused.
+# Called under the exec lock.
+fn: lmx_msg_orphan_settled (@: LmxMsg m) int
+    return: m\orphan != 0 && m\disposed = 0 && m\native_users = 0 && c.lmx_msg_running_load(m) = 0 && m\handoff_ready != 0 && m\state != c.LMX_MSG_STATE_RELEASED
+
+# A failed orphan's retention deadline (spec 19.29.8): now plus the runtime's
+# orphan retention; 0 means no deadline, so a wrapped 0 becomes 1.
+fn: lmx_msg_orphan_deadline (@: LmxMsgRuntime rt; unsigned: now) unsigned
+    unsigned: d
+    d: now + c.lmx_root_record_orphan_retain(rt\root_record)
+    if: d = 0U
+        d: 1U
+    ---
+return: d
+
+fn: lmx_msg_settle_child (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: LmxMsg child) int
+    @: LmxMsg p
+    @: LmxMsg g
+    int: ok
+    int: failed
+    int: st
+    c.lmx_msg_exec_lock(rt)
+    p: lmx_msg_self_or_find(rt, parent)
+    ok: p != 0 && child\parent_msg = p && p\disposed = 0 && child\disposed = 0 && child\native_users = 0 && c.lmx_msg_running_load(child) = 0 && child\handoff_ready != 0
+    c.lmx_msg_exec_unlock(rt)
+    if: ok = 0
+        return: c.LMX_MSG_INVALID
+    g: lmx_msg_first_settled_child(rt, child)
+    while: g != 0
+        st: lmx_msg_settle_child(rt, child\addr, g)
+        if: st != c.LMX_MSG_OK
+            return: st
+        g: lmx_msg_first_settled_child(rt, child)
+    ---
+    lmx_msg_orphan_children(rt, child)
+    c.lmx_msg_exec_lock(rt)
+    failed: c.lmx_msg_success_load(child) = 0 && (child\init != 0 || child\blocks != 0 || child\ranges != 0)
+    c.lmx_msg_exec_unlock(rt)
+    if: failed != 0
+        st: c.lmx_msg_exec_adopt_mark(rt, parent, child\addr)
+    else:
+        st: c.lmx_msg_exec_dispose_mark(rt, parent, child\addr)
+    ---
+    if: st != c.LMX_MSG_OK
+        return: st
+    lmx_msg_release_slot(rt, child)
+return: c.LMX_MSG_OK
+
+# The parent releases a direct child: the child is settled (a failed arena is
+# adopted by the runtime for the parent, a successful history reclaimed) and its
+# slot released, with its settled subtree first.
+fn: lmx_msg_dispose_child (@: LmxMsgRuntime rt; LmxMsgAddr: parent; LmxMsgAddr: child) int
+    @: LmxMsg m
+    if: rt = 0 || parent = 0U || child = 0U
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, parent) = 0
+        if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, child)
+    c.lmx_msg_exec_unlock(rt)
+    if: m = 0
+        return: c.LMX_MSG_INVALID
+return: lmx_msg_settle_child(rt, parent, m)
+
+# The parent adopts a failed direct child: the same settle, keeping adopt's
+# refusals of a successful child and of a child with nothing to adopt.
+fn: lmx_msg_adopt_failed (@: LmxMsgRuntime rt; LmxMsgAddr: parent; LmxMsgAddr: child) int
+    @: LmxMsg m
+    int: ok
+    if: rt = 0 || parent = 0U || child = 0U
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, parent) = 0
+        if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, child)
+    ok: m != 0 && c.lmx_msg_success_load(m) = 0 && (m\init != 0 || m\blocks != 0 || m\ranges != 0)
+    c.lmx_msg_exec_unlock(rt)
+    if: ok = 0
+        return: c.LMX_MSG_INVALID
+return: lmx_msg_settle_child(rt, parent, m)
+
+# Decision 17: an orphan's own end. Its settled children settle into it, its
+# still-running ones are re-rooted in turn, its storage is reclaimed (nobody
+# adopts an orphan's arena) and its slot is released. The host runs it once
+# the orphan's turn has left run_one; the caller checked orphan_settled.
+fn: lmx_msg_reclaim_orphan (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    @: LmxMsg g
+    int: st
+    g: lmx_msg_first_settled_child(rt, m)
+    while: g != 0
+        st: lmx_msg_settle_child(rt, m\addr, g)
+        if: st != c.LMX_MSG_OK
+            return: st
+        ---
+        g: lmx_msg_first_settled_child(rt, m)
+    ---
+    lmx_msg_orphan_children(rt, m)
+    st: c.lmx_msg_exec_reclaim_mark(rt, m)
+    if: st != c.LMX_MSG_OK
+        return: st
+    ---
+    lmx_msg_release_slot(rt, m)
+return: c.LMX_MSG_OK
+
+# Decision 17 (spec 19.29.8), stage 5 (c): the sweep in lmx_msg_drive is the
+# one settlement path for orphan roots, whether the orphan's last turn ran on
+# the host or on its own context. A settled successful orphan is reclaimed at
+# the root's next maintenance. A failed one gets its deadline, and once now
+# reaches it the orphan is reclaimed and its arena dropped.
+fn: lmx_msg_orphan_sweep (@: LmxMsgRuntime rt; unsigned: now) int
+    @: LmxMsg m
+    @: LmxMsg hit
+    int: more 1
+    int: st
+    while: more != 0
+        hit: 0
+        c.lmx_msg_exec_lock(rt)
+        # Stage 5 (d1): orphans are R0's children.
+        m: rt\root
+        if: m != 0
+            m: m\first_child
+        ---
+        while: m != 0 && hit = 0
+            if: lmx_msg_orphan_settled(m) != 0
+                if: c.lmx_msg_success_load(m) = 0 && m\orphan_until = 0U
+                    m\orphan_until: lmx_msg_orphan_deadline(rt, now)
+                ---
+                if: c.lmx_msg_success_load(m) != 0 || now >= m\orphan_until
+                    if: c.lmx_msg_endp_retain(m) != 0
+                        hit: m
+                    ---
+                ---
+            ---
+            m: m\next_sibling
+        ---
+        c.lmx_msg_exec_unlock(rt)
+        if: hit = 0
+            more: 0
+        else:
+            st: lmx_msg_reclaim_orphan(rt, hit)
+            c.lmx_msg_endp_release(hit)
+            if: st != c.LMX_MSG_OK
+                return: st
+            ---
+        ---
+    ---
+return: c.LMX_MSG_OK
+
+sub: lmx_msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
+    @: LmxMsg m
+    @: LmxMsg ch
+    if: rt = 0
+        return
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        return
+    ch: m\first_child
+    while: ch != 0
+        if: ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED && ch\state != c.LMX_MSG_STATE_STOPPED
+            ch\closing: 1
+            c.lmx_msg_exec_ready(rt, ch\addr)
+        ---
+        ch: ch\next_sibling
+    ---
+end: lmx_msg_request_children_close
+
+fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
+    @: LmxMsg m
+    @: LmxMsg ch
+    @: LmxMsg nxt
+    @: LmxMsgCopy n
+    @: LmxMsgCopy outb 0
+    int: pinned 0
+    if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    if: m\state = c.LMX_MSG_STATE_DEAD
+        pinned: c.lmx_msg_endp_retain(m)
+        c.lmx_msg_exec_unlock(rt)
+        c.lmx_msg_mail_outbox_take(m, @ outb)
+        lmx_msg_copy_free(outb)
+        if: pinned != 0
+            c.lmx_msg_endp_release(m)
+        ---
+        return: c.LMX_MSG_DEAD
+    m\exec_live: 0
+    m\last_beat: c.lmx_msg_now(rt)
+    # Mikhail 2026-09-14: running=0 follows success=1 only here, at the turn
+    # boundary; inside a turn running stays 1, so running=0 means a stop request.
+    if: c.lmx_msg_success_load(m) != 0
+        c.lmx_msg_running_store(m, 0)
+    ---
+    ch: m\first_child
+    while: ch != 0
+        if: c.lmx_msg_success_load(ch) != 0
+            ch\tracked: 0
+        ---
+        ch: ch\next_sibling
+    ---
+    if: success = 0
+        m\live_query_pend_id: 0U
+        pinned: c.lmx_msg_endp_retain(m)
+        c.lmx_msg_exec_unlock(rt)
+        c.lmx_msg_mail_outbox_take(m, @ outb)
+        lmx_msg_copy_free(outb)
+        c.lmx_msg_exec_lock(rt)
+        if: pinned != 0
+            c.lmx_msg_endp_release(m)
+        ---
+        ch: m\first_child
+        while: ch != 0
+            nxt: ch\next_sibling
+            if: ch\committed = 0 && ch\state = c.LMX_MSG_STATE_INACTIVE
+                c.lmx_msg_exec_unlock(rt)
+                lmx_msg_release_slot(rt, ch)
+                c.lmx_msg_exec_lock(rt)
+            ---
+            ch: nxt
+        ---
+        if: m\closing != 0
+            m\state: c.LMX_MSG_STATE_STOPPED
+            m\exec_live: 0
+            ch: m\first_child
+            while: ch != 0
+                c.lmx_msg_running_store(ch, 0)
+                c.lmx_msg_exec_ready(rt, ch\addr)
+                ch: ch\next_sibling
+            ---
+            lmx_msg_request_children_close(rt, who)
+        ---
+        lmx_msg_arena_collect(m)
+        c.lmx_msg_exec_unlock(rt)
+        c.lmx_msg_exec_flush_retire(rt)
+        return: c.LMX_MSG_OK
+    ch: m\first_child
+    while: ch != 0
+        if: ch\state = c.LMX_MSG_STATE_INACTIVE
+            if: ch\committed = 0
+                ch\committed: 1
+                ch\child_heard_at: c.lmx_msg_now(rt)
+            ---
+            if: lmx_msg_exec_is_runnable(rt, ch\addr) != 0
+                c.lmx_msg_exec_ready(rt, ch\addr)
+            ---
+        ---
+        ch: ch\next_sibling
+    ---
+    if: m\live_query_pend_id != 0U
+        m\live_query_id: m\live_query_pend_id
+        m\live_query_at: c.lmx_msg_now(rt)
+        m\live_query_pend_id: 0U
+    ---
+    pinned: c.lmx_msg_endp_retain(m)
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_outbox_take(m, @ outb)
+    c.lmx_msg_after_outbox_xfer(rt, m, outb)
+    c.lmx_msg_exec_lock(rt)
+    if: pinned != 0
+        c.lmx_msg_endp_release(m)
+    ---
+    while: outb != 0
+        n: outb
+        outb: n\next
+        n\next: 0
+        lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)
+    ---
+    if: m\closing != 0
+        m\state: c.LMX_MSG_STATE_STOPPED
+        m\exec_live: 0
+        ch: m\first_child
+        while: ch != 0
+            c.lmx_msg_running_store(ch, 0)
+            c.lmx_msg_exec_ready(rt, ch\addr)
+            ch: ch\next_sibling
+        ---
+        lmx_msg_request_children_close(rt, who)
+    ---
+    lmx_msg_arena_collect(m)
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_exec_flush_retire(rt)
+return: lmx_msg_pump(rt)
+
+fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
+    @: LmxMsg dest
+    @: LmxMsgCopy fresh
+    @: LmxMsgCopy put
+    unsigned: dest_addr
+    if: rt = 0 || node = 0
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
+    dest: node\dest_msg
+    if: dest = 0
+        dest: lmx_msg_self_or_find(rt, node\to)
+    ---
+    if: dest != 0 && dest\owner_rt != rt
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_GONE
+    ---
+    if: dest = 0 || dest\state = c.LMX_MSG_STATE_DEAD || dest\state = c.LMX_MSG_STATE_STOPPED || dest\state = c.LMX_MSG_STATE_RELEASED
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_GONE
+    if: dest\state = c.LMX_MSG_STATE_INACTIVE && dest\committed = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_GONE
+    if: node\id != 0U && lmx_msg_done_has(dest, node\from, node\id) != 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_DUPLICATE
+    if: dest\state = c.LMX_MSG_STATE_INACTIVE
+        dest\state: c.LMX_MSG_STATE_RUNNING
+    ---
+    if: node\kind = c.LMX_MSG_KIND_STOP
+        dest\closing: 1
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_OK
+    ---
+    dest_addr: dest\addr
+    if: c.lmx_msg_endp_retain(dest) = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    if: node\owned != 0 || node\delivered != 0
+        if: node\id != 0U && lmx_msg_done_add(dest, node\from, node\id) != 0
+            c.lmx_msg_exec_unlock(rt)
+            lmx_msg_copy_free(node)
+            c.lmx_msg_endp_release(dest)
+            return: c.LMX_MSG_NOMEM
+        ---
+        put: node
+    else:
+        fresh: lmx_msg_copy_dup(node)
+        lmx_msg_copy_free(node)
+        if: fresh = 0
+            c.lmx_msg_exec_unlock(rt)
+            c.lmx_msg_endp_release(dest)
+            return: c.LMX_MSG_NOMEM
+        ---
+        if: fresh\id != 0U && lmx_msg_done_add(dest, fresh\from, fresh\id) != 0
+            c.lmx_msg_exec_unlock(rt)
+            lmx_msg_copy_free(fresh)
+            c.lmx_msg_endp_release(dest)
+            return: c.LMX_MSG_NOMEM
+        ---
+        put: fresh
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_lock(dest)
+    lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, put)
+    c.lmx_msg_mail_unlock(dest)
+    c.lmx_msg_test_on_admit(dest_addr, put)
+    c.lmx_msg_exec_ready(rt, dest_addr)
+    c.lmx_msg_endp_release(dest)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
+    @: LmxMsgCopy n
+    int: st
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        if: c.lmx_msg_exec_holding_any(rt) = 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    while: rt\transport != 0
+        n: lmx_msg_q_pop(@ rt\transport, @ rt\transport_tail)
+        c.lmx_msg_exec_unlock(rt)
+        st: lmx_msg_admit_one(rt, n)
+        if: st = c.LMX_MSG_NOMEM
+            return: st
+        ---
+        c.lmx_msg_exec_lock(rt)
+    ---
+    c.lmx_msg_exec_unlock(rt)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
+    @: LmxMsg m
+    @: LmxMsgCopy n
+    int: pinned 0
+    if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK || out = 0
+        return: c.LMX_MSG_INVALID
+    m: c.lmx_msg_turn_self(rt)
+    if: m != 0 && m\addr = who
+        n: c.lmx_msg_mail_inbox_pop_input(m)
+        if: n = 0
+            return: c.LMX_MSG_EMPTY
+        ---
+        c.lmx_msg_exec_lock(rt)
+        out\id: n\id
+        out\correlation: n\correlation
+        out\reply_to: n\reply_to
+        out\kind: n\kind
+        out\number: n\number
+        out\n: n\n
+        out\bytes: n\bytes
+        n\bytes: 0
+        out\graph: 0
+        if: lmx_msg_delivery_receive(m, n, out) != c.LMX_MSG_OK
+            lmx_msg_copy_free(n)
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_INVALID
+        ---
+        m\exec_id: n\id
+        m\exec_corr: n\correlation
+        m\exec_from: n\from
+        m\exec_reply: n\reply_to
+        m\exec_live: 1
+        m\last_beat: c.lmx_msg_now(rt)
+        lmx_msg_copy_free(n)
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_OK
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    pinned: c.lmx_msg_endp_retain(m)
+    c.lmx_msg_exec_unlock(rt)
+    if: pinned != 0
+        c.lmx_msg_after_recv_pin(rt, m)
+    ---
+    n: c.lmx_msg_mail_inbox_pop_input(m)
+    if: n = 0
+        if: pinned != 0
+            c.lmx_msg_endp_release(m)
+        ---
+        return: c.LMX_MSG_EMPTY
+    ---
+    c.lmx_msg_exec_lock(rt)
+    out\id: n\id
+    out\correlation: n\correlation
+    out\reply_to: n\reply_to
+    out\kind: n\kind
+    out\number: n\number
+    out\n: n\n
+    out\bytes: n\bytes
+    n\bytes: 0
+    out\graph: 0
+    if: lmx_msg_delivery_receive(m, n, out) != c.LMX_MSG_OK
+        lmx_msg_copy_free(n)
+        c.lmx_msg_exec_unlock(rt)
+        if: pinned != 0
+            c.lmx_msg_endp_release(m)
+        ---
+        return: c.LMX_MSG_INVALID
+    ---
+    m\exec_id: n\id
+    m\exec_corr: n\correlation
+    m\exec_from: n\from
+    m\exec_reply: n\reply_to
+    m\exec_live: 1
+    m\last_beat: c.lmx_msg_now(rt)
+    lmx_msg_copy_free(n)
+    c.lmx_msg_exec_unlock(rt)
+    if: pinned != 0
+        c.lmx_msg_endp_release(m)
+    ---
+return: c.LMX_MSG_OK
+
+sub: lmx_msg_env_release (@: LmxMsgEnv env)
+    if: env = 0
+        return
+    if: env\bytes != 0
+        c.free((cast: (@: void) env\bytes))
+    ---
+    env\bytes: 0
+    env\n: 0U
+    # A received graph already belongs to the handler's arena.
+    env\graph: 0
+end: lmx_msg_env_release
+
+fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
+    @: LmxMsgCopy node
+    if: rt = 0 || to = 0U || to = from
+        return: c.LMX_MSG_OK
+    if: lmx_msg_self_or_find(rt, to) = 0
+        return: c.LMX_MSG_GONE
+    if: c.lmx_msg_test_post_dead_fail() != 0
+        return: c.LMX_MSG_NOMEM
+    ---
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\from: from
+    node\to: to
+    node\kind: c.LMX_MSG_KIND_DEAD
+    node\id: correlation
+    node\correlation: correlation
+    node\number: (cast: (int) from)
+    lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, node)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    @: LmxMsgCopy n
+    @: LmxMsgCopy inb 0
+    @: LmxMsgCopy outb 0
+    @: LmxMsgCopy prev 0
+    unsigned: parent
+    unsigned: req
+    int: pinned 0
+    if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    m\state: c.LMX_MSG_STATE_DEAD
+    parent: m\parent
+    req: m\exec_id
+    pinned: c.lmx_msg_endp_retain(m)
+    if: m\exec_live != 0 && m\exec_reply != 0U && m\exec_reply != parent
+        if: lmx_msg_post_dead(rt, who, m\exec_reply, req) = c.LMX_MSG_NOMEM
+            c.lmx_msg_exec_unlock(rt)
+            if: pinned != 0
+                c.lmx_msg_endp_release(m)
+            ---
+            return: c.LMX_MSG_NOMEM
+        ---
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_outbox_take(m, @ outb)
+    lmx_msg_copy_free(outb)
+    c.lmx_msg_mail_inbox_take(m, @ inb)
+    c.lmx_msg_exec_lock(rt)
+    n: inb
+    prev: 0
+    while: n != 0
+        if: n\reply_to != 0U && n\reply_to != parent && (m\exec_live = 0 || n\reply_to != m\exec_reply)
+            req: n\id
+            if: lmx_msg_post_dead(rt, who, n\reply_to, req) = c.LMX_MSG_NOMEM
+                if: prev != 0
+                    prev\next: 0
+                else:
+                    inb: 0
+                ---
+                c.lmx_msg_exec_unlock(rt)
+                lmx_msg_copy_free(inb)
+                c.lmx_msg_mail_inbox_prepend(m, n)
+                if: pinned != 0
+                    c.lmx_msg_endp_release(m)
+                ---
+                return: c.LMX_MSG_NOMEM
+            ---
+        ---
+        prev: n
+        n: n\next
+    ---
+    lmx_msg_copy_free(inb)
+    m\exec_live: 0
+    if: parent != 0U
+        if: lmx_msg_post_dead(rt, who, parent, m\exec_id) = c.LMX_MSG_NOMEM
+            c.lmx_msg_exec_unlock(rt)
+            if: pinned != 0
+                c.lmx_msg_endp_release(m)
+            ---
+            return: c.LMX_MSG_NOMEM
+        ---
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    if: pinned != 0
+        c.lmx_msg_endp_release(m)
+    ---
+return: lmx_msg_pump(rt)
+
+fn: lmx_msg_parent_gone (@: LmxMsgRuntime rt; @: LmxMsg child; unsigned: now; unsigned: threshold) int
+    @: LmxMsg p
+    unsigned: idle
+    if: child = 0 || child\parent = 0U
+        return: 0
+    p: lmx_msg_self_or_find(rt, child\parent)
+    if: p = 0
+        return: 1
+    if: p\state = c.LMX_MSG_STATE_DEAD || p\state = c.LMX_MSG_STATE_STOPPED || p\state = c.LMX_MSG_STATE_RELEASED
+        return: 1
+    if: p\exec_live != 0 && threshold != 0U
+        idle: now
+        if: now >= p\last_beat
+            idle: now - p\last_beat
+        ---
+        if: idle > threshold
+            return: 1
+        ---
+    ---
+return: 0
+
+fn: lmx_msg_poll_mark (@: LmxMsgRuntime rt; @: LmxMsg m; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap; int: n) int
+    if: m = 0
+        return: n
+    if: m\parent != 0U && (m\state = c.LMX_MSG_STATE_RUNNING || (m\state = c.LMX_MSG_STATE_INACTIVE && m\committed != 0))
+        if: lmx_msg_parent_gone(rt, m, now, threshold) != 0
+            m\closing: 1
+            c.lmx_msg_exec_ready(rt, m\addr)
+            if: out != 0 && n < cap
+                out[n]: m\addr
+            ---
+            n: n + 1
+        ---
+    ---
+return: n
+
+fn: lmx_msg_poll_kids (@: LmxMsgRuntime rt; @: LmxMsg m; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap; int: n) int
+    @: LmxMsg ch
+    if: m = 0
+        return: n
+    ch: m\first_child
+    while: ch != 0
+        n: lmx_msg_poll_mark(rt, ch, now, threshold, out, cap, n)
+        n: lmx_msg_poll_kids(rt, ch, now, threshold, out, cap, n)
+        ch: ch\next_sibling
+    ---
+return: n
+
+fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap) int
+    @: LmxMsg m
+    @: LmxMsg fam
+    int: n 0
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: -1
+    c.lmx_msg_exec_lock(rt)
+    if: who != 0U
+        m: lmx_msg_self_or_find(rt, who)
+        n: lmx_msg_poll_mark(rt, m, now, threshold, out, cap, n)
+    else:
+        fam: rt\root
+        while: fam != 0
+            n: lmx_msg_poll_kids(rt, fam, now, threshold, out, cap, n)
+            fam: fam\next_sibling
+        ---
+    ---
+    c.lmx_msg_exec_unlock(rt)
+return: n
+
+# Stage 5 (e): the clock is R0's management state, written only on R0's lane:
+# R0's own turn, or until (f) the host outside any turn. Refused, nothing moves.
+fn: lmx_msg_set_now (@: LmxMsgRuntime rt; unsigned: now) int
+    if: rt = 0 || rt\root = 0
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, rt\root\addr) = 0 && (c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0)
+        return: c.LMX_MSG_INVALID
+    # Created at the first set on R0's lane, as a parent's scheduler record is at
+    # its first step: runtime_new cannot call the generated unit (6f's rule).
+    if: rt\root_record = 0
+        rt\root_record: c.lmx_root_record_new(rt\root)
+        if: rt\root_record = 0
+            return: c.LMX_MSG_NOMEM
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    if: c.lmx_root_record_set_clock(rt\root_record, now) != c.LMX_MSG_OK || c.lmx_root_record_set_clock_test(rt\root_record, 1) != c.LMX_MSG_OK
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_unlock(rt)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_drive_should_close (@: LmxMsg m) int
+    if: m = 0
+        return: 0
+    if: m\closing = 0 || m\exec_live != 0
+        return: 0
+    if: m\state = c.LMX_MSG_STATE_RUNNING
+        return: 1
+    if: m\state = c.LMX_MSG_STATE_INACTIVE && m\committed != 0
+        return: 1
+return: 0
+
+fn: lmx_msg_drive_one (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    unsigned: a 0U
+    int: st
+    int: pin 0
+    if: m = 0
+        return: c.LMX_MSG_OK
+    pin: c.lmx_msg_endp_retain(m)
+    if: pin = 0
+        return: c.LMX_MSG_NOMEM
+    ---
+    if: lmx_msg_drive_should_close(m) = 0
+        c.lmx_msg_endp_release(m)
+        return: c.LMX_MSG_OK
+    ---
+    a: m\addr
+    c.lmx_msg_exec_unlock(rt)
+    if: c.lmx_msg_mail_inbox_empty(m) = 0
+        c.lmx_msg_exec_lock(rt)
+        c.lmx_msg_endp_release(m)
+        return: c.LMX_MSG_OK
+    ---
+    c.lmx_msg_exec_lock(rt)
+    if: lmx_msg_drive_should_close(m) = 0 || m\addr != a || m\state = c.LMX_MSG_STATE_RELEASED
+        c.lmx_msg_endp_release(m)
+        return: c.LMX_MSG_OK
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    if: c.lmx_msg_exec_is_bound(rt, a) != 0
+        c.lmx_msg_exec_ready(rt, a)
+    ---
+    if: c.lmx_msg_exec_is_bound(rt, a) = 0
+        st: c.lmx_msg_exec_unbound_close(rt, a)
+        if: st != c.LMX_MSG_OK
+            c.lmx_msg_exec_lock(rt)
+            c.lmx_msg_endp_release(m)
+            return: st
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    c.lmx_msg_endp_release(m)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_drive_tree (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    int: st
+    if: m = 0
+        return: c.LMX_MSG_OK
+    st: lmx_msg_drive_one(rt, m)
+    if: st != c.LMX_MSG_OK
+        return: st
+return: c.lmx_msg_drive_walk_children(rt, m)
+
+# Stage 5 (c): the root's self-maintenance between its turns, with the drain's
+# authority (the host outside any turn): the clock, the liveness poll, the
+# orphan sweep, the walk, the pump.
+fn: lmx_msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
+    @: LmxMsgAddr none
+    int: st
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK || c.lmx_msg_exec_holding_any(rt) != 0
+        return: c.LMX_MSG_INVALID
+    st: lmx_msg_set_now(rt, now)
+    if: st != c.LMX_MSG_OK
+        return: st
+    none: 0
+    st: lmx_msg_poll(rt, 0U, now, threshold, none, 0)
+    if: st < 0
+        return: c.LMX_MSG_INVALID
+    ---
+    st: lmx_msg_orphan_sweep(rt, now)
+    if: st != c.LMX_MSG_OK
+        return: st
+    ---
+    c.lmx_msg_exec_lock(rt)
+    st: c.lmx_msg_drive_walk_roots(rt)
+    c.lmx_msg_exec_unlock(rt)
+    if: st != c.LMX_MSG_OK
+        return: st
+    ---
+    st: lmx_msg_pump(rt)
+    if: st != c.LMX_MSG_OK
+        return: st
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_state (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    int: s
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        return: m\state
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: -1
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: -1
+    s: m\state
+    c.lmx_msg_exec_unlock(rt)
+return: s
+
+fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    int: cnt 0
+    int: pin 0
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        return: c.lmx_msg_mail_inbox_n(m)
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: -1
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: -1
+    pin: c.lmx_msg_endp_retain(m)
+    c.lmx_msg_exec_unlock(rt)
+    cnt: c.lmx_msg_mail_inbox_n(m)
+    if: pin != 0
+        c.lmx_msg_endp_release(m)
+    ---
+return: cnt
+
+fn: lmx_msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    int: pn
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        return: m\path_n
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: -1
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: -1
+    pn: m\path_n
+    c.lmx_msg_exec_unlock(rt)
+return: pn
+
+fn: lmx_msg_path_seg (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i; @: unsigned out) int
+    @: LmxMsg m
+    if: out = 0 || i < 0
+        return: c.LMX_MSG_INVALID
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        if: m\path = 0 || i >= m\path_n
+            return: c.LMX_MSG_INVALID
+        ---
+        \out: m\path[i]
+        return: c.LMX_MSG_OK
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0 || m\path = 0 || i >= m\path_n
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    \out: m\path[i]
+    c.lmx_msg_exec_unlock(rt)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_child_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    @: LmxMsg ch
+    int: n 0
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        ch: m\first_child
+        while: ch != 0
+            n: n + 1
+            ch: ch\next_sibling
+        ---
+        return: n
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: -1
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: -1
+    ch: m\first_child
+    while: ch != 0
+        n: n + 1
+        ch: ch\next_sibling
+    ---
+    c.lmx_msg_exec_unlock(rt)
+return: n
+
+fn: lmx_msg_child_at (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i) unsigned
+    @: LmxMsg m
+    @: LmxMsg ch
+    int: k 0
+    unsigned: a 0U
+    if: i < 0
+        return: 0U
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        ch: m\first_child
+        while: ch != 0
+            if: k = i
+                return: ch\addr
+            ---
+            k: k + 1
+            ch: ch\next_sibling
+        ---
+        return: 0U
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: 0U
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: 0U
+    ch: m\first_child
+    while: ch != 0
+        if: k = i
+            a: ch\addr
+            c.lmx_msg_exec_unlock(rt)
+            return: a
+        ---
+        k: k + 1
+        ch: ch\next_sibling
+    ---
+    c.lmx_msg_exec_unlock(rt)
+return: 0U
+
+fn: lmx_msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
+    @: LmxMsg m
+    @: uchar initp
+    size_t: n
+    unsigned: parent
+    if: out = 0
+        return: c.LMX_MSG_INVALID
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        parent: m\parent
+        n: m\init_n
+        initp: lmx_msg_copy_bytes(m\init, n)
+        if: n != 0U && initp = 0
+            return: c.LMX_MSG_NOMEM
+        ---
+        out\id: 0U
+        out\correlation: 0U
+        out\reply_to: parent
+        out\kind: c.LMX_MSG_KIND_BYTES
+        out\number: 0
+        out\n: n
+        out\bytes: initp
+        return: c.LMX_MSG_OK
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    parent: m\parent
+    n: m\init_n
+    initp: lmx_msg_copy_bytes(m\init, n)
+    if: n != 0U && initp = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_NOMEM
+    c.lmx_msg_exec_unlock(rt)
+    out\id: 0U
+    out\correlation: 0U
+    out\reply_to: parent
+    out\kind: c.LMX_MSG_KIND_BYTES
+    out\number: 0
+    out\n: n
+    out\bytes: initp
+return: c.LMX_MSG_OK
+
+# Decision 18: a direct child the parent's scheduler step may give a turn:
+# host-mapped, bound, not stopped, dead or released, its own ready flag set,
+# and runnable (an admitted input or a closing request).
+fn: lmx_msg_sched_eligible (@: LmxMsg ch) int
+    if: ch\mapped != 0 || ch\turn = 0 || ch\ready = 0
+        return: 0
+    ---
+    if: ch\state = c.LMX_MSG_STATE_STOPPED || ch\state = c.LMX_MSG_STATE_DEAD || ch\state = c.LMX_MSG_STATE_RELEASED
+        return: 0
+    ---
+    if: c.lmx_msg_mail_inbox_has_input(ch) != 0 || ch\closing != 0
+        return: 1
+    ---
+return: 0
+
+# Decision 18: the parent's scheduler step on its own lane reads its direct
+# children's ready flags in family order, starting after its cursor (the child
+# it last gave a turn, read from the parent's record by the step) and wrapping
+# once, and returns the first eligible child. Nothing is appended to the parent
+# from a child's lane.
+fn: lmx_msg_sched_pick (@: LmxMsg p; unsigned: cursor) unsigned
+    @: LmxMsg ch
+    @: LmxMsg start
+    start: p\first_child
+    ch: p\first_child
+    while: ch != 0
+        if: ch\addr = cursor
+            start: ch\next_sibling
+            ch: 0
+        else:
+            ch: ch\next_sibling
+        ---
+    ---
+    ch: start
+    while: ch != 0
+        if: lmx_msg_sched_eligible(ch) != 0
+            return: ch\addr
+        ---
+        ch: ch\next_sibling
+    ---
+    ch: p\first_child
+    while: ch != 0 && ch != start
+        if: lmx_msg_sched_eligible(ch) != 0
+            return: ch\addr
+        ---
+        ch: ch\next_sibling
+    ---
+return: 0U
+
+# Stage 3c-2b (2026-09-14): the parent's scheduler record (lmx_sched_record,
+# an L2 Structure in the parent's arena, rooted there) is created by the
+# parent's first step on its own lane and holds the cursor: the step reads it
+# before the pick and writes it after. Stage 5 (d3), 19.28.R2.2: the step is
+# the parent's act, run only from the parent's own turn; the host outside any
+# turn steps nothing, so the pick is always the in-turn sibling walk.
+fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
+    @: LmxMsg p
+    @: LmxMsg owner
+    @: Lmx rec
+    unsigned: addr 0U
+    unsigned: cursor 0U
+    if: rt = 0 || parent = 0U
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, parent) = 0
+        return: c.LMX_MSG_INVALID
+    ---
+    c.lmx_msg_exec_lock(rt)
+    owner: lmx_msg_self_or_find(rt, parent)
+    if: owner = 0 || c.lmx_msg_endp_retain(owner) = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    rec: owner\sched_rec
+    if: rec = 0
+        c.lmx_msg_test_lane_write(rt, owner, "sched_step:record_new")
+        rec: c.lmx_sched_record_new(owner)
+        if: rec = 0
+            c.lmx_msg_endp_release(owner)
+            return: c.LMX_MSG_NOMEM
+        ---
+        owner\sched_rec: rec
+    ---
+    cursor: c.lmx_sched_record_cursor(rec)
+    p: lmx_msg_turn_slot(rt, parent)
+    if: p = 0
+        c.lmx_msg_endp_release(owner)
+        return: c.LMX_MSG_INVALID
+    ---
+    addr: lmx_msg_sched_pick(p, cursor)
+    if: addr != 0U
+        c.lmx_msg_test_lane_write(rt, owner, "sched_step:cursor")
+        c.lmx_sched_record_set_cursor(rec, addr)
+    ---
+    c.lmx_msg_endp_release(owner)
+    if: addr = 0U
+        return: c.LMX_MSG_EMPTY
+return: c.lmx_msg_run_child_turn(rt, addr)
+
+fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    @: LmxMsgEnv env
+    unsigned: parent 0U
+    unsigned: qid 0U
+    int: st
+    if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    m: lmx_msg_turn_slot(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_lock(rt)
+        m: lmx_msg_self_or_find(rt, who)
+        if: m = 0 || m\parent = 0U
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_INVALID
+        ---
+        if: m\live_query_id != 0U || m\live_query_pend_id != 0U
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_OK
+        ---
+        if: m\live_seq = 4294967295U
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_NOMEM
+        ---
+        m\live_seq: m\live_seq + 1U
+        qid: m\live_seq
+        parent: m\parent
+        c.lmx_msg_exec_unlock(rt)
+    ---
+    if: m != 0 && qid = 0U
+        if: m\parent = 0U
+            return: c.LMX_MSG_INVALID
+        ---
+        if: m\live_query_id != 0U || m\live_query_pend_id != 0U
+            return: c.LMX_MSG_OK
+        ---
+        if: m\live_seq = 4294967295U
+            return: c.LMX_MSG_NOMEM
+        ---
+        m\live_seq: m\live_seq + 1U
+        qid: m\live_seq
+        parent: m\parent
+    ---
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: c.LMX_MSG_NOMEM
+    env\kind: c.LMX_MSG_KIND_PROGRESS
+    env\number: c.LMX_MSG_PROF_LIVE_Q
+    env\correlation: qid
+    env\reply_to: who
+    st: lmx_msg_send(rt, who, parent, env)
+    c.free((cast: (@: void) env))
+    if: st != c.LMX_MSG_STAGED
+        return: st
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        m\live_query_pend_id: qid
+        m\live_query_pend_at: c.lmx_msg_now(rt)
+    ---
+    if: m = 0
+        c.lmx_msg_exec_lock(rt)
+        m: lmx_msg_self_or_find(rt, who)
+        if: m != 0
+            m\live_query_pend_id: qid
+            m\live_query_pend_at: c.lmx_msg_now(rt)
+        ---
+        c.lmx_msg_exec_unlock(rt)
+    ---
+return: st
+
+fn: lmx_msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEnv env)) int
+    @: LmxMsg m
+    @: LmxMsg ch
+    @: LmxMsgEnv out
+    unsigned: from 0U
+    unsigned: dest 0U
+    unsigned: qid 0U
+    int: st
+    if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK || env = 0
+        return: c.LMX_MSG_INVALID
+    if: env\kind != c.LMX_MSG_KIND_PROGRESS
+        return: c.LMX_MSG_OK
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        if: m\exec_live = 0
+            return: c.LMX_MSG_INVALID
+        ---
+        from: m\exec_from
+        if: env\number = c.LMX_MSG_PROF_LIVE_R
+            if: from = m\parent && env\correlation != 0U && env\correlation = m\live_query_id
+                m\live_query_id: 0U
+            ---
+            return: c.LMX_MSG_OK
+        ---
+        if: env\number != c.LMX_MSG_PROF_LIVE_Q
+            return: c.LMX_MSG_OK
+        ---
+        ch: m\first_child
+        while: ch != 0
+            if: ch\addr = from
+                ch\child_heard_at: c.lmx_msg_now(rt)
+                dest: from
+                qid: env\correlation
+                ch: 0
+            ---
+            if: ch != 0
+                ch: ch\next_sibling
+            ---
+        ---
+    ---
+    if: m = 0
+        c.lmx_msg_exec_lock(rt)
+        m: lmx_msg_self_or_find(rt, who)
+        if: m = 0 || m\exec_live = 0
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_INVALID
+        ---
+        from: m\exec_from
+        if: env\number = c.LMX_MSG_PROF_LIVE_R
+            if: from = m\parent && env\correlation != 0U && env\correlation = m\live_query_id
+                m\live_query_id: 0U
+            ---
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_OK
+        ---
+        if: env\number != c.LMX_MSG_PROF_LIVE_Q
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_OK
+        ---
+        ch: m\first_child
+        dest: 0U
+        while: ch != 0
+            if: ch\addr = from
+                ch\child_heard_at: c.lmx_msg_now(rt)
+                dest: from
+                qid: env\correlation
+                ch: 0
+            ---
+            if: ch != 0
+                ch: ch\next_sibling
+            ---
+        ---
+        c.lmx_msg_exec_unlock(rt)
+    ---
+    if: dest = 0U
+        return: c.LMX_MSG_OK
+    out: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: out = 0
+        return: c.LMX_MSG_NOMEM
+    out\kind: c.LMX_MSG_KIND_PROGRESS
+    out\number: c.LMX_MSG_PROF_LIVE_R
+    out\correlation: qid
+    out\reply_to: who
+    st: lmx_msg_send(rt, who, dest, out)
+    c.free((cast: (@: void) out))
+return: st
+
+fn: lmx_msg_live_check (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned: threshold) int
+    @: LmxMsg m
+    @: LmxMsg ch
+    @: LmxMsg nxt
+    unsigned: wake 0U
+    int: n 0
+    if: c.lmx_msg_exec_holding_turn(rt, who) = 0
+        if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
+            return: -1
+        ---
+    ---
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        if: m\live_query_id != 0U && threshold != 0U && now > m\live_query_at && (now - m\live_query_at) > threshold
+            m\closing: 1
+            n: n + 1
+            c.lmx_msg_exec_ready(rt, who)
+        ---
+        ch: m\first_child
+        while: ch != 0
+            wake: 0U
+            nxt: ch\next_sibling
+            if: ch\mapped = 0 && ch\tracked != 0 && ch\committed != 0 && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_RELEASED
+                if: threshold != 0U && now > ch\child_heard_at && (now - ch\child_heard_at) > threshold
+                    ch\closing: 1
+                    n: n + 1
+                    wake: ch\addr
+                ---
+            ---
+            if: wake != 0U
+                c.lmx_msg_exec_ready(rt, wake)
+            ---
+            ch: nxt
+        ---
+        return: n
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: -1
+    if: m\live_query_id != 0U && threshold != 0U && now > m\live_query_at && (now - m\live_query_at) > threshold
+        m\closing: 1
+        n: n + 1
+        c.lmx_msg_exec_unlock(rt)
+        c.lmx_msg_exec_ready(rt, who)
+        c.lmx_msg_exec_lock(rt)
+        m: lmx_msg_self_or_find(rt, who)
+        if: m = 0
+            c.lmx_msg_exec_unlock(rt)
+            return: n
+        ---
+    ---
+    ch: m\first_child
+    while: ch != 0
+        wake: 0U
+        nxt: ch\next_sibling
+        if: ch\tracked != 0 && ch\committed != 0 && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_RELEASED
+            if: threshold != 0U && now > ch\child_heard_at && (now - ch\child_heard_at) > threshold
+                ch\closing: 1
+                n: n + 1
+                wake: ch\addr
+            ---
+        ---
+        if: wake != 0U
+            c.lmx_msg_exec_unlock(rt)
+            c.lmx_msg_exec_ready(rt, wake)
+            c.lmx_msg_exec_lock(rt)
+        ---
+        ch: nxt
+    ---
+    c.lmx_msg_exec_unlock(rt)
+return: n
+
+fn: lmx_msg_live_test_set_seq (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: v) int
+    @: LmxMsg m
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    m\live_seq: v
+    c.lmx_msg_exec_unlock(rt)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_live_test_set_wait_th (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: th) int
+    @: LmxMsg m
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    m\live_wait_th: th
+    c.lmx_msg_exec_unlock(rt)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_complete (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    if: c.lmx_msg_exec_holding_turn(rt, who) = 0
+        if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    # Mikhail 2026-09-14: the child declares its work done (success=1); running
+    # is cleared from success only at the turn boundary, in end_turn.
+    c.lmx_msg_success_store(m, 1)
+    m\closing: 1
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_exec_ready(rt, who)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_tracked (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    int: t 0
+    if: rt = 0 || who = 0U
+        return: -1
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: -1
+    t: m\tracked
+    c.lmx_msg_exec_unlock(rt)
+return: t
+
+fn: lmx_msg_endp_refs (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    int: r 0
+    if: rt = 0 || who = 0U
+        return: -1
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: -1
+    r: m\refs
+    c.lmx_msg_exec_unlock(rt)
+return: r
+
+fn: lmx_msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; const: @(LmxMsgEnv env)) int
+    @: LmxMsg src
+    @: LmxMsgCopy node
+    if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U || dest = 0
+        return: c.LMX_MSG_INVALID
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\id: env\id
+    node\correlation: env\correlation
+    node\reply_to: env\reply_to
+    node\from: from
+    node\to: dest\addr
+    node\kind: env\kind
+    node\number: env\number
+    node\n: env\n
+    node\bytes: lmx_msg_copy_bytes(env\bytes, env\n)
+    if: env\n != 0U && node\bytes = 0
+        c.free((cast: (@: void) node))
+        return: c.LMX_MSG_NOMEM
+    c.lmx_msg_exec_lock(rt)
+    src: lmx_msg_self_or_find(rt, from)
+    if: src = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_INVALID
+    if: src\state = c.LMX_MSG_STATE_DEAD
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_DEAD
+    if: src\state = c.LMX_MSG_STATE_STOPPED
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_STOPPED
+    if: dest\owner_rt != rt
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_INVALID
+    ---
+    if: c.lmx_msg_endp_retain(dest) = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    node\dest_msg: dest
+    if: c.lmx_msg_endp_retain(src) = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_lock(src)
+    lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+    c.lmx_msg_mail_unlock(src)
+    c.lmx_msg_endp_release(src)
+return: c.LMX_MSG_STAGED

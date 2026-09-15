@@ -1,5 +1,0 @@
-struct: Shared
-    int: n
-end: Shared
-
-fnptr: SharedFn (@: Shared s) int

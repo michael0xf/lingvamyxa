@@ -10,7 +10,7 @@
  * unit is H2, and ONE of the two things it was blocked on has gone away.
  *
  *   1. WAS: "the header-unit L1 lives in l1src and has not been promoted into
- *      stg/l1_baseline; probed 2026-09-09, the baseline rejects struct:
+ *      the baseline slice; probed 2026-09-09, the baseline rejects struct:
  *      outright." NO LONGER TRUE. Codex corrected it on 2026-09-10 and it
  *      checks out: the STG source carries l1_emit_hdr_fnptr, p0.h.lm1 is there,
  *      and the promoted 65D5A5ED translator accepts BOTH forms - fnptr: emits
