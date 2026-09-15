@@ -606,6 +606,14 @@ M. The sequential mapping removed (X), after S3 and before S4.
       baselines at d8f758e6: run_port_parser exit 0 in 326 s ("run_port_parser ok"), run_ingress_harness exit 0
       ("mixa ingress fail_keep_runtime path ok"). Landing: land_fix_then_d2.sh (land_base.sh twice: the fix, then
       D2 plus lmx_cancel).
+      LANDED 2026-09-15: merge fd8f532b on d8f758e6, with the union base on the merge:
+      - run_self_build PASS 8 of 8 (tag selfbuild/fd8f532b, log commit 1bdbfca0);
+      - gates GREEN 31 of 31 in 575 s;
+      - run_port_message plain and -LaneCheck parity PASS (97 methods);
+      - run_l2trans "l2trans gen2 ok" in 289 s;
+      - run_port_parser ok in 320 s;
+      - run_mixa ok; run_ingress_harness ok.
+      integration/main-absorbs-core is 1bdbfca0.
     - Rule from this miss (the coordinator, 2026-09-15): every landing set is the union of the runners earlier
       landings ran, never a per-stage subset. The fixed base is run_self_build with its tag and log, run_gates
       -L2MessageRoot (31), run_port_message plain and -LaneCheck, run_l2trans, run_port_parser, run_mixa and
