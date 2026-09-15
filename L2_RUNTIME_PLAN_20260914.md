@@ -3417,3 +3417,7 @@ success == 1 (model); user code sets success; running is polled while root
 executes, and running = 0 from the parent is the stop request that in the
 end leaves the loop; running is set to 0 at exit; a finished L3 Thread
 reads success && !running.
+The model rule in the design: d6/lock-removal abc36542 (the lead), checked
+on the branch by the coordinator: "fixes no loop shape" 0 in the design and
+the table; Mikhail's sentence present verbatim in KERNEL, S3, Y3 and the
+FIELDS success comment; categories 16/36/47.
