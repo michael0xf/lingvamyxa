@@ -963,7 +963,21 @@ prototype, largest first.
    selftest.lm1, "15 checks, 5 failures" on 4a92659b (red on the
    child-turn refusals, the worker's set_orphan_retain and the
    unchanged-clock lines; the cells' location lines added by the lead with
-   the accessors).
+   the accessors). The l2trans int-alias local fix landed as a4680548 over
+   4a92659b (the table l2_int_alias with each alias's p0.h line, consulted
+   by the classifier and the formal and return codes; the repro with two
+   aliases, each removal red only at its own local; the historical input
+   pin at 140; run_gates 11 of 11, parity, entry_turn 24, run_lmx,
+   run_l2trans, run_l2_message_root 140 inputs, run_port_parser cold). (e)
+   is 6cb55982 on d6/stage5e (reviewed: lm1 and lm2 identical, 22 lines;
+   the acceptance the tenth default; lane falsifier "15 checks, 6
+   failures"), with a fix-up commit pending for the unit's stale header
+   comment, the acceptance's location lines with the root_attach
+   falsifier, and one gate fix found on it: run_sched_record links its own
+   copy of lmx_sched_record and no other runtime unit, so a second unit
+   called by lmx_message left "undefined reference to lmx_root_record_*";
+   Build-L2RuntimeUnits gains -Exclude and run_sched_record passes its own
+   unit (one copy of each unit in the link).
 
 ## 4. Acceptance
 
