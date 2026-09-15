@@ -483,6 +483,7 @@ prototype:
     fn: l2_check_os (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_array_local (const: @(LmP0Node stmt); @@: LmP0Text out_name; @@: LmP0Text out_n) int
     fn: l2_index_tail (@: LmP0Field f; @@: LmP0Field out_idx; @@: LmP0Field out_after) int
+    fn: l2_index_span (@: LmP0Field f; @@: LmP0Field out_after) int
     fn: l2_addr_tail (@: LmP0Field f; int: mi; @@: LmP0Field out_name; @@: LmP0Field out_after) int
     fn: l2_expr_span (@: LmP0Field field) int
     fn: l2_actual_count (@: LmP0Field field) int
@@ -6502,7 +6503,6 @@ return: 0
 
 fn: l2_expr_span (@: LmP0Field field) int
     @: LmP0Field f
-    @: LmP0Field index
     @: LmP0Field after
     @: LmP0Field slash
     @: LmP0Field member
@@ -6527,8 +6527,12 @@ fn: l2_expr_span (@: LmP0Field field) int
         if: n < 1
             return: 0
         return: n + 1
-    if: l2_index_tail(field, @ index, @ after) = 0
-        span: 4
+    # An index is one operand however deep: `text [ index [ 0 ] ]` spans seven
+    # fields. Counting only `name [ X ]` split a nested index into four actuals
+    # and boxed the bare brackets (b5's repro 7acecbbd).
+    n: l2_index_span(field, @ after)
+    if: n > 0
+        span: n
         f: after
     else:
         f: l2_next_active(field\next)
@@ -6539,8 +6543,9 @@ fn: l2_expr_span (@: LmP0Field field) int
                 return: 0
             span: 3
             f: l2_next_active(member\next)
-            if: l2_index_tail(member, @ index, @ after) = 0
-                span: 6
+            n: l2_index_span(member, @ after)
+            if: n > 0
+                span: 2 + n
                 f: after
             ---
         ---
@@ -6559,8 +6564,9 @@ fn: l2_expr_span (@: LmP0Field field) int
             return: 0
         span: span + 1
         operand: 1
-        if: l2_index_tail(f, @ index, @ after) = 0
-            operand: 4
+        n: l2_index_span(f, @ after)
+        if: n > 0
+            operand: n
             f: after
         else:
             f: l2_next_active(f\next)
@@ -6571,8 +6577,9 @@ fn: l2_expr_span (@: LmP0Field field) int
                     return: 0
                 operand: 3
                 f: l2_next_active(member\next)
-                if: l2_index_tail(member, @ index, @ after) = 0
-                    operand: 6
+                n: l2_index_span(member, @ after)
+                if: n > 0
+                    operand: 2 + n
                     f: after
                 ---
             ---
@@ -6580,6 +6587,31 @@ fn: l2_expr_span (@: LmP0Field field) int
     ---
     n: span
 return: n
+
+# `name [ ... ]` with its brackets balanced: the number of fields from name to
+# the closing `]`, and the field after it; 0 when f does not start an index.
+fn: l2_index_span (@: LmP0Field f; @@: LmP0Field out_after) int
+    @: LmP0Field p
+    int: depth 0
+    int: n 1
+    \out_after: 0
+    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || f\value\as = 0 || l2_ident(f\value\as\atom) = 0
+        return: 0
+    p: l2_next_active(f\next)
+    if: p = 0 || p\value = 0 || p\value\kind != c.LM_P0_NODE_ATOM || p\value\as = 0 || l2_text_eq(p\value\as\atom, "[") = 0
+        return: 0
+    while: p != 0
+        n: n + 1
+        if: p\value != 0 && p\value\kind = c.LM_P0_NODE_ATOM && p\value\as != 0 && l2_text_eq(p\value\as\atom, "[")
+            depth: depth + 1
+        if: p\value != 0 && p\value\kind = c.LM_P0_NODE_ATOM && p\value\as != 0 && l2_text_eq(p\value\as\atom, "]")
+            depth: depth - 1
+            if: depth = 0
+                \out_after: l2_next_active(p\next)
+                return: n
+            ---
+        p: l2_next_active(p\next)
+return: 0
 
 fn: l2_actual_count (@: LmP0Field field) int
     @: LmP0Field f
