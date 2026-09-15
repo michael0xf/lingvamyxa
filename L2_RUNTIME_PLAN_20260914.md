@@ -5802,3 +5802,20 @@ untouched by this landing, not an S5 gap; the coordinator routes it to
 the lead's S6 section (its row DEL at S6 with the worker pool's
 bookkeeping). Falsifier: every "gone" name returns zero grep hits on
 the post-landing tree.
+S5's landing RED, nothing pushed (the lead, 2026-09-15): merge 0be7b9e5
+(ddab10a0 onto 3e6fc02a, 5 M) ran the union base plus lmx_cancel; the
+gates stopped at port_slots after 338 s, "FAIL exit=1" at compile;
+everything else green (self-build 8 of 8 with tag selfbuild/0be7b9e5
+and the log commit on d6/lock-s5-landing-0be7b9e5, pushed by the rule;
+port_message both modes PASS; run_l2trans; run_port_parser; mixa;
+ingress; lmx_cancel). Cause, the lead's miss and the recorded lesson
+"field check must ignore the receiver": l2src/tests/lmx_msg_slots_selftest.lm1
+59 builds a test runtime and writes "other\root_seq: 97U", a field S5
+deleted (checked by the coordinator); the reader had grepped on the
+rt\ receiver and the probe covers only the five core files. Fix,
+test-only, no lock: the line dropped (the fixture's root_seq plays no
+part in the slots checks); before re-landing the lead greps every
+receiver of the removed names tree-wide and runs run_port_msg_slots
+locally; the probe unaffected; the new tip differs from ddab10a0 by
+that one test line; re-landed with land_s5.sh, the allowlist extended by
+that test file, no re-measure by the coordinator needed.
