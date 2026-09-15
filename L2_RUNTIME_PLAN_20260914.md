@@ -3957,3 +3957,12 @@ outside any turn); cancel_spin_host is changed at S4 so its cancellations
 are made on the host thread, or its worker delivers the cancellation as
 mail to the host (an admission into R0's mailbox) and the host issues the
 stop; listed in S4's note as a test change.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only: the A-stage
+inventory, LOCK_REMOVAL_A_ALLOCS.txt on sonnet/a-allocs: at c063fd00
+every allocation and free in l2src not through the Message's own arena
+(malloc/calloc/realloc/free, lm_alloc-style helpers, the foreign-alloc
+paths of L2_FOREIGN_ALLOC.txt), file:line, function, what is allocated,
+its owner, and its category: (a) the arena's own block allocation, (b)
+runtime or scaffolding storage a named stage deletes, (c) something that
+must become a node in a named Message's arena, (d) a contradiction (no
+owner and no stage); counts per category at the top.
