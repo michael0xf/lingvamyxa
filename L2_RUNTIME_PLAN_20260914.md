@@ -4417,3 +4417,20 @@ C; the L2 mirrors are held to parity with the L1-built reference in
 run_port_message) is not in the fixed point today and joins it, with the
 same criterion, when the port to L2 resumes after the lock work. The
 earlier open question above (the L2 stage in the self-build) is closed.
+UI-step case, decided (2026-09-15): land_oneroot.sh runs every step strictly
+in sequence (gate log mtimes: gen2_l2_run_lmx 09:08:50-09:09:13, the
+next steps after gate.ps1 returned, the 33 gates and mixa runners much
+later), so no landing step overlapped it; measurement #2 (6 busy
+processes, 100 runs, instrumentation reverted) 0 of 100 failed, all 100
+"MEASURE ui-step drain=0 inbox=1 runnable=1 step=0 recvd=1"; across both
+loops the case was reached 119 times with neither an EMPTY nor a
+refusal; at 16 busy processes on 16 cores the selftest breaks earlier
+("fast turn did not overlap slow wait") and never reaches it. Ruling
+(coordinator): no test edit under this landing; relaunch land_oneroot.sh
+(merging d6/one-root-selfbuild 27edf717, the mixa set reduced to
+run_mixa) with every other session holding heavy runs for its duration
+(about 35 minutes); the selftest's load sensitivity (the overlap case
+and the UI-step case) recorded here as a known limit that M removes
+with the UI step and the mapped turns; the lead's scan for another
+session's writes under any build/ tree in 09:08:30-09:09:30 is reported
+if it finds one.
