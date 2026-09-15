@@ -1,0 +1,115 @@
+GATE_TIME_1016: why one run_gates chain took 1016 s
+Measured by 0c from logs only, 2026-09-15. Nothing was rerun.
+
+The run
+  gates.log of the (b) landing, lead's scratchpad stage3\lock\land_b_8cd61352:
+  "gates HEAD 798718226d36... dirty=0 pin=722AC86E pin_matches_L1_PIN=True",
+  "gates GREEN: 32 of 32 in 1016s", 04:52:26-05:09:22 on 2026-09-15.
+  It is the 32-gate default set, not run_gates -L2MessageRoot: the log has no
+  l2_message_root row. The 33-gate runs (with -L2MessageRoot, pin 0B3D85B3) took
+  532-562 s: c063fd00 532, 5cee1426 535, 80101431 544, b4e1296d 545, 64c4af01 562.
+  Its per-gate logs survive in C:\Nyasha_Planet\lingvamyxa\build\fable\wti\stg\l1_baseline\build\gates\20260915_045226.
+
+The comparison runs (same 32 gates, same pin 722AC86E)
+  510 s: land_d1_17b4d5e1\gates.log, HEAD 7200294b, 04:20:49-04:29:19, gate logs 20260915_042049.
+  520 s: land_gates32_ad3fc6b8\gates.log, HEAD 88934463, log written 04:07.
+
+Falsifier: per-gate seconds sum to the chain total within the runner's overhead
+(run_gates.ps1 times each gate and the whole chain separately, rounding each):
+  1016 s run: 32 gates sum 1015 s, total 1016 s, overhead 1 s.
+  510 s run:  sum 511 s, total 510 s, overhead -1 s (rounding).
+  520 s run:  sum 520 s, total 520 s, overhead 0 s.
+
+Per gate, seconds: 1016 run, 510 run, 520 run, delta vs 510, delta vs 520 (largest delta first)
+  graph_abi               150    69    73     81    77
+  send_local               58    26    25     32    33
+  family_handoff           57    26    26     31    31
+  c_scanners               51    23    23     28    28
+  lmx_message              51    25    26     26    25
+  port_graph_copy          45    19    20     26    25
+  port_merge_owned         32    14    14     18    18
+  entry_turn               26    11    12     15    14
+  port_chars_owned         26    11    11     15    15
+  port_value_owned         28    13    14     15    14
+  port_array_ref_owned     26    11    12     15    14
+  port_branch_owned        26    11    12     15    14
+  port_owned_ranges        25    11    12     14    13
+  port_roots_stale         25    11    12     14    13
+  port_liveness            25    11    11     14    14
+  port_msg_blocks          25    11    12     14    13
+  port_array_owned         26    12    12     14    14
+  port_msg_graph_copy      25    11    12     14    13
+  port_slots               24    11    12     13    12
+  port_mail_chain          24    11    11     13    13
+  port_storage             24    11    11     13    13
+  port_path_storage        24    11    11     13    13
+  scenario36               54    41    39     13    15
+  port_history             25    12    12     13    13
+  port_visit               24    11    12     13    12
+  sched_record             23    12    11     11    12
+  liveness                  3     1     1      2     2
+  visit                     3     1     1      2     2
+  roots_stale               3     2     1      1     2
+  history                   3     2     2      1     1
+  turn_step_child           1     0     0      1     1
+  lane_oracle              53    59    57     -6    -4
+  sum of deltas: 504 s vs the 510 s run, 495 s vs the 520 s run.
+
+Which gates account for the difference
+  No single gate. Every gate that translates and compiles (graph_abi, send_local,
+  family_handoff, c_scanners, lmx_message and the 18 port parity runners) took about
+  2.2 times its baseline, and together they are the 504 s. The 5 largest deltas
+  (graph_abi 81, send_local 32, family_handoff 31, c_scanners 28, lmx_message 26)
+  are 198 s; the 18 port runners add 266 s at 13-26 s each.
+
+What those gates were doing, by their own lines
+  - The same work as in the 510 s run. Each gate's verdict line is identical in both
+    runs (graph_abi "63 checks, 0 failures ... 75, then success at call 76";
+    send_local "checks=146 failures=0 owned_frees=1"; family_handoff "checks=63
+    failures=0 watched_frees=4"; c_scanners "cases=130 freed=4316"; lmx_message
+    "selected=Message ok"). The chain wrote 5055 build files and 476 evidence files
+    under build\fable\wti in its window, against 5029 and 476 in the 510 s run's.
+  - Not a rebuild of the pinned translator: pin_matches_L1_PIN=True in both, and the
+    gates run the pinned gen2 binary.
+  - Not a cold gcc of one selftest or a wait: the slowdown is spread over every
+    compiling step. Inside send_local, its core archive (core.zip) to its first
+    translated module took 13 s (04:55:42-04:55:55) against 7 s (04:23:12-04:23:19)
+    in the 510 s run; the port runners, which each build one selftest with the
+    runtime units, went from 11 s to 24-26 s each.
+  - When it started, from the gate log times: lane_oracle ran 04:52:26-04:53:19 in
+    53 s (faster than the baseline's 59 s), scenario36 04:53:19-04:54:13 (+13 s),
+    and every gate from sched_record (04:54:36) to graph_abi (05:09:22) ran at about
+    2.2 times. So the slowdown began about 04:53 and lasted past 05:09.
+
+What ran around it
+  - The (b) landing's own steps, before the chain, in land_b_8cd61352: root
+    buildCore 04:50:50, root run_gen 04:52:13, self_build 04:52:21, slice_equal
+    04:52:25, then run_gates 04:52:26. These had finished.
+  - cleanup_relaunch_b.sh was written at 04:52:52; it ends by exec'ing
+    regen_root.sh. No regen_root run followed: the only regen_root directory is
+    regen_root_7200294b, 04:48:44-04:50:23.
+  - No other run_gates chain overlapped: of the 139 chain outputs on disk, only this
+    one covers 04:52-05:09.
+  - No other file was written in the window anywhere under C:\Nyasha_Planet (depth 12)
+    except the chain's own build outputs and evidence, nor in the other sessions'
+    temp directories under Temp\claude (8 bash-edit-diff objects only), nor directly
+    in %TEMP%.
+
+Conclusion
+  The 1016 s run did the same work as the 510 s and 520 s runs, and took about 2.2
+  times as long in every translating and compiling gate from about 04:53 to 05:09.
+  That is CPU contention from outside the chain. What caused it left no file in the
+  repository trees or the session temp directories, so these logs do not name it;
+  they rule out a pinned-translator rebuild, a single cold compile, a wait, a second
+  gate chain and a regen_root relaunch.
+
+The 06:18 run with pin A45828C5
+  land_o_6eb6729a\gates.log (HEAD c063fd00): "pin=A45828C5 pin_matches_L1_PIN=False",
+  "gates RED: stopped at lane_oracle after 0s". The installed gen2 translator did not
+  match L1_PIN (0B3D85B3), so lane_oracle refused at once; it was re-run as
+  resume_o_c063fd00 at 06:31, green 33 of 33 in 532 s. It says nothing about timing.
+
+Falsify: in the two gate log directories named above, each gate log's write time
+minus the previous one's (the first minus the directory's start time) reproduces the
+chain's per-gate seconds. Measured: largest per-gate difference 0 s in both runs; the
+1016 s run's 32 gates sum to 1015 s by both, the 510 s run's to 511 s by both.
