@@ -1,0 +1,20 @@
+runner	exit	seconds	stdout_files	last_line
+run_array_owned.ps1	0	3	20	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\array_owned\20260914_200152_246_3dd88cc7
+run_array_ref_owned.ps1	0	3	17	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\array_ref_owned\20260914_200155_691_9e57684e
+run_candidate_c_scanners.ps1	0	26	0	Candidate scanner evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\candidate_c_scanners\20260914_200158_365 result=PASS
+run_candidate_indent.ps1	-1	1209	0	
+run_chars_owned.ps1	0	3	17	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\chars_owned\20260914_202233_035_1d18c827
+run_entry_turn.ps1	0	15	3	entry turn PASS: 24 checks, 0 failures, two runs agree, body and adapter each called once, aborting program exits 1; evidence C:\Nyasha_Planet\wt0c_rh\stg\l1_baseline\build\entry_turn\20260914_202235_763\evidence.json
+run_foreign_alloc.ps1	0	2	7	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\foreign_alloc\20260914_202250_577_4a93bf5d
+run_graph_abi.ps1	0	101	157	merge selftest: 261 checks, 0 failures', fixtures 152/152, support warnings 1; evidence C:\Nyasha_Planet\wt0c_rh\build\fable\graph_abi\run_20260914_202252_566_3a613ab1
+run_l2_message_root.ps1	0	57	0	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\l2_message_root\20260914_202434_039_4ae0240f
+run_l2trans.ps1	1	0	0	   1_GEN='gen2'; powershell -File tests\l1\run_parser.ps1 (the gen2 step of tests\l1\run_gen.ps1)
+run_lmx.ps1	0	36	9	l2 lmx gen2 ok
+run_lmx_msg_history_owned.ps1	0	16	15	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_history_owned\20260914_202609_060_cdae2241
+run_lmx_msg_roots_stale.ps1	0	16	15	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_roots_stale\20260914_202625_409_ced8f5e6
+run_model_scenario36.ps1	0	27	18	core tests PASS: lmx_model_scenario36_selftest 49/0, lmx_msg_delivery_selftest 27/0, lmx_model_checks_19_29_6_selftest 32/0, lmx_model_liveness_33_selftest 61/0, lmx_model_family_close_32_selftest 24/0, lmx_model_family_release_17_selftest 51/0, lmx_model_ui_lane_3d_selftest 22/0, lmx_model_orphan_m
+run_msg_blocks.ps1	0	9	8	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_blocks\20260914_202709_863_d21964a1
+run_msg_family_handoff.ps1	0	73	45	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_family_handoff\20260914_202719_424_32192dac
+run_msg_liveness.ps1	0	13	12	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_liveness\20260914_202832_723_72cae5fd
+run_msg_mail_chain.ps1	0	17	15	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_mail_chain\20260914_202846_162_762afc4c
+run_msg_path_storage.ps1	1	9	8	argument that is not null or empty, and then try the command again.

@@ -1,0 +1,116 @@
+RUNNER HAZARDS: build reuse keyed on presence or time, and Start-Process -Wait launches, in every l2src runner (0c, 2026-09-14)
+IN PROGRESS: the survey table below is complete for (a) and (b) on d925e600; (c) has 19 of 47 cold rows.
+
+Why
+  run_port_parser taught two hazards (l2src/PORT_PARSER_TIMING.txt; 4b3f8d9c, 49e5db6d):
+  - a runner that skips a build step because its output already exists links whatever tree first built
+    that output: a warm build\port_parser linked a pre-e64c8083 lmx_message_exec.o ("undefined
+    reference to `lmx_msg_run_entry_turn'"), and after a core change it would report the old core's
+    result as the new one's;
+  - PS 5.1 Start-Process -Wait costs about 1 s per launch however fast the child is (1758 of 1845 s were
+    launches); Start-Process -PassThru without reading $p.Handle first returns an empty ExitCode, so an
+    exit compare can pass silently.
+  e2's ticket: survey every other runner under l2src first (this table), then fix per runner in gate
+  weight order, each fix a runner-only commit with its falsifier.
+
+Survey method (on d925e600)
+  Static: every .ps1 under stg/l1_baseline/l2src (48 files: 47 run_*.ps1 and l2units_build.ps1), every
+  Test-Path, LastWriteTime/CreationTime, Get-FileHash/SHA256 and Start-Process line with two lines of
+  context, and every dot-sourced builder (a runner inherits its builder's hazards). Each Test-Path site
+  classified as reuse (skips a build step when an output exists), input check (throws on a missing
+  source or tool), cleanup/evidence, or optional input.
+  Output directory per runner: fixed (the same path every run, so reuse can cross runs and branches in
+  one worktree) or stamped (a new directory per run, so nothing on disk is reused).
+  Cold runs: every runner once, sequentially, in a fresh private worktree on d925e600 (claude-0c/
+  runner-hazards) whose fixed output dirs did not exist; wall time, exit, last line, and the number of
+  stdout files written during the run (a launch proxy).
+
+(a) Reuse keyed on presence or time
+  Only three runners write to a fixed output directory; every other runner writes to
+  build/<name>/<stamp> or build/codex/<name>/<runId> and reuses nothing across runs.
+  run_lmx.ps1 (fixed build\l2\targeted\<gen>\<Suite>, or build\l2 for Full)
+    L431-433: l2trans.exe is rebuilt only when absent or when l2src\l2trans.lm1 is newer than it
+      (LastWriteTime). The exe can come from any earlier run in that worktree, of any branch; a change
+      to an input l2trans.lm1 predefs or includes (l1src/parser.lm1, lm1/build headers) without touching
+      l2trans.lm1 itself is not seen, and a checkout that gives l2trans.lm1 an older mtime than the exe
+      reuses the exe. HAZARD.
+    L190-227 Get-LmxObject: objects keyed on a content hash (source SHA256, gcc path and SHA256, options,
+      SHA256 of every header under l2src, lm1/build and the generated include dir), in an in-run
+      hashtable (L186 $objectCache = @{}) with the key in the object's file name. Not a hazard.
+  run_port_parser.ps1 (fixed build\port_parser)
+    L134: p0_dump_alloc_counter.o is compiled only when absent. The rebuild fix 49e5db6d removed the three
+      runtime-trio checks and missed this one. Its source l2src/p0_dump_alloc_counter.c changes rarely,
+      but a warm dir links whatever tree first compiled it. HAZARD.
+  run_l2trans.ps1 (fixed build\l2trans)
+    L36-38: the STG oracle build\l1trans\gen2\printTree.exe (used by the printTree parity stage and by
+      run_candidate_indent) is accepted by presence alone: no hash, pin or record of the tree that built
+      it. It is built by another script (tests\l1\run_parser.ps1 with L1_GEN=gen2), so a warm worktree
+      compares against whatever printTree an earlier build left there (wt0c_w2's is from 09-13 20:17).
+      A fresh worktree has none, and the runner stops at once (the cold batch's exit 1 in 0 s). The chain
+      goes one step further: stg/l1_baseline/tests/l1/run_parser.ps1 (outside l2src) needs the lm0 oracle
+      build\lm0\printTree.lm0.exe, also accepted by presence alone (its L46), and no tracked script builds
+      that into a worktree. For the cold timing it was copied from the main checkout's ignored build\lm0
+      (09-05, SHA256 8FA2A40396ED7A4DE1262D76DA3EA1244AF9F68F5E707D970155963E29D37717). HAZARD
+      (presence-keyed input rather than reused output; fix candidates: build it in the run, or pin its
+      hash as run_port_parser pins l1trans).
+    Otherwise no presence-keyed build skip: Get-L2MessageObjects (L94-131) translates and compiles every call, once
+    per invocation ("no reuse across runs"); the Test-Path sites are input checks (L11, L20, L37, L659),
+    optional inputs (L17 output translator, L205), and cleanups before a write (L272, L666, L670-671,
+    L1521). Reads of files a run did not write are the other form of this hazard (the fixed
+    entry_puts_triple_long read found earlier, f6966bcd); not surveyed line by line here.
+  l2units_build.ps1: L50 and L64 test source existence (no L1 twin; the unit has a header source); every
+    generated artifact is rebuilt each call. Not a hazard.
+  Other classes found on the way (not reuse, reported for the no-comparison-skipped rule):
+    run_candidate_indent.ps1 L525, L541: a golden comparison runs only if the golden file exists, so a
+      missing golden skips its compare silently.
+    run_candidate_indent.ps1 L474: the two extra corpus inputs are used only if present.
+
+(b) Start-Process launches
+  -PassThru, then $p.Handle read before WaitForExit (no 1 s cost, exit code observable): run_array_owned,
+    run_array_ref_owned, run_chars_owned, run_foreign_alloc, run_entry_turn, run_lmx Invoke-LmxTest
+    (L52-66), run_model_scenario36, run_msg_blocks, run_msg_family_handoff, run_msg_mail_chain,
+    run_msg_path_storage, run_msg_send_local, run_msg_slots, run_msg_storage, run_owned_ranges,
+    run_port_message, run_sched_record.
+  -Wait (about 1 s per launch):
+    run_candidate_indent.ps1 L481 Invoke-DumpExe, called per corpus input at L505 and L506 and, for some
+      inputs, L540: 36 tree-contract inputs (+ up to 2 extras) x 2-3 launches, about 72-114 per run.
+      It is not a standalone runner: its four parameters are Mandatory (-l1trans, -out, -log,
+      -messageObjects) and its one caller is run_l2trans.ps1 L5186, so these launches and its time are
+      part of every run_l2trans run. Started alone from a hidden console it waits for parameter input
+      forever (the cold batch measured exactly that: exit -1 after 1209 s, stopped by hand; not a result).
+    run_l2trans.ps1 L611, L613 (entry_strcmp ok/no, 2) and L676/L678 Invoke-One (5 parity cases x 2
+      executables, 10): 12 per run.
+    run_lmx.ps1 L290 (lmx_dec_selftest, lmx_message_selftest when built: up to 2) and L497
+      (cancel_spin_host, 1): up to 3 per run in the suites that build them.
+    run_lmx_msg_history_owned.ps1 L28, run_lmx_msg_roots_stale.ps1 L28 (11 stage call sites each, some
+      in loops over header units and sources), run_msg_liveness.ps1 L37, run_msg_visit.ps1 L34 (9 stage
+      call sites each, some per optimization level): every stage is one -Wait launch.
+  run_port_parser.ps1 L69: already cmd /c (d72ee7f0). Between d925e600 and 090704f7 the only runner
+    change is run_port_parser's stage list (c05e1178, dd067e06: d_stack_geometry and d_lineage_trailer
+    added, no code change): 14 stages, so 36 inputs x 2 drivers x 2 executables x 14 = 2016 golden
+    launches per run, all cmd /c. Its cold time below is re-measured on 090704f7.
+
+(c) Cold run per runner
+  Status: IN PROGRESS, 19 of 47 cold rows (the machine rebooted during row 20; the batch resumes from
+    run_msg_send_local on the same base, d925e600, and later rows land as fast-forward commits).
+  runner                           exit  seconds  stdout files  note
+  run_array_owned.ps1              0           3            20  pass (evidence written)
+  run_array_ref_owned.ps1          0           3            17  pass (evidence written)
+  run_candidate_c_scanners.ps1     0          26             0  Candidate scanner evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\candidate_c_scanners\2026
+  run_candidate_indent.ps1         -1       1209             0  not a result: Mandatory params, called only by run_l2trans L5186; blocked on the parameter prompt, stopped by hand
+  run_chars_owned.ps1              0           3            17  pass (evidence written)
+  run_entry_turn.ps1               0          15             3  entry turn PASS: 24 checks, 0 failures, two runs agree, body and adapter each called once,
+  run_foreign_alloc.ps1            0           2             7  pass (evidence written)
+  run_graph_abi.ps1                0         101           157  merge selftest: 261 checks, 0 failures', fixtures 152/152, support warnings 1; evidence C:
+  run_l2_message_root.ps1          0          57             0  pass (evidence written)
+  run_l2trans.ps1                  1           0             0  setup: missing build\l1trans\gen2\printTree.exe (the L36-38 presence-keyed oracle); re-timed with the oracle built in this worktree
+  run_lmx.ps1                      0          36             9  l2 lmx gen2 ok
+  run_lmx_msg_history_owned.ps1    0          16            15  pass (evidence written)
+  run_lmx_msg_roots_stale.ps1      0          16            15  pass (evidence written)
+  run_model_scenario36.ps1         0          27            18  core tests PASS: lmx_model_scenario36_selftest 49/0, lmx_msg_delivery_selftest 27/0, lmx_m
+  run_msg_blocks.ps1               0           9             8  pass (evidence written)
+  run_msg_family_handoff.ps1       0          73            45  pass (evidence written)
+  run_msg_liveness.ps1             0          13            12  pass (evidence written)
+  run_msg_mail_chain.ps1           0          17            15  pass (evidence written)
+  run_msg_path_storage.ps1         1           9             8  RED, runner code: L27 Start-Process -ArgumentList $quoted refuses an empty argument list ("The argument is null or empty") at the first stage with no native arguments, after compile_O0 built path_O0.exe; not an input the cold dir lacks
+  The stdout-file count is a launch proxy: each Start-Process stage writes one Name.stdout.txt.
