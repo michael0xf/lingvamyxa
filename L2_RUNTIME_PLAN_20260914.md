@@ -4286,3 +4286,17 @@ probe fault, named as such; the same 8 runners are baselined at
 b4e1296d in a fresh worktree with the stg paths, and only a runner green
 there and red on the moved tree counts against ONE ROOT; then the
 UI-step loop under load.
+Mikhail (2026-09-15, verbatim): "каждую успешную самосборку комитьте и
+пуште" (commit and push every successful self-build). Standing rule from
+now, as read by the coordinator: whenever run_self_build passes on a
+committed tree (fixed point pass 3 == pass 2), that state is pushed at
+once, before and independently of the rest of a landing: if the
+regenerated C differs from the committed C, the regenerated files are
+committed on the branch first (as (b) did at 79871822); then the
+measured commit is pushed as the branch's tip and tagged
+selfbuild/<hash> (an annotated tag naming the date, the pin and the
+fixed-point blob ids), the tag pushed; a tag that already exists is
+left. The landing scripts (the lead's land_*.sh, e9's gate record) do
+this right after their run_self_build step; a red on any later step
+never withdraws the pushed self-build. Applies now to ONE ROOT's merge
+5cee1426, whose run_self_build passed 8 of 8 on the moved tree.
