@@ -5219,3 +5219,30 @@ runners' signature pins and embedded drivers, not only the sources.
 The lead merges 29f58f76 with D2's landing (its section at 3833911b or
 later; the landing set: the self-build, the 31 gates, port_message,
 run_l2trans, run_mixa).
+S2 red re-measured by the coordinator (2026-09-15) on c8f9cb50 in exec-3a
+(pin 0B3D85B3): run_port_message plain PASS (97 methods, 63 s), then the
+built reference.exe run twice with LMX_LOOKUP_COUNT=1: "lookup walks:
+C1=112 C2=1 turn_other=37 host=2652049" and "C1=112 C2=1 turn_other=39
+host=2580685"; C1 and C2 equal to the lead's, turn_other varying by one
+or two (37-39) with the host's polling, so S2's green criterion names
+C1=0 and C2=0 only, turn_other reported. The machine is the lead's for
+D2's landing.
+e9's S2 gate impact list landed on claude-0c/s2-gate-impact 464cacee
+(l2src/S2_GATE_IMPACT.txt, read only; checked by the coordinator): of
+the 30 defaults plus l2_message_root, 10 assert a C1/C2/C5 entry point
+by address (lane_oracle, scenario36, lmx_message, send_local,
+family_handoff, entry_turn, c_scanners, port_msg_graph_copy, graph_abi,
+l2_message_root; the line named), 0 numeric-only, 21 unaffected; the
+tests use only lmx_msg_find (SPINE's N class, not driven by S2's
+green); two runners pin the generated entry call's text
+(run_entry_turn.ps1 109/112 and run_l2trans.ps1 1152, reaching
+c_scanners, graph_abi and l2_message_root: "lmx_msg_run_entry_turn(process_runtime,
+process_addr, l2_program_turn, ..."); send_local and family_handoff pin
+their pass lines (checks=122, checks=67); the explicit numeric grep
+(addresses, child indices, rt\n slot counts, lookup counters,
+pass-line counts) finds only numbers S2 does not change by the design.
+Open for the lead's S2 form: whether map_child, exec_bind,
+dispose_child, end_turn, run_entry_turn and create keep their address
+parameters (the design threads the sites; SPINE 27-46 and b5's file name
+no public signature change); the two entry-call text pins depend on it.
+C3/C4 uses listed separately for S4.
