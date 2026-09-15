@@ -1368,6 +1368,15 @@ S5. The runtime-level lists (L5). Waits on 5.1.
       Fix: __atomic_fetch_add_4 on the unsigned next_addr, with a file-scope typedef that fails the compile unless
       the field is 4 bytes. __sync_fetch_and_add is not used, because the accepted probe excludes only
       __atomic_ lines. exec.c is syntax-checked with the port_message headers before the green is re-run.
+    - Second green attempt, NOT green on the probe alone (2026-09-15): d6/lock-s5 2f137863; measure tree
+      04659274 = 2f137863 + 85953500.
+      - run_port_message exit 0 in 51 s, parity PASS.
+      - UAF kit over the executor selftest: "165 of 165 clean in 403 s".
+      - Tracked tree clean after the runs.
+      - The probe printed next_addr_nonatomic=1, from the size-check typedef naming next_addr without an
+        __atomic_ call.
+      Fix: the typedef checks sizeof(unsigned), the field's declared type, without naming the field. The probe is
+      unchanged. The rerun checks the probe on the tree before the full green.
     - UAF kit for S5's green, rebuilt in scratch (never committed):
       - q_alloc.c: a poisoning quarantine allocator (0xDD, 8192 blocks, 256 MB, free-site frames, eviction and
         atexit checks, double free);
