@@ -3992,3 +3992,26 @@ emitted for it (the monitor primitive, enter/leave, reentrancy, the
 locked object), how far it went (parsed, emitted, tested), and every
 shortfall against the spec's receiver description; no proposal of b5's
 own.
+b5's research on the old project's synchronized receiver landed on
+sonnet/y1-old-sync ed8b780c (LOCK_REMOVAL_Y1_OLD_SYNCHRONIZED.txt; old
+tree C:\Nyasha_Planet\lingvamyxa_old_worked_version at git 620db861;
+checked): registered as an ordinary receiver (core.lm2 149,
+trans_registry.lm2 612/700/793) and fully emitted
+(trans_l1_statement.lm2 schedule_synchronized/emit_cleanup 11103,
+483-502): an enter/leave pair with cleanup-stack unwinding on every exit
+(return with value capture before release, break, continue; ordering
+verified in emit_return_statement ~3690-3860); but lm_synchronized_enter/
+leave have no runtime definition anywhere, generated C included; the only
+definitions are local non-atomic depth-counter stand-ins in
+tests/trans_synchronized_cleanup.lm2 (the one test, cleanup order only)
+and, a generation earlier, lm2/mix/old/Mix.lm2 (16 call sites locking
+page/node structures of a flat page table, before the Message model); a
+real program would compile and fail to link. Shortfalls against spec
+20.5.7: no monitor policy or reentrant entry (spec 15111-15112); no
+lm_resolve_lock_handle-equivalent, the raw expression cast to void*
+(15090); value-return safety tied by the spec to the status-plus-typed-
+outputs ABI 21.13.4, absent from the old tree's spec copy (its
+capture-then-release ordering matches structurally); nothing exercised
+under concurrency. So Y1 takes the old emission shape (enter/leave with
+the cleanup unwinding) and supplies the runtime monitor: reentrant, on
+the mailbox object, Java-style, as Mikhail ruled.
