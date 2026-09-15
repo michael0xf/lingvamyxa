@@ -5082,3 +5082,15 @@ cold gate record on the landed tip as for ONE ROOT (run_self_build first
 with the tag and the log line, then gate.ps1 whole), then install_pin
 into its two trees; and, standing for every future impact list, the
 grep for a deletion's numeric side effects.
+M gates GREEN on 26dde049 (the lead, 2026-09-15): "gates GREEN: 31 of 31
+in 657s" with -L2MessageRoot, the pin matching L1_PIN, the tree clean.
+M acceptance green measured by the coordinator on 26dde049 in exec-3a
+(pin 0B3D85B3): run_port_message -LaneCheck exit 0 in 68 s, no LANE MAP
+FAIL line, parity PASS, 97 methods redirected (101 before M, the four
+mapping methods gone); the plain run exit 0 in 61 s, parity PASS. M's
+acceptance record: red 199dab84 (site=ui_step owner=6, 14 s), green
+26dde049, falsifier on 2006d9d1 (run_child_turn put back, red). The
+lead merges install_pin 8479fdab, pushes, and launches land_m.sh
+00b04751 d6/m-sequential <hash> 31 (the self-build with its tag and log
+commit, the 31 gates, port_message plain and -LaneCheck, run_lmx -Suite
+Cancel, run_mixa; push only when all green and origin unmoved).
