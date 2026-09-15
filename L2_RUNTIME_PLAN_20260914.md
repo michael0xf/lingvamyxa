@@ -5017,3 +5017,16 @@ the allowlist (l2src only). Still owed before "landed": the M
 acceptance's one-site falsifier (one deleted mapping and its marker put
 back turns -LaneCheck red), and the coordinator's own green measure of
 -LaneCheck on the M tip merged with 199dab84.
+M acceptance falsifier (the lead, 2026-09-15; checked in the design at
+d6/lock-removal 8fe1ae96): on 2006d9d1 in a scratch worktree, exec.c
+regained lmx_msg_run_child_turn (child_turn_core's non-bootstrap path
+with its lmx_msg_test_map_site("run_child_turn", child) marker), called
+from P's own turn on B in the exec selftest's parent-turn scenario;
+run_port_message -LaneCheck exit 1, "LANE MAP FAIL site=run_child_turn
+owner=4: a Message's turn was run on another Message's lane; each L3
+Thread runs its turns on its own thread (M)"; the patch discarded, the
+worktree removed. Accepted as M's falsifier record by the coordinator
+(exec.c changed since only by the one-line mapped clear in
+unbind_slot_locked, 56a74dae, which does not touch the oracle). The
+coordinator's green runs on 14cb1960 come before land_m.sh, after the
+lead's gates; the landing merges install_pin 8479fdab first.
