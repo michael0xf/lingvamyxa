@@ -249,6 +249,21 @@ Survey method (on d925e600)
     because the times in their commit messages overlapped a graph_abi cold run; the message times of
     those six are not the measurement. A first re-time was invalid (the unfixed version never reached
     disk; git rejected a PS 5.1 --source=(...) argument) and is not used.
+  (e), second cold run on 9ad7e6bf: red only at port_slots (26 passed, 5 skipped gates pass when run
+    alone). Cause: stage 5 (e) commit 6cb55982 deleted LmxMsgRuntime.clock, and
+    tests/lmx_msg_slots_selftest.lm1 L59 still wrote other\clock (a sentinel for the L76 memcmp).
+    run_msg_slots is red on the same line. Neither slots runner was a default when (e) landed. d6 owns
+    the test fix; the 32 re-run after it lands.
+(j) run_port_parser's gcc lines against cmd.exe's limit (0c, measured on 9ad7e6bf, nothing changed)
+  Every gcc call goes through Invoke-Gcc: cmd /c "gcc <each arg quoted> > "log" 2>&1". Probe on that path
+  (gcc -fsyntax-only, padded with -D entries): 8152 chars runs; 8192 fails, "The command line is too
+  long.", exit 1, gcc never starts and no log is written. Stage table read from the runner's parse tree
+  and each link line rebuilt as L829-865 build it: the largest is e_appenders' dumplink, 7048 chars with
+  99 -D entries (about 49 chars each, quoted); the two driver sources are absolute, so each character of
+  worktree root adds 2 (28 here). Margin: about 22 more entries, about 121 in total. Inferred, not run:
+  on failure Invoke-Gcc's Get-Content of the missing log throws first under EAP Stop, so the red line
+  would name the log path, not the length. Fix shape (response file or header) to be settled; it lands
+  before stage e4b.
 (c) Cold run per runner
   Complete: 46 of 46 runners cold on d925e600 (every run_*.ps1 but run_gates, whose time is its defaults' sum),
   sequential in a fresh private worktree; the machine rebooted during row 20 and the batch resumed from
