@@ -5109,3 +5109,15 @@ sonnet/d2-create-id off fc8e9d6e; the lead writes D2's section and
 merges), then S2 (green measurable now that M is in), S4-S6, Y, A. e9
 runs the cold gate record on fc8e9d6e; the lead merges integration into
 main.
+After M (the lead, 2026-09-15; checked by the coordinator): main 91e8cb0c =
+fe516c1e + integration fc8e9d6e, fresh detached worktree, no conflicts.
+D: D1 is done on fc8e9d6e (find_create 0); what remains of create_id is
+D2's parameter (lmx_message.h 3, lm1 6, lm2 6, run_port_message.ps1 1,
+prose in three notes); D2's section in the (a) format with the site
+counts on fc8e9d6e (lmx_msg_create( 390, _graph( 7, _prepare( 4, beside
+b5's 490), naming b5's sonnet/d2-create-id, the green set and the grep
+falsifier; the lead merges b5's branch when green. S2: the red counter
+branch b3d16381 predates ONE ROOT (four files under stg/l1_baseline), so
+it is re-cut with the prefix stripped onto fc8e9d6e as
+d6/lock-s2-red-oneroot; C1/C2 measured with LMX_LOOKUP_COUNT=1 after
+e9's cold gate record, the numbers into S2's section.
