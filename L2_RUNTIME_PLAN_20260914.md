@@ -2864,3 +2864,14 @@ lm1/build/printTree.lm1.c generated from lm2/printTree.lm2, the command,
 the deduplicated fixture list, the date) and the rule that a disagreement
 is a question, never a regeneration. Given to the lead for
 buildCore.lm1's staged-test script.
+The lead's ticket to b5 (consistent with the plan, not overridden): draft
+the root CMake group as local commits, the landing held for probe (a)'s
+lines, covering every CMakeLists.txt reader of root lm2/ or the dead
+lm1/build files (331-355 the generated-C paths and the LM2_* registries;
+515-560 trans.lm0 and the refresh_* targets; 607-616 the printTree custom
+command; 730-747 runBuildCore; the BUILD_TRANS_LM0 and VCPKG_FETCH
+options); red the named grep's lines today, green the grep at 0; no builds
+without a slot from the lead. D1 on its merge 2c880103 so far: the
+create_id grep at 0, run_port_message plain and -LaneCheck PASS (101
+methods redirected, one fewer with find_create deleted); MessageApi,
+scenario36 and the 32 gates running.
