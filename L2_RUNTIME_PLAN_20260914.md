@@ -3475,3 +3475,14 @@ run_l2trans "l2trans gen2 ok"; run_port_parser ok. The coordinator checked
 the binary's SHA-256 against the pin (equal, 298308 bytes) and installed
 it in the coordinator's worktrees with a stg gen2 directory, re-hashing
 each copy (exec-3a and review-3d 0B3D85B3, and the rest of build/fable).
+57 (0c) unreachable at the pin announcement (2026-09-15): the lead's message
+to lingvamyxa-57 failed ("no agent named 'lingvamyxa-57' is reachable"),
+ListAgents shows only 6f, b5 and ba live. The lead pushes (c) through
+push_c.sh (re-checks wti HEAD 64c4af01, origin at 79871822, a clean tree,
+L1_PIN.txt and both pin binary hashes). Relay owed to 57 when it returns
+under any name: the pin 0B3D85B3..., the binary path, the install into its
+worktrees' stg gen2 with a hash check before any pinned run, and its
+verify run over the landed hash. Until then land_c.sh's run on 64c4af01
+(stg gate whole, root route, run_legacy_p0, run_self_build 8 of 8,
+run_slice_equal 16 of 16 and 8 of 8, 33 gates) is the record of (c) and of
+the seed row alike; 57's verify-only run is a re-measurement, not a gate.
