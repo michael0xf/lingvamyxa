@@ -953,6 +953,22 @@ commit and the notes say why.
 
 ## 6. Coordination
 
+Gate policy (2026-09-14, from 0c's runner survey, l2src/RUNNER_HAZARDS.txt):
+run_gates' default set is the eleven of decision-18 days plus the 18 port
+parity runners, run_entry_turn, run_graph_abi and run_turn_step_child_copies,
+because two parity runners outside the defaults had been red unnoticed and a
+gate that runs nowhere is not a gate; the L1 module selftest runners stay
+opt-in as the port runners' reference half (retired under decision 12 where
+the duplication is exact); run_l2trans, run_port_parser and
+run_l2_message_root stay outside run_gates and required in the lead's landing
+chains. Runner rules: no build step skipped on the presence or timestamp of
+an output (rebuild, or a content-hash key); a missing golden or oracle is red
+with its name, never a pass; launches through cmd /c with $LASTEXITCODE where
+a runner spends its time in launches; a pin of the runtime's own bookkeeping
+(a pre-test allocation or free count) moves with the runtime commit that
+moves it, never silently. Fix order: the reuse sites, then the default set
+with its measured time, then the launches.
+
 - Lead (`lingvamyxa-d6`): translator gaps found by this lane, with fixtures
   as before; merges through integration; the model's §31/§34 wording carries
   decision 14; the full gate on every merge.
