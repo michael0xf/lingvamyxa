@@ -1,0 +1,301 @@
+Lock removal, stage O: the lm2/own.lm2 message-thread runtime inventory
+==================================================
+Ticket, 2026-09-15 (ba, for d6/lock-removal's stage O): Mikhail ordered the
+lock-based message-thread runtime in lm2/own.lm2 deleted whole ("да,
+удаляйте целиком"), replaced by the one core. This file is the inventory
+that comes first -- nothing is deleted under this ticket.
+
+lm2/own.lm2 and stg/l1_baseline/lm2/own.lm2 are byte-identical (diff -q,
+confirmed; 3798 lines each). lm2/own_abi.lm2 and
+stg/l1_baseline/lm2/own_abi.lm2 are also byte-identical (1126 lines each).
+Every own.lm2/own_abi.lm2 line number below applies to both copies; they
+are named together and counted once, per the ticket.
+
+--- 1. Every definition and every use, by family ---
+
+Family                    | definitions | uses (own.lm2, grep -c on the
+                          | in own.lm2   | bare name, both copies equal)
+lm_message_thread_*       |     46       |    118
+lm_host_thread_*          |      4       |     11
+lm_thread_provider*       |      1       |      2
+lm_mutex_*                |      4       |    112
+lm_condition_*            |      5       |     34
+lm_native_mutex_*         |     12       |     32
+lm_native_condition_*     |     15       |     40
+lm_native_thread_*        |     15       |     61
+lm_native_host_thread_*   |      7       |     22
+Named-family total        |    109       |    432
+
+Record types: LmMutex (7 uses), LmCondition (7), LmHostThread (6) -- all
+three are opaque c.struct/c.named-struct declarations in own_abi.lm2 (not
+own.lm2), each with its own field.class/.field.index/.field.address-depth
+tables (own_abi.lm2:~660-900 for the runtime/pool/thread record's own four
+named fields below). The runtime/pool/thread records themselves
+(LmMessageThreadRuntime, LmMessageThreadPool, LmMessageThreadComponent,
+LmMessageThread) are declared the same way at own_abi.lm2:73-170.
+
+Four named fields (own.lm2 uses / own_abi.lm2 field-table definition line):
+  route_mutex       : 54 uses / own_abi.lm2:660 (class LmMutex), :685
+                       (index), :708 (offset)
+  work_ready        : 17 uses / own_abi.lm2:724 (class LmCondition), :746
+                       (index), :766 (offset)
+  state_mutex       :  9 uses / own_abi.lm2:797 (class LmMutex), :843
+                       (index), :879 (offset)
+  stopped_condition : 17 uses / own_abi.lm2:798 (class LmCondition), :844
+                       (index), :880 (offset)
+
+GAP IN THE TICKET'S FAMILY LIST, flagged rather than silently folded in:
+own.lm2 also defines and uses a large family the ticket does not name --
+lm_native_message_thread_* (e.g. lm_native_message_thread_state_lock,
+_ready_push_locked, _pool_stop_locked, _worker, _execute -- the bulk of
+the pool/scheduling implementation). 344 uses, 48 definitions. Checked for
+external callers the same way as every other family (git grep across the
+whole tree, build/ excluded, outside own.lm2/own_abi.lm2): zero. Entirely
+internal to own.lm2, so it changes no consumer's analysis below, but a
+family list this specific should have named it; noting the gap rather
+than guessing why it was left out.
+
+--- Full definition list (109 lines, both copies; the several duplicate
+names below are parallel per-provider implementations, e.g. a pthread
+block and a Win32 block of the same native primitive, each its own fn:
+at a different line -- own.lm2's own LM_THREAD_PROVIDER_* table at the
+top of the file selects one at compile time) ---
+
+lm_native_thread_provider_invalid_pthread_target 211; lm_native_thread_identity_new_current 218,353,487; lm_native_thread_identity_is_current 226,361,491; lm_native_thread_identity_delete 232,367,495; lm_native_thread_provider_name 236,378,499; lm_native_host_thread_start 240,382,503; lm_native_host_thread_join 258,405,519; lm_native_mutex_new 269,419,530; lm_native_mutex_delete 280,428,534; lm_native_mutex_lock 291,436,539; lm_native_mutex_unlock 297,443,543; lm_native_condition_new 303,450,547; lm_native_condition_delete 314,459,551; lm_native_condition_wait 325,464,556; lm_native_condition_signal 331,472,562; lm_native_condition_broadcast 337,479,566; lm_native_thread_provider_invalid_win32_target 346; lm_native_host_thread_entry 371; lm_native_thread_provider_invalid_value 571;
+lm_message_thread_pool_pump 1455; lm_message_thread_runtime_set_rest_lmx_provider 1467; lm_message_thread_runtime_admit_lmx 1521; lm_message_thread_request_exit 1540; lm_message_thread_runtime_exit_state 1566; lm_message_thread_runtime_attach_root 1583; lm_message_thread_runtime_detach_root 1606; lm_message_thread_runtime_delete 1625; lm_message_thread_pool_new 1676; lm_message_thread_pool_request_stop 1750; lm_message_thread_pool_request_stop_when_idle 1763; lm_message_thread_runtime_new 1777; lm_message_thread_new_in 1794; lm_message_thread_start 1861; lm_message_thread_start_mailbox 1867; lm_message_thread_bind_route 1873; lm_message_thread_send_lmx 1934; lm_message_thread_current_lmx 1970; lm_message_thread_inbox_count 1988; lm_message_thread_outbox_count 2000; lm_message_thread_join 2012; lm_message_thread_pool_delete 2091; lm_message_thread_component_find 2360; lm_message_thread_component_detach 2395; lm_message_thread_component_release 2429; lm_message_thread_component_attach 2445; lm_message_thread_component_get 2470; lm_message_thread_component_remove 2484; lm_message_thread_component_count 2500;
+lm_thread_provider_name 2729; lm_host_thread_new 2734; lm_host_thread_delete 2748; lm_host_thread_start 2769; lm_host_thread_join 2791; lm_mutex_new 2809; lm_mutex_delete 2823; lm_mutex_lock 2831; lm_mutex_unlock 2838; lm_condition_new 2845; lm_condition_delete 2859; lm_condition_wait 2867; lm_condition_signal 2874; lm_condition_broadcast 2881;
+lm_message_thread_init 3464; lm_message_thread_destroy 3483; lm_message_thread_new 3528; lm_message_thread_delete 3541; lm_message_thread_is_running 3556; lm_message_thread_status 3567; lm_message_thread_owner 3578; lm_message_thread_execution_context 3585; lm_message_thread_set_execution_context 3596; lm_message_thread_turn_count 3608; lm_message_thread_collection_count 3619; lm_message_thread_arena_count 3630; lm_message_thread_request_stop 3641; lm_message_thread_request_failure 3678; lm_message_thread_collect 3712; lm_message_thread_begin_turn 3742; lm_message_thread_end_turn 3760.
+
+Internal-use summary (not one line per raw occurrence -- grouped by
+enclosing fn/sub, same discipline as this branch's LmxMsgCopy census):
+own.lm2's 432 named-family uses plus 344 lm_native_message_thread_* uses
+(776 total field/call touches) are consumed almost entirely by own.lm2's
+own 157 functions calling each other and touching the four named fields
+above -- the pool scheduler (lm_native_message_thread_ready_push_locked/
+_pop_locked/_schedule_stop_locked/_pool_stop_locked/_pool_is_quiescent_
+locked/_pool_maybe_finish_drain_locked, 1002-1098), the worker loop
+(lm_native_message_thread_worker, 1402-1433, and _pool_pump_one,
+1433-1654, the largest single function in the file), and the public API
+wrappers (2360-2500, 2729-2900, 3464-3800) that call the native_* and
+mutex/condition primitives to implement the public lm_message_thread_*/
+lm_host_thread_*/lm_mutex_*/lm_condition_* surface. No further per-line
+breakdown is given here: own.lm2 is being deleted whole, so an exhaustive
+internal cross-reference has no consumer to inform; sections 2-4 below,
+the external boundary, are where the deletion decision's evidence lives.
+
+--- 2. Consumers outside own.lm2 and own_abi.lm2 (both copies) ---
+
+Grepped tree-wide, build/ excluded, for every family above (named +
+the flagged lm_native_message_thread_* gap): every hit outside
+own.lm2/own_abi.lm2 falls into six tiers.
+
+TIER 1 -- THE HEADLINE FINDING, the L2-to-L1 translator's own emitted
+boilerplate. lm2/trans_l1_statement.lm2: 123 matches (both copies
+identical). This is not a call from the translator's own runtime; it is
+literal C source TEXT the translator writes into every program it
+compiles. Representative lines (full text, not paraphrased): 829 `thread
+= lm_message_thread_new();`, 837 `runtime = lm_message_thread_runtime_new
+();`, 861 `lm_message_thread_runtime_attach_root(runtime, thread)`, 875
+`while (lm_message_thread_begin_turn(thread)) {`, 889 `lm_message_thread_
+end_turn(thread);`, 1138 `lm_lmx_message_thread = lm_message_thread_new
+();` (the MAIN program's own thread variable) -- and, far more
+pervasively, `lm_own_arena_new_zero(lm_lmx_message_thread,
+lm_message_thread_owner(lm_lmx_message_thread), sizeof(*...))` as the
+STANDARD allocation call the translator emits for every structure, array,
+closure environment and table row a compiled L1/L2 program creates (2493,
+2502, 4934, 1713, 3177, 3952, 3956, 5140, 5142, 6772, 6784, 8235, 14102,
+14141, 14533, 10661, and more -- 123 total). lm2/trans_l1_expr.lm2: 3
+matches, same shape (the array/callable-env allocation helpers). lm2/
+trans_text.lm2: 1 match (a scaffold-token recognizer for
+"lm_lmx_message_thread"/"lm_message_thread_main_context"/etc., part of
+the same emission machinery). lm1/build/trans.lm1.c and lm1/build/
+rest_lmx_http_client.lm1.c, rest_lmx_http_server.lm1.c (also matched):
+these are GENERATED C, the translator's own build output containing the
+same literal strings as data inside trans_l1_statement's compiled form,
+or the already-translated REST files (tier 3) -- not independent source,
+not counted separately.
+WHAT IS LOST: every program the L1/L2 translator compiles is built around
+an implicit per-program LmMessageThread as its execution context and
+lm_own_arena_new_zero(thread, lm_message_thread_owner(thread), ...) as
+the allocator for every heap value. Deleting own.lm2 without a drop-in
+replacement providing these exact symbols breaks compilation (undefined
+references) of every translated C program in the project, not merely
+programs that use threading explicitly. This is a production feature in
+the deepest sense: the code generator's own contract.
+
+TIER 2 -- the parser's per-thread registry. lm2/parser.lm2:1401,1417,1426
+(both copies, identical content though the surrounding file differs
+elsewhere -- an unrelated colon-frame/trailer parsing gap between the two
+copies, not touching these three lines). lm_message_thread_component_get/
+_attach/_remove store lm_p0_registry_component_destroy as a component on
+the CURRENT thread, so the P0 parser registry is created once per
+LmMessageThread and torn down when that thread's components are released.
+WHAT IS LOST: the parser's registry lifecycle tied to a thread's own
+teardown; a replacement needs an equivalent per-execution-context
+attach/detach hook, or the registry becomes leaked/global.
+
+TIER 3 -- REST HTTP production code. lm2/rest_lmx_http_server.lm2:453
+(`lm_message_thread_runtime_admit_lmx(server\runtime, route, body,
+content_length)` -- an inbound HTTP request is admitted into the message-
+thread runtime as an LMX message). lm2/rest_lmx_http_client.lm2:310,469,
+487 (`lm_message_thread_runtime_set_rest_lmx_provider(runtime, ops,
+context)` -- registers/clears the client's outbound REST transport as the
+runtime's provider). Both copies identical.
+WHAT IS LOST: the REST server's ingress path (turning an HTTP request into
+a runtime-admitted message) and the REST client's provider registration
+(outbound delivery) both call directly into own.lm2's runtime API; no
+substitute exists elsewhere in the tree today (grepped: these are the
+only definitions of admit_lmx and set_rest_lmx_provider).
+
+TIER 4 -- native C tests of this module's own API (would naturally go
+with it, not "external" in the sense of losing an unrelated feature):
+tests/message_thread_application_exit.c, message_thread_mailbox_native.c,
+message_thread_pool_native.c, message_thread_rest_lmx_ingress.c,
+message_thread_rest_lmx_provider.c, message_thread_root_drain.c,
+thread_provider_native.c (7 files, all under tests/). tests/
+p0_tree_contract/p0_meta_dump.c also matches (prototypes + a direct call
+sequence at lines 80-89/261-285, a diagnostic dump tool exercising the
+same thread lifecycle as a realistic host, not itself part of the parser
+tree contract it's named for). tests/rest_lmx_http_client_backend_anchor.c,
+_libcurl_loopback.c, _none.c, and tests/rest_lmx_http_server_civetweb.c,
+_none.c (5 files) exercise tier 3's REST provider/admission through the
+message-thread runtime as their test harness.
+WHAT IS LOST: these 13 files test own.lm2/tier-3 behavior directly; they
+have no reason to exist once their subject is gone (delete alongside it,
+or rewrite against "the one core" once it exists).
+
+TIER 5 -- L2 translator self-test fixtures (own.lm2's API used as
+realistic input to test the TRANSLATOR's handling of unrelated language
+features -- anonymous structures, arrays, callables -- inside a message-
+thread-owned arena context, per tier 1's standard boilerplate). Two
+sub-groups:
+  (a) tests that exercise own.lm2's own translated behavior directly:
+      tests/trans_message_thread_arena_isolation.lm2,
+      trans_message_thread_arena_registry.lm2,
+      trans_message_thread_component_registry.lm2,
+      trans_message_thread_diagnostic_invoke_boundary.lm2,
+      trans_message_thread_loop.lm2, trans_message_thread_mailbox_single.
+      lm2, trans_message_thread_pool_single.lm2,
+      trans_thread_provider_single.lm2,
+      trans_parser_thread_registry_isolation.lm2 (9 files).
+  (b) generic translator tests that use lm_message_thread_owner(...) only
+      as their arena-context boilerplate (tier 1's pattern, written by
+      hand instead of generated), unrelated to message-thread behavior
+      itself: trans_anonymous_structure.lm2,
+      trans_anonymous_structure_empty.lm2,
+      trans_array_reference_extent_identity.lm2,
+      trans_array_reference_extent_storage.lm2,
+      trans_array_return_type_receiver.lm2,
+      trans_callable_capture_tables.lm2, trans_callable_lazy_bind.lm2,
+      trans_copy_structure.lm2,
+      trans_empty_named_structure_descriptor.lm2,
+      trans_function_pointer_typedef_conditional.lm2,
+      trans_inferred_class_return_pointer.lm2,
+      trans_l2_module_init_root_main_local_hygiene.lm2,
+      trans_l2_table_runtime_local_arena.lm2,
+      trans_l2_table_runtime_top_level_arena.lm2,
+      trans_module_init_anonymous_structure.lm2,
+      trans_module_init_array_reference.lm2,
+      trans_module_init_array_worker.lm2,
+      trans_module_init_named_structure.lm2,
+      trans_named_structure_construction.lm2, trans_own_arena_reclaim.lm2,
+      trans_parser_managed_abi.lm2, trans_structure_graph_cycle.lm2,
+      trans_structure_graph_empty.lm2 (23 files). tests/
+      trans_rest_lmx_http_server_default_stub.c also here (a C stub
+      matching tier 3's server default path).
+WHAT IS LOST: (a)'s 9 files lose their subject outright, same as tier 4.
+(b)'s 23 files lose only their arena-context boilerplate -- IF tier 1's
+replacement keeps the same call shape (an owner-arena accessor taking
+something like lm_lmx_message_thread), these files likely need no change
+at all beyond what the translator itself emits; they do not call own.lm2
+directly, they contain hand-written L2 source that mimics what the
+translator would generate, so their fate follows tier 1's replacement
+design, not a separate decision.
+
+TIER 6 -- build system. CMakeLists.txt: `lm_thread_provider` INTERFACE
+library (91-99, selects LM_THREAD_PROVIDER=pthread/win32/single and links
+Threads::Threads for pthread) linked PUBLIC by the `own.lm1` STATIC
+library target (393-407) -- own.lm1 here compiles ${LM1_GENERATED_OWN_C}
+(lm1/build/own.lm1.c), the L1 baseline's own module; see item 4 below for
+why this link is present but inert today. CMakeLists.txt:528-539 also
+defines `add_custom_target(refresh_own_lm1 ...)`, an opt-in (not built by
+default, no ALL) target that runs trans.lm0 (the L2-to-L1 translator) on
+lm2/own.lm2 directly to regenerate lm1/build/own.lm1.c -- its own DEPENDS
+line names lm2/own.lm2 by path and breaks (a missing-file CMake
+configure error) the moment own.lm2 is deleted, even though nothing
+invokes this target by default. stg/l1_baseline/buildCore.lm0.bat:64 and
+stg/l1_baseline/README.txt:96 both document (comment/prose, not code) the
+same distinction: "needs the L2-profile archives that define
+lm_message_thread_*; the L1-profile ones [do not]" -- a named, pre-
+existing build-profile split, not a bug.
+WHAT IS LOST: the `refresh_own_lm1` custom target stops configuring
+(CMake errors on the missing DEPENDS path) the moment own.lm2 is deleted;
+it must be removed in the same commit as the deletion, or CMake
+configuration itself breaks project-wide. `lm_thread_provider` and
+`own.lm1`'s link to it are unaffected (see item 4: own.lm1.c does not use
+lm_thread_provider's macro today).
+
+TIER 7 -- documentation only, not code, no build/link impact:
+Lingvamyxa_spec_history.txt (historical API names, e.g. line 3326-3339),
+memory_model_development_plan.txt (585, 755, contrasting `lm_message_
+thread_owner` with an unrelated Mix-page concept), stg/l1_baseline/
+oldchain/README.txt (8, 14, 16, 29 -- see item 4, this is the file that
+documents the L1/L2-profile split directly and by name), stg/l1_baseline/
+README.txt (96, the same split stated in the current, non-archived docs).
+
+--- 3. Falsify: grep counts, both copies, build/ excluded ---
+Named-family definitions in own.lm2: 109 (46+4+1+4+5+12+15+15+7).
+Named-family uses in own.lm2: 432 (118+11+2+112+34+32+40+61+22, the nine
+families in the table above in order). lm_native_message_thread_* (flagged gap): 48
+definitions, 344 uses, 0 external callers. All four counts identical
+between lm2/ and stg/l1_baseline/lm2/ (diff -q on both own.lm2 and
+own_abi.lm2 confirms byte-identity, so every grep -c is definitionally
+equal on both paths; not re-run twice).
+External consumer file count, each lm2/-vs-stg/l1_baseline/lm2/ pair
+counted once per the ticket's own instruction: tier 1 3 (trans_l1_
+statement.lm2 pair 123 matches, trans_l1_expr.lm2 pair 3, trans_text.lm2
+pair 1) + tier 2 1 (parser.lm2 pair, 3 matches) + tier 3 2 (rest_lmx_
+http_server.lm2 pair 1, rest_lmx_http_client.lm2 pair 3) + tier 4 13
+(native tests, no lm2/stg duplication -- tests/ is not mirrored under
+stg/l1_baseline/tests, checked directly) + tier 5 33 (9 own-behavior +
+23 boilerplate-only + 1 REST stub) + tier 6 2 (CMakeLists.txt, stg/
+l1_baseline/buildCore.lm0.bat) + tier 7 4 (the two README.txt, the spec
+history, the memory-model plan) = 58 distinct consumer files outside
+own.lm2/own_abi.lm2, each named above by path; the generated lm1/build/
+trans.lm1.c and rest_lmx_http_{client,server}.lm1.c are the translator's
+own compiled mirror of tiers 1/3 and are not counted a second time.
+
+--- 4. Does anything in the L1 baseline (stg/l1_baseline/l2src, lm1) link
+own.lm1.c's message-thread part? ---
+
+NO, as currently checked in. l1src/own.lm1 (274 lines, the L1-profile
+source) has zero matches for every family above (grepped directly).
+stg/l1_baseline/lm1/build/own.lm1.c and lm1/build/own.lm1.c (the checked-
+in generated output, both copies) also have zero matches (grepped
+directly). buildCore.lm1:521 translates l1src/own.lm1 (not lm2/own.lm2)
+into this file; that is the path that actually produced what's checked
+in today.
+
+BUT: CMakeLists.txt's `refresh_own_lm1` custom target (tier 6 above)
+exists specifically to translate lm2/own.lm2 -- the FULL message-thread
+module -- into this exact same output path (lm1/build/own.lm1.c) via
+trans.lm0, the L2-to-L1 translator. It is not run by default and nothing
+currently checked in was produced by it (confirmed: the checked-in file
+has zero message-thread symbols, which the refresh target's own output
+would not). This is a documented, deliberate two-profile split (tier 6/7:
+stg/l1_baseline/oldchain/README.txt describes exactly this failure mode
+by name -- "L2-profile archives that define lm_message_thread_*" vs "L1-
+profile ones" that do not, and a link failure ("undefined reference to
+`lm_message_thread_new'") when the two are mixed) -- not a bug, not a
+contradiction to stop and report, a named build-profile boundary that
+answers the question cleanly: today, no; the machinery to make it yes
+exists in CMakeLists.txt but is unused.
+
+--- What this file does not decide ---
+The replacement design for tier 1 (what "the one core" emits in place of
+lm_message_thread_new/_begin_turn/_end_turn/_owner and lm_own_arena_new_
+zero's owner-thread argument) is d6/lock-removal's stage O design, not
+this inventory. Tiers 2-3's replacement calls, tier 5(a)/6's rewrites, and
+tier 4/5(a)'s test disposition are listed as consumers with what they
+lose, not decided here. No file was edited, moved or deleted by this
+ticket.
