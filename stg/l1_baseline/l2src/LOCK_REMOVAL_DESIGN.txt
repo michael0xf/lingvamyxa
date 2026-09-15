@@ -118,8 +118,10 @@ FIELDS. Every stage names its fields' owners (coordinator, 2026-09-15; map secti
     Consequence for every stage: an L3T, PAR or MBOX row is not a field of a C record but a Structure node in the
     Message's arena reached from root. The hand-written C for it takes l2trans's emission form: the declared formals,
     the hidden through-arguments in intern name order, the graph node. The later port then writes the L2 source whose
-    translation is that C. The whole C record is the four-field LmxMsg plus the native primitives (the thread handle,
-    the thread id, the mailbox's monitor).
+    translation is that C. Mikhail's fourth sentence (spec section 2 line 1071, model section 2, main d2546b54),
+    verbatim: "Поэтому структура Message как данные остается и на Си -- в точности как стуктура Lmx". So the four-field
+    LmxMsg is a C data type beside Lmx for good, and only what root reaches is written in LMX. (The map's sentence that
+    the C keeps only the native primitives is the coordinator's and is before Mikhail; it is not cited here.)
 
 S0. The proof tool (57): the lane tripwire red on a lane write from a thread with no turn. It is the proof for S2-S5
     and lands first.

@@ -7,8 +7,9 @@ LmxMsg { volatile ... running = 1; volatile ... success = 0; struct LmxRoot *roo
 описывают Message". An L3 Thread's record "очевидно может быть сложней и содержать большее число полей так как там
 планировщик и так далее".
 Message = {running, success, root}. L3 Thread = a Message plus its mailbox (the one synchronized collection of
-Messages, the one lock) plus its scheduler and maintenance state as Structure data in its own arena. The C keeps the
-native primitives only (the thread, the mailbox's monitor).
+Messages, the one lock) plus its scheduler and maintenance state as Structure data in its own arena. (The map's
+sentence that the C keeps only the native primitives is the coordinator's and is before Mikhail; it is not cited
+as a basis here.)
 
 The record, now in the documentation (spec section 2, model section 2, main c7f9d375; Mikhail asked for the handoff
 flag and confirmed its meaning, "Так"):
@@ -23,8 +24,10 @@ The inside (spec section 2, main c2b86f16, Mikhail verbatim): written into what 
 with these Messages; on L1 the code that will be generated, "В точности как имитируется L2 на Си -- функция с
 аргументами ,скрытми ргументами и узлом графа." So an L3T, PAR or MBOX row below is a Structure node in the Message's
 arena reached from root, not a field of a C record, and its hand-written C takes l2trans's emission form (declared
-formals, hidden through-arguments in intern name order, the graph node). The whole C record is the four-field LmxMsg
-plus the native primitives (thread handle, thread id, the mailbox's monitor).
+formals, hidden through-arguments in intern name order, the graph node).
+Mikhail's fourth sentence (spec section 2 line 1071, model section 2, main d2546b54), verbatim: "Поэтому структура
+Message как данные остается и на Си -- в точности как стуктура Lmx". So the four-field LmxMsg is a C data type beside
+Lmx for good, and only what root reaches is written in LMX.
 
 Rule for every stage (coordinator, 2026-09-15): a stage's note names, for each field it touches, its owner below or
 its deletion. A field with neither is a contradiction, and the stage stops.
@@ -34,7 +37,7 @@ Thread's or its parent's arena, or deletion):
   MSG    one of the four fields: running, success, handoff_safe, root; "MSG.root, inside" is data inside the Message
          reached from root (19.29.2: blocks, ranges, the graph's storage)
   L3T    Structure data in the L3 Thread's own arena (scheduler, maintenance, the capability toward its parent);
-         "L3T of R0" is R0's own arena; "L3T native" is the thread's native primitive the C keeps (map 5.7)
+         "L3T of R0" is R0's own arena; "L3T native" is the thread's native primitive (proposed; see the header note)
   PAR    Structure data in the parent's arena (its child references, their paths, the settle write)
   MBOX   the L3 Thread's mailbox: the synchronized collection of Messages and its monitor
   DEL    deleted, with the ruling or stage that removes it
@@ -130,7 +133,7 @@ LmxMsgRuntime.root_record | h:227 | R0's policy record, already Structure data i
 
 --- LmxMsgBindWait (lmx_message_exec.c 34-55): the worker's wait object. Goes (map 5.7: no wait, no notify)
 LmxMsgBindWait.wait_ev / .cv / .sig | c:36,39,40 | the wait primitive | DEL | ruled (map 5.7; S3) | S3
-LmxMsgBindWait.worker / .worker_on | c:37,41,42 | the worker thread handle | L3T native (the L3 Thread's OS thread, which the C keeps) | ruled (map 5.7: the C keeps the thread) | M/S3
+LmxMsgBindWait.worker / .worker_on | c:37,41,42 | the worker thread handle | L3T native (the L3 Thread's OS thread) | proposed (the map's "C keeps the native primitives" is before Mikhail) | M/S3
 LmxMsgBindWait.gen, .retired, .slot, .launch_n | c:44-47 | wait generations and launch gate | DEL | ruled (map 5.7; S3 launch wake goes) | S3
 LmxMsgBindWait.reaping, .on_reap, .reap_next | c:48,49,51 | the reap list | DEL (each thread frees itself; no join) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | S3/S5
 LmxMsgBindWait.owner_tid | c:50 | the owning thread's id | L3T native (thread identity, T) | proposed | S3
