@@ -1694,6 +1694,18 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         pump's loop is two and two.
       - Measured green on the move: run_port_message parity PASS, 103 methods; run_lmx -Suite Message ok.
         Landed as c52b7c8a's successor on d6/lock-s6.
+      - The hold-order check the coordinator asked to keep lives in run_port_message.ps1, beside the existing
+        msg_send mail-lock pin and scoped the same way, one method body apiece: host_drain, pump, post_dead,
+        end_turn and runtime_delete each take a mailbox monitor at least once and release it as often as they
+        take it. It is deliberately written about the monitor, not about the executor lock, so that (a3)'s
+        deletion cannot turn it into a check that can no longer fail.
+      - Proven able to fail before being trusted (the rule against unfalsifiable assertions): removing exactly one
+        line from lmx_message.lm2 -- post_dead's c.lmx_msg_mail_unlock(root), verified as a one-line change with
+        the other 8 holds intact and no name corrupted -- turned the gate red with "msg_post_dead takes a mailbox
+        monitor 1 times and releases it 0 times", and the file was restored from git in the same command's
+        finally. A first attempt at that tripwire was botched by my own replacement string (it stripped the
+        backslash from rt\transport, so l2trans failed on an unresolved name instead and proved nothing about the
+        assertion); the second attempt mutated by line, verified the mutation, and restored unconditionally.
     - Red measured by d6 (2026-09-15, d6/lock-s6-red 695d54fc = 8eeb094f plus l2src/run_lock_s6_probe.ps1; builds
       nothing): -Part all exits 1 with "S6 probe: exec_lock_calls=601 exec_lock_decl=11 host_lock=43 exec_fields=27
       | refs=349 runtime_lists=36", S6-1 RED, S6-2 RED.
