@@ -2316,6 +2316,10 @@ $byvalueL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit
 if ($byvalueL1 -notmatch '; LmP0NodeKind: l2_p\d+_0\) LmP0NodeKind' -or $byvalueL1 -notmatch '; LmP0FrameFlags: l2_p\d+_0\) LmP0FrameFlags' -or $byvalueL1 -match 'c\.LmP0FrameFlags' -or $byvalueL1 -notmatch 'LmP0NodeKind: l2_t\d+' -or $byvalueL1 -notmatch 'LmP0FrameFlags: l2_t\d+') { throw "unit_byvalue_foreign did not spell the by-value foreign types as written" }
 # A foreign int alias as a local's declared type (5e's repro, parser-l2 Stage d
 # slice 5): `LmP0TrailerRole: trailer_role` translates as an int own local.
+$aliasLocalHeader = "lm1\build\l2src\tests\repro_foreign_int_alias_local.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $aliasLocalHeader) | Out-Null
+& $outputL1trans "l2src\tests\repro_foreign_int_alias_local.h.lm1" $aliasLocalHeader
+if ($LASTEXITCODE -ne 0) { throw "repro_foreign_int_alias_local header translation failed" }
 Invoke-Leaf "l2src\tests\repro_foreign_int_alias_local.lm2" "repro_foreign_int_alias_local" 0 "probe_foreign_int_alias_local"
 # LmP0Document is a foreign pointer type like LmP0Frame (Stage B step 3): its
 # fields resolve as a formal and as a local.
