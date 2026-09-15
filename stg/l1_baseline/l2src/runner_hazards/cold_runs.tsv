@@ -18,3 +18,10 @@ run_msg_family_handoff.ps1	0	73	45	Evidence: C:\Nyasha_Planet\wt0c_rh\build\code
 run_msg_liveness.ps1	0	13	12	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_liveness\20260914_202832_723_72cae5fd
 run_msg_mail_chain.ps1	0	17	15	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_mail_chain\20260914_202846_162_762afc4c
 run_msg_path_storage.ps1	1	9	8	argument that is not null or empty, and then try the command again.
+run_msg_send_local.ps1	0	78	45	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_send_local\20260914_222522_809_c57e2795
+run_msg_slots.ps1	0	22	20	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_slots\20260914_222641_214_3b25eed6
+run_msg_storage.ps1	1	19	18	argument that is not null or empty, and then try the command again.
+run_msg_visit.ps1	0	10	9	Evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\msg_visit\20260914_222723_002_766cb6cb
+run_owned_ranges.ps1	1	9	8	argument that is not null or empty, and then try the command again.
+run_port_array_owned.ps1	0	13	3	lmx_array_owned parity PASS: 929 checks, 0 failures, 30 counted allocations released, reference and generated agree on both runs, selftest redirected onto the unit's names; evidence C:\Nyasha_Planet\wt0c_rh\stg\l1_baseline\build\port_array_owned\20260914_222742_425\evidence.json
+run_port_array_ref_owned.ps1	0	13	3	lmx_array_ref_owned parity PASS: 453 checks, 0 failures, 66 counted allocations released, reference and generated agree on both runs, selftest redirected onto the unit's names; evidence C:\Nyasha_Planet\wt0c_rh\stg\l1_baseline\build\port_array_ref_owned\20260914_222756_104\evidence.json

@@ -1,5 +1,5 @@
 RUNNER HAZARDS: build reuse keyed on presence or time, and Start-Process -Wait launches, in every l2src runner (0c, 2026-09-14)
-IN PROGRESS: the survey table below is complete for (a) and (b) on d925e600; (c) has 19 of 47 cold rows.
+IN PROGRESS: (a), (b) and (d) are surveyed on d925e600; (c) has 26 of 47 cold rows.
 
 Why
   run_port_parser taught two hazards (l2src/PORT_PARSER_TIMING.txt; 4b3f8d9c, 49e5db6d):
@@ -65,12 +65,11 @@ Survey method (on d925e600)
       missing golden skips its compare silently.
     run_candidate_indent.ps1 L474: the two extra corpus inputs are used only if present.
 
-(b) Start-Process launches
-  -PassThru, then $p.Handle read before WaitForExit (no 1 s cost, exit code observable): run_array_owned,
-    run_array_ref_owned, run_chars_owned, run_foreign_alloc, run_entry_turn, run_lmx Invoke-LmxTest
-    (L52-66), run_model_scenario36, run_msg_blocks, run_msg_family_handoff, run_msg_mail_chain,
-    run_msg_path_storage, run_msg_send_local, run_msg_slots, run_msg_storage, run_owned_ranges,
-    run_port_message, run_sched_record.
+(b) Start-Process launches (each statement read with its backtick-continued lines joined; 2d1207f2 read only
+    the first line and listed several -Wait runners as safe, corrected here)
+  -PassThru, then $p.Handle read before WaitForExit (no 1 s cost, exit code observable): run_array_owned L31,
+    run_array_ref_owned L31, run_chars_owned L31, run_entry_turn L51, run_foreign_alloc L24,
+    run_lmx L52 (Invoke-LmxTest), run_model_scenario36 L65, run_port_message L92, run_sched_record L56.
   -Wait (about 1 s per launch):
     run_candidate_indent.ps1 L481 Invoke-DumpExe, called per corpus input at L505 and L506 and, for some
       inputs, L540: 36 tree-contract inputs (+ up to 2 extras) x 2-3 launches, about 72-114 per run.
@@ -82,35 +81,54 @@ Survey method (on d925e600)
       executables, 10): 12 per run.
     run_lmx.ps1 L290 (lmx_dec_selftest, lmx_message_selftest when built: up to 2) and L497
       (cancel_spin_host, 1): up to 3 per run in the suites that build them.
-    run_lmx_msg_history_owned.ps1 L28, run_lmx_msg_roots_stale.ps1 L28 (11 stage call sites each, some
-      in loops over header units and sources), run_msg_liveness.ps1 L37, run_msg_visit.ps1 L34 (9 stage
-      call sites each, some per optimization level): every stage is one -Wait launch.
-  run_port_parser.ps1 L69: already cmd /c (d72ee7f0). Between d925e600 and 090704f7 the only runner
+    Every stage of these stage runners is one -Wait launch (stage function, line):
+      run_lmx_msg_history_owned L28, run_lmx_msg_roots_stale L28, run_msg_blocks L43,
+      run_msg_family_handoff L51, run_msg_liveness L37, run_msg_mail_chain L38, run_msg_path_storage L27,
+      run_msg_send_local L39, run_msg_slots L27, run_msg_storage L32, run_msg_visit L34,
+      run_owned_ranges L28. Their per-run launch counts are the cold rows' stdout-file counts (c).  run_port_parser.ps1 L69: already cmd /c (d72ee7f0). Between d925e600 and 090704f7 the only runner
     change is run_port_parser's stage list (c05e1178, dd067e06: d_stack_geometry and d_lineage_trailer
     added, no code change): 14 stages, so 36 inputs x 2 drivers x 2 executables x 14 = 2016 golden
     launches per run, all cmd /c. Its cold time below is re-measured on 090704f7.
 
+(d) Runners that cannot pass as written (found by the cold runs; a cold red is the hazard itself unless its
+    cause is an input the cold dir lacks)
+  run_msg_path_storage.ps1: red on every run, cold or warm. L58 Invoke-PathStage "run_$level" $exe @() makes
+    L24's $quoted the empty string, and L27 Start-Process -FilePath $Tool -ArgumentList $quoted refuses it
+    ("Cannot validate argument on parameter 'ArgumentList'. The argument is null or empty") right after
+    compile_O0 built path_O0.exe. L27's unconditional -ArgumentList $quoted has been there since the
+    runner's first commit, ca710b62 (09-11). run_gates' default set does not include this runner, so
+    nothing noticed.
+  The same shape (unconditional -ArgumentList $quoted with a stage called with @()) is in
+    run_msg_storage.ps1 (L32, @() at L76) and run_owned_ranges.ps1 (L28, @() at L60); their cold rows
+    decide. Every other stage runner passes arguments through a conditional @argumentOption.
 (c) Cold run per runner
-  Status: IN PROGRESS, 19 of 47 cold rows (the machine rebooted during row 20; the batch resumes from
-    run_msg_send_local on the same base, d925e600, and later rows land as fast-forward commits).
+  Status: IN PROGRESS, 26 of 47 cold rows (the machine rebooted during row 20; the batch resumed
+    from run_msg_send_local on the same base, d925e600).
   runner                           exit  seconds  stdout files  note
-  run_array_owned.ps1              0           3            20  pass (evidence written)
-  run_array_ref_owned.ps1          0           3            17  pass (evidence written)
-  run_candidate_c_scanners.ps1     0          26             0  Candidate scanner evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\candidate_c_scanners\2026
-  run_candidate_indent.ps1         -1       1209             0  not a result: Mandatory params, called only by run_l2trans L5186; blocked on the parameter prompt, stopped by hand
-  run_chars_owned.ps1              0           3            17  pass (evidence written)
-  run_entry_turn.ps1               0          15             3  entry turn PASS: 24 checks, 0 failures, two runs agree, body and adapter each called once,
-  run_foreign_alloc.ps1            0           2             7  pass (evidence written)
-  run_graph_abi.ps1                0         101           157  merge selftest: 261 checks, 0 failures', fixtures 152/152, support warnings 1; evidence C:
-  run_l2_message_root.ps1          0          57             0  pass (evidence written)
-  run_l2trans.ps1                  1           0             0  setup: missing build\l1trans\gen2\printTree.exe (the L36-38 presence-keyed oracle); re-timed with the oracle built in this worktree
-  run_lmx.ps1                      0          36             9  l2 lmx gen2 ok
-  run_lmx_msg_history_owned.ps1    0          16            15  pass (evidence written)
-  run_lmx_msg_roots_stale.ps1      0          16            15  pass (evidence written)
-  run_model_scenario36.ps1         0          27            18  core tests PASS: lmx_model_scenario36_selftest 49/0, lmx_msg_delivery_selftest 27/0, lmx_m
-  run_msg_blocks.ps1               0           9             8  pass (evidence written)
-  run_msg_family_handoff.ps1       0          73            45  pass (evidence written)
-  run_msg_liveness.ps1             0          13            12  pass (evidence written)
-  run_msg_mail_chain.ps1           0          17            15  pass (evidence written)
-  run_msg_path_storage.ps1         1           9             8  RED, runner code: L27 Start-Process -ArgumentList $quoted refuses an empty argument list ("The argument is null or empty") at the first stage with no native arguments, after compile_O0 built path_O0.exe; not an input the cold dir lacks
+  run_array_owned.ps1              0           3            20  pass
+  run_array_ref_owned.ps1          0           3            17  pass
+  run_candidate_c_scanners.ps1     0          26             0  pass: Candidate scanner evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\candidate_c_sca
+  run_candidate_indent.ps1         -1       1209             0  not a result: Mandatory params, called only by run_l2trans L5186; blocked on the parameter prompt
+  run_chars_owned.ps1              0           3            17  pass
+  run_entry_turn.ps1               0          15             3  pass: entry turn PASS: 24 checks, 0 failures, two runs agree, body and adapter each ca
+  run_foreign_alloc.ps1            0           2             7  pass
+  run_graph_abi.ps1                0         101           157  pass: merge selftest: 261 checks, 0 failures', fixtures 152/152, support warnings 1; e
+  run_l2_message_root.ps1          0          57             0  pass
+  run_l2trans.ps1                  1           0             0  setup: missing build\l1trans\gen2\printTree.exe (the L36-38 presence-keyed oracle); re-timed once built here
+  run_lmx.ps1                      0          36             9  pass: l2 lmx gen2 ok
+  run_lmx_msg_history_owned.ps1    0          16            15  pass
+  run_lmx_msg_roots_stale.ps1      0          16            15  pass
+  run_model_scenario36.ps1         0          27            18  pass: core tests PASS: lmx_model_scenario36_selftest 49/0, lmx_msg_delivery_selftest 2
+  run_msg_blocks.ps1               0           9             8  pass
+  run_msg_family_handoff.ps1       0          73            45  pass
+  run_msg_liveness.ps1             0          13            12  pass
+  run_msg_mail_chain.ps1           0          17            15  pass
+  run_msg_path_storage.ps1         1           9             8  RED, runner code (d): L27 -ArgumentList refuses the empty argument list of L58's run stage
+  run_msg_send_local.ps1           0          78            45  pass
+  run_msg_slots.ps1                0          22            20  pass
+  run_msg_storage.ps1              1          19            18  red: argument that is not null or empty, and then try the command again.
+  run_msg_visit.ps1                0          10             9  pass
+  run_owned_ranges.ps1             1           9             8  red: argument that is not null or empty, and then try the command again.
+  run_port_array_owned.ps1         0          13             3  pass: lmx_array_owned parity PASS: 929 checks, 0 failures, 30 counted allocations rele
+  run_port_array_ref_owned.ps1     0          13             3  pass: lmx_array_ref_owned parity PASS: 453 checks, 0 failures, 66 counted allocations 
   The stdout-file count is a launch proxy: each Start-Process stage writes one Name.stdout.txt.
