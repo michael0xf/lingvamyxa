@@ -1,0 +1,131 @@
+LOCK_REMOVAL_S5_REVIEW: review of d6/lock-s5 ddab10a0 (S5's landing) against
+integration 3e6fc02a, cross-checked against LOCK_REMOVAL_S5_LISTS.txt
+(c063fd00) and the re-based LOCK_REMOVAL_S6_LOCK_SITES.txt (sonnet/s6-rebase
+0783c86b, its four S5-pending sites), per 6f's standing review ticket
+(sonnet/s5-review, 2026-09-15, doc-only, no builds).
+
+Method: `git diff 3e6fc02a ddab10a0 -- l2src/` read in full (5 files, 68
+insertions, 168 deletions: lmx_message.h, lmx_message.lm1, lmx_message.lm2,
+lmx_message_exec.c, lmx_message_exec.h); every item below checked by direct
+grep against the post-landing tree, not assumed from the diff's own shape.
+
+--- The four S5-pending sites (LOCK_REMOVAL_S6_LOCK_SITES.txt 0783c86b)
+
+1. Retire queue (LmxMsgExec.retire_head/.retire_tail, LmxMsg.retire_next/
+   .retire_queued, lmx_msg_exec_flush_retire, lmx_msg_exec_retire_n):
+   GONE. All four fields and both functions deleted outright (lmx_message.h,
+   lmx_message_exec.c, lmx_message_exec.h); every caller's own flush_retire
+   call removed too (lmx_msg_exec_stop x2, lmx_msg_exec_drop_binds,
+   lmx_msg_exec_unbind, lmx_msg_exec_unbind_msg, lmx_msg_handoff_supervision,
+   lmx_msg_end_turn x2 -- 9 call sites, all clean). Matches LOCK_REMOVAL_S5_
+   LISTS.txt's own c063fd00 finding that this queue was already dead code
+   (no append site existed): the fix is a pure deletion, no behavior to
+   replace. Falsify: grep -rn "retire_head\|retire_tail\|retire_next\|
+   retire_queued\|lmx_msg_exec_flush_retire\|lmx_msg_exec_retire_n" across
+   l2src/*.lm1/*.c/*.h returns nothing.
+
+2. root_seq (LmxMsgRuntime.root_seq, written in lmx_msg_assign_path):
+   GONE. Field removed from the struct; assign_path's own root-path branch
+   no longer reads or increments it -- slot\path[0] is now the constant 1U,
+   since S5's landing makes R0 the one root a runtime ever has (assign_
+   path's own new comment: "only R0 is created without a parent, so its
+   path is [1]"). Falsify: grep -rn "root_seq" across l2src/*.lm1/*.c/*.h
+   returns nothing.
+
+3. next_addr's non-atomic increment (lmx_message.lm1's own `rt\next_addr:
+   rt\next_addr + 1U` inside create_prepare): RESOLVED, not merely moved.
+   create_prepare's own site is gone (`slot\addr: c.lmx_msg_addr_take(rt)`
+   replaces it); the sole surviving writer is the new lmx_msg_addr_take
+   (lmx_message_exec.c:471), `__atomic_fetch_add_4(&rt->next_addr, 1U,
+   __ATOMIC_RELAXED)` -- an order-free atomic, matching LOCK_REMOVAL_S5_
+   LISTS.txt's own c063fd00 finding that next_addr is "write-then-discard
+   per creation, never re-read except to generate the next value" (no
+   separate reader to convert). One other reference remains, lmx_message.
+   lm1:863, `rt\next_addr: 1U` inside lmx_msg_runtime_new -- a plain write,
+   but before host_attach/exec_attach publish the runtime to any other
+   thread, so no concurrent reader can observe it; not a live-runtime
+   reader/writer and not what this item was about. Falsify: grep -rn
+   "next_addr" across l2src/*.lm1/*.c/*.h returns exactly these two lines
+   (the struct field declaration itself is the third hit, lmx_message.h:
+   201) -- no bare `rt->next_addr +` or `rt\next_addr:` arithmetic left
+   anywhere outside lmx_msg_addr_take's own atomic op.
+
+4. The two root-list walks (append in create_prepare, unlink in release_
+   slot): GONE, and not by making the walk atomic -- by deleting the walk.
+   S5's landing changes the model itself: rt->root is now a single Message
+   pointer (R0), not the head of a next_sibling-chained list of roots (the
+   comment repeated at every touched site: "R0 is the one root"). create_
+   prepare's append walk is now `rt\root: slot`, one assignment; release_
+   slot's unlink walk is now `if: rt\root = m -> rt\root: 0`, one compare.
+   The same change removed three more root-list walks this ticket didn't
+   name but LOCK_REMOVAL_S5_LISTS.txt's own root-field entry implied were
+   the same shape: lmx_msg_find's own family-search loop (now a single
+   lmx_msg_find_tree(rt->root, addr) call), lmx_msg_poll's own loop over
+   `fam\next_sibling` (now one `if rt->root != 0` call), and drive_walk_
+   list's own inline root-membership scan in exec.c (removed together with
+   lmx_msg_drive_walk_roots's own rewrite, which now pins R0 with retain/
+   release around a single unlock/relock window instead of walking a list
+   under one unbroken hold). Falsify: grep -n "next_sibling" in lmx_
+   message.lm1 and lmx_message_exec.c finds no site describing more than
+   one root chained by it; the one remaining next_sibling comment (exec.c:
+   1416, rec_walk_locked) is a family-tree walk from the one root down
+   through children/siblings, not a walk across multiple roots -- read
+   directly to confirm this before excluding it, not assumed from the
+   name alone.
+
+--- No lock hold added
+
+Checked: every `+` line in the diff naming lmx_msg_exec_lock/unlock or a
+lock primitive (CRITICAL_SECTION, pthread_mutex_t, mutex_init) is inside
+lmx_msg_drive_walk_roots's own rewrite, reusing the function's existing
+exec_lock/unlock pair in a new pattern (retain R0, unlock, drive it if
+still root and live, unlock, release, re-lock on return -- the function's
+own comment: "the exec lock is held on entry and on return"), not a new
+lock declaration or a second lock. No new CRITICAL_SECTION/pthread_
+mutex_t, no new lmx_msg_host_lock/unlock site, confirmed by grep across
+the full diff. If anything this rewrite shortens net hold time (an
+unlocked window now exists inside a walk that previously held the lock
+throughout); it does not lengthen or duplicate it.
+
+--- Cross-Message lists/counts left in LmxMsgRuntime or LmxMsgExec
+
+LmxMsgRuntime (lmx_message.h:193-209, post-landing): root (single Message
+pointer, no longer a list -- see item 4), slots, n, transport, transport_
+tail, host_sync, exec, next_addr (now atomic, item 3), root_record. Of
+these, slots/n (S6's own fate, LOCK_REMOVAL_S5_LISTS.txt's own "becomes
+data of R0's arena, proposed by extension") and transport/transport_tail
+(Y's own fate, LOCK_REMOVAL_Y_SITES.txt) are the two named exceptions --
+present, untouched by S5's landing, correctly out of S5's own scope.
+
+LmxMsgExec (lmx_message_exec.c:86-112, post-landing): lock/tls, nworkers,
+stopping, stopped, no_retire, contexts_live, rt, unbound_held, four
+LMX_MSG_EXEC_TEST-only scalars. reap_head, wait_serial and ui_lane --
+LOCK_REMOVAL_S5_LISTS.txt's own other cross-Message fields, fated DEL/S3
+and DEL/M respectively -- are already gone, removed before c063fd00 by S3
+and M's own earlier landings (confirmed absent here too, not this ticket's
+own work).
+
+One item flagged rather than silently passed: nworkers is a runtime-wide
+count spanning every mapped Message (LOCK_REMOVAL_S5_LISTS.txt's own
+words), still present, and not one of the two exceptions this review's own
+instruction names (slots/n, transport). Its own fate is tagged M, not S5
+(LOCK_REMOVAL_S5_LISTS.txt: "DEL, M -- once each L3 Thread is its own OS
+thread with no shared launch/reap bookkeeping, a runtime-wide worker count
+has nothing left to count") -- correctly out of S5's own landing's scope,
+and untouched by this diff, so not a gap S5 introduced. Named here because
+the review's own instruction, taken literally, does not except it; the
+substance (it is M's work, not S5's, and was never claimed done by S5) is
+not in question.
+
+--- Falsifier
+Every item named "gone" above verified absent from the post-landing tree
+by grep of its own name, run directly against ddab10a0's checkout, not
+inferred from the diff alone (a name could survive in a file the diff
+didn't touch): retire_head/retire_tail/retire_next/retire_queued/flush_
+retire/retire_n (0 hits), root_seq (0 hits), the multi-root next_sibling
+chain (0 hits; the one surviving next_sibling site read directly and
+confirmed to be a different, still-correct walk). next_addr's own
+remaining 3 hits read directly and classified (1 struct field, 1 atomic
+op, 1 pre-publication init). No new lock primitive found by grep across
+the full diff. nworkers's continued presence confirmed by direct grep and
+its fate traced to LOCK_REMOVAL_S5_LISTS.txt's own row, not assumed.
