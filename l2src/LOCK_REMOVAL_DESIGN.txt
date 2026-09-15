@@ -291,6 +291,20 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       - run_port_message with the counter: parity PASS;
       - reference.exe twice with LMX_LOOKUP_COUNT=1: "lookup walks: C1=48 C2=0 turn_other=17" both times.
       The put-back site's own 48 walks come back and nothing else moves.
+      turn_other = 17, attributed (scratch worktree ws2meas at 121f4b87 plus a never-committed
+      RtlCaptureStackBackTrace print in the counter's turn_other arm; run_port_message parity PASS; reference.exe
+      with LMX_LOOKUP_COUNT=1 LMX_WALK_SITES=1 gives C1=0 C2=0 turn_other=17; scratchpad s2_walk_sites.py). All 17
+      found a Message that is neither the turn, its child, its grandchild nor its parent. Turn -> found address
+      pairs: 3->4 9 times, 3->5 2, 4->3 1, 4->5 2, 4->6 2, 5->3 1. By call chain:
+      - 14 are sends to another Message by address: lmx_msg_dest_from_src <- lmx_msg_send from turn_send_once 7,
+        turn_fast 2, turn_send_delta 2 and turn_send_two 2; <- lmx_msg_send_owned from turn_owned_send 1. This is
+        C3, whose capability form is decided in S4, not S2.
+      - 2 are exec_bind from a turn on an address outside its own record and child list: caller_msg_locked's
+        fallback <- exec_bind_mode <- lmx_msg_exec_bind. mapping_authority_locked then decides (the
+        settled-ancestor reach).
+      - 1 is a turn unbinding a Message that is not its child: lmx_msg_exec_unbind <- turn_map_sibling, the
+        exec selftest's refusal case. The address form keeps the lookup, so the refusal can be reached.
+      So no C1/C2 site remains, and the rest is S4's sends plus two address-form calls outside the caller's family.
       What the green then measures: no walk of the runtime's tree from a turn's C1/C2 site. A scan of the caller's
       own child list for a child address is not a lookup the counter hooks, and it is the design's "parent's child
       pointer"; stated here so that nobody reads the green as more than that.
