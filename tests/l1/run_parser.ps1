@@ -1,5 +1,9 @@
-# Parser acceptance: L1 printTree vs printTree.lm0 oracles.
+# Parser acceptance: L1 printTree against the committed printTree.lm0 goldens.
 # CWD = repo root. Isolated artifacts under build\l1trans.
+# The goldens (tests\l1\goldens\printTree.lm0\<key>.exit, <key>.stdout, <key>.p0; see
+# its README.txt) were generated once from the lm2 chain's printTree.lm0.exe. A
+# disagreement with them is a question, never a regeneration. <key> is the fixture's
+# repo-relative path with \ and / replaced by _.
 
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..\..")
@@ -10,18 +14,23 @@ $l1trans = "build\l1trans\$gen\l1trans.exe"
 $obj = "build\obj\l1trans\$gen"
 $bin = "build\l1trans\$gen"
 $log = Join-Path "build\l1trans\logs" $gen
-$oracleDir = "build\l1trans\oracles"
+$goldenDir = "tests\l1\goldens\printTree.lm0"
 $ptSrc = "l1src\printTree.lm1"
 $ptC = Join-Path $obj "printTree.c"
 $ptExe = Join-Path $bin "printTree.exe"
-$lm0 = "build\lm0\printTree.lm0.exe"
 $script:parserLog = Join-Path $log "parser_accept.log"
 
-New-Item -ItemType Directory -Force -Path $obj, $bin, $log, $oracleDir | Out-Null
+New-Item -ItemType Directory -Force -Path $obj, $bin, $log | Out-Null
 Set-Content -LiteralPath $script:parserLog -Value "$(Get-Date -Format o) parser accept start"
 
 function Write-PLog([string]$msg) {
     Add-Content -LiteralPath $script:parserLog -Value "$(Get-Date -Format o) $msg"
+}
+
+function Get-GoldenPath([string]$src, [string]$ext) {
+    $p = Join-Path $goldenDir (($src -replace "[\\/]", "_") + $ext)
+    if (-not (Test-Path -LiteralPath $p)) { throw "missing golden $p for $src" }
+    return $p
 }
 
 $savedHosted = @{
@@ -40,10 +49,10 @@ function Restore-HostedRegistryEnv {
 }
 try {
 foreach ($k in $savedHosted.Keys) { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
-Write-PLog "ENV effective default hosted P0 for L1 translate and printTree.lm0 oracle"
+Write-PLog "ENV effective default hosted P0 for L1 translate"
 
 if (-not (Test-Path $l1trans)) { throw "missing $l1trans" }
-if (-not (Test-Path $lm0)) { throw "missing $lm0" }
+if (-not (Test-Path -LiteralPath $goldenDir)) { throw "missing golden directory $goldenDir" }
 
 & $l1trans $ptSrc $ptC
 if ($LASTEXITCODE -ne 0) { throw "translate printTree failed $LASTEXITCODE" }
@@ -83,20 +92,19 @@ $positive = @(
 
 foreach ($src in $positive) {
     if (-not (Test-Path $src)) { throw "missing fixture $src" }
-    $base = [IO.Path]::GetFileNameWithoutExtension($src)
-    $l1out = Join-Path $log "pt_l1_$base.stdout"
-    $l1err = Join-Path $log "pt_l1_$base.stderr"
-    $o0 = Join-Path $oracleDir "$base.oracle"
-    $o0err = Join-Path $log "pt_lm0_$base.stderr"
-    $ec0 = Invoke-Dump $lm0 $src $o0 $o0err
+    $key = ($src -replace "[\\/]", "_")
+    $l1out = Join-Path $log "pt_l1_$key.stdout"
+    $l1err = Join-Path $log "pt_l1_$key.stderr"
+    $ec0 = [int]((Get-Content -LiteralPath (Get-GoldenPath $src ".exit") -TotalCount 1).Trim())
+    $o0 = Get-GoldenPath $src ".stdout"
     $ec1 = Invoke-Dump $ptExe $src $l1out $l1err
-    Write-PLog "dump $src l1_exit=$ec1 lm0_exit=$ec0"
+    Write-PLog "dump $src l1_exit=$ec1 golden_exit=$ec0"
     if ($ec0 -ne 0 -or $ec1 -ne 0) {
-        throw "positive dump expected exit 0: $src l1=$ec1 lm0=$ec0"
+        throw "positive dump expected exit 0: $src l1=$ec1 golden=$ec0"
     }
-    $h0 = (Get-FileHash $o0).Hash
+    $h0 = (Get-FileHash -LiteralPath $o0).Hash
     $h1 = (Get-FileHash $l1out).Hash
-    if ($h0 -ne $h1) { throw "oracle mismatch $src l1=$h1 lm0=$h0" }
+    if ($h0 -ne $h1) { throw "golden mismatch $src l1=$h1 golden=$h0 ($o0)" }
     Write-PLog "MATCH $src hash=$h1 bytes=$((Get-Item $l1out).Length)"
 }
 
@@ -115,17 +123,17 @@ $malformed = @(
 )
 foreach ($src in $malformed) {
     if (-not (Test-Path $src)) { throw "missing $src" }
-    $base = [IO.Path]::GetFileNameWithoutExtension($src)
-    $l1errPath = Join-Path $log "pt_l1_$base.stderr"
-    $ec1 = Invoke-Dump $ptExe $src (Join-Path $log "pt_l1_$base.stdout") $l1errPath
-    $ec0 = Invoke-Dump $lm0 $src (Join-Path $log "pt_lm0_$base.stdout") (Join-Path $log "pt_lm0_$base.stderr")
-    Write-PLog "malformed $src l1_exit=$ec1 lm0_exit=$ec0"
+    $key = ($src -replace "[\\/]", "_")
+    $l1errPath = Join-Path $log "pt_l1_$key.stderr"
+    $ec1 = Invoke-Dump $ptExe $src (Join-Path $log "pt_l1_$key.stdout") $l1errPath
+    $ec0 = [int]((Get-Content -LiteralPath (Get-GoldenPath $src ".exit") -TotalCount 1).Trim())
+    Write-PLog "malformed $src l1_exit=$ec1 golden_exit=$ec0"
     if ($ec0 -ne 1 -or $ec1 -ne 1) {
-        throw "malformed expected exit 1 for both: $src l1=$ec1 lm0=$ec0"
+        throw "malformed expected exit 1 for both: $src l1=$ec1 golden=$ec0"
     }
     $l1err = Get-Content -LiteralPath $l1errPath -Raw
     if ([string]::IsNullOrWhiteSpace($l1err) -or $l1err -notmatch "P0 parse error") {
-        throw "malformed missing non-empty P0 parse error: $src l1=$ec1 lm0=$ec0 stderr=$l1err"
+        throw "malformed missing non-empty P0 parse error: $src l1=$ec1 golden=$ec0 stderr=$l1err"
     }
 }
 

@@ -1,0 +1,54 @@
+structure fields=1
+  frame head="L2" body=structure fields=3
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "int8"
+      frame head="columns" body=structure fields=2
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="int8" body=structure fields=1
+            atom "`context literal`"
+      frame head="rows" body=structure fields=0
+      Tail cutter trailer spelling="end" fields=1
+        atom "int8"
+    frame head="join" body=structure fields=3
+      structure fields=1
+        atom "int8"
+      atom "Boolean"
+      structure fields=3
+        atom "source"
+        frame head="columns" body=structure fields=2
+          structure fields=1
+            frame head="class" body=structure fields=1
+              atom "class"
+          structure fields=1
+            frame head="int8" body=structure fields=1
+              atom "`context literal`"
+        frame head="rows" body=structure fields=8
+          atom "None"
+          atom "-1"
+          atom "false"
+          atom "0"
+          atom "true"
+          atom "1"
+          atom "OK"
+          atom "1"
+      Tail cutter trailer spelling="end" fields=1
+        atom "Boolean"
+    frame head="external" body=structure fields=1
+      frame head="fn" body=structure fields=4
+        atom "main"
+        structure fields=0
+        atom "int"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom "0"
+        Tail cutter trailer spelling="end" fields=1
+          atom "main"
+      Tail cutter trailer spelling="end" fields=1
+        atom "external"
+    Tail cutter trailer spelling="end" fields=1
+      atom "L2"

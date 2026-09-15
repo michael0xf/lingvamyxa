@@ -1,0 +1,25 @@
+structure fields=1
+  frame head="indexDemo" body=structure fields=2
+    frame head="value" body=structure fields=9
+      atom "array"
+      atom "["
+      atom "index"
+      atom "-"
+      atom "other"
+      atom "["
+      frame head="nested" body=structure fields=2
+        atom "1"
+        atom "2"
+      atom "]"
+      atom "]"
+    frame head="text" body=structure fields=7
+      atom "table"
+      atom "["
+      atom ""row one""
+      atom "]"
+      atom "["
+      frame head="column" body=structure fields=1
+        atom "name"
+      atom "]"
+    Tail cutter trailer spelling="end" fields=1
+      atom "indexDemo"

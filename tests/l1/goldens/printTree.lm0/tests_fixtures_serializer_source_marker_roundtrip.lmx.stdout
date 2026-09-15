@@ -1,0 +1,32 @@
+structure fields=2
+  frame head="table" body=structure fields=4
+    atom "source"
+    frame head="name" body=structure fields=1
+      atom "marked"
+    frame head="columns" body=structure fields=2
+      structure fields=1
+        frame head="class" body=structure fields=1
+          atom "class"
+      structure fields=1
+        frame head="int" body=structure fields=1
+          atom "value"
+    frame head="rows" body=structure fields=2
+      atom "markedKey"
+      atom "1"
+    Tail cutter trailer spelling="end" fields=1
+      atom "marked"
+  frame head="table" body=structure fields=3
+    frame head="name" body=structure fields=1
+      atom "unmarked"
+    frame head="columns" body=structure fields=2
+      structure fields=1
+        frame head="class" body=structure fields=1
+          atom "class"
+      structure fields=1
+        frame head="int" body=structure fields=1
+          atom "value"
+    frame head="rows" body=structure fields=2
+      atom "unmarkedKey"
+      atom "2"
+    Tail cutter trailer spelling="end" fields=1
+      atom "unmarked"

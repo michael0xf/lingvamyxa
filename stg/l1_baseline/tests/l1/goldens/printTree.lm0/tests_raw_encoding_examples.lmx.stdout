@@ -1,0 +1,25 @@
+structure fields=6
+  frame head="@" body=structure fields=2
+    atom "u32"
+    frame head="utf32" body=structure fields=1
+      atom "text utf32"
+  frame head="@" body=structure fields=2
+    atom "u16"
+    frame head="utf16" body=structure fields=1
+      atom "'''text utf16'''"
+  frame head="@" body=structure fields=2
+    atom "u32"
+    frame head="utf32" body=structure fields=1
+      atom """"text utf32""""
+  frame head="String" body=structure fields=2
+    atom "u32"
+    frame head="utf32" body=structure fields=1
+      atom "text utf32"
+  frame head="String" body=structure fields=2
+    atom "u16"
+    frame head="utf16" body=structure fields=1
+      atom "'''text utf16'''"
+  frame head="String" body=structure fields=2
+    atom "u32"
+    frame head="utf32" body=structure fields=1
+      atom """"text utf32""""

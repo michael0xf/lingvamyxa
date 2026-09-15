@@ -1,0 +1,398 @@
+structure fields=3
+  frame head="L2" body=structure fields=3
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "HelloConfig"
+      frame head="columns" body=structure fields=4
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "field_type"
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "owner"
+        structure fields=1
+          frame head="char" body=structure fields=1
+            atom "default"
+      frame head="rows" body=structure fields=12
+        atom "greeting"
+        atom "Text"
+        atom "owned"
+        atom ""Hello World""
+        atom "maxI"
+        atom "int"
+        atom "value"
+        atom "3"
+        atom "maxJ"
+        atom "int"
+        atom "value"
+        atom "3"
+      Tail cutter trailer spelling="end" fields=1
+        atom "HelloConfig"
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "HelloConfig_rules"
+      frame head="columns" body=structure fields=2
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="char" body=structure fields=1
+            atom "condition"
+      frame head="rows" body=structure fields=2
+        atom "positiveBounds"
+        atom ""maxI > 0 && maxJ > 0""
+      Tail cutter trailer spelling="end" fields=1
+        atom "HelloConfig_rules"
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "entryPoint"
+      frame head="columns" body=structure fields=2
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="Symbol" body=structure fields=1
+            atom "implementation"
+      frame head="rows" body=structure fields=2
+        atom "app"
+        atom "helloMain"
+      Tail cutter trailer spelling="end" fields=1
+        atom "entryPoint"
+    Tail cutter trailer spelling="end" fields=1
+      atom "L2"
+  frame head="L5" body=structure fields=6
+    frame head="behavior" body=structure fields=2
+      atom "HelloConfig"
+      structure fields=1
+        frame head="message" body=structure fields=2
+          atom "run"
+          atom "helloMain"
+    frame head="fact" body=structure fields=2
+      atom "model"
+      atom "HelloConfig"
+    frame head="fact" body=structure fields=4
+      atom "message"
+      atom "HelloConfig"
+      atom "run"
+      atom "helloMain"
+    frame head="fact" body=structure fields=3
+      atom "entryPoint"
+      atom "app"
+      atom "helloMain"
+    frame head="target" body=structure fields=5
+      atom "app"
+      frame head="kind" body=structure fields=1
+        atom "executable"
+      frame head="sources" body=structure fields=1
+        structure fields=1
+          atom ""src/hello_world.lm3""
+      frame head="entry" body=structure fields=1
+        atom "helloMain"
+      frame head="output" body=structure fields=1
+        atom ""build/bin/hello_world.lm0.exe""
+    frame head="build" body=structure fields=1
+      atom "app"
+    Tail cutter trailer spelling="end" fields=1
+      atom "L5"
+  frame head="L3" body=structure fields=3
+    frame head="fn" body=structure fields=4
+      atom "words"
+      structure fields=0
+      frame head="iterator" body=structure fields=1
+        atom "Text"
+      structure fields=2
+        frame head="yield" body=structure fields=1
+          atom ""Hello""
+        frame head="yield" body=structure fields=1
+          atom ""World""
+      Tail cutter trailer spelling="end" fields=1
+        atom "words"
+    frame head="fn" body=structure fields=4
+      atom "checkedGreeting"
+      structure fields=1
+        frame head="HelloConfig" body=structure fields=1
+          atom "cfg"
+      structure fields=1
+        atom "Text"
+      structure fields=3
+        frame head="throws" body=structure fields=2
+          atom "GreetingRetry"
+          atom "GreetingSkip"
+        frame head="if" body=structure fields=8
+          atom "cfg"
+          atom "\"
+          atom "greeting"
+          atom "\"
+          atom "len"
+          atom "="
+          atom "0"
+          structure fields=1
+            frame head="throw" body=structure fields=1
+              frame head="GreetingRetry" body=structure fields=1
+                atom "cfg"
+        frame head="if" body=structure fields=8
+          atom "cfg"
+          atom "\"
+          atom "greeting"
+          atom "\"
+          atom "len"
+          atom "<"
+          atom "0"
+          structure fields=1
+            frame head="throw" body=structure fields=1
+              frame head="GreetingSkip" body=structure fields=3
+                atom "cfg"
+                atom "\"
+                atom "greeting"
+      Tail cutter trailer spelling="return" fields=3
+        atom "cfg"
+        atom "\"
+        atom "greeting"
+    frame head="sub" body=structure fields=2
+      atom "helloMain"
+      structure fields=18
+        frame head="HelloConfig" body=structure fields=2
+          atom "cfg"
+          structure fields=3
+            frame head="greeting" body=structure fields=1
+              atom ""Hello World""
+            frame head="maxI" body=structure fields=1
+              atom "3"
+            frame head="maxJ" body=structure fields=1
+              atom "3"
+        frame head="HelloConfig" body=structure fields=2
+          atom "emptyCfg"
+          structure fields=3
+            frame head="greeting" body=structure fields=1
+              atom """"
+            frame head="maxI" body=structure fields=1
+              atom "1"
+            frame head="maxJ" body=structure fields=1
+              atom "1"
+        frame head="finally" body=structure fields=1
+          frame head="System\out\println" body=structure fields=1
+            atom ""--- finally helloMain ---""
+        frame head="assert" body=structure fields=5
+          atom "cfg"
+          atom "\"
+          atom "maxI"
+          atom "="
+          atom "3"
+        frame head="assert" body=structure fields=5
+          atom "cfg"
+          atom "\"
+          atom "maxJ"
+          atom "="
+          atom "3"
+        structure fields=2
+          frame head="catch" body=structure fields=3
+            atom "GreetingRetry"
+            structure fields=0
+            structure fields=6
+              atom "cfg"
+              atom "\"
+              atom "greeting"
+              atom "\"
+              atom "len"
+              atom "++"
+          frame head="System\out\println" body=structure fields=1
+            frame head="checkedGreeting" body=structure fields=1
+              atom "cfg"
+        structure fields=2
+          frame head="catch" body=structure fields=3
+            atom "GreetingRetry"
+            structure fields=0
+            structure fields=6
+              atom "emptyCfg"
+              atom "\"
+              atom "greeting"
+              atom "\"
+              atom "len"
+              atom "++"
+          frame head="System\out\println" body=structure fields=1
+            frame head="checkedGreeting" body=structure fields=1
+              atom "emptyCfg"
+        frame head="catch" body=structure fields=3
+          atom "GreetingSkip"
+          structure fields=1
+            frame head="Text" body=structure fields=1
+              atom "badText"
+          structure fields=1
+            frame head="System\out\println" body=structure fields=1
+              structure fields=3
+                atom ""handled EmptyGreeting: ""
+                atom "+"
+                atom "badText"
+        frame head="each" body=structure fields=4
+          atom "word"
+          atom "in"
+          atom "words"
+          structure fields=1
+            frame head="match" body=structure fields=2
+              atom "word"
+              structure fields=2
+                structure fields=2
+                  atom ""Hello""
+                  frame head="System\out\println" body=structure fields=1
+                    atom ""match: Hello""
+                structure fields=2
+                  atom "default"
+                  frame head="System\out\println" body=structure fields=1
+                    structure fields=3
+                      atom ""match default: ""
+                      atom "+"
+                      atom "word"
+              Tail cutter trailer spelling="end" fields=1
+                atom "match"
+          Tail cutter trailer spelling="end" fields=1
+            atom "each"
+        frame head="int" body=structure fields=2
+          atom "k"
+          atom "0"
+        frame head="while" body=structure fields=4
+          atom "k"
+          atom "<"
+          atom "5"
+          structure fields=4
+            frame head="k" body=structure fields=3
+              atom "k"
+              atom "+"
+              atom "1"
+            frame head="if" body=structure fields=4
+              atom "k"
+              atom "="
+              atom "2"
+              structure fields=1
+                atom "continue"
+            frame head="if" body=structure fields=4
+              atom "k"
+              atom ">"
+              atom "3"
+              structure fields=1
+                atom "break"
+            frame head="System\out\println" body=structure fields=1
+              structure fields=3
+                atom ""while k: ""
+                atom "+"
+                atom "k"
+          Tail cutter trailer spelling="end" fields=1
+            atom "while"
+        frame head="int" body=structure fields=2
+          atom "redoFlag"
+          atom "0"
+        frame head="while" body=structure fields=4
+          atom "redoFlag"
+          atom "<"
+          atom "2"
+          structure fields=4
+            frame head="redoFlag" body=structure fields=3
+              atom "redoFlag"
+              atom "+"
+              atom "1"
+            frame head="if" body=structure fields=4
+              atom "redoFlag"
+              atom "="
+              atom "1"
+              structure fields=1
+                atom "redo"
+            frame head="System\out\println" body=structure fields=1
+              atom ""redo executed once""
+            atom "break"
+          Tail cutter trailer spelling="end" fields=1
+            atom "while"
+        frame head="untilDemo" body=structure fields=1
+          frame head="System\out\println" body=structure fields=1
+            atom ""until body executes before condition""
+          Tail cutter trailer spelling="until" fields=1
+            atom "true"
+        frame head="int" body=structure fields=2
+          atom "attempt"
+          atom "0"
+        frame head="loadAttempt" body=structure fields=1
+          frame head="retryable" body=structure fields=4
+            frame head="finally" body=structure fields=1
+              frame head="System\out\println" body=structure fields=1
+                atom ""--- cleanup attempt ---""
+            frame head="attempt" body=structure fields=3
+              atom "attempt"
+              atom "+"
+              atom "1"
+            frame head="if" body=structure fields=4
+              atom "attempt"
+              atom "<"
+              atom "2"
+              structure fields=2
+                frame head="System\out\println" body=structure fields=1
+                  atom ""--- retry loadAttempt ---""
+                frame head="retry" body=structure fields=1
+                  atom "loadAttempt"
+            frame head="System\out\println" body=structure fields=1
+              structure fields=3
+                atom ""retryable attempt: ""
+                atom "+"
+                atom "attempt"
+          Tail cutter trailer spelling="end" fields=1
+            atom "loadAttempt"
+        frame head="outerLoop" body=structure fields=1
+          frame head="for" body=structure fields=5
+            frame head="int" body=structure fields=2
+              atom "i"
+              atom "1"
+            structure fields=5
+              atom "i"
+              atom "<="
+              atom "cfg"
+              atom "\"
+              atom "maxI"
+            atom "i"
+            atom "++"
+            structure fields=1
+              frame head="for" body=structure fields=5
+                frame head="int" body=structure fields=2
+                  atom "j"
+                  atom "1"
+                structure fields=5
+                  atom "j"
+                  atom "<="
+                  atom "cfg"
+                  atom "\"
+                  atom "maxJ"
+                atom "j"
+                atom "++"
+                structure fields=2
+                  frame head="if" body=structure fields=8
+                    atom "i"
+                    atom "="
+                    atom "2"
+                    atom "&&"
+                    atom "j"
+                    atom "="
+                    atom "2"
+                    structure fields=2
+                      frame head="System\out\println" body=structure fields=1
+                        atom ""--- continue outerLoop ---""
+                      frame head="continue" body=structure fields=1
+                        atom "outerLoop"
+                  frame head="System\out\println" body=structure fields=1
+                    structure fields=7
+                      atom ""i: ""
+                      atom "+"
+                      atom "i"
+                      atom "+"
+                      atom "", j: ""
+                      atom "+"
+                      atom "j"
+          Tail cutter trailer spelling="end" fields=1
+            atom "outerLoop"
+        frame head="System\out\println" body=structure fields=1
+          atom ""Done.""
+      Tail cutter trailer spelling="end" fields=1
+        atom "helloMain"
+    Tail cutter trailer spelling="end" fields=1
+      atom "L3"

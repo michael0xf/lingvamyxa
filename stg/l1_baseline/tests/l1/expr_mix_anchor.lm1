@@ -1,0 +1,25 @@
+{style: ignored by L1 emission}
+fn: same (const: @(char a); const: @(char b)) int
+    int: i 0
+    while: a[i] != 0 && b[i] != 0
+        if: a[i] != b[i]
+            return: 0
+        i: i + 1U
+    return: a[i] = b[i]
+end: same
+{end: ignored by L1 emission}
+
+external:
+    fn: main () int
+        const: @(char balanced) "keep {mark: nested} exact"
+        const: @(char quoted_close) "keep {text: \"}\" tail} exact"
+        const: @(char unclosed) "keep {unclosed exact"
+        if: same(balanced, "keep {mark: nested} exact") = 0
+            return: 1
+        if: same(quoted_close, "keep {text: \"}\" tail} exact") = 0
+            return: 2
+        if: same(unclosed, "keep {unclosed exact") = 0
+            return: 3
+        return: 0
+    end: main
+end: external

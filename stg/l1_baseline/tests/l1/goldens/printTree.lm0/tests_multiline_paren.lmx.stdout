@@ -1,0 +1,9 @@
+structure fields=1
+  frame head="calc" body=structure fields=1
+    frame head="value" body=structure fields=1
+      structure fields=3
+        atom "1"
+        atom "+"
+        atom "2"
+    Tail cutter trailer spelling="end" fields=1
+      atom "calc"

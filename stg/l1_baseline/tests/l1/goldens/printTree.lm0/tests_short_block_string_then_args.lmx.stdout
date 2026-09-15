@@ -1,0 +1,11 @@
+structure fields=2
+  frame head="short" body=structure fields=3
+    structure fields=1
+      atom "test"
+    atom "arg2"
+    atom "arg3"
+  frame head="short_relaxed" body=structure fields=3
+    structure fields=1
+      atom "test"
+    atom "arg2"
+    atom "arg3"

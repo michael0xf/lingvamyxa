@@ -1,0 +1,24 @@
+structure fields=4
+  frame head="print" body=structure fields=8
+    atom "a"
+    atom "+"
+    atom "b"
+    atom "*"
+    atom "c"
+    atom "="
+    atom "="
+    atom "d"
+  frame head="print" body=structure fields=6
+    atom "arr"
+    atom "["
+    atom "i"
+    atom "+"
+    atom "1"
+    atom "]"
+  frame head="print" body=structure fields=3
+    atom "c.printf"
+    atom ""%d""
+    atom "n"
+  frame head="print" body=structure fields=2
+    atom "`a+b`"
+    atom ""x+y""

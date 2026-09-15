@@ -1,0 +1,34 @@
+structure fields=1
+  frame head="L2" body=structure fields=2
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "`registry.generic-key.smoke`"
+      frame head="columns" body=structure fields=2
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "key"
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "value"
+      frame head="rows" body=structure fields=2
+        atom "sample"
+        atom "ok"
+      Tail cutter trailer spelling="end" fields=1
+        atom "`registry.generic-key.smoke`"
+    frame head="external" body=structure fields=1
+      frame head="fn" body=structure fields=4
+        atom "main"
+        structure fields=0
+        atom "int"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom "0"
+        Tail cutter trailer spelling="end" fields=1
+          atom "main"
+      Tail cutter trailer spelling="end" fields=1
+        atom "external"
+    Tail cutter trailer spelling="end" fields=1
+      atom "L2"

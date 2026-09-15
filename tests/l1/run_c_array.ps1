@@ -94,16 +94,9 @@ function Negative([string]$name, [string]$diag) {
     Write-A "EXIT negative $src $LASTEXITCODE diagnostic ok"
 }
 
-# Root gen0 binary may still be an older P0; gen2 has empty-colon P0.
-if ($gen -eq "gen0") {
-    Negative "invalid_c_array_empty" "c.array missing contents"
-    Negative "invalid_c_array_noname" "c.array missing name"
-    Negative "invalid_c_array_const_arity" "const c.array expects exactly one bracket-head array declaration"
-} else {
-    Negative "invalid_c_array_empty" "empty colon Frame is not allowed"
-    Negative "invalid_c_array_noname" "c.array missing name"
-    Negative "invalid_c_array_const_arity" "empty colon Frame is not allowed"
-}
+Negative "invalid_c_array_empty" "empty colon Frame is not allowed"
+Negative "invalid_c_array_noname" "c.array missing name"
+Negative "invalid_c_array_const_arity" "empty colon Frame is not allowed"
 
 Write-A "c_array ok"
 Write-Output "l1trans $gen c_array ok"

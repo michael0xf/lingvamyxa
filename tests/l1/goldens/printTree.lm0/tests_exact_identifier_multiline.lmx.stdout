@@ -1,0 +1,4 @@
+structure fields=1
+  frame head="`alpha
+    beta`" body=structure fields=1
+    atom "value"

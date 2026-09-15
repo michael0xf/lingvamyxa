@@ -1,0 +1,9 @@
+structure fields=1
+  frame head="root" body=structure fields=1
+    frame head="outer" body=structure fields=2
+      frame head="if" body=structure fields=2
+        atom "condition"
+        structure fields=1
+          frame head="bodyCall" body=structure fields=0
+      frame head="else" body=structure fields=1
+        frame head="fallbackCall" body=structure fields=0

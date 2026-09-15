@@ -1,0 +1,4 @@
+structure fields=1
+  frame head="quotes" body=structure fields=2
+    atom """"one " two "" four """" five """"" done""""
+    atom "'''one ' two '' four '''' five ''''' done'''"

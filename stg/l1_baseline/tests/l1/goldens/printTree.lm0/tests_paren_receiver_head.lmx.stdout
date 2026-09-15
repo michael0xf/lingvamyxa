@@ -1,0 +1,9 @@
+structure fields=2
+  frame head="()" body=structure fields=1
+    atom "variable"
+  frame head="container" body=structure fields=2
+    structure fields=0
+    frame head="()" body=structure fields=1
+      atom "inner"
+    Tail cutter trailer spelling="end" fields=1
+      atom "container"

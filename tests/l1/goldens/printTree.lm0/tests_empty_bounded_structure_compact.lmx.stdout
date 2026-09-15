@@ -1,0 +1,8 @@
+structure fields=1
+  frame head="container" body=structure fields=1
+    frame head="call" body=structure fields=3
+      atom "alpha"
+      structure fields=0
+      atom "omega"
+    Tail cutter trailer spelling="end" fields=1
+      atom "container"

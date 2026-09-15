@@ -1,8 +1,9 @@
 # Legacy P0 syntax corpus (recursive old *.lmx + tests/l1/return_bare*.lmx).
-# Manifest pins expected_exit. Live compare: existing printTree.lm0.exe, root
-# gen2 printTree, STG gen2 printTree — exit, full stdout, and full P0
-# code/line/column. run_parser does NOT rebuild lm0; native finalize may
-# overwrite that path. This is PARSE agreement, not consumer/emitter proof.
+# Manifest pins expected_exit. Compared: the committed printTree.lm0 goldens
+# (tests\l1\goldens\printTree.lm0, generated once from the lm2 chain's printTree.lm0.exe;
+# see its README.txt), root gen2 printTree and STG gen2 printTree: exit, full stdout,
+# and full P0 code/line/column. A disagreement with the goldens is a question, never a
+# regeneration. This is PARSE agreement, not consumer/emitter proof.
 
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..\..")
@@ -12,7 +13,7 @@ if ($env:L1_GEN -and $env:L1_GEN.Trim().Length -gt 0) { $gen = $env:L1_GEN.Trim(
 
 $rootPt = "build\l1trans\$gen\printTree.exe"
 $stgPt = "stg\l1_baseline\build\l1trans\$gen\printTree.exe"
-$lm0 = "build\lm0\printTree.lm0.exe"
+$goldenDir = "tests\l1\goldens\printTree.lm0"
 $manifest = "tests\l1\legacy_p0_manifest.txt"
 $outDir = "build\l1trans\legacy_p0"
 $log = Join-Path "build\l1trans\logs" $gen
@@ -20,7 +21,7 @@ New-Item -ItemType Directory -Force -Path $outDir, $log | Out-Null
 
 if (-not (Test-Path -LiteralPath $rootPt)) { throw "missing $rootPt" }
 if (-not (Test-Path -LiteralPath $stgPt)) { throw "missing $stgPt" }
-if (-not (Test-Path -LiteralPath $lm0)) { throw "missing $lm0" }
+if (-not (Test-Path -LiteralPath $goldenDir)) { throw "missing golden directory $goldenDir" }
 if (-not (Test-Path -LiteralPath $manifest)) { throw "missing $manifest" }
 
 $savedHosted = @{
@@ -41,6 +42,12 @@ foreach ($k in $savedHosted.Keys) { Remove-Item "Env:$k" -ErrorAction SilentlyCo
 function Invoke-Dump([string]$exe, [string]$src, [string]$stdout, [string]$stderr) {
     $p = Start-Process -FilePath (Join-Path (Get-Location) $exe) -ArgumentList $src -NoNewWindow -Wait -PassThru -RedirectStandardOutput (Join-Path (Get-Location) $stdout) -RedirectStandardError (Join-Path (Get-Location) $stderr)
     return $p.ExitCode
+}
+
+function Get-GoldenPath([string]$key, [string]$ext, [string]$src) {
+    $p = Join-Path $goldenDir ($key + $ext)
+    if (-not (Test-Path -LiteralPath $p)) { throw "missing golden $p for $src" }
+    return $p
 }
 
 function Get-Diag([string]$errPath) {
@@ -82,16 +89,15 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
     if ($note -match "root_diag=(\d+@\d+:\d+)") { $rootDiag = $Matches[1] }
     if (-not (Test-Path -LiteralPath $src)) { throw "missing fixture $src" }
     $base = ($src -replace "[\\/]", "_")
-    $o0 = Join-Path $outDir "$base.lm0.out"
-    $e0 = Join-Path $outDir "$base.lm0.err"
+    $o0 = Get-GoldenPath $base ".stdout" $src
     $oR = Join-Path $outDir "$base.root.out"
     $eR = Join-Path $outDir "$base.root.err"
     $oS = Join-Path $outDir "$base.stg.out"
     $eS = Join-Path $outDir "$base.stg.err"
-    $ec0 = Invoke-Dump $lm0 $src $o0 $e0
+    $ec0 = [int]((Get-Content -LiteralPath (Get-GoldenPath $base ".exit" $src) -TotalCount 1).Trim())
     $ecR = Invoke-Dump $rootPt $src $oR $eR
     $ecS = Invoke-Dump $stgPt $src $oS $eS
-    if ($ec0 -ne $expect) { throw "$src oracle exit $ec0 expected $expect ($note)" }
+    if ($ec0 -ne $expect) { throw "$src golden exit $ec0 expected $expect ($note)" }
     if ($ecR -ne $rootExpect) { throw "$src root printTree exit $ecR expected $rootExpect" }
     if ($ecS -ne $stgExpect) { throw "$src STG printTree exit $ecS expected $stgExpect" }
     if ($rootExpect -ne $expect) {
@@ -111,23 +117,21 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
         if ($hS -ne $hR) { throw "stdout mismatch STG vs root: $src" }
         $reject++
     } elseif ($expect -eq 0) {
-        $h0 = (Get-FileHash $o0).Hash
+        $h0 = (Get-FileHash -LiteralPath $o0).Hash
         $hR = (Get-FileHash $oR).Hash
         $hS = (Get-FileHash $oS).Hash
-        if ($hR -ne $h0) { throw "stdout mismatch root vs lm0: $src" }
-        if ($hS -ne $h0) { throw "stdout mismatch STG vs lm0: $src" }
+        if ($hR -ne $h0) { throw "stdout mismatch root vs golden: $src ($o0)" }
+        if ($hS -ne $h0) { throw "stdout mismatch STG vs golden: $src ($o0)" }
         $accept++
     } else {
-        $d0 = Get-Diag $e0
         $dR = Get-Diag $eR
         $dS = Get-Diag $eS
-        if ($d0 -notmatch "P0 parse error") { throw "oracle missing P0 parse error: $src : $d0" }
         if ($dR -notmatch "P0 parse error") { throw "root missing P0 parse error: $src : $dR" }
         if ($dS -notmatch "P0 parse error") { throw "STG missing P0 parse error: $src : $dS" }
-        $loc0 = Get-P0Loc $d0
-        if ($loc0.Length -eq 0) { throw "oracle missing code/line/column: $src : $d0" }
-        if ((Get-P0Loc $dR) -ne $loc0) { throw "root diag parity: $src oracle=$d0 root=$dR" }
-        if ((Get-P0Loc $dS) -ne $loc0) { throw "STG diag parity: $src oracle=$d0 stg=$dS" }
+        $loc0 = (Get-Content -LiteralPath (Get-GoldenPath $base ".p0" $src) -TotalCount 1).Trim()
+        if ($loc0 -notmatch "^\d+@\d+:\d+$") { throw "golden P0 location malformed: $src : $loc0" }
+        if ((Get-P0Loc $dR) -ne $loc0) { throw "root diag parity: $src golden=$loc0 root=$dR" }
+        if ((Get-P0Loc $dS) -ne $loc0) { throw "STG diag parity: $src golden=$loc0 stg=$dS" }
         $reject++
     }
     if ($src.StartsWith("tests\l1\")) { $extra++ }
@@ -139,7 +143,7 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
     $n++
 }
 
-Write-Output "legacy P0 corpus ok n=$n old119=$old added=$added extra_l1=$extra accept=$accept reject=$reject oracle=printTree.lm0 root=$gen stg=$gen"
+Write-Output "legacy P0 corpus ok n=$n old119=$old added=$added extra_l1=$extra accept=$accept reject=$reject oracle=goldens/printTree.lm0 root=$gen stg=$gen"
 } finally {
     Restore-HostedRegistryEnv
 }

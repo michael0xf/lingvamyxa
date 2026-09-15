@@ -3,10 +3,16 @@ rem buildCore.lm0.bat for the stg\l1_baseline build root.
 rem
 rem Own script, not a copy of the repo-root one. The root script serves the live
 rem L1 chain and changes with it; this root has different needs:
-rem   - it must never touch the pinned old-L2-chain seed archives, and in fact
-rem     restores them, so that buildCore -> run_seed works with no manual step;
 rem   - it needs no cmake;
 rem   - it builds only the four tools this root actually uses.
+rem
+rem It needs nothing of the old L2 chain (Mikhail 2026-09-15: the previous binary
+rem always exists, and the old chain's files go): no trans.lm0.exe, no
+rem printTree.lm0.exe, no libparser/libown archives. Everything it builds comes
+rem from this root's committed generated C in lm1\build. The gen0 seed is gcc on
+rem that same committed l1trans.lm1.c (tests\l1\run_seed.ps1), and the parser
+rem oracle is committed goldens under tests\l1, so nothing here restores or
+rem checks an old binary.
 rem
 rem Anchors at its own directory, like every runner here.
 
@@ -60,26 +66,4 @@ set "CFLAGS=-std=c99 -Wall -Wextra -Wpedantic %THREAD_FLAGS%"
 "%LM_CC%" %CFLAGS%     "lm1\build\finalize.lm1.c"  -o build\lm0\finalize.lm0.exe  || exit /b 1
 "%LM_CC%" %CFLAGS% -I. "lm1\build\buildCore.lm1.c" -o build\lm0\buildCore.lm0.exe || exit /b 1
 
-rem Pinned old-L2-chain prerequisites of the gen0 seed. libparser/libown must be
-rem the L2-profile archives that define lm_message_thread_*; the L1-profile ones
-rem this chain could produce do not, and run_seed then fails at link. They are
-rem restored, never rebuilt. See oldchain\README.txt.
-
-for %%A in (libparser.lm0.a libown.lm0.a) do (
-    if not exist "oldchain\lib\%%A" (
-        echo buildCore.lm0.bat: pinned seed prerequisite missing: oldchain\lib\%%A 1>&2
-        echo Restore it from the repo build\tmp\ - see oldchain\README.txt. 1>&2
-        exit /b 1
-    )
-    copy /Y "oldchain\lib\%%A" "build\lm0\%%A" >nul || exit /b 1
-)
-
-for %%E in (trans.lm0.exe printTree.lm0.exe) do (
-    if not exist "build\lm0\%%E" (
-        echo buildCore.lm0.bat: pinned old-chain binary missing: build\lm0\%%E 1>&2
-        echo It is not built here. Copy it from the repo build\lm0\. 1>&2
-        exit /b 1
-    )
-)
-
-echo built build\lm0 bootstrap tools; pinned seed prerequisites restored
+echo built build\lm0 bootstrap tools from lm1\build

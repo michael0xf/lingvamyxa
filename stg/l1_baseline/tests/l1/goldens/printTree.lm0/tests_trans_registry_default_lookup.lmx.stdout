@@ -1,0 +1,52 @@
+structure fields=1
+  frame head="L2" body=structure fields=3
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "namespace"
+      frame head="columns" body=structure fields=2
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "`receiver.type`"
+      frame head="rows" body=structure fields=2
+        atom "default"
+        atom "`receiver.statement`"
+      Tail cutter trailer spelling="end" fields=1
+        atom "namespace"
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "`receiver.statement`"
+      frame head="columns" body=structure fields=2
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="binding" body=structure fields=1
+            atom "receiver"
+      frame head="rows" body=structure fields=2
+        atom "default"
+        atom "lm_trans_statement_emit_assert"
+      Tail cutter trailer spelling="end" fields=1
+        atom "`receiver.statement`"
+    frame head="external" body=structure fields=1
+      frame head="fn" body=structure fields=4
+        atom "main"
+        structure fields=0
+        atom "int"
+        structure fields=2
+          frame head="customAssert" body=structure fields=3
+            atom "1"
+            atom "="
+            atom "1"
+          frame head="return" body=structure fields=1
+            atom "0"
+        Tail cutter trailer spelling="end" fields=1
+          atom "main"
+      Tail cutter trailer spelling="end" fields=1
+        atom "external"
+    Tail cutter trailer spelling="end" fields=1
+      atom "L2"

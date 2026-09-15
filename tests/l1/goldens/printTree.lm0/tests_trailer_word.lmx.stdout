@@ -1,0 +1,9 @@
+structure fields=2
+  structure fields=2
+    atom "block0"
+    atom "block0"
+  structure fields=2
+    atom "trailer_word"
+    structure fields=2
+      atom "block1"
+      atom "block1"

@@ -84,3 +84,6 @@ lm1/build/*
 
 # vcpkg source-catalog local state.
 cmake/vcpkg-sources/vcpkg_installed/
+
+# Python bytecode of manual migration utilities is never tracked.
+__pycache__/

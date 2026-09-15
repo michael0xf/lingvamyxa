@@ -1,0 +1,10 @@
+structure fields=1
+  frame head="record" body=structure fields=2
+    atom "sample"
+    structure fields=2
+      frame head="id" body=structure fields=1
+        atom "1"
+      frame head="name" body=structure fields=1
+        atom "smoke"
+    Tail cutter trailer spelling="end" fields=1
+      atom "sample"

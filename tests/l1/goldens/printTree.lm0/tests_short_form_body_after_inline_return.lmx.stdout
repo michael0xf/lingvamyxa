@@ -1,0 +1,38 @@
+structure fields=1
+  frame head="fn" body=structure fields=4
+    atom "lm_trans_text_equals"
+    structure fields=3
+      frame head="const" body=structure fields=1
+        structure fields=1
+          frame head="LmP0Text" body=structure fields=1
+            atom "text"
+      PositionalSkip atom ""
+      frame head="const" body=structure fields=1
+        frame head="@" body=structure fields=2
+          atom "char"
+          atom "value"
+    structure fields=1
+      atom "int"
+    structure fields=3
+      frame head="size_t" body=structure fields=1
+        atom "length"
+      frame head="length" body=structure fields=1
+        frame head="c.strlen" body=structure fields=1
+          atom "value"
+      frame head="return" body=structure fields=9
+        atom "text"
+        atom "\"
+        atom "length"
+        atom "="
+        atom "length"
+        atom "&&"
+        frame head="c.memcmp" body=structure fields=5
+          atom "text"
+          atom "\"
+          atom "data"
+          atom "value"
+          atom "length"
+        atom "="
+        atom "0"
+    Tail cutter trailer spelling="end" fields=1
+      atom "lm_trans_text_equals"

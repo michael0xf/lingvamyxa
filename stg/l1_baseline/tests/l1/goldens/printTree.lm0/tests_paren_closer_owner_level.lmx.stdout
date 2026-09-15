@@ -1,0 +1,12 @@
+structure fields=3
+  frame head="call" body=structure fields=2
+    frame head="int" body=structure fields=2
+      atom "a"
+      atom "b"
+    frame head="ret" body=structure fields=1
+      atom "int"
+  atom "value"
+  structure fields=3
+    atom "1"
+    atom "+"
+    atom "1"
