@@ -273,6 +273,51 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
         back to looking at it, one CPU core per L3 Thread while it has no mail. Options put: (a) pure spin; (b) a
         scheduler yield between empty rounds (SwitchToThread / sched_yield: no object, no signal); (c) a fixed sleep
         tick between empty rounds (no object, no signal, a timed pause bounding mail latency by the tick).
+    Replacements (callers grepped at c063fd00 over l2src *.c/*.h/*.lm1/*.lm2/tests and mixa_manager; every line
+    below is decided by the rulings except the one marked EMPTY-ROUND, which takes Mikhail's answer):
+    R1. lmx_msg_exec_wake_locked (exec.c 1459-1465, exec.h 54, its visitor ctx_visit_wake 1442-1449) and its one
+        call in run_one (2656): deleted with nothing in their place. Fields: ExecBind.affinity read (DEL, M),
+        ExecBind.wait (DEL, S3), the BindWait primitive (DEL, S3).
+    R2. lmx_msg_exec_wake_addr_locked (exec.c 1467-1477, exec.h 55): deleted, with its callers in admission,
+        lmx_message.lm1 775 and its mirror lmx_message.lm2 821 (same commit); admission only admits into the
+        mailbox. Its address walk (rec_at_addr_locked: LmxMsg.addr, Runtime.root, LmxMsg.exec_bind,
+        ExecBind.in_table) is no longer called from here; the walk itself goes in S2/S5.
+    R3. exec_start_map_kick (exec.c 2665-2701+, called at 3236): deleted; a launched worker takes its first Message
+        from its mailbox itself.
+    R4. The wait primitive: bind_wait_signal (1994-2006, prototype 145; calls 1446, 1475, 2130, 2243, 2995, 3377),
+        bind_wait_new/bind_wait_destroy, BindWait.wait_ev/cv/sig, the generation and launch hold (gen, slot,
+        launch_n, retired; bind_wait_launch_hold_locked/release, launch_same_gen): deleted. BindWait keeps only
+        what the thread itself needs (worker, owner_tid: L3T) until M removes the type.
+    R5. The reap list and the joins: bind_reap_push (2119-2131; calls 2217, 3378, 3511), bind_reap_join_all (2133;
+        calls 2302, 3223, 3423, 3518), bind_wait_join (2097-2117; calls 2170, 2245), join_bind_worker's signal and
+        join (2228-2252), BindWait.reaping/on_reap/reap_next: deleted. The thread frees its own state when it
+        leaves its loop (Mikhail: "Исполнитель сам освобождает свою память"); an unbind or stop only writes what
+        the worker reads on its next round. Risk named for the code: a record freed while its worker still reads
+        it; the UAF kit and the executor selftest's unbind/stop tests are the check.
+    R6. launch_ctx_thread (2879-3005): the launch gate goes (LmxMsgCtxPack.go/gate/gm/gc, pack_gate_init/wait/
+        signal/destroy 2801-2850, the worker's pack_gate_wait at 3058 and its pthread twin 3151), with the refusal
+        path's join (2976-2982) and the signal at 2995. The thread handle is closed at once (CloseHandle /
+        pthread_detach); the worker reads its record through what the launch handed it and exits on its own
+        checks (the rec gone or affinity UI, as at 3086). LmxMsgCtxPack keeps rt and addr only until S2/M.
+    R7. The stop event: e->stop_ev (exec.c 108; CreateEventA 1245, CloseHandle 1248/1287, ResetEvent 3232, SetEvent
+        3419 in lmx_msg_exec_stop) and ctx_visit_stop_retire_waits (3373-3382): deleted. The worker already reads
+        e->stopping each round (3074); the stop writes it and returns without waiting.
+    R8. context_worker (Win32 3071-3132, pthread twin from 3135): the block at 3097-3131 (the two-handle
+        WaitForMultipleObjects with INFINITE or 20 ms) becomes, after a round with nothing taken: the live check
+        when live_wait_th != 0 (lmx_msg_live_check with lmx_msg_now, every round instead of by a timeout), then the
+        EMPTY-ROUND line: (a) nothing, (b) SwitchToThread() / sched_yield(), or (c) Sleep(tick) / nanosleep. The
+        loop's other checks stay as they are (e->stopping, the rec gone or UI).
+    R9. host.c: lmx_msg_host_wake (148-168, host.h 13; callers lmx_message.lm1 974, lmx_message.lm2 1030) deleted
+        with its callers; lmx_msg_host_shutdown keeps writing shutting_down under the host lock but its SetEvent /
+        pthread_cond_broadcast (182, 187-188) go; lmx_msg_host_wait (194-, lmx_message.h 289) becomes one
+        EMPTY-ROUND step for the host drive instead of a wait on h->wake (its callers: lmx_message_host_selftest.c
+        133/238, lmx_message_selftest.lm1 642/646, mixa_manager/tests/mixa_ingress_host_harness.c 242/277 keep the
+        call). The vendored snapshot mixa_manager/vendor/lmx_msg_host_ingress_v0 is not touched by S3.
+    Red and green: red on record at 74146146 (-LaneCheck exit 1 at ctx_visit_wake). After R1-R9 merged with
+    74146146: -LaneCheck exit 0 (no LANE WAKE FAIL at any of the 11 sites; the oracle's markers have nothing left to
+    mark), the plain run_port_message parity PASS, the executor selftest's stop/unbind/launch tests and the host
+    selftests green, then the 33 gates. Falsify R-by-R: put back any one signal (e.g. bind_wait_signal at 2995) and
+    -LaneCheck is red at that site.
 
 M. The sequential mapping removed (X), after S3 and before S4.
     Mikhail on 5.5, verbatim (2026-09-15): "мы же обсудили миллион раз. Закрытие родителя это авария. _Каждый ребенок
