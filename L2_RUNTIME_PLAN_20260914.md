@@ -3331,3 +3331,9 @@ whole, the root chain plus run_legacy_p0, the pin install, run_gates
 -L2MessageRoot 33 of 33, run_l2trans, run_port_parser), stops at READY TO
 PUSH; the pin hash and main-checkout path are announced to all four
 sessions before the push.
+Mikhail (2026-09-15, verbatim, correcting the coordinator's kernel list "the
+thread with its infinite loop"): "поток с бесконечным циклом" -- цикл в L3 Thread очеивдно прерывается по success==1 So the kernel's loop over turns
+runs while success is 0 and ends when user code sets success to 1;
+running=0 stays the parent's stop request seen by user code. Entered in
+spec 19.28.R2.2 and the model's section 31; the lead told to write the
+loop that way in the kernel paragraph and the S3, M and Y notes.

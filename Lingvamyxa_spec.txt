@@ -11628,6 +11628,10 @@ runs on between turns and looks into its mailbox each time round: "иначе н
 реализуешь цикл бесконечный -- он тупо не будет проверять почту!!!"
 (otherwise you cannot implement the infinite loop; it simply will not check
 the mail).
+And on the coordinator's words "the thread with its infinite loop", the same
+day, verbatim: "поток с бесконечным циклом" -- цикл в L3 Thread очеивдно прерывается по success==1 (the loop in an L3 Thread obviously
+breaks on success==1): the owner's loop over turns runs while success is 0
+and ends when user code sets success to 1.
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
