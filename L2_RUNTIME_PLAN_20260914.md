@@ -3366,3 +3366,14 @@ kernel in the generated shape, the thread handle and thread id among them;
 47 rows deleted; sum 99, one category per row checked by script. Stages
 S2-S6, M, Y and A stay as the lock removal that reduces today's C to that
 kernel. Table state: 81 ruled, 18 proposed, 0 held.
+Mikhail (2026-09-15, verbatim, on the loop's exit and the two flags): "success && !running, с выходом выставляется running = 0. Просто running опрашивается при выполнении Lmx* root и я же не знаю как кокнретный планировщик устроен и когда выйдет. Но условия выхода очевидно есть!"
+So the kernel fixes no loop shape: the exit conditions exist (user code
+sets success; running is polled while root executes; at exit running is
+set to 0) and a finished L3 Thread reads success && !running; running=0
+written by the parent stays its stop request (19.28.R2.2 ownership item
+(3)). The record's comments in spec section 2 and model section 2 now say
+so (running: polled while root executes, 0 the parent's stop request and
+set at exit; success: 1 written by user code), his sentence entered
+verbatim beside the record and after the loop sentence in 19.28.R2.2 and
+model 31. The lead's kernel paragraph is to say the same: not "runs while
+success is 0", but the exit conditions and the finished state.

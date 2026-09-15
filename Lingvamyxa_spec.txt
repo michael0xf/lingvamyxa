@@ -1049,13 +1049,20 @@ this form; "Все остальное -- не Message и должно в ито�
 same day):
 
     typedef struct LmxMsg {
-        volatile uint_fast8_t running;       /* 1 at launch; 0 is written by the parent */
-        volatile uint_fast8_t success;       /* 0 at launch; 1 is written by the Message itself */
+        volatile uint_fast8_t running;       /* 1 at launch; polled while root executes; 0 is the
+                                                parent's stop request, and is set at exit */
+        volatile uint_fast8_t success;       /* 0 at launch; 1 is written by user code */
         volatile uint_fast8_t handoff_safe;  /* 1 is written by the Message itself when it has left
                                                 its last turn and nothing native uses its arena:
                                                 the arena may be attached (19.29.7, 19.29.8) */
         Lmx *root;                           /* the root of its graph; its arena is reached from it */
     } LmxMsg;
+
+Mikhail, 2026-09-15, verbatim, on the two flags: "success && !running, с выходом выставляется running = 0. Просто running опрашивается при выполнении Lmx* root и я же не знаю как кокнретный планировщик устроен и когда выйдет. Но условия выхода очевидно есть!" (a finished
+one is success and not running; at exit running = 0 is set; running is
+simply polled while Lmx* root executes, and how a particular scheduler is
+arranged and when it exits is not fixed here, but the exit conditions
+obviously exist).
 
 Everything else is not Message and is, in the end, written in LMX as the
 inside of a Message (its Structure data in its own arena): an L3 Thread's
@@ -11630,8 +11637,10 @@ runs on between turns and looks into its mailbox each time round: "иначе н
 the mail).
 And on the coordinator's words "the thread with its infinite loop", the same
 day, verbatim: "поток с бесконечным циклом" -- цикл в L3 Thread очеивдно прерывается по success==1 (the loop in an L3 Thread obviously
-breaks on success==1): the owner's loop over turns runs while success is 0
-and ends when user code sets success to 1.
+breaks on success==1). And, the same hour, verbatim: "success && !running, с выходом выставляется running = 0. Просто running опрашивается при выполнении Lmx* root и я же не знаю как кокнретный планировщик устроен и когда выйдет. Но условия выхода очевидно есть!": the
+exit conditions exist without fixing a particular scheduler's shape; user
+code sets success, running is polled while root executes, and at exit
+running is set to 0, so a finished L3 Thread reads success && !running.
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
