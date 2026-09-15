@@ -5453,3 +5453,15 @@ wt0c_oneroot_gate; wt0c_landed_391b5062 after its gate run); M's record
 tree removed (clean, fc8e9d6e on integration). b5's two guard suites had
 already run during the record (reported above); the record is green
 regardless. The machine is free: the lead's S2 builds.
+Integration 4a0af0a7 (e9's log line merged, one file; checked). S2's edits
+in progress on d6/lock-s2 off 391b5062 (the lead, 2026-09-15,
+uncommitted): in lm1 and lm2 exec_is_runnable and exec_ready get record
+forms used by end_turn and request_children_close; admission readies
+the destination by its record, pinned; release_slot unbinds by record;
+settle_child_msg passes records to the recursion and to
+adopt_mark/dispose_mark; dispose_child and adopt_failed resolve the
+child on the calling parent's child list; in exec.c record forms of
+unbind, adopt_mark and dispose_mark, then launch_ctx_thread, map_child
+and exec_bind_mode; every address form stays as a wrapper, no signature
+changes. Next: run_port_message plain, then the S2 counter merged in a
+scratch tree; "ready for re-measure" with a tip hash.
