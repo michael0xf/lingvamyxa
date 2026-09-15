@@ -527,8 +527,17 @@ M. The sequential mapping removed (X), after S3 and before S4.
       101 methods redirected. Falsify: git ls-remote origin fable/m-acceptance-oneroot prints 199dab84.
     - Green: M's branch merged with 199dab84 gives -LaneCheck exit 0 and the plain run PASS; the functions deleted
       (grep at 0 for run_child_turn, sched_step, exec_ui_step, turn_step_child, AFFINITY_UI outside the oracle);
-      every converted test green on its own thread; the 33 gates.
+      every converted test green on its own thread; the 30 gates (sched_record and turn_step_child gone at M).
+      Measured on d6/m-sequential 2006d9d1 (793c267f's core, 199dab84's oracle, the exec selftest and cancel_spin_host
+      converted, b5's 76ad060d merged): run_port_message plain parity PASS (97 methods redirected) and -LaneCheck parity
+      PASS with no LANE MAP, WRITE or WAKE FAIL line; run_lmx -Suite Cancel ok (e8ea6ef8). e9's scenario36 set and the
+      gates are measured on the final merge.
     - Falsifier: one site's mapping and its marker put back turns -LaneCheck red at that site.
+      Measured on a scratch worktree at 2006d9d1 with scratchpad putback_site.py (lmx_msg_run_child_turn restored with
+      its lmx_msg_test_map_site mark, called from P's own turn in the parent-turn scenario): -LaneCheck exit 1 at
+      "LANE MAP FAIL site=run_child_turn owner=4".
+    - Unbind clears LmxMsg.mapped (e9's find; 56a74dae): red first on 2006d9d1 at "exec remap unbind mapped=1", green
+      with the one-line clear in unbind_slot_locked.
     - M keeps no Message's turn on a foreign lane. Mikhail's allowance that children may run on the parent's thread
       is not used by M; a later stage that uses it names the site first, and the coordinator re-cuts the oracle.
     - Fields (b5's survey sonnet/m-fields 18d5e3e2; every site it lists has a row in LOCK_REMOVAL_FIELDS.txt): M
