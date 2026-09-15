@@ -1702,3 +1702,12 @@ family_handoff (63/0, watched_frees 4), the rest running; S1 commits onto
 integration after S0 lands, its own merge. Design updated at 15567b9f with
 Mikhail's 5.4 sentence verbatim, A3 no longer waiting, LmxMsgCopy at
 admission marked as today's artefact.
+Correction (0c, 2026-09-15): run_port_message -LaneCheck is already the
+first of run_gates' 11 defaults (run_gates.ps1 34-35, "the decision 18
+lane-write oracle is part of the gate"), so the proof for S2 on already
+runs in every default chain once S0 lands; the coordinator's "a proof that
+runs in no default gate" was wrong. Ruled: 0c hardens the row instead
+(renamed lane_oracle, its verdict requiring the parity pass line and 0
+"LANE WRITE FAIL" in the log, count and total unchanged, the RUNNER_HAZARDS
+row for the no-turn gap in the same commit), on the integration hash with
+S0 in; 0c's 32-name default-set commit merges over it afterwards.
