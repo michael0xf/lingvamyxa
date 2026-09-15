@@ -276,6 +276,16 @@ Survey method (on d925e600)
   [IO.File]::WriteAllLines with relative $patchedC (and $unitFixedC for _dedup.c), which resolve against
   the process directory, not the runner's Set-Location. That is the working-directory hazard b5
   measured; its fix follows as a separate commit.
+  Branch claude-0c/port-parser-cwd 673c3475 (for landing, 6f-approved order): cd8c9028, then 7a1eb5fc
+  (both WriteAllLines targets made absolute; from the worktree root: red "Could not find a part of the
+  path ...\parser_patched.c" on cd8c9028's bytes, green 332 s, 18 stages, no stray root build dir),
+  then 673c3475 (6f's check: the guard passes -DCMDLINE_GUARD_STRING="a\\b" and requires
+  sizeof == 4). Which mutation each catches, measured from the root: dropping the \ escape is red
+  at the guard's own path with or without the entry ("buildport_parsercmdline_guardempty.c: No such
+  file or directory"), so a path already covers \. Dropping the " escape is red only with the entry
+  ("<command-line>: error: stray '\' in program"); without it the guard passes and the whole run is
+  green (18 stages), so the entry is the only " coverage. Committed guard line: "cmdline guard ok:
+  137 arguments, 8855 characters inline, through a response file" (green 318 s).
 (c) Cold run per runner
   Complete: 46 of 46 runners cold on d925e600 (every run_*.ps1 but run_gates, whose time is its defaults' sum),
   sequential in a fresh private worktree; the machine rebooted during row 20 and the batch resumed from
