@@ -1,0 +1,28 @@
+predef: "l2src/tests/repro_expr_length_limit.h.lm1"
+
+# Repro for lingvamyxa-ba (d6), 2026-09-15: l2trans's expression
+# flattener (l2_cat, l2src/l2trans.lm1:10558-10567) writes into a
+# fixed `dest` buffer and refuses once `strlen(dest) + strlen(src) >=
+# 255U`, surfacing as "expression too long" at the TRANSLATE-time
+# frame (not an oracle-logic issue). Found while porting l1src/
+# parser.lm1:1959-1969's lm_p0_scan_builtin_compact_atom_piece
+# (parser-l2 Stage e Slice 4a): its one `if:` condition is a raw
+# 9-way `||`-chain of paired `&&` comparisons, 318 source characters
+# on one line -- well past what a 254-byte flattened buffer holds
+# once every literal gets its own spacing. The same chain, unedited,
+# reproduces the identical error standalone below. A shorter chain
+# (e.g. this port's own p0_skip_field_space / p0_field_start_looks_
+# explicit_frame while-conditions, ~229 raw characters) already
+# translates fine, so this looks like a straightforward fixed-size
+# buffer, not a structural refusal -- probably a one-line size bump
+# in l2_cat/its callers, not a parsing gap.
+
+fn: probe_long_or_chain (char: first; char: second) int
+    if: (((((((((first = '!') && (second = '=')) || ((first = '<') && (second = '='))) || ((first = '>') && (second = '='))) || ((first = '&') && (second = '&'))) || ((first = '|') && (second = '|'))) || ((first = '+') && (second = '+'))) || ((first = '-') && (second = '-'))) || ((first = '[') && (second = ']')))
+        return: 1
+    return: 0
+end: probe_long_or_chain
+
+fn: main () int
+    return: 0
+end: main
