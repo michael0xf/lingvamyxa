@@ -403,6 +403,63 @@ static int run_nested(Lmx *node) {
     return 0;
 }
 
+/* S4 guard check (red-first, LOCK_REMOVAL_S4_SITES.txt site 8): a lane that
+ * is neither the target's parent's own lane nor the host outside any turn
+ * -- a spawned thread, same shape as cancel_after_settle above, but never
+ * settled onto the host or any parent's turn -- must be refused. Today
+ * lmx_msg_emergency_cancel has no caller-identity check at all, so this
+ * spawned call succeeds (LMX_MSG_OK) instead of being refused
+ * (LMX_MSG_INVALID); this check is red until S4's guard lands. */
+typedef struct WrongLaneArg {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr who;
+    volatile LONG got;
+} WrongLaneArg;
+
+static DWORD WINAPI wrong_lane_cancel_worker(void *arg) {
+    WrongLaneArg *a = (WrongLaneArg *)arg;
+    InterlockedExchange(&a->got, (LONG)lmx_msg_emergency_cancel(a->rt, a->who));
+    return 0;
+}
+
+static int run_s4_guard_emergency_cancel(void) {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr p = 0, c = 0;
+    uchar ini = 1;
+    WrongLaneArg arg;
+    HANDLE th;
+    int got;
+    rt = lmx_msg_runtime_new();
+    if (rt == 0 || lmx_msg_create(rt, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+        || lmx_msg_create(rt, p, 2, &ini, 1, &c) != LMX_MSG_OK
+        || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {
+        return fail_rt(rt, "s4 guard emergency_cancel: boot");
+    }
+    memset(&arg, 0, sizeof(arg));
+    arg.rt = rt;
+    arg.who = c;
+    arg.got = (LONG)LMX_MSG_INVALID;
+    /* This spawned thread is not c's parent p's own lane (p never runs a
+     * turn here) and not the host outside any turn (main() is a different
+     * thread): the guard's own two legitimate callers, neither. */
+    th = CreateThread(0, 0, wrong_lane_cancel_worker, &arg, 0, 0);
+    if (th == 0 || join_canceler(th, rt, "s4 guard emergency_cancel: thread") != 0) {
+        return 1;
+    }
+    got = (int)InterlockedCompareExchange(&arg.got, 0, 0);
+    lmx_msg_exec_stop(rt);
+    lmx_msg_runtime_delete(rt);
+    if (got != LMX_MSG_INVALID) {
+        fprintf(stderr,
+            "S4 guard check FAILED: emergency_cancel from neither the parent's lane nor "
+            "the host outside any turn returned %d, want LMX_MSG_INVALID=%d (no guard yet)\n",
+            got, LMX_MSG_INVALID);
+        return 1;
+    }
+    printf("s4 guard emergency_cancel ok (refused from a spawned thread)\n");
+    return 0;
+}
+
 int main(void) {
     Lmx *node = make_int_node();
     if (node == 0) {
@@ -411,7 +468,7 @@ int main(void) {
         g_graph_ranges = 0;
         return 1;
     }
-    if (run_map(node) != 0 || run_nested(node) != 0) {
+    if (run_map(node) != 0 || run_nested(node) != 0 || run_s4_guard_emergency_cancel() != 0) {
         (void)lmx_msg_blocks_dispose_all(&g_graph_blocks);
         g_graph_ranges = 0;
         return 1;
