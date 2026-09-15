@@ -4349,3 +4349,22 @@ carries the mark forward and the relaunched ONE ROOT landing merges it
 (5cee1426 + 27edf717), so the line lands in integration. land_oneroot.sh
 commits exactly that subject with only the appended line, right after
 the tag.
+e9's gate record wired for the self-build mark (2026-09-15): after_landed_gate.sh
+runs l2src/run_self_build.ps1 first (gcc of the committed C, evidence
+outside the tree, the gate still cold after), then tag_selfbuild.sh:
+needs the PASS line, 8 files in pass 3 and each regenerated blob equal to
+the committed one (else "new fixed point, report to the lead"); tags
+selfbuild/<8-hex> in the lead's layout, leaving any selfbuild tag already
+on the commit; appends one line to l2src/SELF_BUILD_LOG.txt on
+claude-0c/selfbuild-log-<8> off the measured commit (lines +1, every line
+with a resolving hash), commits the one path, pushes, checks ls-remote;
+stops without creating the file if it is absent. Tested with --check
+(nothing created): c063fd00 would tag; 5cee1426 "already on origin";
+a byte appended to pass-3 own.lm1.c stops "regenerates to af420c0f,
+committed 5cb4f9a3"; a log without the PASS line stops; the line check
+accepts short and full hashes and refuses a line with none. The docs
+rule's falsifier found three of e9's 17 worktrees with modified tracked
+code on the old stg layout (wt0c_lane_gate's run_gates.ps1 identical to
+what landed; wt0c_s5 and wt0c_s6 scratch selftest edits from the 09-14
+landings, superseded); patches saved in its scratchpad; the coordinator
+approved removing the three worktrees.
