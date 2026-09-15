@@ -1670,6 +1670,30 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         threads; until then the cell is defence, as the coordinator put it, not the ordering itself.
       - Measured after the rewrite: run_port_message green, "lmx_message parity PASS ... 103 methods redirected"
         (102 before; the new method is lmx_msg_maintenance_close_ok).
+    - (a2) the transport relay moves onto R0's mailbox monitor (approved by the coordinator; adds no lock).
+      - Why it is not the queue's deletion: pump is public (lmx_message.h:236) and about seventy fixtures pin its
+        two-step shape (lmx_msg_delivery_selftest.lm1:81 checks inbox_n = 0, then pump, then 1), so deleting the
+        queue changes observable behaviour and stays Y3's with its own acceptance, as LOCK_REMOVAL_FIELDS rows
+        140-141 already say ("the queue DEL", proposed, S5/Y3). What S6 owes is only that the queue stop resting
+        on the executor lock.
+      - Why the monitor is the right owner: spec 11551 names "the mailbox's admission lock" as the one cross-lane
+        synchronization the model permits, and the queue is R0's own relay hop (root's inbox -> host_drain ->
+        transport -> pump -> the destination's inbox), which is what FIELDS' MBOX tag on those two rows means.
+      - The five sites, in lm1 and lm2 alike: host_drain's re-stage loop, end_turn's outbox relay, post_dead's
+        push, pump's take, runtime_delete's teardown.
+      - Hold order, read before the edit and unchanged by it (the coordinator's hold-order record):
+        - host_drain's ingress take and end_turn's outbox take are each entered and left before the transport
+          hold begins, so the two monitors are sequential, never nested;
+        - pump releases R0's monitor before admit_one takes MAIL on the destination, same shape as before;
+        - post_dead runs under lmx_msg_fail's executor hold and takes R0's monitor inside it (EXEC then MAIL);
+          a scan of lmx_message_exec.c, lm1 and lm2 for the reverse nesting -- an exec lock taken inside a
+          mailbox hold -- found none, so the interim order cannot deadlock, and the exec lock goes in (a3);
+        - runtime_delete frees the queue before the slot walk in which slot_free destroys R0's monitor.
+      - Balance, measured: 8 takes and 9 releases of R0's monitor per file, the odd one being host_post's
+        late-post refusal from (c), which has one take and two exits. Every other site is a plain pair, and
+        pump's loop is two and two.
+      - Measured green on the move: run_port_message parity PASS, 103 methods; run_lmx -Suite Message ok.
+        Landed as c52b7c8a's successor on d6/lock-s6.
     - Red measured by d6 (2026-09-15, d6/lock-s6-red 695d54fc = 8eeb094f plus l2src/run_lock_s6_probe.ps1; builds
       nothing): -Part all exits 1 with "S6 probe: exec_lock_calls=601 exec_lock_decl=11 host_lock=43 exec_fields=27
       | refs=349 runtime_lists=36", S6-1 RED, S6-2 RED.
