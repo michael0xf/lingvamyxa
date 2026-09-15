@@ -33,7 +33,24 @@ SPEC (quoted from Lingvamyxa_spec.txt on origin/main bf647d94)
   separate parent-loss/orphan-retention timeout before self-reclamation. ... Timeout never grants permission to free
   memory still used by native code. Settling is lifecycle work, not a busy wait or a promise of bounded cleanup for an
   uninterruptible foreign call. Such an unresolved branch stays unreclaimed."
-- "Decision 17" as a phrase does not occur in the spec text; the rules quoted above are its spec form.
+- "Decision 17" as a phrase does not occur in the spec text; it is LEAD_REVIEW's numbering, and the rules quoted here
+  are its spec form.
+- The stage 5 (f) clarification, origin/main 995ff339 (19.29.6 stage-5 block, 12628-12651): "(clarified 2026-09-15,
+  review chat, stage 5 (f); Mikhail may overrule): the root's direct children get their closing flags, each closing
+  turn runs on its own lane (a host-run child stepped by the root's maintenance, a child on its own context on that
+  context, a child with no handler closed by the maintenance's bookkeeping), settled children are reclaimed by the
+  chain, and only then the root's own storage and the runtime go; nothing is freed as a slot of the runtime behind a
+  Message's back. Once the root closes no adopter remains, so a failed orphan retained under the orphan-retention
+  timeout is reclaimed by the root's close without waiting for that timeout; storage still used by native code holds
+  the close instead, with no timeout (19.29.8). A child served by the UI lane whose request is still pending is closed
+  without a handler and the request goes with the lane's mailbox, until the root's own loop carries the UI child's turn
+  adapter. The close first makes the root's mailbox refuse new admissions, the mailbox's own state under its own lock,
+  since outside code reaches the runtime only through that mailbox (iii); a post after the deletion returns is the
+  embedder's use of a freed handle. Deletion is refused from inside any turn, the root's own included, and from any
+  thread that is not the root's lane; the root's lane outside any turn is the bootstrap thread, so no second OS thread
+  runs the root's maintenance concurrently. With this the host forms of the lifecycle calls retire: a child is disposed
+  or adopted only from its parent's own turn, and creating the runtime and deleting it are the only two calls made on
+  no Message's lane." Q7 is answered by this text (39f53e1a adds the 19.29.8 cross-reference).
 
 MEASURED (integration 402b2919 unless stated)
 - The acceptance, run by 6f on 402b2919: lmx_model_runtime_close_5f_selftest "45 checks, 4 failures", red twice each
@@ -124,7 +141,21 @@ is a mapped child whose turn has ended, waiting on its context worker for readin
 exec_ready must wake that worker so the closing turn runs (or the child is closed). Probe on 402b2919 (proposed to 6f
 in place of the recv-shaped one): C mapped, its turn ends with an empty inbox, its worker idles; runtime_delete must
 wake it and return, under a watchdog. If the wake is missing, the fix is in request_children_close's ready and the
-probe is its red, named in MEASURED. (Not yet measured.)
+probe is its red, named in MEASURED.
+Measured 2026-09-15 on d6/stage5f-design (402b2919 + ffeb1094), scratch test lmx_model_close_wake_probe_selftest
+(not committed): C created under R0, bound, given one input, mapped by R0's turn; C's first turn runs on its worker and
+ends (turns=1, closed=0, exec_live=0, checked before the request); then lmx_msg_request_children_close(rt, R0) from
+main outside any turn, so no end_turn's ready loop (lmx_message.lm1 1787/1834, 1798-1804) can wake C and
+request_children_close's own exec_ready (1718) is the only wake; the probe waits up to 3 s for C's closing turn.
+- Green, run_model_scenario36 -Tests: "core tests PASS: lmx_model_close_wake_probe_selftest 6/0, two runs each agree,
+  production runtime" (the check "the close request woke C's idle worker and C ran its closing turn" passing).
+- Falsifier, -MessageSource a copy of lmx_message.lm1 with request_children_close's exec_ready removed (13 exec_ready
+  calls -> 12): both runs "close wake probe: before the request turns=1 closed=0 exec_live=0", then "close wake probe:
+  held" and FAIL on that check.
+So the close request wakes an idle mapped child through request_children_close's ready; no fix is needed there.
+Probe corrections on the way: its first idle predicate used running_load, which end_turn clears only after a
+completion (success flag), so the precondition could not hold; and the falsifier copy must sit in l2src/ for its
+imports to resolve.
 Conditions: lm1 and lm2 mirrored in one commit for every lmx_message change; each of the 48 migrated lifecycle sites
 keeps its check label and measured count (the executor selftest's 36 included), and every migrated test's runner runs
 on the landing; both acceptance tests join run_model_scenario36's defaults in the (f) commit; the tripwired grep at 0
