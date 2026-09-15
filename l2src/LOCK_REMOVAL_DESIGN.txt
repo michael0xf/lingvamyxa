@@ -232,6 +232,21 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       l2trans.lm1 14737 emits l2_program_turn with "@: LmxMsg m c.lmx_msg_find(rt, who)"; the turn's own record
       (lmx_msg_turn_self) replaces it, so S2 changes l2trans.lm1 and its landing runs run_l2trans and the self-build.
       Each of these takes the record its caller holds (C1: the parent's child pointer; C2: the turn's own record).
+    - Form (d6, 2026-09-15; decided, not measured; no lock, wait or signal is added): S2 changes no public or exported
+      signature. lmx_msg_map_child, exec_bind, exec_unbind, dispose_child, settle_child, end_turn, run_entry_turn and
+      create keep their address parameters. So do lmx_msg_exec_ready and exec_is_runnable(_locked), which tests call
+      by address (the exec selftest 19 times, family_close_32 3, family_release_17 2, family_handoff 2, entry_turn 1,
+      send_local 1 at d8f758e6). Inside, the caller's record is the turn's own (lmx_msg_turn_self), and a child
+      address resolves on that record's own child list (first_child, next_sibling), not through the runtime's table.
+      The static helpers that walked (is_runnable_locked, exec_ready's core, launch_ctx_thread) take the LmxMsg.
+      Hence run_entry_turn.ps1:109/112, run_l2trans.ps1:1152 and run_port_message.ps1's five signature pins stay.
+      The 10 gates that e9's impact list (claude-0c/s2-gate-impact 464cacee) marks as asserting an entry point by
+      address keep their lines unless a pinned count moves, and a moved count is named in S2's allowlist.
+    - One case outside e9's list: l2src/tests/l2_message_root_driver.lm1:84 wraps lmx_msg_find, and its mode 3
+      returns 0 to fail the generated l2_program_turn's own lookup ("failure precedes graph binding", binds=0).
+      Once the emitted turn reads lmx_msg_turn_self, mode 3 injects nothing and goes red. S2 therefore retargets the
+      mode 3 wrap onto lmx_msg_turn_self and adds that symbol to run_l2_message_root.ps1:530's wrap list. Both
+      files are in S2's allowlist, and the case is added to e9's list.
 
 S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and every wake-matching rule above.
     Mikhail, verbatim (relayed by the coordinator): "тупейший вложенный synchronized по локу на чтение и запись как в
@@ -582,6 +597,17 @@ M. The sequential mapping removed (X), after S3 and before S4.
       e9's cold record on fc8e9d6e (worktree wt0c_landed_fc8e9d6e, no build/ before): run_self_build PASS 8 of 8 in
       14 s, tag selfbuild/fc8e9d6e, log line aade30b8 merged as d8f758e6; gate.ps1 exit 0 in 324 s, "gate: all green",
       27 of 27 steps. main carries it (8ea36474).
+    - M's miss (found 2026-09-15 by d6 baselining run_l2trans at d8f758e6 for D2's landing): run_l2trans was not in
+      M's landing set. The fixture l2src/tests/unit_runtime_struct_field.lm2 (45166cd4) read LmxMsg.ui_pending, which M
+      deleted, so run_l2trans went red at gcc ("'LmxMsg' has no member named 'ui_pending'", exit 1 in 97 s). A grep of
+      every struct field M's diff deletes finds no other reader. The fix (d6/struct-field-after-m) moves the fixture
+      and run_l2trans.ps1's pin to LmxMsg.success, a field of the L3 Thread record that no stage deletes. It lands on
+      its own, before D2.
+    - Rule from this miss (the coordinator, 2026-09-15): every landing set is the union of the runners earlier
+      landings ran, never a per-stage subset. The fixed base is run_self_build with its tag and log, run_gates
+      -L2MessageRoot (31), run_port_message plain and -LaneCheck, run_l2trans, run_port_parser, run_mixa and
+      mixa_manager/run_ingress_harness. Each stage adds the suites it touches on top. Every land_*.sh carries that
+      base.
     - M keeps no Message's turn on a foreign lane. Mikhail's allowance that children may run on the parent's thread
       is not used by M; a later stage that uses it names the site first, and the coordinator re-cuts the oracle.
     - Fields (b5's survey sonnet/m-fields 18d5e3e2; every site it lists has a row in LOCK_REMOVAL_FIELDS.txt): M
