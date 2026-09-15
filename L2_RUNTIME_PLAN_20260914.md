@@ -1936,3 +1936,13 @@ the host selftest's g_go_mu, the pthread worker's pthread_cond_wait bound to
 the exec lock (goes with it), the launch pack gate if it is a mutex. 0c's
 inventory section 5 is rewritten against those quotes; the S3 red test
 proceeds.
+Found by 0c (2026-09-15): the launch pack gate is a mutex on POSIX
+(LmxMsgCtxPack's pthread_mutex_t gm with a condition variable around the go
+flag, exec.c 2789-2832; a one-shot event on Win32), a lock outside any
+mailbox that the map's 3.5 had not named. No question open: under the
+order it goes, replaced by the launched Message's own mailbox (the launch
+parameters as the child's first Message, the thread waiting on its own
+mailbox's wake); the map's 3.5 now names it, with the host lock
+LmxMsgHostSync.lock as host_sync's X. 0c's inventory section 5 is rewritten
+against Mikhail's two recorded sentences with the two production locks
+added.

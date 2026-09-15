@@ -289,6 +289,13 @@ cite this map's owner codes in their target-owner column.
     (context_worker 2993/3086), a cross-lane free found by the lead's allocation inventory (9e26a8c3)
     and a design item of its own: the pack becomes the child's own (its arena, freed by its thread) or
     the parent's (freed on the parent's lane after the child's thread has read it), never handed across.
+    The pack also carries the launch gate (found by 0c): on POSIX a pthread_mutex_t gm with a condition
+    variable around the go flag (exec.c 2789-2832, pack_gate_wait / pack_gate_signal), on Win32 a one-shot
+    event. A mutex outside any mailbox: X under the order, no question open; the launched Message's own
+    mailbox replaces it (the launch parameters are the child's first Message, and its thread waits on its
+    own mailbox's wake), so the gate, its mutex and its event go with the pack. The host lock
+    LmxMsgHostSync.lock (host.c 31/40, taken by host_post around shutdown ordering) is the X of 3.2's
+    host_sync, stage 5 (f).
 
 4. RULE FOR THE INVENTORIES
   A line's target owner is M, P, Q, T or X only if the section quoted in 2 names it (cite the line);
