@@ -3684,27 +3684,6 @@ int lmx_msg_native_users(LmxMsgRuntime *rt, LmxMsgAddr who) {
     return m != 0 ? m->native_users : -1;
 }
 
-#if defined(__GNUC__)
-__attribute__((unused))
-#endif
-static int adopt_push(LmxMsg *p, void *base, size_t n) {
-    LmxMsgBlock *b;
-    if (base == 0) {
-        return 0;
-    }
-    b = (LmxMsgBlock *)calloc(1U, sizeof(LmxMsgBlock));
-    if (b == 0) {
-        return 1;
-    }
-    b->base = base;
-    b->n = n;
-    if (lmx_msg_blocks_push(&p->blocks, b) != LMX_MSG_BLOCKS_OK) {
-        free(b);
-        return 1;
-    }
-    return 0;
-}
-
 static int lifecycle_authority(LmxMsgRuntime *rt, LmxMsgAddr who) {
     if (lmx_msg_exec_holding_turn(rt, who) != 0) {
         return 1;
