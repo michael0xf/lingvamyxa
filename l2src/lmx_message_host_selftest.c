@@ -106,7 +106,7 @@ static void *off_owner(void *arg)
     unsigned seg = 0;
     uchar b = 1;
     memset(&env, 0, sizeof(env));
-    if (lmx_msg_create(g_rt, 0, 99, &b, 1, &a) != LMX_MSG_INVALID) {
+    if (lmx_msg_create(g_rt, 0, &b, 1, &a) != LMX_MSG_INVALID) {
         *fail += 1;
     }
     if (lmx_msg_send(g_rt, 1, 1, &env) != LMX_MSG_INVALID) {
@@ -173,11 +173,11 @@ int main(void) {
     if (g_rt == 0) {
         return 1;
     }
-    st = lmx_msg_create(g_rt, 0, 1, init, 1, &parent);
+    st = lmx_msg_create(g_rt, 0, init, 1, &parent);
     if (st != LMX_MSG_OK) {
         return 1;
     }
-    st = lmx_msg_create(g_rt, parent, 2, init, 1, &child);
+    st = lmx_msg_create(g_rt, parent, init, 1, &child);
     st = lmx_msg_end_turn(g_rt, parent, 1);
     g_dest = child;
 

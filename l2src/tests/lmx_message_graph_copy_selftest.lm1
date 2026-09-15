@@ -108,13 +108,13 @@ fn: main () int
     check(lmx_branch_child_known(bad\graph, 0U) != shared && lmx_int_value_known(lmx_branch_child_known(bad\graph, 0U)) = 7, "ordinary sibling remains copied")
 
     rt: c.lmx_msg_runtime_new()
-    check(rt != 0 && c.lmx_msg_create(rt, 0U, 1U, 0, 0U, @ parent_addr) = c.LMX_MSG_OK, "runtime parent created")
+    check(rt != 0 && c.lmx_msg_create(rt, 0U, 0, 0U, @ parent_addr) = c.LMX_MSG_OK, "runtime parent created")
     if: rt = 0 || parent_addr = 0U
         return: 2
     child_count: c.lmx_msg_child_n(rt, parent_addr)
-    status: c.lmx_msg_create_graph(rt, parent_addr, 2U, bad_root, src\ranges, 0, 0, 0, 0U, @ child_addr)
+    status: c.lmx_msg_create_graph(rt, parent_addr, bad_root, src\ranges, 0, 0, 0, 0U, @ child_addr)
     check(status = c.LMX_MSG_INVALID && child_addr = 777U && c.lmx_msg_child_n(rt, parent_addr) = child_count, "failed graph prepare publishes no child or create id")
-    status: c.lmx_msg_create_graph(rt, parent_addr, 2U, root, src\ranges, c.lmx_msg_eternal_ranges(src), c.lmx_msg_method_ranges(src), 0, 0U, @ child_addr)
+    status: c.lmx_msg_create_graph(rt, parent_addr, root, src\ranges, c.lmx_msg_eternal_ranges(src), c.lmx_msg_method_ranges(src), 0, 0U, @ child_addr)
     child_msg: c.lmx_msg_find(rt, child_addr)
     child_graph: c.lmx_msg_graph(child_msg)
     child_callable: lmx_branch_struct_known(child_graph, 1U)
@@ -129,7 +129,7 @@ fn: main () int
     # use the first child's copied graph as the source of another creation.
     # Its ordinary graph must be copied again, while the root-owned admitted E
     # address survives unchanged through the child into the new Message.
-    status: c.lmx_msg_create_graph(rt, parent_addr, 3U, child_graph, child_msg\ranges, c.lmx_msg_eternal_ranges(child_msg), c.lmx_msg_method_ranges(child_msg), 0, 0U, @ forwarded_addr)
+    status: c.lmx_msg_create_graph(rt, parent_addr, child_graph, child_msg\ranges, c.lmx_msg_eternal_ranges(child_msg), c.lmx_msg_method_ranges(child_msg), 0, 0U, @ forwarded_addr)
     forwarded_msg: c.lmx_msg_find(rt, forwarded_addr)
     forwarded_graph: c.lmx_msg_graph(forwarded_msg)
     check(status = c.LMX_MSG_OK && forwarded_msg != 0 && forwarded_graph != 0 && forwarded_graph != child_graph, "child classifier forwards a fresh ordinary graph into another Message")

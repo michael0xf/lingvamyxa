@@ -170,7 +170,7 @@ fn: main () int
 
     # --- (2) a child's own turn on the host thread is not R0's lane: both
     # setters refuse and the clock is unchanged.
-    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created as R0's child")
+    check(lmx_msg_create(rt, 0U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created as R0's child")
     st: lmx_msg_run_entry_turn(rt, p, turn_child_setters, 0)
     check(st = c.LMX_MSG_OK, "P's own turn ran on the host thread")
     check(g_child_now = c.LMX_MSG_INVALID, "set_now from a child's turn on the host thread refuses")
@@ -178,7 +178,7 @@ fn: main () int
     check(lmx_msg_now(rt) = 5000U, "the clock is unchanged by the refused write")
 
     # --- (3) a turn on a context worker is not R0's lane either.
-    check(lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, d, turn_worker_setters, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && post(rt, d, 7U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "D created as R0's child, bound, given an input")
+    check(lmx_msg_create(rt, 0U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, d, turn_worker_setters, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && post(rt, d, 7U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "D created as R0's child, bound, given an input")
     map_cell[0]: d
     map_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
     st: lmx_msg_root_turn(rt, turn_map_child, (cast: (@: void) map_cell))
