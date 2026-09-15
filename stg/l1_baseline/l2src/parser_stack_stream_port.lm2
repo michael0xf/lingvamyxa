@@ -502,15 +502,7 @@ fn: p0_pending_mix_push (@: LmP0Document document; @: LmP0PendingMix pending; co
 end: p0_pending_mix_push
 
 fn: p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack; const: @(LmP0StreamEvent event)) int
-    # Stopgap (l2src/tests/repro_foreign_int_alias_local.lm2, sent to
-    # d6, 2026-09-14): l2trans refuses a foreign int-alias type
-    # (l1src/p0.h: `typedef int LmP0TrailerRole`) as a LOCAL variable's
-    # own declared type -- "unsupported body, frame=LmP0TrailerRole" --
-    # even though the same type already works as a formal/return (d6's
-    # 642b6700). LmP0TrailerRole literally is int, so `int: trailer_
-    # role` is behaviorally identical, not a logic change. Revert to
-    # `LmP0TrailerRole: trailer_role` once the gap is fixed.
-    int: trailer_role
+    LmP0TrailerRole: trailer_role
     size_t: top_level
     @: LmP0Structure parent
     @: LmP0Node nd
