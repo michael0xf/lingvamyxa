@@ -590,6 +590,21 @@ D. create_id and create-retry idempotence deleted (X), with S1's dead-code kind.
         the 487 sites above, l2trans.lm1's emitted process entry and library open, the generated units and their
         collect C, and run_l2trans's affected cases with the historical case pin in L2_MESSAGE_ROOT.txt. The
         signature becomes the spec's create/spawn(handler, initialData).
+    D in the (a) format after M (integration fc8e9d6e, 2026-09-15):
+    - D1 is done: git grep find_create on fc8e9d6e is 0; the remaining create_id sites are D2's parameter
+      (lmx_message.h 3, lmx_message.lm1 6, lmx_message.lm2 6, run_port_message.ps1 1, and prose in three notes).
+    - D2's sites on fc8e9d6e (git grep -F -c): lmx_msg_create( 390 (the executor selftest 236, lmx_message_selftest
+      77, the model and message tests 2-9 each, cancel_spin_host 4, the host selftest 3), lmx_msg_create_graph( 7,
+      lmx_msg_create_prepare( 4, plus the lm2 msg_create names, l2trans.lm1's emitted entry and library open, and the
+      generated units; b5's list counts 490.
+    - Owner: b5's ticket, sonnet/d2-create-id off fc8e9d6e (the coordinator, 2026-09-15). No behaviour change, so no
+      red; the proof is the grep at 0 for create_id outside prose, and green on run_port_message plain, run_lmx
+      -Suite Message, run_msg_send_local, run_msg_family_handoff and run_l2_message_root (the coordinator's set),
+      then the full gates at d6's merge. No lock, wait or signal is added.
+    - Falsifier: the grep. One create_id actual put back in a test call no longer compiles (the signature has one
+      argument fewer), so the gate that builds it is red.
+    - d6 merges b5's branch when green and lands D2 with the S-landing pattern (self-build tag and log, the gates,
+      port_message plain and -LaneCheck, run_l2trans, run_mixa).
 
 O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced by the one core (X).
     Mikhail, verbatim (2026-09-15), to its real extent: "3- да, удаляйте целиком".
