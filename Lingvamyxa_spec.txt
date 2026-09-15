@@ -11560,6 +11560,13 @@ spec?). Confirmed by him the same day ("да") in this wording: for now every L3
 Thread runs on its own OS thread, and the sequential mapping (children without
 a thread of their own, stepped by the parent's thread) is removed from the
 runtime until the core is exact by the spec.
+Confirmed by Mikhail the same day ("да") in this wording, on the runtime-level
+structures the L1 implementation kept under its executor's lock: there is no
+root list (the root is one, R0, and its children are an ordinary child list in
+R0's arena); there is no walk at deletion (the close is R0's own closing
+end-turn); the slot list served only the L1 delete loop and its address lookup
+and goes without replacement; the retire queue goes (a closed child's storage
+is its parent's settle write); a lane's own queue is that Message's mailbox.
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
@@ -12875,7 +12882,7 @@ The prototype must not be promoted to the application as-is.
 Language-facing operations (names follow existing thread/send/stop
 contracts; `spawn` here is English, not a new parser intrinsic):
 
-    create/spawn(handler, initialData, create_id) -> MessageAddress
+    create/spawn(handler, initialData) -> MessageAddress
         Reserve a child identity and a distinct INACTIVE arena during
         the parent turn. Copy initialData (numbers and exact byte/text
         payloads) into that reserved child's arena. This is not a send
@@ -12885,19 +12892,13 @@ contracts; `spawn` here is English, not a new parser intrinsic):
         when parent is the host root). Concatenation, not arithmetic
         on the whole address: parent `34.3` yields `34.3.1`, then
         `34.3.2`; that child's first child is `34.3.1.1`. First
-        allocated child is 1. Retry of the same (parent, create_id)
-        returns the same child and the same path and does not consume
-        another counter value. An aborted reservation is not reused;
-        a later retry of that create_id gets a new slot and a new
-        path segment. The internal mailbox slot (`LmxMsgAddr`) is
+        allocated child is 1. The internal mailbox slot (`LmxMsgAddr`) is
         not the Mix path. This path names Message placement; it does
         not make every Mix cell a running Message. Externally issued
         addresses and packed mixed-radix ints are not this allocator.
-        While the child is still live, retry of the same
-        (parent, create_id) returns that child (no second committed
-        child). An aborted uncommitted reservation is released
-        (tombstone); retry must not return the freed handle.
-        The child does not run before the creator's successful
+        (The create-retry idempotence keyed by (parent, create_id), with its
+        tombstone rule, was removed by Mikhail's order of 2026-09-15:
+        "убирайте".) The child does not run before the creator's successful
         end-turn publication. Third-party send cannot activate an
         uncommitted reservation. A failed parent turn releases
         uncommitted children. Send to that reserved

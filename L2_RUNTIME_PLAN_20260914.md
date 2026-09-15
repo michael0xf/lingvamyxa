@@ -1824,3 +1824,20 @@ create-retry idempotence stay (and create_id with it), or go with the whole
 retry clause, in which case those spec sentences go by his word and
 create_id with its bookkeeping joins the dead-code stage. Nothing removed
 until his answer.
+Mikhail's last three answers (2026-09-15, verbatim): "1 - -да, 2 -- убирайте
+3- да, удаляйте целиком" (1 yes; 2 remove; 3 yes, delete it whole). 1: the
+5.1 wording confirmed and entered in spec 19.28.R2.2 and the model's
+section 29 (no root list; no walk at deletion; the slot list and the retire
+queue go without replacement; a lane's own queue is that Message's
+mailbox). 2: create id goes: the create-retry idempotence keyed by (parent,
+create_id) and its tombstone rule removed from 19.29.7.1 (the signature is
+create/spawn(handler, initialData) -> MessageAddress) and from the model's
+three mentions, each place carrying a one-line note of the removal by his
+order; in code create_id, the retry lookup and their bookkeeping (header 7,
+lm1 and lm2 18 each, tests 5) join the design's dead-code stage,
+LMX_MSG_UI_LANE_ID going with the UI lane's change to an L3 Thread. 3:
+lm2/own.lm2's lock-based message-thread runtime with own_abi.lm2 and its C
+tests is deleted whole, replaced by the one core, its own stage in the
+design with a grep at 0 for lm_mutex_, lm_condition_ and
+lm_native_mutex_/condition_ as its proof. Every question of the map is now
+answered.

@@ -306,9 +306,10 @@ CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1600:
   the retention array supplies the second reference. Translator storage grows;
   the 70-E fixture forbids a hidden 16/64/128 cap.
 - `lmx_msg_create_graph` now prepares the complete copied graph in a private
-  child slot and publishes the child/create_id only after copy and path setup
-  succeed. Failure leaves the child count and create_id reusable. The focused
-  Message graph test is 22/0.
+  child slot and publishes the child only after copy and path setup succeed.
+  Failure leaves the child count reusable. The focused Message graph test is
+  22/0. (create_id and the create-retry idempotence removed by Mikhail's order,
+  2026-09-15.)
 - The repeated Exec timeout was not fully explained by the earlier test observer.
   A live-process backtrace found workers looping in `lmx_msg_find_tree` while
   stop waited in `bind_reap_join_all`: retirement freed a root after removing it
@@ -1257,9 +1258,8 @@ arena. Граф начальных данных строится общим с m
 ветки сохраняют свои адреса.
 
 Дочерний путь расширяет путь родителя локальным счётчиком; первое значение — 1.
-Идемпотентность живого создания привязана к `(parent, create_id)`. Отброшенная
-резервация не разрешает повторно использовать уже выданную идентичность
-как будто её никогда не было.
+(Идемпотентность повтора create по `(parent, create_id)` снята распоряжением
+Михаила 2026-09-15: «убирайте».)
 
 До успешной публикации родительского turn ребёнок не становится доступным
 для обычного исполнения входящих. При неуспехе родителя неопубликованные
@@ -1420,6 +1420,13 @@ committed, tracked, время последнего ответа, отображ
 потоке ОС, а последовательное отображение (дети без своего потока, которых
 шагает поток родителя) из рантайма убирается, пока ядро не сделано точно по
 спецификации.
+Подтверждено Михаилом в тот же день («да») в такой формулировке о структурах
+уровня рантайма, которые реализация L1 держала под локом исполнителя: списка
+корней нет (корень один, R0, его дети — обычный список детей в арене R0);
+обхода при удалении нет (закрытие — собственный закрывающий конец turn R0);
+список слотов служил только циклу удаления L1 и поиску по адресу и уходит без
+замены; очередь retire уходит (хранилище закрытого ребёнка — запись родителя
+при осадке); очередь полосы — это почтовый ящик Message этой полосы.
 
 ## 30. Блокировки и безопасное наблюдение
 
@@ -1965,7 +1972,7 @@ independent, цикл, Array, общий метод на изменившемс�
 
 `lmx_msg_graph_copy_install` подключён к `lmx_msg_create_graph`: отдельная arena
 ребёнка и полный граф готовятся до публикации inactive child; ошибка не
-публикует ребёнка и не расходует create id. Проверка root -> child -> следующий
+публикует ребёнка. Проверка root -> child -> следующий
 Message сохраняет METHOD/eternal terminals и заново копирует mutable-данные.
 
 Failure graph уже передаётся родителю через согласованный перенос

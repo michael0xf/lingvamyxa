@@ -300,8 +300,12 @@ cite this map's owner codes in their target-owner column.
   (2.1 11566-11571) except the named single-writer flags of (3).
 
 5. QUESTIONS FOR MIKHAIL, THROUGH THE LEAD (each with the coordinator's proposed answer first)
-  5.1 With clause (5) deleted, the four structures it named have no owner in the spec. Proposed, for his
-      agreement before any doc carries it: the root list is R0's child list in R0's arena; the slot list goes (no
+  5.1 ANSWERED by Mikhail, 2026-09-15 ("зачем вам список корней?"; "откуда ты взял обход при удалении?";
+      then "да" to this wording, now in spec 19.28.R2.2 and the model's section 29): no root list (the root
+      is one, R0, its children an ordinary child list in R0's arena); no walk at deletion; the slot list
+      goes without replacement; the retire queue goes (a closed child's storage is the parent's settle
+      write); a lane's own queue is that Message's mailbox. The original question and proposal, kept for
+      the record: the root list is R0's child list in R0's arena; the slot list goes (no
       registry; address resolution is a walk from R0 through child lists, or a capability the caller
       holds); the retire queue goes (a released Message's storage is its parent's settle write on the
       parent's lane, and a Message reclaims its own at its end-turn); a lane's own queue is that
