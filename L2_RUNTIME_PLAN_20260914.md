@@ -2444,3 +2444,23 @@ inbox length beside admits for every violating pair (length greater than
 the counted admissions is a miscount; equal with wakes greater is the
 kick's extra wake; owner 7 stands either way); the finding is "fits, not
 proven" until its numbers are in.
+Mikhail on the lm2 deletion's scope (2026-09-15, to "is splitting the shared
+declarations while keeping the L2 sources very hard?", answered: no, a
+mechanical cut of own_abi.lm2's message-thread declarations, table_descriptor
+untouched, verifiable only by grep since nothing builds lm2/*.lm2 today):
+"расщепляйте" (split). Stage O's scope: the L2 sources (parser.lm2,
+l1trans.lm2, printTree.lm2, table.lm2, registry_control.lm2, mix/) and
+table_descriptor.lm2 stay; own_abi.lm2 is split (the message-thread
+declarations out, the ownership and arena ABI kept, the five predefs still
+resolving by grep); own.lm2, the trans.lm2 chain (thirteen files), its kept
+generated C (trans.lm1.c and the two REST .lm1.c with their gitignore
+exceptions), its CMake targets, the 13 C tests and the fixtures go, each
+named, mirrored in stg/l1_baseline/lm2; b5's, one commit per group on
+sonnet/stage-o, red by the greps, green with the live chain's gates and
+CMake configuring clean. The lead's O1 measure is running after 57's
+"done" (red at fb1c7221 failing to link; green on 69255593 alone and in
+the defaults; the parent_msg falsifier; run_port_message plain and
+-LaneCheck), then landing on d7f3b569, then ad3fc6b8, then D1; the kick
+finding folded into S3 in the design at 1f3f4dfd (the wake-all and
+exec_start_map_kick go together), the strict check and an uncapped probe
+with S3's green.
