@@ -14051,7 +14051,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             return: 1
         i: i + 1
     ---
-    if: c.fprintf(l2_out, "predef: \"%slmx_branch_owned.h.lm1\" \"%slmx_value_owned.h.lm1\"\ninclude: \"%slmx.h\" \"%slmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_rt_root, l2_rt_root, l2_rt_root, l2_rt_root) < 0
+    if: c.fprintf(l2_out, "predef: \"%slmx_branch_owned.h.lm1\" \"%slmx_value_owned.h.lm1\"\ninclude: \"%slmx.h\" \"%slmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\" \"<ctype.h>\"", l2_rt_root, l2_rt_root, l2_rt_root, l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
     i: 0
