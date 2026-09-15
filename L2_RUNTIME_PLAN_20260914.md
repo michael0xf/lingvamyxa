@@ -2765,3 +2765,11 @@ red, the green 0 sites). Put to him by the coordinator: what the owner
 thread does when its mailbox is empty after a turn (the thread ends and
 the next admission launches the turn, or it waits on something); nothing
 coded for the empty case until his word.
+stg's buildCore.lm0.bat rewrite committed locally on d6/stg-buildcore (base
+c94d3e31; 9 insertions, 25 deletions: the oldchain archive restore and the
+trans.lm0.exe/printTree.lm0.exe check deleted, the four gcc builds from
+stg's lm1/build kept, the header saying nothing of the old chain is
+needed), to be moved onto the tip after the 32-gate landing, measured red
+(the old bat in a fresh worktree without pinned inputs) and green (the new
+bat cold), pushed for 0c to stack on; stg/l1_baseline/oldchain/ with its
+README.txt goes in the same branch.
