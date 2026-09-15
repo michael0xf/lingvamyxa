@@ -987,6 +987,19 @@ S4. The family tree and the mapping written only on the owner's lane (L2, L3), t
       a write happens off the owner's lane today: endp_try_retire unlinking from any lane that drops the last
       reference, orphan_children's re-rooting, the host arms of mapping_authority.
     - Green: the tripwire green, then the lock calls around L2/L3 removed, the UAF kit clean.
+    - Site table after M (b5, sonnet/s4-sites fc1e88a6, LOCK_REMOVAL_S4_SITES.txt; checked by the coordinator,
+      2026-09-15). Of the S4 writes:
+      - 9 sites already run on the owner's lane and need nothing (map_child among them).
+      - 3 need a guard and nothing else; there are no edges and no moves:
+        orphan_sweep's own entry: its chain to orphan_children and the third call path of adopt_mark, dispose_mark
+        and reclaim_mark is unguarded end to end, and one guard there closes both;
+        the public lmx_msg_exec_bind, which has no check that the caller is the child's parent's lane or the host;
+        emergency_cancel, as already ruled.
+    - Ruled (the coordinator): S4's code list is those three guards, each refusing a call from any other lane, each
+      with a red-first check (a foreign-lane call refused: fails before, passes after), plus the cancel_spin_host
+      change already ruled.
+    - Two corrections to carry into this text when S4 starts: end_turn's committed/tracked walk is two loops at
+      different lines, and the liveness reply's child_heard_at write is in lmx_msg_live_handle.
 
 S5. The runtime-level lists (L5). Waits on 5.1.
     rt->slots, rt->n, the retire queue, the reap queue, rt->transport and e->ui_lane each either go or become a cell in
