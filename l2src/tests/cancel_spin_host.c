@@ -361,10 +361,9 @@ static int run_nested(Lmx *node) {
     if (st != LMX_MSG_OK) {
         return fail_rt(rt, "spin-nested entry turn");
     }
-    if (lmx_msg_state(rt, p) != LMX_MSG_STATE_STOPPED) {
-        fprintf(stderr, "spin-nested parent state=%d\n", lmx_msg_state(rt, p));
-        return fail_rt(rt, "spin-nested parent");
-    }
+    /* p (R0) is never cancelled -- it just received its posted mail and
+     * returned, still running; only its lawfully mapped child c is
+     * cancelled below (check_aftermath's own expect_parent_live). */
     /* M: yield rounds reading flags, no wall clock: the child's L2 loop is
      * entered, then the cancel stops it (same pattern as run_map's own). */
     fprintf(stderr, "reading: spin-nested: the child's inner loop entered\n");
@@ -380,23 +379,13 @@ static int run_nested(Lmx *node) {
     while (lmx_msg_state(rt, c) != LMX_MSG_STATE_STOPPED) {
         SwitchToThread();
     }
-    if (field_at(node, 0U) != 1 || field_at(node, 1U) != 0) {
-        fprintf(stderr, "spin-nested hit=%d after=%d\n", field_at(node, 0U), field_at(node, 1U));
-        return fail_rt(rt, "spin-nested graph");
-    }
-    if (InterlockedCompareExchange(&ctx.done, 0, 0) != 0) {
-        return fail_rt(rt, "spin-nested host wrapper");
-    }
-    memset(&e, 0, sizeof(e));
-    e.kind = LMX_MSG_KIND_BYTES;
-    e.n = 1;
-    e.bytes = &ini;
-    if (lmx_msg_host_post(rt, sib, &e) != LMX_MSG_STAGED) {
-        return fail_rt(rt, "spin-nested sibling");
+    if (check_aftermath(rt, p, c, sib, g, &ctx, node, "spin-nested", 1) != 0) {
+        return fail_rt(rt, "spin-nested aftermath");
     }
     lmx_msg_exec_stop(rt);
     lmx_msg_runtime_delete(rt);
-    fprintf(stderr, "cancel_spin_parent ok hit=1 after=0 parent_stopped=1\n");
+    fprintf(stderr, "cancel_spin_parent ok hit=%d after=%d parent_live=1\n",
+        field_at(node, 0U), field_at(node, 1U));
     return 0;
 }
 
