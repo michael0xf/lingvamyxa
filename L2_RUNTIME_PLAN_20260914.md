@@ -5385,3 +5385,17 @@ with the tip check, by hand after reading every runner line; if any
 red, nothing is pushed; land_base2.sh names the landing branch per
 merge from now on. Rule kept: a self-build mark is pushed as its own
 ref, never over another attempt's.
+D2 LANDED (the lead, 2026-09-15; checked by the coordinator: integration
+391b5062, tag selfbuild/6fe7924e on origin, no create_id in l2src code,
+headers, runners or tests): merge 6fe7924e (sonnet/d2-create-id 3a37ca87
+onto 1bdbfca0, 34 M); the union base plus lmx_cancel all green on the
+merge: self-build PASS 8 of 8, gates GREEN 31 of 31 in 529 s,
+port_message plain and -LaneCheck PASS (97 methods), run_l2trans ok,
+run_port_parser ok, run_mixa ok, the ingress harness ok, lmx_cancel ok;
+the tag and the log commit on sonnet/d2-create-id-landing-6fe7924e, the
+first attempt's ed00470d left as it was; integration pushed by hand
+after the tip check. Next: S2's code on d6/lock-s2 off 391b5062 by the
+threading plan in d6/lock-removal ca45129f; green C1=0 and C2=0 with
+c8f9cb50's counter merged, re-measured by the coordinator before the
+landing. Now: e9's gate record on 391b5062, then b5's red measurement
+of the two S4 guard checks; the lead merges integration into main.
