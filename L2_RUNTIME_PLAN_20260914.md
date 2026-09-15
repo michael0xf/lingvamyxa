@@ -3522,3 +3522,25 @@ resume_o.sh on the same merge (guards HEAD c063fd00, origin 64c4af01, a
 clean tree; re-installs the pin hash-checked; runs only the 33 gates,
 run_l2trans and run_port_parser; pushes if green); land_o.sh fixed for
 next time.
+Stage O LANDED (the lead, 2026-09-15): c063fd00 on integration/main-absorbs-core
+(64c4af01..c063fd00), the merge of sonnet/stage-o 6eb6729a; checked by the
+coordinator: ls-remote c063fd00, 0 tracked files under lm2/ and stg lm2/,
+diff 64c4af01..c063fd00 is 1 A (LOCK_REMOVAL_O0_MEASUREMENT.txt), 2 M
+(.gitignore, CMakeLists.txt), 172 D (lm2/, stg lm2/, the three dead
+lm1/build files, tests/ outside tests/l1). Measured on it: stg gate.ps1 all
+green (276 s); root buildCore/run_seed/run_gen; run_legacy_p0 ok n=131;
+run_self_build 8 of 8; run_slice_equal 16 of 16 and 8 of 8;
+run_p0_tree_contract ok n=36; CMake extract and configure ok; after the
+pin re-install, run_gates -L2MessageRoot GREEN 33 of 33 (532 s),
+run_l2trans gen2 ok, run_port_parser ok. main does not yet contain
+c063fd00 (the lead merges integration into main next, as at 57b5a178).
+The self-build half of the single goal is on integration: one fixed point
+at root and slice, the pin promoted, the old chain deleted; the one-root
+question is before Mikhail. Order for the lock half, ruled by the
+coordinator: S3 (no wake, the 11 sites) first, then M, D2, S2 (green
+after M), S4-S6, Y, A. Roles for S3: the lead designs and codes the 11
+sites in the (a) format, with b5's sonnet/s3-fields bb71e769 as the field
+evidence and the host.c pair (host_wake, host_shutdown) as b5's sub-ticket
+if the lead wants it; the coordinator owns the acceptance: 0c's oracle
+claude-0c/s3-wake-oracle 022b1136 measured red on c063fd00 first, then
+green after S3, in the coordinator's exec-3a worktree.
