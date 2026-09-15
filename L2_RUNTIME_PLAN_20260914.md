@@ -1031,6 +1031,52 @@ prototype, largest first.
    the chain, the free wrap counting exactly the tree's blocks, the worker
    joined; runtime_delete from inside a turn refusing; (b) and (e)
    unchanged.
+   The (f) acceptance written first (2026-09-15): fable/stage5f-acceptance
+   ffeb1094 off 402b2919, two tests and one runner hook. tests/lmx_model_
+   runtime_close_5f_selftest.lm1: R0 with P1 (C mapped onto its own context
+   by P1's turn and inside its turn until it sees its closing flag), a
+   failed orphan Q retained under the policy (P2 stopped by R0 and released
+   from R0's own turn, the strict lifecycle form, clock 5000, retain 100,
+   deadline 5100 never reached), U mapped to the UI lane with one request
+   pending in the lane's mailbox; runtime_delete with no exec_stop before
+   it, two cycles; measured "45 checks, 4 failures" on 402b2919, red twice
+   each at "C's turn ended because the chain set its closing flag, not by
+   its own deadline" and "P1's closing turn ran on R0's lane before its
+   storage went"; the join line (C's done flag set 50 ms after its
+   end_turn), the UI line and the balance line are green today, so the
+   balance is (f)'s guard against residue, not a red. The balance is ld
+   --wrap on malloc, calloc, realloc and free over every linked object,
+   measured over two cycles because the first pays the L2 library runtime's
+   open: the live count after the second delete equals the count after the
+   first, exact with no magic number. tests/lmx_model_runtime_close_5f_
+   turn_selftest.lm1: delete from inside R0's turn on the host thread and
+   from a child's turn on a worker refuses INVALID with the runtime alive,
+   from the host outside any turn OK; translates on 402b2919 and fails gcc
+   "void value not ignored as it ought to be" at its three sites
+   (runtime_delete is a sub today). run_model_scenario36.ps1: a test that
+   defines __wrap_NAME is linked with -Wl,--wrap=NAME for each such name (a
+   missing hook is a red link). Questions the acceptance settles, for the
+   lead's design in the (a) format: Q1 runtime_delete returns a status,
+   OK from the host outside any turn, INVALID from inside any turn with
+   nothing touched (every caller today is a statement; the sub form is
+   unobservable); Q2 a retained failed orphan at R0's close is reclaimed by
+   the chain, no adopter remaining once R0 closes and its arena handoff-safe
+   (waiting for a retention deadline on a clock nobody advances is a hang);
+   Q3 runtime_delete is R0's maintenance with the drain's authority, stepping
+   its children until the tree settles (a host-run child's closing turn is
+   the red line; dropping binds and freeing slots is what decision 17
+   forbids); Q4 the mapped child's turn ends on its worker after the chain
+   sets its closing flag and the worker is joined before the runtime is
+   freed (green today through exec_stop, must stay green when the host
+   forms retire). Left to the design: what stays callable from main once
+   the host forms retire (the acceptance calls create with parent 0,
+   host_post, host_drain, set_now, set_orphan_retain, exec_bind, drive,
+   emergency_cancel and root_turn from main; whatever moves into R0's turn,
+   the test moves as d's steps did), and the order of R0's own slot, the UI
+   lane and the runtime record at the end. Falsifiers on the (f) tree: the
+   join deleted before the runtime's free makes the join line red; one
+   free dropped on the close path (a slot's path array) makes the balance
+   line red by that block.
 
 ## 4. Acceptance
 
