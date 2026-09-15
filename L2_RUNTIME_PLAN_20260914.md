@@ -3853,3 +3853,18 @@ times cold, then land_s3.sh again. Rule for S3 and every later stage:
 where the owner's round replaces a sleep, test helpers with timing
 assumptions surface as races; each is fixed in the test, never by a wait
 in the core.
+S3 race fix pushed: d6/s3-no-wake a3e907d0, diff against c41089f3 one file,
+lmx_message_exec_selftest.c, 5 lines; five cold -LaneCheck runs in
+progress, then land_s3.sh c063fd00 a3e907d0. ONE ROOT survey (the lead):
+outside stg, 74 mixa .ps1 runners, mixa tests/l1_gaps/run.sh, root
+tests/l1/run_legacy_p0.ps1:15 and run_import_capacity.py:219 name stg
+paths (runners, M); 4 mixa .lm2 and mixa_backend.h name them in comments
+only; 39 docs name them. Docs line ruled by the coordinator: runners M;
+source comments M in the same commit, text only; documents that are
+dated history (the plan's entries, the map, the design's measured rows,
+the field tables, evidence files) keep their paths as written at their
+hashes; the current instructions get the new paths in the same landing
+(CORE_LEAD ru/en, the model's current parts, the README at the root, the
+runner hazards file); the spec's verbatim sentences and citations stay as
+they are and the spec gains no path edits; the coordinator's memory notes
+are updated after the landing.
