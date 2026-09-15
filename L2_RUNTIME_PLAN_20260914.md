@@ -4318,3 +4318,13 @@ nothing to commit first, the regenerated C equals the committed C).
 land_oneroot.sh now pushes <branch>-landing and tags selfbuild/<merge>
 right after a PASS, leaves an existing tag, and a later red does not
 withdraw it; every future land_*.sh with run_self_build gets the step.
+Mikhail (2026-09-15, verbatim): "регенерация равна зафиксированному, коммитить было нечего" имею  в виду помечать как-то каждые успешно самособранные исходники (I mean marking, somehow, every set of
+sources that self-built successfully). So the mark is on the sources
+themselves, every time, whether or not the regenerated C changed: (1)
+the annotated tag selfbuild/<hash> on the exact commit whose sources
+self-built (immutable, already in place for 5cee1426); and (2) a line
+appended to a file in the tree, l2src/SELF_BUILD_LOG.txt (date, the
+measured commit, the pin, the fixed-point line, the eight generated-C
+blob ids, who measured), committed and pushed right after on the same
+branch, so the mark travels with the checkout and with merges. Both are
+done by the landing scripts and e9's gate record after every PASS.
