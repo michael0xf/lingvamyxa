@@ -2932,3 +2932,12 @@ not the step); the rewrite deletes the loop and keeps only the top-level
 form, so its green is sound; the red measure judges by the bat's own
 diagnosis with the exit code recorded, not trusted. The root's
 buildCore.lm0.bat has no such loop. A RUNNER_HAZARDS row for 0c.
+d6/stg-buildcore pushed: e5da89f5 on 88934463 (29b739eb the bat rewrite,
+e5da89f5 oldchain/ deleted), the hash sent to 0c as the seed branch's base;
+measured cold in fresh worktrees without pinned inputs: red on 88934463
+(the old bat diagnosing "pinned seed prerequisite missing" but exiting 0,
+judged by its diagnosis), green on e5da89f5 (exit 0 in 4 s, the four tools
+built from stg's committed lm1/build, no old-chain file in build/lm0, no
+oldchain/ directory, old-chain names only in comments, the tracked tree
+clean); lands with 0c's seed branch after (b). D1's relanding (17b4d5e1,
+MessageApi green on the branch) running.
