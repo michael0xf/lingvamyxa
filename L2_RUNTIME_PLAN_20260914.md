@@ -5342,3 +5342,10 @@ The S4 correction recorded in the design at d6/lock-removal c6fee6f1
 "l2trans gen2 ok"; red at d8f758e6); the run_port_parser baseline at
 d8f758e6 running; then land_fix_then_d2.sh lands the fix and D2 with
 the union base.
+b5's S4 site table updated at sonnet/s4-sites 6cfaf9bc (checked): the
+orphan_children row reads "nothing (guarded at lmx_msg_drive's
+require_owner)", counts 10 nothing / 2 guards, the cross-references of
+child_chain_remove and the settle section corrected to the same
+reasoning. The double landing (the fix, then D2) runs with the union
+base on d8f758e6; b5's red measurement of the two guard checks waits for
+the machine.
