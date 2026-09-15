@@ -264,6 +264,18 @@ Survey method (on d925e600)
   on failure Invoke-Gcc's Get-Content of the missing log throws first under EAP Stop, so the red line
   would name the log path, not the length. Fix shape (response file or header) to be settled; it lands
   before stage e4b.
+  6f ruled a response file per gcc call. Fix: claude-0c/port-parser-rsp cd8c9028 on 402b2919. Invoke-Gcc
+  writes <-o target>.rsp (each argument quoted, \ and " escaped: gcc reads \ as an escape there) and runs
+  gcc "@<rsp>"; when cmd refuses a line, the throw names the length and the limit. A permanent guard
+  compiles an empty unit with 130 -D entries (8823 chars inline). Measured: the guard on HEAD's
+  Invoke-Gcc gives "The command line is too long." then "Cannot find path ...cmdline_guard.gcc.log";
+  inline arguments with the new throw give "gcc did not start: cmd /c refused a 8876-character line
+  (cmd.exe's limit is 8191)"; the change, run cold from stg\l1_baseline, exits 0 in 327 s with 18 stages
+  ok. The largest real gcc line is now 186 chars (+1 per character of worktree root).
+  Found while measuring it: launched from the worktree root, run_port_parser fails at stage a on
+  [IO.File]::WriteAllLines with relative $patchedC (and $unitFixedC for _dedup.c), which resolve against
+  the process directory, not the runner's Set-Location. That is the working-directory hazard b5
+  measured; its fix follows as a separate commit.
 (c) Cold run per runner
   Complete: 46 of 46 runners cold on d925e600 (every run_*.ps1 but run_gates, whose time is its defaults' sum),
   sequential in a fresh private worktree; the machine rebooted during row 20 and the batch resumed from
