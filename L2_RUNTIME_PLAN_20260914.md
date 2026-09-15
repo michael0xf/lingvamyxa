@@ -1055,6 +1055,30 @@ a runner spends its time in launches; a pin of the runtime's own bookkeeping
 moves it, never silently. Fix order: the reuse sites, then the default set
 with its measured time, then the launches.
 
+Translator repairs driven by the parser port's Stage e (2026-09-14/15, the
+lead, each a leaf in run_l2trans's historical set with its pin, red on the
+previous translator and green after, in landing order): the int-alias
+local (a table of foreign int aliases with their p0.h lines, pin 140); the
+nested index in an actual (`text[index[0]]` had split into four actuals:
+l2_index_span counts a balanced index at the head and operand sites of
+l2_expr_span, pin 141); LmP0IndentStack retired from its legacy codes 13/14/15,
+field table and sizeof/new_zero cases to the foreign pointer path spelled as
+written, the dead code-13 comparisons deleted, `stack\columns[idx]` a leaf,
+pin 142; `c.sizeof(name[0])` renaming the leading identifier of a formal or
+slot and keeping the index, pin 143; the lm_own_resize, lm_own_copy_bytes and
+lm_own_delete paths splitting actuals with l2_expr_span instead of one field
+per actual, which had silently truncated an unparenthesized length (latent in
+landed code, hit by the oracle's usual spelling at the first port; the
+emitted text and a read-back as the reds), pin 144; the own-allocation temp
+typed as the prototype's `@: void` with the source's cast the only type
+(U4: the "size_t" text sniff gone; an uncast call typed by its assignment),
+pin 145; the unreachable lm_p0_set_diagnostic handler deleted under
+decision 12. Rule learnt: every special-cased call form in l2trans that
+re-parses actuals on its own is a defect waiting; actuals go through
+l2_expr_span. Named for its own ticket: U4's remaining default that casts
+any other lm_own_new_zero argument to `@: LmP0Text`; a probe's
+`lm_own_resize(stack\columns, ...)` failing with no located diagnostic.
+
 - Lead (`lingvamyxa-d6`): translator gaps found by this lane, with fixtures
   as before; merges through integration; the model's §31/§34 wording carries
   decision 14; the full gate on every merge.
