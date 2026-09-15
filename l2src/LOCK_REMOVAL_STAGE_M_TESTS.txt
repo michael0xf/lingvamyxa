@@ -16,6 +16,12 @@ Rulings for the conversions (the coordinator, 2026-09-15, after the core commit 
    loop starts, so a hang names itself in the log.
 2. Every pre-existing go cell in a test M converts (orphan_mapped_17's g_go and the like) goes in the same commit,
    the property restated by flag reads as in family_release_17.
+3. In lmx_message_exec_selftest.c the unit is the scenario block: a block M deletes or converts loses its go cells
+   and wall-clock loops in the same commit; a block M does not touch keeps its gates for now. The untouched gates
+   are recorded test debt, a list in this file (block name, the gate's kind: Sleep, event, go cell, wall-clock
+   loop, and the stage whose subject the block is: S2, S4, S5, S6 or Y); each later stage's note converts its own
+   blocks under rulings 1 and 2, so the file's wait count goes down by stage and reaches 0 at S6. Falsified by: the
+   debt list's block count plus M's converted blocks equals the count of blocks with a gate at 793c267f.
 Split (accepted): d6 the core, lmx_message_exec_selftest.c and tests/cancel_spin_host.c, the runners and the landing;
 b5 the send_local, family_handoff and adopt_unrooted tests; e9 the run_model_scenario36 set (liveness_33,
 family_close_32, family_release_17, orphan_mapped_17, scenario36, root_ingress_5b, root_record_5e), whose rt\n pins
