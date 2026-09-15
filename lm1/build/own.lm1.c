@@ -140,7 +140,7 @@ int lm_own_ptr_stack_push(LmOwnPtrStack * stack, void * item)
     stack->items = items;
     stack->capacity = capacity;
     }
-    stack->items[stack->count] = item;
+    stack->items[stack -> count] = item;
     stack->count = stack -> count + 1U;
     return 0;
 }
@@ -152,7 +152,7 @@ void * lm_own_ptr_stack_pop(LmOwnPtrStack * stack)
     }
     stack->count = stack -> count - 1U;
     item = stack -> items[stack -> count];
-    stack->items[stack->count] = 0;
+    stack->items[stack -> count] = 0;
     return item;
 }
 void * lm_own_ptr_stack_at(const LmOwnPtrStack * stack, size_t index)
@@ -320,7 +320,7 @@ int lm_own_arena_absorb(LmOwnArena * target, LmOwnArena * source)
     }
     i = 0U;
     while (i < n) {
-    target->allocations->items[target->allocations->count] = source -> allocations -> items[i];
+    target->allocations->items[target -> allocations -> count] = source -> allocations -> items[i];
     target->allocations->count = target -> allocations -> count + 1U;
     i = i + 1U;
     }
