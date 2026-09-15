@@ -2969,3 +2969,16 @@ the red-first runs, the cold chain from the root with root lm2 and the
 dead files aside. Ruled: red-first measured now, green on the first base
 containing (b), the landing with the lead's buildCore and refresh after
 (b).
+0c's S3 oracle re-cut ("no wake site exists"): claude-0c/s3-wake-oracle
+022b1136 on the merge 3d4bd792 (integration 7200294b), exec.c, exec.h and
+host.c only (+34/-103, the counting oracle removed whole); cold on Win32:
+run_port_message -LaneCheck exits 1 in 14 s with "LANE WAKE FAIL
+site=ctx_visit_wake owner=3" and 0 LANE WRITE FAIL; plain run_port_message
+exits 0 in 53 s with parity PASS (101 methods redirected). Probe (each site
+printed once, no abort): all 11 instrumented sites are signalled during
+the selftest, identical in the four runs, none dead: bind_reap_push,
+ctx_visit_wake, host_shutdown, host_wake, join_bind_worker, launch,
+launch_gate_go, launch_gate_refuse, stop_event, stop_retire_walk,
+wake_addr_locked. S3's green is those 11 gone (no LANE WAKE FAIL, the probe
+at 0 lines); the lane_oracle gate is red on the branch until then, so it
+lands only with the lead's S3 change; the pthread paths unbuilt.
