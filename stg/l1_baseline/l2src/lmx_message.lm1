@@ -415,7 +415,7 @@ return: p
 
 fn: lmx_msg_turn_copy_bytes (const: @(char source); size_t: length) @: char
     @: char copy
-    if: length = (cast: size_t -1)
+    if: length = (cast: (size_t) -1)
         return: 0
     copy: (cast: (@: char) lmx_msg_turn_new_zero(length + 1U))
     if: copy = 0
