@@ -3966,3 +3966,20 @@ its owner, and its category: (a) the arena's own block allocation, (b)
 runtime or scaffolding storage a named stage deletes, (c) something that
 must become a node in a named Message's arena, (d) a contradiction (no
 owner and no stage); counts per category at the top.
+b5's A-stage inventory landed on sonnet/a-allocs 66dcf0bf
+(LOCK_REMOVAL_A_ALLOCS.txt; checked): 133 raw malloc/calloc/realloc/free
+calls grouped into 15 sites by what each allocates. 5 sites (c), arena
+nodes named by the design: LmxMsg itself (A1, slot_new), LmxOwnedRange,
+LmxMsgBlock, LmxMsgRoot, the init and path arrays (A2). 9 sites (b),
+scaffolding a stage deletes: BindWait and CtxPack (S3), ExecBind (M),
+LmxMsgExec and LmxMsgRuntime (S5), HostSync (S6), done_from/done_id (Y3,
+by Q2), the LmxMsgCopy/LmxMsgEnv copy-and-envelope machinery and its
+delivery_new scratch carrier (A3, "no copies" deletes the mechanism). 1
+site, three call-local scratch buffers freed within their own call:
+ruled (c) by the coordinator, allocated from the executing Message's turn
+arena (O1's lmx_msg_turn_*) when inside a turn, and from R0's when in the
+host drive outside any turn, the lead confirming per buffer in A2's note.
+(d) finding: LOCK_REMOVAL_DESIGN.txt 871-872 still lists done_* among
+A2's arrays "allocated from that arena" while Q2 deleted done_* outright
+(Y3); the design's A2 text is stale there and the lead corrects it before
+A2's note.
