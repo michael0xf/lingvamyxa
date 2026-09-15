@@ -1,0 +1,83 @@
+predef: "l2src/parser_field_parse_port_l2.h.lm1"
+
+# L2 port of l1src/parser.lm1's field-parsing state machine (Stage e
+# of the parser-in-L2 port ticket). Bodies are ported straight from
+# the oracle, unedited. Named p0_*, never lm_p0_*, per the ticket.
+#
+# Slice e1: lifecycle for the field-parse loop's own explicit
+# continuation stack (LmOwnPtrStack of LmP0FieldParseLoopFrame
+# frames -- see p0_stream_apply_item_event and this port's own d5
+# narrative for the same explicit-stack-not-recursion shape).
+# Formals/locals named node in the oracle renamed nd, same rule as
+# every other renamed formal in this port.
+
+sub: p0_field_parse_loop_frame_delete_any (@: void object)
+    @: LmP0FieldParseLoopFrame frame
+    frame: (cast: (@: LmP0FieldParseLoopFrame) object)
+    if: (frame = 0)
+        return
+    if: frame\indent_stack_owned
+        lm_p0_indent_stack_delete(frame\indent_stack)
+    lm_own_delete(frame, 0)
+end: p0_field_parse_loop_frame_delete_any
+
+fn: p0_field_parse_loop_stack_new (@: LmP0Document document; size_t: line; size_t: column) @: LmOwnPtrStack
+    @: LmOwnPtrStack stack
+    stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
+    if: (stack = 0)
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating parser field stack")
+        return: 0
+    lm_own_ptr_stack_init(stack, p0_field_parse_loop_frame_delete_any)
+    return: stack
+end: p0_field_parse_loop_stack_new
+
+sub: p0_field_parse_loop_stack_delete (@: LmOwnPtrStack stack)
+    if: (stack = 0)
+        return
+    lm_own_ptr_stack_destroy(stack)
+    lm_own_delete(stack, 0)
+end: p0_field_parse_loop_stack_delete
+
+fn: p0_field_parse_loop_push (@: LmP0Document document; @: LmOwnPtrStack stack; @: LmP0IndentStack indent_stack; int: indent_stack_owned; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: layout_base_level; size_t: i; size_t: current_source_level; int: allow_empty_fields; int: expect_field; int: headless_group_after_separator; LmP0FieldParseLoopContinuation: continuation; @: LmP0Node nd; size_t: start; size_t: close_index) int
+    @: LmP0FieldParseLoopFrame frame
+    frame: (cast: (@: LmP0FieldParseLoopFrame) lm_own_new_zero(c.sizeof(frame[0])))
+    if: (frame = 0)
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while growing parser field stack")
+        return: 0
+    frame\indent_stack: indent_stack
+    frame\structure: structure
+    frame\text: text
+    frame\length: length
+    frame\line: line
+    frame\column: column
+    frame\offset: offset
+    frame\flags: flags
+    frame\short_source_level: short_source_level
+    frame\layout_base_level: layout_base_level
+    frame\i: i
+    frame\current_source_level: current_source_level
+    frame\allow_empty_fields: allow_empty_fields
+    frame\expect_field: expect_field
+    frame\headless_group_after_separator: headless_group_after_separator
+    frame\indent_stack_owned: indent_stack_owned
+    frame\continuation: continuation
+    frame\node: nd
+    frame\start: start
+    frame\close_index: close_index
+    if: (lm_own_ptr_stack_push(stack, frame) != 0)
+        p0_field_parse_loop_frame_delete_any(frame)
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while growing parser field stack")
+        return: 0
+    return: 1
+end: p0_field_parse_loop_push
+
+fn: p0_field_parse_fail (@@: LmOwnPtrStack parse_stack; @@: LmP0IndentStack indent_stack; @: int indent_stack_owned) int
+    if: ((((indent_stack_owned != 0) && indent_stack_owned[0]) && (indent_stack != 0)) && (indent_stack[0] != 0))
+        lm_p0_indent_stack_delete(indent_stack[0])
+        indent_stack[0]: 0
+        indent_stack_owned[0]: 0
+    if: (parse_stack != 0)
+        p0_field_parse_loop_stack_delete(parse_stack[0])
+        parse_stack[0]: 0
+    return: 0
+end: p0_field_parse_fail

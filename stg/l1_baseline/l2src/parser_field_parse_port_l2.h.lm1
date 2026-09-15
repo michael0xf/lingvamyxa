@@ -1,0 +1,22 @@
+include: "l1src/p0.lm1.h"
+
+# Header unit for the clean L2 port of l1src/parser.lm1's field-parsing
+# state machine (parser-in-L2 port ticket, Stage e). lm_own_new_zero/
+# lm_own_delete/lm_own_ptr_stack_init are L1-implemented (l1src/
+# own.lm1, compiled into the same oracle object this L2 unit links
+# against) -- Stage A rule: an LMX name needs a prototype: declaration
+# here, never c. -- lm_p0_set_diagnostic/lm_p0_indent_stack_delete are
+# still oracle-native (not yet ported by any stage); the calls
+# retarget automatically once/if those names are ever ported and
+# added to a stage's Funcs list -- no source change needed then.
+# Removed from this header in the same commit that ports each one.
+
+prototype:
+    fn: lm_own_new_zero (size_t: size) @: void
+    sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
+    sub: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item)
+    sub: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack)
+    fn: lm_own_ptr_stack_push (@: LmOwnPtrStack stack; @: void item) int
+    sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))
+    sub: lm_p0_indent_stack_delete (@: LmP0IndentStack stack)
+end: prototype
