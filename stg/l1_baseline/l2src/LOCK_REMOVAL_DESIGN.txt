@@ -111,6 +111,15 @@ FIELDS. Every stage names its fields' owners (coordinator, 2026-09-15; map secti
     Thread's Structure, the arena from root, the mailbox, R0's arena, a native primitive) or its deletion. A field with
     neither is a contradiction, and the stage stops. The table of every field is LOCK_REMOVAL_FIELDS.txt; its
     "proposed" lines and questions Q1-Q4 wait for the coordinator.
+    The record, documented (spec section 2, model section 2, main c7f9d375): LmxMsg { running; success; handoff_safe;
+    Lmx *root }. The inside of a Message (spec section 2, main c2b86f16, Mikhail verbatim): it is written into what
+    root reaches; on L2 that is the code working with these Messages; on L1 the code that will be generated, "В
+    точности как имитируется L2 на Си -- функция с аргументами ,скрытми ргументами и узлом графа."
+    Consequence for every stage: an L3T, PAR or MBOX row is not a field of a C record but a Structure node in the
+    Message's arena reached from root. The hand-written C for it takes l2trans's emission form: the declared formals,
+    the hidden through-arguments in intern name order, the graph node. The later port then writes the L2 source whose
+    translation is that C. The whole C record is the four-field LmxMsg plus the native primitives (the thread handle,
+    the thread id, the mailbox's monitor).
 
 S0. The proof tool (57): the lane tripwire red on a lane write from a thread with no turn. It is the proof for S2-S5
     and lands first.

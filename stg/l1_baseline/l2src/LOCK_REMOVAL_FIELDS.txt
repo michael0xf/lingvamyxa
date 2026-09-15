@@ -19,6 +19,12 @@ flag and confirmed its meaning, "Так"):
                                                                19.29.8); today's native_users folds into when it is set
                           Lmx *root; }
 His sentence beside it: everything else is not Message and ends up in LMX as the inside of a Message.
+The inside (spec section 2, main c2b86f16, Mikhail verbatim): written into what root reaches; on L2 the code working
+with these Messages; on L1 the code that will be generated, "В точности как имитируется L2 на Си -- функция с
+аргументами ,скрытми ргументами и узлом графа." So an L3T, PAR or MBOX row below is a Structure node in the Message's
+arena reached from root, not a field of a C record, and its hand-written C takes l2trans's emission form (declared
+formals, hidden through-arguments in intern name order, the graph node). The whole C record is the four-field LmxMsg
+plus the native primitives (thread handle, thread id, the mailbox's monitor).
 
 Rule for every stage (coordinator, 2026-09-15): a stage's note names, for each field it touches, its owner below or
 its deletion. A field with neither is a contradiction, and the stage stops.
