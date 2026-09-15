@@ -1387,3 +1387,35 @@ fix). U4 and the handler deletion follow at 149.
 - Helper (`lingvamyxa-5e`): parser in L2 (§6.5) unchanged.
 - Review chat: this lane, stage by stage; decisions carried to Mikhail;
   spec clarifications committed as docs the day they are made.
+
+## 7. Removing the executor's shared lock (Mikhail, 2026-09-15)
+
+Mikhail's order, relayed by the lead and confirmed by the coordinator the
+same hour: "Stop everything immediately and put all effort into removing
+this shared lock. It is not needed." Earlier the same day: "There must be no
+shared locks. The mail queue has only its own internal collection lock,
+that's all"; "each L3 Thread has its own scheduler and GC"; "the executor
+frees its own memory." Everything else is held where it stands: the uchar
+merge 85c6fd0e unpushed (integration stays c067bed9), stage 5 (f) unwritten
+(d6/stage5f-impl ee8b80c9 empty, the acceptance f79320de unmerged), 0c's
+step-2 timing, b5's leaf tickets. Size on c067bed9 (lmx_msg_exec_lock( and
+*_locked( calls): lmx_message_exec.c 165, lmx_message.lm1 65 (lm2 65),
+lmx_message_exec.h 9, the executor selftest 5, the model tests 29 across 7
+files. Division: the lead inventories exec.c (LOCK_REMOVAL_INVENTORY.txt in
+wt5f on c067bed9), b5 lmx_message.lm1 (LOCK_REMOVAL_INVENTORY_LM1.txt), 0c
+the tests, runners and the -LaneCheck oracle with the gate per removal step
+(LOCK_REMOVAL_INVENTORY_TESTS.txt), the coordinator the spec and model map
+(l2src/LOCK_REMOVAL_SPEC_MAP.txt on main: where 19.28.R2.2, 19.29.6 and the
+model's sections 25 and 29 already say who owns each piece, and where the
+spec is silent). One format for every inventory line: file:line, enclosing
+function, the state read and written under the lock, the lane today
+(bootstrap/R0, the Message's own context, a parent's lane, any OS thread),
+and the target owner by the rule (the Message's own fields on its own lane;
+the parent's scheduler state as the parent's Structure data; cross-lane
+only through a mailbox with its own collection lock) or "silent", the
+silent lines being the design's questions. Rule: no lock line goes before
+the inventories and the map are in and the design is written in the (a)
+format, stage by stage, each stage red-first with the lane tripwire as its
+proof (every write the removed lock covered becomes a lane write on its
+owner's lane; -LaneCheck the oracle that no write moved off its lane); the
+mail queue's own collection lock is the one lock that remains.
