@@ -5030,3 +5030,19 @@ worktree removed. Accepted as M's falsifier record by the coordinator
 unbind_slot_locked, 56a74dae, which does not touch the oracle). The
 coordinator's green runs on 14cb1960 come before land_m.sh, after the
 lead's gates; the landing merges install_pin 8479fdab first.
+M gates on 14cb1960 RED (the lead, 2026-09-15): "stopped at lmx_message
+after 112 s" (lane_oracle PASS 76 s and scenario36 PASS 26 s first).
+Cause: l2src/lmx_message_selftest.lm1 537-540 pinned the stage 5 (d2)
+path, where the UI lane took R0's first child sequence (p0 [1, 2]); with
+no core UI lane p0 is [1, 1] and the check prints "grandchild mid seg";
+a test pin of the deleted lane, not a core defect, not on e9's impact
+list (which grepped for the mechanism's names, not for numeric
+consequences of its absence: sequences, counts). Same grep found one
+more pin: run_port_msg_path_storage.ps1's pre_allocations=3 (the
+process Message, R0 and the UI lane's placement path), now 2; and two
+stale comments (l2_message_root_driver.lm1, exec.c). Fixed in wtm,
+uncommitted; run_lmx -Suite Message and run_port_msg_path_storage
+running, then a commit and the full 31 gates again; the coordinator's
+acceptance runs follow on the new tip. Lesson for impact lists: grep
+also for the numeric side effects of a deleted mechanism (ids,
+sequences, pre-allocation counts, check counts), not only its names.
