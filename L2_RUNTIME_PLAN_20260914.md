@@ -5077,3 +5077,8 @@ a pin mismatch and re-run green at 06:31 in 532 s. Falsifier: each
 gate log's write time minus the previous one reproduces the chain's
 per-gate seconds in both runs (1015 + 1 s overhead; 511 s). Closed as
 environmental; the plan's open item on it is closed.
+Ticket to e9 (the coordinator, 2026-09-15), to start at M's "landed": the
+cold gate record on the landed tip as for ONE ROOT (run_self_build first
+with the tag and the log line, then gate.ps1 whole), then install_pin
+into its two trees; and, standing for every future impact list, the
+grep for a deletion's numeric side effects.
