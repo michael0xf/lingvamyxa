@@ -230,7 +230,11 @@ O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced 
           blocks, and fn lmx_msg_turn_copy_bytes (const: @(char source); size_t: length) @: char. Both return 0
           outside a turn, and on refusal nothing is pushed. The writer is the Message's own lane (M, 2.1 (1)).
         - Freed by what already frees the Message's arena: slot free at its release, or the parent's settle write
-          when adopted. End-turn collection of unreachable blocks (19.29.4) is not part of O1.
+          when adopted. End-turn collection of unreachable blocks (19.29.4) is not part of O1. Read on d7f3b569:
+          lmx_msg_arena_collect (lmx_message.lm1 326-369) takes only blocks that carry a registered range
+          (lmx_msg_block_has_range). A turn-arena block has none, so it survives every end-turn and lives until the
+          Message's release, the same lifetime as the lm2 chain's per-thread arena today. Collecting such blocks by
+          reachability would need them classified as values, which belongs to a later arena stage and not to O1.
         - Red first: a model test, run by run_model_scenario36, where two Messages each allocate in their own turn
           (A on a context worker, B on R0's turn) expects each allocation in its own Message's blocks list and none
           in the other's, 0 returned outside any turn, and the two-cycle balance (ld --wrap live count after the
