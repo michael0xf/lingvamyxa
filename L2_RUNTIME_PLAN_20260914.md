@@ -3926,3 +3926,18 @@ the guard that the writer is the child's parent's lane or the host outside
 any turn, refusing otherwise; the S4_WRITES file's "running has zero
 foreign-lane write sites" is corrected to "one, emergency_cancel, item
 (3), unguarded today"; the selftests keep their calls.
+S3 landing #2 red (the lead, 2026-09-15), merge abd21ada unpushed:
+port_message twice, run_lmx Message, scenario36 green; 21 gates PASS, then
+RED at port_msg_blocks: "the runtime freed 0 blocks before the test,
+expected 1". Not a race: run_port_msg_blocks.ps1 241-242 pins one
+pre-test free as the entry turn's bind-wait record (stage 5 (a),
+e64c8083); S3 makes that record only in a launch, and
+lmx_msg_run_entry_turn binds without launching, so 0 is S3's value. Fix,
+runner only (the allowlist gains run_port_msg_blocks.ps1): the pin
+becomes 0 with that reason; no other pre_frees/bind-wait pin in l2src
+runners, l2src tests or mixa runners. Coordinator's note: a pinned count
+of pre-test frees is a magic number (it moved once at stage 5 (a) and
+now at S3, and BindWait leaves entirely at S5), so when S5 lands the
+runner should pin the two-cycle balance instead; for S3 the 0 pin with
+its reason is enough. Before the relaunch the lead pre-runs, on the fix,
+run_port_msg_blocks and the 12 gates that had not run.
