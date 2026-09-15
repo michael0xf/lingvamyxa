@@ -3696,3 +3696,15 @@ though central to the UI-stepping sites (a row set to add before M's
 design note, as CtxPack was for S3); the S3-owned fields ready and
 launching appear at M sites but are gone by then. No site whose removal
 needs a new lock, wait or signal.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only: the Y stage's site
+inventory, LOCK_REMOVAL_Y_SITES.txt on sonnet/y-sites: at c063fd00 every
+site in l2src (lm1, lm2 mirror, exec.c, host.c) and mixa_manager outside
+vendor/ that reads or writes the mailbox rows (inbox, inbox_tail, mail,
+the runtime's transport pair), file:line, the thread that runs it (the
+owner in its round, a sender at admission, the host drive), admission or
+the owner's take or a read, and the lock covering it today (executor,
+host, none); any sender reaching the mailbox other than by admission, or
+any read outside the owner and admission, flagged as a contradiction to
+stop on. The LmxMsgExec gap (no rows in the FIELDS table) went to the
+lead, to be added as a scaffolding type with its lock as an S6 row before
+M's note.
