@@ -4866,3 +4866,19 @@ fact goes to the lead's Y note: whether one end-turn's admissions to one
 destination are made under one hold of that mailbox's monitor (the same
 monitor, no new lock) so a publication is one unit to its recipient, or
 the model makes no such promise; decided there.
+M, the lead's status (2026-09-15): the pump fact is in Y's facts at
+d6/lock-removal bf2ecb19 with the open choice as worded; b5's 76ad060d
+queued for the M merge. The exec selftest converted in wtm, uncommitted,
+fast-loop evidence only: about 40 blocks pass in order (contexts,
+close-path, mix map, map fail, both timers, cancel/complete idle, m0,
+handoff, the settle branch, the restated mapped orphan, nested users,
+owned move, dest pin OOM); the run stops at the end_turn splice FIFO
+block, under reading. Three core facts for every converter: (1)
+require_turn gives the host outside any turn the parent's authority
+only when no context is live and no worker runs (the lead's own_turn
+helper stops the contexts it started so the host acts as parent
+between turns again); (2) on its own context a Message runs a turn for
+every input it holds, so a test turn that does not recv its input gets
+turn after turn (owned send re-sent three times until its turn took the
+input); (3) a yield loop must read the flag the check reads (close-path
+read done while end_turn had not yet written STOPPED).
