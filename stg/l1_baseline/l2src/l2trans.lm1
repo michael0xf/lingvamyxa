@@ -11185,13 +11185,20 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         s0[0]: 0
         s1[0]: 0
         t: 0
+        # An actual is a whole expression (see lm_own_resize below).
         while: a0 != 0 && t < 2
-            n: 1
-            if: t = 0 && l2_prep(a0\value, mi, ind, s0) != 0
+            n: l2_expr_span(a0)
+            if: n < 1
                 return: 1
-            if: t = 1 && l2_prep(a0\value, mi, ind, s1) != 0
+            if: t = 0 && l2_emit_fields(a0, n, mi, ind, s0) != 0
                 return: 1
-            a0: l2_next_active(a0\next)
+            if: t = 1 && l2_emit_fields(a0, n, mi, ind, s1) != 0
+                return: 1
+            k: 0
+            while: k < n && a0 != 0
+                a0: l2_next_active(a0\next)
+                k: k + 1
+            ---
             t: t + 1
         if: l2_emit_checkpoint(mi, ind) != 0
             return: 1
@@ -11208,12 +11215,21 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         s0[0]: 0
         s1[0]: 0
         t: 0
+        # An actual is a whole expression: `8U * c.sizeof(c.int)` spans three
+        # fields, and prepping only the first silently dropped the rest.
         while: a0 != 0 && t < 2
-            if: t = 0 && l2_prep(a0\value, mi, ind, s0) != 0
+            n: l2_expr_span(a0)
+            if: n < 1
                 return: 1
-            if: t = 1 && l2_prep(a0\value, mi, ind, s1) != 0
+            if: t = 0 && l2_emit_fields(a0, n, mi, ind, s0) != 0
                 return: 1
-            a0: l2_next_active(a0\next)
+            if: t = 1 && l2_emit_fields(a0, n, mi, ind, s1) != 0
+                return: 1
+            k: 0
+            while: k < n && a0 != 0
+                a0: l2_next_active(a0\next)
+                k: k + 1
+            ---
             t: t + 1
         if: l2_emit_checkpoint(mi, ind) != 0
             return: 1
@@ -11229,12 +11245,21 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         s0[0]: 0
         s1[0]: 0
         t: 0
+        # An actual is a whole expression: `8U * c.sizeof(c.int)` spans three
+        # fields, and prepping only the first silently dropped the rest.
         while: a0 != 0 && t < 2
-            if: t = 0 && l2_prep(a0\value, mi, ind, s0) != 0
+            n: l2_expr_span(a0)
+            if: n < 1
                 return: 1
-            if: t = 1 && l2_prep(a0\value, mi, ind, s1) != 0
+            if: t = 0 && l2_emit_fields(a0, n, mi, ind, s0) != 0
                 return: 1
-            a0: l2_next_active(a0\next)
+            if: t = 1 && l2_emit_fields(a0, n, mi, ind, s1) != 0
+                return: 1
+            k: 0
+            while: k < n && a0 != 0
+                a0: l2_next_active(a0\next)
+                k: k + 1
+            ---
             t: t + 1
         if: l2_emit_checkpoint(mi, ind) != 0
             return: 1

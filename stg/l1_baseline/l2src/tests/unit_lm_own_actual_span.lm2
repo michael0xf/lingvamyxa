@@ -1,0 +1,36 @@
+# lm_own_* actuals are whole expressions (found measuring OWN_ALLOC_TYPE_DESIGN's red): an unparenthesized length
+# lost every field after its first, so `lm_own_resize(cells, 8U * c.sizeof(c.int))` resized to 8 bytes and
+# `lm_own_copy_bytes(text, n + 1U)` copied n bytes. The copy is NUL-terminated at its length, so reading copy[2] is
+# in bounds either way and reads 0 before the repair; the resize's element 7 exists only after it.
+fn: copy_tail (const: @(char text); size_t: n) int
+    @: char copy
+    copy: lm_own_copy_bytes(text, n + 1U)
+    if: copy = 0
+        return: 1
+    if: copy[2] != 'c'
+        lm_own_delete(copy, 0)
+        return: 1
+    lm_own_delete(copy, 0)
+    return: 0
+end: copy_tail
+fn: grow () int
+    @: int cells
+    cells: (cast: (@: int) lm_own_new_zero(2U * c.sizeof(c.int)))
+    if: cells = 0
+        return: 1
+    cells: (cast: (@: int) lm_own_resize(cells, 8U * c.sizeof(c.int)))
+    if: cells = 0
+        return: 1
+    cells[7]: 42
+    if: cells[7] != 42
+        return: 1
+    lm_own_delete(cells, 0)
+    return: 0
+end: grow
+fn: main () int
+    if: copy_tail("abc", 2U) != 0
+        return: 1
+    if: grow() != 0
+        return: 2
+    return: 10
+end: main
