@@ -134,10 +134,19 @@ LmxMsgRuntime.root_record | h:227 | R0's policy record, already Structure data i
 --- LmxMsgBindWait (lmx_message_exec.c 34-55): the worker's wait object. Goes (map 5.7: no wait, no notify)
 LmxMsgBindWait.wait_ev / .cv / .sig | c:36,39,40 | the wait primitive | DEL | ruled (map 5.7; S3) | S3
 LmxMsgBindWait.worker / .worker_on | c:37,41,42 | the worker thread handle | L3T native (the L3 Thread's OS thread) | proposed (the map's "C keeps the native primitives" is before Mikhail) | M/S3
-LmxMsgBindWait.gen, .retired, .slot, .launch_n | c:44-47 | wait generations and launch gate | DEL | ruled (map 5.7; S3 launch wake goes) | S3
+LmxMsgBindWait.gen, .slot, .launch_n | c:44,46,47 | wait generations and launch gate | DEL | ruled (map 5.7; S3 launch wake goes) | S3
+LmxMsgBindWait.retired | c:45 | a generation's stop flag, polled by the worker loop (exec.c 3063, 3078, 3156, 3170; set at 2123 join_bind_worker, 2241 stop_retire_walk, 3376 stop) | DEL; its stop role is MSG running = 0 written by the parent, read by the owner's loop each round | proposed (b5 FLAG-1; with M there are no generations to retire) | M/S3
 LmxMsgBindWait.reaping, .on_reap, .reap_next | c:48,49,51 | the reap list | DEL (each thread frees itself; no join) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | S3/S5
 LmxMsgBindWait.owner_tid | c:50 | the owning thread's id | L3T native (thread identity, T) | proposed | S3
 LmxMsgBindWait.rec | c:54 | back link to the bind record | DEL | ruled (map 5.7) | S3
+
+--- LmxMsgCtxPack (lmx_message_exec.c 2788-2799 at 79871822): the launch handshake of a context worker. A sixth
+    scaffolding type (b5 FLAG-2); it describes no Message
+LmxMsgCtxPack.rt | c:2789 | the runtime pointer handed to the worker | DEL (LmxMsgRuntime goes) | ruled (map 5.7) | S3/S5
+LmxMsgCtxPack.addr | c:2790 | the bound Message's address | DEL (a capability, S2) | proposed | S2/S3
+LmxMsgCtxPack.wait | c:2791 | the worker's LmxMsgBindWait | DEL | ruled (map 5.7: BindWait goes) | S3
+LmxMsgCtxPack.go | c:2792 | the launch gate's go/refuse decision | DEL | ruled (S3 deletion list: launch_gate_go, launch_gate_refuse) | S3
+LmxMsgCtxPack.gate / .gm / .gc | c:2794,2796,2797 | the launch gate's event or mutex and condition | DEL | ruled (S3 deletion list; no wait, no notify) | S3
 
 --- LmxMsgExecBind (lmx_message_exec.c 57-74): the handler binding. Becomes the L3 Thread's or its parent's Structure data (map 5.7)
 LmxMsgExecBind.addr | c:58 | the bound Message's address | DEL (a capability, S2) | proposed | S2
