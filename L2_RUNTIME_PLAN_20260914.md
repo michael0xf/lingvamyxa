@@ -3750,3 +3750,12 @@ arming stay). Local run on 322eed3a before the oracle merge: -LaneCheck
 exit 0, plain parity PASS. measure_s3.sh on c41089f3 runs the red at
 74146146, the green, then the stop_event falsifier (one signal put back
 with its marker must turn the oracle red again, proving it still armed).
+Mikhail (2026-09-15, verbatim) on the one-root question: "1) сейчас, после
+приземления S3, пока деревья равны и слияние дешёвое" (now, after S3 lands,
+while the trees are equal and the merge is cheap). So the next stage after
+S3 lands is ONE ROOT: the copy of l1src, tests/l1 and lm1/build leaves
+stg/l1_baseline, the gates point at the root, l2src and the gates stay;
+the lead designs it in the (a) format after S3's "landed", ahead of M.
+And on 57: the helper 0c is back in a restarted session (id
+6d55a058-ba1a-4a63-bfd4-793291f1f3bc, its own words relayed by Mikhail);
+the coordinator relays the pin and the verify-run ticket to it.
