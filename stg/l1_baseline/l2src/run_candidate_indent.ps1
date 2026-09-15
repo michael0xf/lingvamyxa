@@ -478,6 +478,9 @@ $repo = (Resolve-Path (Resolve-L2Path "..\..")).Path
 $corpusDir = Join-Path $repo "tests\p0_tree_contract"
 $corpus = @(Get-ChildItem -LiteralPath $corpusDir -Filter "*.lmx" | Sort-Object Name | ForEach-Object { Join-Path "tests\p0_tree_contract" $_.Name })
 $extra = @("tests\arr.lmx", "tests\tail_cutters.lmx")
+# Compared against the STG printTree only: no golden exists for them in the tree, and a golden minted from
+# today's output would be a self-fulfilling pin, not a measurement (6f).
+$stgOnlyExtras = $extra
 foreach ($e in $extra) {
     if (Test-Path -LiteralPath (Join-Path $repo $e)) { $corpus += $e }
 }
@@ -530,6 +533,10 @@ foreach ($src in $corpus) {
     }
     if ($ecC -ne 0) { throw "$src unexpected reject $ecC $ae" }
     $gold = Join-Path (Split-Path -Parent $rootSrc) ($stem + ".tree.txt")
+    # Every accepted tree-contract input has a golden; a missing one is red with its name, never a pass
+    # (RUNNER_HAZARDS.txt (a)). The extra inputs have no golden and are compared against the STG only.
+    if ($src.StartsWith("tests\p0_tree_contract\") -and -not (Test-Path -LiteralPath $gold)) { throw "$src has no golden $gold" }
+    if (-not $src.StartsWith("tests\p0_tree_contract\") -and $stgOnlyExtras -notcontains $src) { throw "$src is neither a tree-contract input nor a listed STG-only extra" }
     if (Test-Path -LiteralPath $gold) {
         $g = (Read-Norm $gold).TrimEnd()
         $at = $a.TrimEnd()
