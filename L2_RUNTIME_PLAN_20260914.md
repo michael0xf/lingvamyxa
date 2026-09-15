@@ -5746,3 +5746,19 @@ type, without naming the field; the probe left as accepted; the chain
 runs the probe on the tree first (0/0/0/0 required), the exec.c syntax
 check, commit and push, then s5_green.sh in full; after green the
 falsifier, then the tip to the coordinator.
+b5's S6 census re-based on 3e6fc02a: sonnet/s6-rebase 0783c86b (checked by
+the coordinator: parent 3e6fc02a; the S5-pending rows present): 82 lock
+sites (101 before): S3 done 3, M done 11, S4 done 49, S5 pending 13, Y
+1, S6 5; 19 dropped, each confirmed absent by grep (the UI lane and the
+bind table's queued-mapping path, the wait/reap/launch-gate family and
+CtxPack's mutex/condvar, S2's take_addr/sched_step consolidation); the
+S5-pending rows: the retire queue's two rows re-tagged pending
+(e75263d7), root_seq (lm1 1063-1069 via assign_path), next_addr's
+non-atomic increment (lm1 1180-1181), the two root-list walks (the
+append in create_prepare lm1 1202-1205, the unlink in release_slot lm1
+1449-1463), all inside already-counted holds. "Done" for S3, M and S4
+means the hold's need is gone; the holds themselves leave with the
+lock at S6 (76 holds whose need is gone plus the 5 S6 sites and Y's 1
+after S5). b5 dropped its derived per-stage delta narrative after one
+mistag (bind_has_worker, M not S3) and kept only the directly counted
+totals and the verified drop list.
