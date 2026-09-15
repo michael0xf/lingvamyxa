@@ -4153,3 +4153,16 @@ land_oneroot.sh's allowlist gained both. Next: the red measure in a
 fresh worktree at b4e1296d (a control run_port_msg_visit with the slice
 intact, then the same runner with only the slice's l1src removed), then
 land_oneroot.sh b4e1296d d6/one-root 6bfefa81.
+ONE ROOT red measured (the lead, 2026-09-15) at b4e1296d in a fresh
+worktree with the pin at stg gen2: git ls-files stg/l1_baseline 1229 (0
+on d6/one-root); control run_port_msg_visit with the slice intact exit 0
+"lmx_msg_visit parity PASS: 148 checks"; the same runner with only
+stg/l1_baseline/l1src removed exit 1 at "l2units: failed" (the l2trans
+build translating l2src/l2trans.lm1 with predef l1src/parser.lm1 from the
+slice's cwd), the F2 blocker shown red on the tree itself. Landing
+launched: land_oneroot.sh b4e1296d d6/one-root 6bfefa81 (allowlist by
+status with rename detection; root buildCore/run_seed/run_gen, gate.ps1,
+legacy_p0, self_build, p0_tree_contract, cmake configure, the pin
+re-installed at build/l1trans/gen2 and gen3, the 33 gates, l2trans,
+port_parser, port_message -LaneCheck, run_mixa, the 7 mixa L2 parity
+runners).
