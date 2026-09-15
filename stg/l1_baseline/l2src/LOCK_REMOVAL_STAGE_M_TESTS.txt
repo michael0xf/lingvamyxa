@@ -33,8 +33,19 @@ Each test's step uses, and a first guess to be confirmed by reading every check 
   wait for C4". g_step / turn_root_step (57-65, 270-274): R0's turn stepping R so that R0's settle runs. The
   property "R0's settle never takes a failed orphan" stays, moved into R0's own turn calling its settle directly,
   with no child step.
-- lmx_model_family_close_32, root_record_5e, root_ingress_5b, orphan_mapped_17, scenario36, family_handoff: one
-  turn_step_child helper each (the stage-5 (d) migration), used to map or step. Read each use site.
+- lmx_model_family_close_32: step_from_root(p, c1) at 140 and 152 runs C's ordinary turn ("C's ordinary turn had an
+  effect and published a reply") and C's closing turn ("C's closing turn found no input and ended normally"). Child
+  properties: convert.
+- lmx_model_orphan_mapped_17: map_child_in_root(r, p, cc) at 179 ("P maps C onto its own context") is already the
+  own-thread path; only the host-side step of P around map_child becomes P's own turn on its own thread.
+  step_from_root(r, p) at 192 runs P's closing turn ("P ran its closing turn: stopped, C's close requested"). Child
+  property: convert.
+- lmx_model_scenario36_selftest: step_from_root(p, a) at 289 ("A's turn ran") and step_from_root(p, b) at 324/330
+  ("B's turn ran and ended in failure", "B leaves its native activation, handoff-safe"). Child properties: convert.
+- lmx_model_root_ingress_5b_selftest: map_child_in_root(rt, r, d) at 152 ("D bound, given an input and mapped onto
+  its own context") is already own-thread; R's host-side step to map D becomes R's own turn.
+- lmx_msg_family_handoff_selftest and lmx_model_root_record_5e_selftest: the turn_step_child helper is defined;
+  their use sites did not match this read's pattern. Read them before M's commit.
 - lmx_msg_send_local_selftest: run_child_turn helper plus sched_step (111), the parent's scheduler step. The
   sched_step checks are mapping properties and go; the send/admission checks convert.
 - lmx_sched_record_selftest: sched_step at 73 and the cursor. The scheduler record's cursor is the mapping: the test
