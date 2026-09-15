@@ -11526,12 +11526,27 @@ own worker, the host mapping, or its parent's lane in the sequential
 mapping of 19.28.R2.2) is that Message's lane for the take and clears its
 ready flag; a late read changes nothing. (4)
 Primitives: mailbox admission under its lock, reference counts, wait
-signals. (5) Runtime-level structures under the executor's lock belong to no
-Message: the root list, the slot list, the retire queue, a lane's own queue.
+signals.
 What is removed by this rule: a parent's ready lists and context lists
 appended by a child's, a sender's or a UI thread's lane; a child unlinking
 itself from its parent's list; the parent's step reads its children's own
 cells instead.
+
+Clarification (2026-09-15, Mikhail, verbatim): "Там не должно быть общих
+блокировок. У очереди писем только своя внутренняя блокировка коллекции,
+всё" (there must be no shared locks; the mail queue has only its own internal
+collection lock, that is all); "блокировка только локальная у коллекции
+сообщений может быть, больше блокировокне требуется даже локальных -- их в
+проекте не длолжно быть больше вообще" (the only lock there may be is the
+local lock of the message collection; no other locks are needed, not even
+local ones; there must be none of them in the project at all); "значит
+реализуйте полноценную арену для каждого MEssage, как описано в спеке. Без
+этого Message не имеет смысла" (so implement a full arena for each Message,
+as described in the spec (19.29.2); without it a Message makes no sense).
+Deleted the same day by his order: the former item (5) of the ownership list
+above, "Runtime-level structures under the executor's lock belong to no
+Message: the root list, the slot list, the retire queue, a lane's own queue",
+written 2026-09-14 by the review chat as its own consequence, never his words.
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own

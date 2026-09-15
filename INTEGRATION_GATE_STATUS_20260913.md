@@ -2637,8 +2637,12 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - (3) Control flags with a designated cross-lane writer: running=0 and
     closing by the parent, ready=1 by the sender at admission.
   - (4) Primitives: mailbox admission, refs, bind_wait_signal.
-  - (5) Runtime-level lists under the exec lock belong to no Message: the
-    root list, slot list, retire queue, e->scan and the lane queue.
+  - (5) deleted 2026-09-15 by Mikhail's order. It said runtime-level lists
+    under the exec lock belong to no Message; the review chat wrote it as its
+    own consequence (spec commit 0c875197) and this file copied it (4baa4474).
+    His rule (verbatim): "блокировка только локальная у коллекции сообщений
+    может быть, больше блокировокне требуется даже локальных -- их в проекте
+    не длолжно быть больше вообще".
   - Removed in d6's first decision 18 commit, after the release chain:
     - A: pushes into the parent's sched_ready and map sets from the
       sender, the child or the catch-up;

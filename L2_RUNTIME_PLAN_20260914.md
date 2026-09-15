@@ -1436,3 +1436,26 @@ the unfinished closing work is lost. The lead's exec.c counting unit: 77
 lmx_msg_exec_lock( acquisitions and 88 _locked( lines (22 helpers running
 under a caller's lock), 165 together, one inventory line per acquisition and
 one per helper.
+Later the same day (Mikhail, verbatim): "блокировка только локальная у
+коллекции сообщений может быть, больше блокировокне требуется даже локальных
+-- их в проекте не длолжно быть больше вообще" (the only lock there may be is
+the local lock of the message collection; no other locks, not even local ones,
+anywhere in the project). The removal's target is therefore every lock in the
+project except the message collection's own, not only the executor's.
+His order on the spec's decision-18 item (5) ("Runtime-level structures under
+the executor's lock belong to no Message: the root list, the slot list, the
+retire queue, a lane's own queue"): find who wrote it, delete it at once, and
+add to the docs only instructions agreed with him. Found: written 2026-09-14
+10:10 -03 by the review chat (the coordinator's session, then e2) in commit
+0c875197 as its own consequence of his one-arena, one-lane, one-writer
+clarification, never his words; the lead's session copied it into
+INTEGRATION_GATE_STATUS 4 s later (4baa4474). Deleted from the spec, the
+model's section 29 and the gate status. Open for him, not deleted without his
+word: item (4) of the same list (the coordinator's sentence, "Primitives:
+mailbox admission under its lock, reference counts, wait signals"), and the
+coordinator's consequences in the stage-5 (f) paragraph of spec 19.29.6 and
+the model's section 32 marked "Mikhail may overrule" (the root's close
+settling children before the root's storage and the runtime go, the UI child
+closed without a handler, the root's mailbox refusing admissions, the
+bootstrap thread as the root's lane, the strict lifecycle form, the retained
+orphan reclaimed at the root's close, and the 19.29.8 cross-reference).
