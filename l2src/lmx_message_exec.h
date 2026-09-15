@@ -51,7 +51,6 @@ int lmx_msg_exec_is_runnable_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_is_runnable_msg(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_exec_is_runnable_msg_locked(LmxMsg *m);
 void lmx_msg_exec_ready_msg(LmxMsgRuntime *rt, LmxMsg *m);
-void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt);
 int lmx_msg_exec_msg_bound(LmxMsg *m);
 int lmx_msg_exec_adopt_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_exec_dispose_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
@@ -65,7 +64,6 @@ LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i);
 #if defined(LMX_MSG_EXEC_TEST)
 void lmx_msg_exec_test_set_fail_ctx(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_test_set_fail_adopt_block(LmxMsgRuntime *rt, int v);
-int lmx_msg_exec_retire_n(LmxMsgRuntime *rt);
 #endif
 #if defined(LMX_MSG_EXEC_TEST)
 extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
