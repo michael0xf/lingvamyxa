@@ -6687,6 +6687,49 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        seen_new(rti);
+        {
+            /* M (e9's find): unbind clears the child's mapped flag, so after a rebind its
+             * parent maps it again and the map gives it a worker; before, map_child
+             * returned OK with no worker and the child never ran. */
+            LmxMsgAddr p = 0, c = 0;
+            LmxMsg *cm;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || entry_map(rti, p, c) != LMX_MSG_OK
+                || lmx_msg_exec_bind_has_worker(rti, c) == 0) {
+                fprintf(stderr, "exec remap create\n");
+                if (rti != 0) {
+                    lmx_msg_exec_stop(rti);
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            cm = lmx_msg_find(rti, c);
+            if (lmx_msg_exec_unbind(rti, c) != LMX_MSG_OK || cm == 0 || cm->mapped != 0) {
+                fprintf(stderr, "exec remap unbind mapped=%d\n", cm != 0 ? cm->mapped : -1);
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_exec_bind(rti, c, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || entry_map(rti, p, c) != LMX_MSG_OK || lmx_msg_exec_bind_has_worker(rti, c) == 0
+                || lmx_msg_host_post(rti, c, &env) != LMX_MSG_STAGED || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec remap map again worker=%d\n", lmx_msg_exec_bind_has_worker(rti, c));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            YIELD_UNTIL("remap: the rebound child takes its input on its new context",
+                InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 0);
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: unbind clears mapped; a rebound child is mapped again and gets a worker\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
         {
             /* Stage 3b-8: the family boundary contract. A bound child cannot leave its
              * family (lmx_msg_child_unlink returns INVALID and nothing moves); once

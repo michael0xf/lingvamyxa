@@ -1653,6 +1653,9 @@ static void unbind_slot_locked(LmxMsgExec *e, LmxMsgExecBind *rec) {
     old = rec->msg;
     rec->msg = 0;
     if (old != 0) {
+        /* M: the retired worker leaves on its next round, so the Message is no longer
+         * mapped; a rebind lets its parent map it again (a worker for the new record). */
+        old->mapped = 0;
         lmx_msg_endp_release(old);
     }
     rec->in_table = 0;
