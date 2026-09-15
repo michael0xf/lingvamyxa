@@ -1521,3 +1521,13 @@ recorded at runtime_new; a lane write with turn == 0 on any other thread is
 red), red on that mutation and green on the baseline, and no removal stage
 cites -LaneCheck as its proof before the tripwire is measured; a lane write
 from the bootstrap thread outside any turn must stay green.
+Inventory 2 of 3 (b5, 2026-09-15): sonnet/lock-inventory df360bb0,
+l2src/LOCK_REMOVAL_INVENTORY_LM1.txt, widened to the order's scope in the same
+file: 72 lock-acquisition sites in lmx_message.lm1 (65 of the exec-lock
+family, 1 host_lock, 6 mail_lock), lm1 and lm2 mirroring on every lock verb
+by grep; 66 to go and 6 allowed (each mail_lock verified to guard only a
+Message's own inbox or outbox push); of the 65 exec-lock lines 51 silent, 8
+not applicable, 6 fitting the map's M or P, all grep-verified against the
+file's own fields. Next for b5 on the same branch: the allocation inventory
+of lmx_message.lm1 (every calloc, malloc, realloc and free site with the
+record, the lane and the owner code), the arena half of the order.
