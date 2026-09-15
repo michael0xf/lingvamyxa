@@ -6236,3 +6236,7 @@ each reading the other's); the exec selftest's drive_mail_overlap
 ("drive close mail does not hold exec") converts to taking MAIL on a
 different Message while the hook holds the closer's, pinning that the
 monitor is per mailbox, not global.
+Correction to the Y2 flag above: the non-recursive init is
+pthread_mutex_init((pthread_mutex_t *)m->mail, 0) at exec.c 517 (not 519),
+against e->lock's PTHREAD_MUTEX_RECURSIVE at 1277-1278; checked by grep
+at 11f581e0.
