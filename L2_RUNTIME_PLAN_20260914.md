@@ -903,6 +903,29 @@ prototype, largest first.
    with the tripwire's measurement. 5e's slice 4 (185bb9d3, d_trailer_
    resolve, 14 stages, the falsifier at 6 mismatches on three inputs) and
    the notes for slices 2 and 3 (03d9aeff) are pushed for the lead's merge.
+   Landed after the machine's reboot (2026-09-14; every session came back
+   under a new name, the roles re-identified, nothing pushed was lost):
+   the turn-identity pair 75216d52 merged as ac861a5b over d7835dc7
+   (run_gates 11 of 11; parity with the foreign-turn and foreign-stop
+   lines; entry_turn 24; run_lmx, run_l2trans, run_l2_message_root green);
+   5e's slice 5 with its note (9a50dae1) merged as b3b13a86, so the parser
+   port's Stage d (39 functions, one unit) is complete on integration and
+   Stage e's plan is accepted; the host-pick deletion 10523360 (approved:
+   lm1 and lm2 identical, no reference to the deleted names left) in its
+   merge measure; 0c's never-run runners fixed (ee35e67a: path_storage,
+   storage, owned_ranges refused an empty -ArgumentList since their first
+   commits on 09-11) and the l2trans int-alias local fix (a table of
+   foreign int aliases with their p0.h lines, consulted everywhere the
+   classifier and the formal and return codes need it; the single-name
+   form refused) queued behind it. Found by 0c's cold survey: two parity
+   runners outside run_gates' defaults were red unnoticed, run_port_msg_
+   blocks (an extra free on the parity side: the bootstrap's bind-wait
+   record reaped at run_entry_turn's unbind since stage 5 (a), counted by
+   the process-wide free wrap of a link that opens a library unit; the
+   module's disposal identical) and run_port_msg_path_storage (the
+   pre-test allocation count moved with R0 and the UI child); both fixed
+   runner-only by isolating the module under test; the survey's section
+   (e) decides which non-default runners join run_gates.
 
 ## 4. Acceptance
 
