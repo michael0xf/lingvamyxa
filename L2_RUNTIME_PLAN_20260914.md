@@ -2982,3 +2982,12 @@ launch_gate_go, launch_gate_refuse, stop_event, stop_retire_walk,
 wake_addr_locked. S3's green is those 11 gone (no LANE WAKE FAIL, the probe
 at 0 lines); the lane_oracle gate is red on the branch until then, so it
 lands only with the lead's S3 change; the pthread paths unbuilt.
+S3's proof tool recorded in the design at 277dd3e8 (the 11 sites the
+deletion list; green -LaneCheck with no LANE WAKE FAIL and the probe at 0
+lines; 022b1136 landing only with the S3 change; the unbuilt pthread paths
+removed by the same diff). b5's CMake configure check, run 1, inconclusive
+through the lead's script (base 7200294b and the draft 010271f7 failing
+identically on "Bundled libsodium source was not found", the script having
+skipped the ExtractThirdPartyZips step lm_build_full_project runs first);
+rerun with extraction running; then probe (a), then 0c's goldens and seed
+red-first, then (b).
