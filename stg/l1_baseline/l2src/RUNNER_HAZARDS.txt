@@ -212,6 +212,26 @@ Survey method (on d925e600)
      per-stage launches, heaviest first, each with its existing red line unchanged and its time before and
      after.
   (d)'s and (f)'s fixes are claude-0c/runner-fix-empty-args c373fd04, queued with the lead.
+(i) Where the fixes stand (0c, 2026-09-15)
+  (d), (f): claude-0c/runner-fix-empty-args landed on integration as merge 4a92659b.
+  (a): claude-0c/runner-reuse-fixes landed as merge 9ad7e6bf on f59a79c7. Commits: aed30059 run_lmx
+    rebuilds l2trans.exe; 5d7e75ef run_port_parser compiles its alloc counter; 26763641 run_l2trans and
+    run_candidate_indent build the STG printTree oracle in the run (lm0 lines gone); ef6418b7 a missing
+    golden is red with its name; cff22ae5 run_l2trans and 7a72844c run_graph_abi never take a root gen3
+    by presence; 9bfbd144 run_graph_abi translates a case's l2src/tests header in the run.
+  9bfbd144 came from (e)'s first cold run of the new default set (c0d743b3: 31 of 32, red at graph_abi,
+    734 s): run_graph_abi reuses run_l2trans's Invoke-Positive/Leaf/LeafOut cases but never built the
+    test header repro_foreign_int_alias_local includes, and adds -I lm1/build only for C that includes
+    l1src/p0.lm1.h. So that case failed in every run_graph_abi from 9db35aef on, warm or cold, and no
+    landing ran run_graph_abi after it. My first explanation ("passes on a leftover after run_l2trans")
+    was wrong: d6's landing ran run_l2trans first and was still red. It was retracted. The other five
+    headers run_l2trans writes belong to cases registered with other helpers, which run_graph_abi does
+    not parse.
+  (e): the run_gates default set (32 gates) is not committed yet; it re-runs cold on the integration
+    that holds 9ad7e6bf, and its commit prints that time.
+  (b): claude-0c/runner-wait-launches 64df50cc (12 runner-only commits, on c0d743b3) is pushed and not
+    landed. Each red line is unchanged under a broken selftest. Six before/after times in those commit
+    messages overlapped a graph_abi cold run and are being re-measured; the clean numbers go here.
 (c) Cold run per runner
   Complete: 46 of 46 runners cold on d925e600 (every run_*.ps1 but run_gates, whose time is its defaults' sum),
   sequential in a fresh private worktree; the machine rebooted during row 20 and the batch resumed from
