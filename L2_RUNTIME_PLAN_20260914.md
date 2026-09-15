@@ -5769,3 +5769,18 @@ added, no cross-Message list or count left in LmxMsgRuntime or
 LmxMsgExec except slots/n for S6 and transport for Y, every reader of
 next_addr on the __atomic_ form), as LOCK_REMOVAL_S5_REVIEW.txt on
 sonnet/s5-review.
+S5 acceptance green measured by the coordinator (2026-09-15) in exec-3a:
+the S5 tip d6/lock-s5 ddab10a0 (e75263d7 plus the S4 merge 3e6fc02a and
+the two helper fixes) merged locally with the probe 85953500 (parents
+checked; never pushed): the probe "retire_queue=0 root_seq=0
+next_addr_nonatomic=0 root_list_loops=0", exit 0; run_port_message
+plain parity PASS in 47 s, 102 methods. The lead's own green agrees
+(measure tree 116123d1: the probe 0/0/0/0; parity PASS in 49 s; the UAF
+kit over the executor selftest "165 of 165 clean in 401 s", its
+detectors proven first by a tripwire), and his falsifier holds
+(release_slot's head unlink put back, the only diff, gives
+root_list_loops=1 with the other three at 0). S5's acceptance record:
+red 85953500 (28/7/4/14), green ddab10a0 (0/0/0/0), falsifier 1.
+Landing next: land_s5.sh onto 3e6fc02a, the union base plus lmx_cancel,
+the allowlist lmx_message.h/.lm1/.lm2 and lmx_message_exec.c/.h; the
+probe never folded in.
