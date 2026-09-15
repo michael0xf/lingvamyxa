@@ -5762,3 +5762,10 @@ lock at S6 (76 holds whose need is gone plus the 5 S6 sites and Y's 1
 after S5). b5 dropped its derived per-stage delta narrative after one
 mistag (bind_has_worker, M not S3) and kept only the directly counted
 totals and the verified drop list.
+Standing ticket to b5 (the coordinator, 2026-09-15): when S5's tip is
+handed over, review its diff against 3e6fc02a with the S5 lists and the
+re-based census (every S5-pending row gone or explained, no lock hold
+added, no cross-Message list or count left in LmxMsgRuntime or
+LmxMsgExec except slots/n for S6 and transport for Y, every reader of
+next_addr on the __atomic_ form), as LOCK_REMOVAL_S5_REVIEW.txt on
+sonnet/s5-review.
