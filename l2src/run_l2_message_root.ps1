@@ -5,7 +5,7 @@
 param([string]$CoreCommit = 'HEAD', [switch]$SkipHistoricalCatalogAudit)
 $ErrorActionPreference = 'Stop'
 $rootBaseline = Split-Path -Parent $PSScriptRoot
-$rootRepo = Split-Path -Parent (Split-Path -Parent $rootBaseline)
+$rootRepo = $rootBaseline
 $rootCompiler = Join-Path $rootBaseline 'build/l1trans/gen2/l1trans.exe'
 $rootPin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()
 if ($rootPin -notmatch '^[0-9A-F]{64}$') { throw "L1_PIN.txt must hold one 64-hex SHA256, got 'rootPin=$rootPin'" }
@@ -61,11 +61,11 @@ try {
     Assert-RootExit 'resolve'
     if ($rootRevision -notmatch '^[0-9a-f]{40}$') { throw 'Expected immutable revision' }
     $rootEvidence.coreCommit = $rootRevision
-    git archive --format=zip "--output=$rootRun/core.zip" $rootRevision -- stg/l1_baseline/l1src stg/l1_baseline/l2src stg/l1_baseline/lm1/build/l1src/p0.lm1.h
+    git archive --format=zip "--output=$rootRun/core.zip" $rootRevision -- l1src l2src lm1/build/l1src/p0.lm1.h
     Assert-RootExit 'archive'
     $rootEvidence.archiveSHA256 = (Get-FileHash -LiteralPath "$rootRun/core.zip").Hash
     Expand-Archive -LiteralPath "$rootRun/core.zip" -DestinationPath $rootSnapshot
-    $rootWork = Join-Path $rootSnapshot 'stg/l1_baseline'
+    $rootWork = $rootSnapshot
     foreach ($name in $rootOwned) {
         $path = Join-Path $PSScriptRoot $name
         $rootEvidence.owned[$path] = (Get-FileHash -LiteralPath $path).Hash

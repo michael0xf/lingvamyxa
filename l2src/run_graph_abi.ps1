@@ -26,7 +26,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $baseline = Split-Path -Parent $PSScriptRoot
-$repo = Split-Path -Parent (Split-Path -Parent $baseline)
+$repo = $baseline
 Set-Location $baseline
 
 $pin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()

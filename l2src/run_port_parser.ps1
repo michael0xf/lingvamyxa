@@ -26,9 +26,9 @@
 # result with no override calls).
 #
 $ErrorActionPreference = "Stop"
-Set-Location (Join-Path $PSScriptRoot "..")   # -> stg/l1_baseline
+Set-Location (Join-Path $PSScriptRoot "..")   # -> repo root
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $goldenDir = Join-Path $repoRoot "tests\p0_tree_contract"
 $dumpSrc = Join-Path $goldenDir "p0_meta_dump.c"
 if (-not (Test-Path $dumpSrc)) { throw "missing $dumpSrc" }

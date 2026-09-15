@@ -10,10 +10,10 @@
 # and does not decide. Executables are compared by nothing: gcc output here is not
 # byte-reproducible from identical C.
 #
-#   powershell -NoProfile -ExecutionPolicy Bypass -File stg/l1_baseline/l2src/run_self_build.ps1
+#   powershell -NoProfile -ExecutionPolicy Bypass -File l2src/run_self_build.ps1
 param([string]$OutDir)
 $ErrorActionPreference = 'Continue'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $OutDir) { $OutDir = Join-Path $repo ('build\self_build\' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff')) }
 $map = @(
     @('l1src/p0.h.lm1', 'lm1/build/l1src/p0.lm1.h'),

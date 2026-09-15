@@ -8,7 +8,7 @@
 # run_msg_family_handoff archive the committed HEAD, the other gates read the
 # working tree.
 #
-#   powershell -NoProfile -ExecutionPolicy Bypass -File stg/l1_baseline/l2src/run_gates.ps1
+#   powershell -NoProfile -ExecutionPolicy Bypass -File l2src/run_gates.ps1
 #   ... -SchedRecordSource <copy.lm2>   run_sched_record against another source
 #   ... -L2MessageRoot                  also run the opt-in l2_message_root gate, last
 #

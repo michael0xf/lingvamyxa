@@ -14,7 +14,7 @@ foreach ($level in $requested) {
 }
 $Optimization = $requested
 $baseline = Split-Path -Parent $PSScriptRoot
-$repo = Split-Path -Parent (Split-Path -Parent $baseline)
+$repo = $baseline
 $compiler = Join-Path $baseline 'build/l1trans/gen2/l1trans.exe'
 $pin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()
 if ($pin -notmatch '^[0-9A-F]{64}$') { throw "L1_PIN.txt must hold one 64-hex SHA256, got 'pin=$pin'" }
@@ -54,7 +54,7 @@ try {
     if ($revision -notmatch '^[0-9a-f]{40}$') { throw 'Expected a resolved full commit hash.' }
     $evidence.coreCommit = $revision
     # Inspect the selected immutable revision, never the live checkout.
-    $subtree = 'stg/l1_baseline/l2src'
+    $subtree = 'l2src'
     Invoke-SendStage 'list_core' $git @('ls-tree', '--name-only', $revision, '--', "$subtree/")
     $listed = @(Get-Content -LiteralPath (Join-Path $run 'list_core.stdout.txt') | Where-Object { $_ } | ForEach-Object { ($_ -split '/')[-1] })
     $fixed = @('lmx.h', 'lmx_message.h', 'lmx_message.lm1', 'lmx_message_host.h', 'lmx_message_host.c', 'lmx_message_exec.h', 'lmx_message_exec.c')
@@ -69,9 +69,9 @@ try {
     $archive = Join-Path $run 'core.zip'
     # l1src and lm1/build: l2trans.lm1 predefs l1src/parser.lm1 and its C
     # includes lm1/build, and the L2 runtime units need l2trans.
-    Invoke-SendStage 'archive_core' $git @('archive', '--format=zip', "--output=$archive", $revision, '--', $subtree, 'stg/l1_baseline/l1src', 'stg/l1_baseline/lm1/build')
+    Invoke-SendStage 'archive_core' $git @('archive', '--format=zip', "--output=$archive", $revision, '--', $subtree, 'l1src', 'lm1/build')
     Expand-Archive -LiteralPath $archive -DestinationPath $snapshot
-    $stageWorkingDir = Join-Path $snapshot 'stg/l1_baseline'
+    $stageWorkingDir = $snapshot
     $files = @($fixed) + @($moduleNames | ForEach-Object { "$_.h.lm1"; "$_.lm1" })
     $coreHashes = @{}
     foreach ($file in $files) {

@@ -3,7 +3,7 @@
 param([string]$OracleEvidence,[switch]$FocusedBracket)
 $ErrorActionPreference='Stop'
 $rootBaseline=Split-Path -Parent $PSScriptRoot
-$repo=Split-Path -Parent (Split-Path -Parent $rootBaseline)
+$repo=$rootBaseline
 # Everything this gate measures comes from the tree: the pinned L1 compiler, the
 # current l2trans, HEAD's l1src/l2src/p0.lm1.h with the listed inputs copied from
 # the working tree, and runtime objects built from the tree by run_l2trans's own
@@ -20,7 +20,7 @@ New-Item -ItemType Directory -Path $sourceRoot -Force | Out-Null
 function Get-TreeRuntimeObjects {
     # A private scope: run_l2trans's variables ($out, $cflags, ...) stay inside.
     . (Join-Path $PSScriptRoot 'run_l2trans.ps1') -BuildOnly -OutputDirectory 'build/c_scanners_runtime' -TranslatorPath $l1trans
-    # Its object paths are relative to stg/l1_baseline; this gate compiles and
+    # Its object paths are relative to the repo root; this gate compiles and
     # links from inside its snapshot, so make them rooted.
     @(Get-L2MessageObjects) | ForEach-Object { if ([IO.Path]::IsPathRooted($_)) { $_ } else { Join-Path $rootBaseline $_ } }
 }
@@ -46,10 +46,10 @@ try {
     Set-Location $savedLocation
 }
 $l2exe=$currentL2Exe
-git -C $repo archive --format=zip "--output=$run/core.zip" HEAD -- stg/l1_baseline/l1src stg/l1_baseline/l2src stg/l1_baseline/lm1/build/l1src/p0.lm1.h
+git -C $repo archive --format=zip "--output=$run/core.zip" HEAD -- l1src l2src lm1/build/l1src/p0.lm1.h
 if($LASTEXITCODE -ne 0){throw 'Archive failed'}
 Expand-Archive -LiteralPath "$run/core.zip" -DestinationPath $sourceRoot
-$work=Join-Path $sourceRoot 'stg/l1_baseline'
+$work=$sourceRoot
 $out='build/c_scanners'
 New-Item -ItemType Directory -Path (Join-Path $work $out) -Force | Out-Null
 $evidence=[ordered]@{result='FAIL';stages=@();compiler=$l1trans;compilerSHA256=$pin;l2Compiler=$l2exe;coreCommit=((git -C $repo rev-parse HEAD) -join '');currentL2TranslatorSourceSHA256=(Get-FileHash (Join-Path $PSScriptRoot 'l2trans.lm1')).Hash;sources=@{};reusedObjects=$runtimeObjectHashes}
@@ -256,7 +256,7 @@ try {
             foreach($source in $cached.sources.PSObject.Properties){
                 if($source.Name -match '[\\/]l1src[\\/]' -and (Get-FileHash $source.Name).Hash -ne $source.Value){throw 'Oracle cache frozen source changed'}
             }
-            $cachedRoot=Join-Path (Split-Path -Parent $OracleEvidence) 'source/stg/l1_baseline'
+            $cachedRoot=Join-Path (Split-Path -Parent $OracleEvidence) 'source'
             $cachedScript=Get-Content (Join-Path $cachedRoot 'l2src/run_candidate_c_scanners.ps1') -Raw
             $currentScript=Get-Content $PSCommandPath -Raw
             if([regex]::Match($cachedScript,'(?m)^    \$cflags=.*$').Value -ne [regex]::Match($currentScript,'(?m)^    \$cflags=.*$').Value){throw 'Oracle cache C flags changed'}

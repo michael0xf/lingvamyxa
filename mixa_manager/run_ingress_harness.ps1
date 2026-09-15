@@ -1,13 +1,13 @@
 # App-only LMX_MSG_HOST_INGRESS_V0 foreign-thread harness (Windows).
 # Pins: mixa_manager/vendor/lmx_msg_host_ingress_v0 (no live l2src dependency).
-# Translator: stable stg\l1_baseline\build\l1trans\gen2\l1trans.exe (full SHA256).
+# Translator: pinned build\l1trans\gen2\l1trans.exe (full SHA256).
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
-$L1RootAbs = Join-Path $PSScriptRoot "..\stg\l1_baseline"
+$L1RootAbs = Join-Path $PSScriptRoot ".."
 $ExpectedTransSha = Get-L1Pin -L1Root $L1RootAbs
 Set-Location (Join-Path $PSScriptRoot "..")
 
-$trans = "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+$trans = "build\l1trans\gen2\l1trans.exe"
 if ($env:MIXA_L1TRANS -and $env:MIXA_L1TRANS.Trim().Length -gt 0) {
     $trans = $env:MIXA_L1TRANS.Trim()
 }

@@ -262,7 +262,7 @@ foreach ($unit in $units) {
         $inc += @("-I", $blkInc)
     }
     if ($unit -eq "lmx_dec_selftest") {
-        $decSrc = Join-Path (Get-Location) "..\..\third_party\decNumber\decNumber-icu-368"
+        $decSrc = Join-Path (Get-Location) "third_party\decNumber\decNumber-icu-368"
         $defs = @("-DDECNUMDIGITS=34")
         $opt = @("-O2")
         $inc += @("-I", $decSrc)

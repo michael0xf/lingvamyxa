@@ -1,7 +1,7 @@
 # Focused foreign ABI test; no Message runtime or translator self-build.
 $ErrorActionPreference = 'Stop'
 $baseline = Split-Path -Parent $PSScriptRoot
-$repo = Split-Path -Parent (Split-Path -Parent $baseline)
+$repo = $baseline
 $compiler = Join-Path $baseline 'build/l1trans/gen2/l1trans.exe'
 $pin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()
 if ($pin -notmatch '^[0-9A-F]{64}$') { throw "L1_PIN.txt must hold one 64-hex SHA256, got 'pin=$pin'" }

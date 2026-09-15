@@ -2,7 +2,7 @@
 param([string]$CoreCommit = 'HEAD')
 $ErrorActionPreference = 'Stop'
 $baseline = Split-Path -Parent $PSScriptRoot
-$repo = Split-Path -Parent (Split-Path -Parent $baseline)
+$repo = $baseline
 $compiler = Join-Path $baseline 'build/l1trans/gen2/l1trans.exe'
 $pin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()
 if ($pin -notmatch '^[0-9A-F]{64}$') { throw "L1_PIN.txt must hold one 64-hex SHA256, got 'pin=$pin'" }
@@ -43,11 +43,11 @@ try {
     if ($revision -notmatch '^[0-9a-f]{40}$') { throw 'Expected full commit hash.' }
     $evidence.coreCommit = $revision
     $coreFiles = @('lmx_message.h', 'lmx_msg_blocks.h.lm1', 'lmx_owned_ranges.h.lm1', 'lmx_msg_storage.h.lm1', 'lmx_msg_path_storage.h.lm1')
-    $paths = @($coreFiles | ForEach-Object { "stg/l1_baseline/l2src/$_" })
+    $paths = @($coreFiles | ForEach-Object { "l2src/$_" })
     $archive = Join-Path $run 'core_headers.zip'
     Invoke-SlotsStage 'archive_core' $git (@('archive', '--format=zip', "--output=$archive", $revision, '--') + $paths)
     Expand-Archive -LiteralPath $archive -DestinationPath $snapshot
-    $stageWorkingDir = Join-Path $snapshot 'stg/l1_baseline'
+    $stageWorkingDir = $snapshot
     New-Item -ItemType Directory -Path (Join-Path $stageWorkingDir 'l2src/tests') -Force | Out-Null
     foreach ($name in $ownNames) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $stageWorkingDir "l2src/$name")

@@ -107,8 +107,8 @@ $replaced = @(
 $frozenParser = Resolve-L2Path "l1src\parser.lm1"
 $srcParser = [System.IO.File]::ReadAllText($frozenParser).Replace("`r`n", "`n")
 $frozenHash = (Get-FileHash -Algorithm SHA256 $frozenParser).Hash
-$headParser = (git -C (Resolve-L2Path "..\..") rev-parse "HEAD:stg/l1_baseline/l1src/parser.lm1").Trim()
-$workParser = (git -C (Resolve-L2Path "..\..") hash-object "stg/l1_baseline/l1src/parser.lm1").Trim()
+$headParser = (git -C (Resolve-L2Path ".") rev-parse "HEAD:l1src/parser.lm1").Trim()
+$workParser = (git -C (Resolve-L2Path ".") hash-object "l1src/parser.lm1").Trim()
 if ($headParser -ne $workParser) { throw "frozen REF l1src/parser.lm1 is dirty; refuse to strip a moving original" }
 foreach ($name in $replaced) {
     $all = [regex]::Matches($srcParser, "(?m)^(sub|fn): $([regex]::Escape($name))\b")
@@ -474,7 +474,7 @@ $expectReject = @{
     "invalid_triple_unclosed" = @{ Exit = 1; Diag = "P0 parse error 4 at 1:4: unterminated python-like string literal" }
 }
 $emptyColon = @("return_colon_empty_trailer", "return_colon_comment_trailer", "F_star_fence")
-$repo = (Resolve-Path (Resolve-L2Path "..\..")).Path
+$repo = (Resolve-Path (Resolve-L2Path ".")).Path
 $corpusDir = Join-Path $repo "tests\p0_tree_contract"
 $corpus = @(Get-ChildItem -LiteralPath $corpusDir -Filter "*.lmx" | Sort-Object Name | ForEach-Object { Join-Path "tests\p0_tree_contract" $_.Name })
 $extra = @("tests\arr.lmx", "tests\tail_cutters.lmx")

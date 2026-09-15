@@ -21,7 +21,7 @@ $out = "build\l2trans"
 $log = "build\l1trans\logs\$gen"
 if ($OutputDirectory) { $out = $OutputDirectory; $log = Join-Path $out 'logs' }
 New-Item -ItemType Directory -Force -Path $out, $log | Out-Null
-# Paths below are read and written relative to stg/l1_baseline; -OutputDirectory
+# Paths below are read and written relative to the repo root; -OutputDirectory
 # may be rooted, and a rooted path is used as given.
 function Resolve-L2Path([string]$Path) {
     if ([System.IO.Path]::IsPathRooted($Path)) { return $Path }

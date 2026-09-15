@@ -4,7 +4,7 @@
 # Revived 2026-09-14 (d6): the runner hard-coded the file and module list of
 # core 57b590f4, so any newer core failed at the `message` stage
 # ("cannot read import l2src/lmx_msg_liveness.h.lm1"). The snapshot is now the
-# whole stg/l1_baseline/l2src subtree of the selected revision, and the
+# whole l2src subtree of the selected revision, and the
 # modules are every lmx_*.lm1 with a matching .h.lm1 in that revision: the
 # production runtime run_model_scenario36.ps1 builds. This is the model's
 # section 34 (family handoff) coverage.
@@ -23,7 +23,7 @@ foreach ($level in $requested) {
 }
 $Optimization = $requested
 $baseline = Split-Path -Parent $PSScriptRoot
-$repo = Split-Path -Parent (Split-Path -Parent $baseline)
+$repo = $baseline
 $compiler = Join-Path $baseline 'build/l1trans/gen2/l1trans.exe'
 $pin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()
 if ($pin -notmatch '^[0-9A-F]{64}$') { throw "L1_PIN.txt must hold one 64-hex SHA256, got 'pin=$pin'" }
@@ -66,7 +66,7 @@ try {
     if ($revision -notmatch '^[0-9a-f]{40}$') { throw 'Expected a resolved full commit hash.' }
     $evidence.coreCommit = $revision
     # Inspect the selected immutable revision, never the live checkout.
-    $subtree = 'stg/l1_baseline/l2src'
+    $subtree = 'l2src'
     Invoke-FamilyStage 'list_core' $git @('ls-tree', '--name-only', $revision, '--', "$subtree/")
     $listed = @(Get-Content -LiteralPath (Join-Path $run 'list_core.stdout.txt') | Where-Object { $_ } | ForEach-Object { ($_ -split '/')[-1] })
     $fixed = @('lmx.h', 'lmx_message.h', 'lmx_message.lm1', 'lmx_message_host.h', 'lmx_message_host.c', 'lmx_message_exec.h', 'lmx_message_exec.c')
@@ -81,9 +81,9 @@ try {
     $archive = Join-Path $run 'core.zip'
     # l1src and lm1/build: l2trans.lm1 predefs l1src/parser.lm1 and its C
     # includes lm1/build, and the L2 runtime units need l2trans.
-    Invoke-FamilyStage 'archive_core' $git @('archive', '--format=zip', "--output=$archive", $revision, '--', $subtree, 'stg/l1_baseline/l1src', 'stg/l1_baseline/lm1/build')
+    Invoke-FamilyStage 'archive_core' $git @('archive', '--format=zip', "--output=$archive", $revision, '--', $subtree, 'l1src', 'lm1/build')
     Expand-Archive -LiteralPath $archive -DestinationPath $snapshot
-    $stageWorkingDir = Join-Path $snapshot 'stg/l1_baseline'
+    $stageWorkingDir = $snapshot
     $files = @($fixed) + @($moduleNames | ForEach-Object { "$_.h.lm1"; "$_.lm1" })
     $coreHashes = @{}
     foreach ($file in $files) {
