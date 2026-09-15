@@ -37,10 +37,8 @@ if (-not (Test-Path -LiteralPath $TranslatorPath)) { throw "missing translator: 
 $transHash = (Get-FileHash -LiteralPath $TranslatorPath).Hash
 if ($requireStablePin -and $transHash -ne $pin) { throw "translator $TranslatorPath hash $transHash is not the stable pin" }
 $l1trans = (Resolve-Path -LiteralPath $TranslatorPath).ProviderPath
-$currentTranslator = Join-Path $repo 'build/l1trans/gen3/l1trans.exe'
-if (-not $OutputTranslatorPath -and (Test-Path -LiteralPath $currentTranslator)) {
-    $OutputTranslatorPath = $currentTranslator
-}
+# The output translator is -OutputTranslatorPath or the translator above; a root build/l1trans/gen3 is
+# used only when named, never because the file exists (l2src/RUNNER_HAZARDS.txt (a)).
 if (-not $OutputTranslatorPath) { $OutputTranslatorPath = $l1trans }
 if (-not (Test-Path -LiteralPath $OutputTranslatorPath)) { throw "missing output translator: $OutputTranslatorPath" }
 $outputL1trans = (Resolve-Path -LiteralPath $OutputTranslatorPath).ProviderPath
