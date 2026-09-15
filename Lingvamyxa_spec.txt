@@ -1062,6 +1062,10 @@ inside of a Message (its Structure data in its own arena): an L3 Thread's
 record adds its mailbox (the one synchronized collection of Messages) and
 its scheduler and maintenance state as such data; the C keeps only the
 native primitives (the thread, the mailbox's monitor).
+Mikhail, 2026-09-15, verbatim, on that inside: "и транслируется в LMX как внутренность Message." -- то есть записывается в "struct Lmx *root; " , и на L1 нужно сделать имитацию (то есть не имитацию а код вкоторый L2 и L3 будут разворачиваться) and, correcting
+himself the same minute: "то есть записывается в "struct Lmx *root;"" это уже на L2 там лежит код который с этими Message и работает. А на L1 просто тот код который _будет порождаться_. (that inside is written into what
+`root` reaches; on L2 that is where the code working with these Messages
+lies; on L1 there is simply the code that will be generated).
 
 `node` is the Structure's lexical parent. Merge and Message creation copy the
 complete used graph with the same traversal, including lexical node chains to

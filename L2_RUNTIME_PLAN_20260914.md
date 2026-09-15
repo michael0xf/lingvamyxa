@@ -3235,3 +3235,14 @@ proposed by analogy with the deleted create retry; and "ready" put to
 him too, since his 2026-09-14 sentence names readiness as the child's own
 flag written by the sender at admission while his final loop makes the
 mailbox's non-emptiness the readiness, DEL proposed; those two rows held.
+Mikhail (2026-09-15, verbatim, on the LmxMsg record's "inside of a Message"):
+"и транслируется в LMX как внутренность Message." -- то есть записывается в "struct Lmx *root; " , и на L1 нужно сделать имитацию (то есть не имитацию а код вкоторый L2 и L3 будут разворачиваться) and, correcting himself the same minute: "то есть записывается в "struct Lmx *root;"" это уже на L2 там лежит код который с этими Message и работает. А на L1 просто тот код который _будет порождаться_.
+Read by the coordinator: the L3 Thread's internals (the field table's L3T,
+PAR, ARENA and MBOX rows) are not fields of a C record but Structure data
+reached from root; on L2 they are ordinary code over that data; the C
+written by hand in L1 for them is the code the translator will generate
+from that L2 code, so it is written in the translator's output shape
+(operations over Lmx in the Message's arena), not as a bespoke C design,
+and the later port is writing the L2 source whose translation is that C.
+Entered verbatim in spec section 2 and the model's section 2 after the
+LmxMsg record.
