@@ -3783,3 +3783,24 @@ Landing: land_s3.sh c063fd00 c41089f3 (allowlist the 8 exec/host/message
 files; port_message twice, run_lmx -Suite Message, run_model_scenario36,
 the 33 gates; push only if all green and the tip unmoved); then "landed",
 e9's slot, then the ONE ROOT section.
+b5's S4 census landed on sonnet/s4-writes 7ebf6d54 (LOCK_REMOVAL_S4_WRITES.txt,
+11 sites, LmxMsg rows only; checked by the coordinator, 11 tagged
+permits). 9 sites are item (2) (child_link, child_chain_remove,
+handoff_supervision: the family chain; end_turn's committed, tracked and
+child_heard_at on its own children; exec_bind_mode/map_child: the
+execution mapping at bind; adopt, dispose, reclaim_mark: the settle
+writes). Two "none", ruled by the coordinator: (i) lmx_msg_create_prepare,
+the parent's lane populating the new child's record (addr, parent, state,
+init, owner_rt, alloc_next, path, the arena) before launch: not a
+contradiction; before launch the child has no lane, it is the spec's
+reserved child created by merge in the creator's turn (19.29.7.1), so
+until launch its record is the creator's own data and from launch the
+child's lane owns it; the S4 note states the boundary as launch. (ii)
+lmx_msg_endp_retain/release, the atomic reference counts (the spec's
+"Primitives" clause): not an S4 category; refs is DEL with S6 (the arena
+attached at consumption replaces shared reference counts; map 2.6). Also
+found: running has zero foreign-lane write sites today, a parent's stop
+reaching the target as a STOP Message the target acts on itself; the
+mechanism (flag write or Message) is implementation, Mikhail's "0 is the
+parent's stop request" holds either way. No site needs a new lock, wait
+or signal; all run under today's executor lock.
