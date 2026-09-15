@@ -830,6 +830,17 @@ formal failed "unsupported index" because the type kept legacy codes 13/14/15;
 it is now a foreign pointer type, and the leaf writes and reads the index and
 allocates a local of the type through the explicit cast.
 
+Added 2026-09-15, making 143 (349D98CEFA2E378EB2F7543E7ACA118C633802AEB0DC4F9C99E8C4221D0AF8CE):
+Leaf (1):
+  unit_sizeof_element
+Removing only that line reproduces the 142-case digest (73174F6D...) exactly.
+It is the falsifier for 5e's e3 pre-validation (parser-l2 Stage e slice 3):
+`c.sizeof(new_columns[0])` kept the source name of a renamed slot local, and
+`c.sizeof(p[0])` that of a formal, because l2_sizeof_name_bytes lowered only a
+bare identifier; l2trans and l1trans passed and gcc reported the name
+undeclared. The leading identifier of `name[digits]` is now renamed with the
+index kept; own fields and any other tail stay as before.
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for

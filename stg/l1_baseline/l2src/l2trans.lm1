@@ -10870,30 +10870,54 @@ return: c.memcmp(a\data, d, n) = 0
 fn: l2_sizeof_name_bytes (const: @(LmP0Node node); const: @(char d); size_t: b; size_t: e; int: mi; const: @(char ind); @: char dest) int
     size_t: n 0U
     size_t: i 0U
+    size_t: h 0U
     int: k 0
     int: oi -1
     int: t 0
     if: d = 0 || dest = 0 || e <= b
         return: 2
-    n: e - b
-    if: n > 200U
+    if: e - b > 200U
         return: 2
     if: d[b] != 95 && (d[b] < 65 || d[b] > 90) && (d[b] < 97 || d[b] > 122)
         return: 2
     i: b
-    while: i < e
-        if: d[i] != 95 && (d[i] < 65 || d[i] > 90) && (d[i] < 97 || d[i] > 122) && (d[i] < 48 || d[i] > 57)
-            return: 2
+    while: i < e && (d[i] = 95 || (d[i] >= 65 && d[i] <= 90) || (d[i] >= 97 && d[i] <= 122) || (d[i] >= 48 && d[i] <= 57))
         i: i + 1U
+    h: i
+    # An element operand `name[digits]` (c.sizeof(new_columns[0])) renames its
+    # name like a bare one; any other tail stays as written.
+    if: h < e
+        if: e - h < 3U || d[h] != 91 || d[e - 1U] != 93
+            return: 2
+        i: h + 1U
+        while: i < e - 1U
+            if: d[i] < 48 || d[i] > 57
+                return: 2
+            i: i + 1U
+        ---
+    n: h - b
     if: mi >= 0
         k: 0
         while: k < l2_m_arity[mi]
             if: l2_text_is_bytes(l2_fn(mi, k), d + b, n)
-                if: c.sprintf(dest, "c.sizeof(l2_p%d_%d)", mi, k) < 0
+                if: c.sprintf(dest, "c.sizeof(l2_p%d_%d%.*s)", mi, k, (cast: (int) (e - h)), d + h) < 0
                     return: 1
                 return: 0
             k: k + 1
         ---
+        k: 0
+        while: k < l2_m_sn[mi]
+            if: l2_text_is_bytes(l2_sn[l2_slot_off(mi, k)], d + b, n)
+                if: c.sprintf(dest, "c.sizeof(l2_s%d_%d%.*s)", mi, k, (cast: (int) (e - h)), d + h) < 0
+                    return: 1
+                return: 0
+            k: k + 1
+        ---
+    ---
+    # An own field is lowered through a typed temp, which has no elements.
+    if: h < e
+        return: 2
+    if: mi >= 0
         k: 0
         while: k < l2_own_n && oi < 0
             if: l2_own_mi[k] = mi && l2_text_is_bytes(l2_own_name[k], d + b, n) && (l2_own_host[k] = 0 || l2_scope_has(l2_own_host[k]))
