@@ -576,19 +576,11 @@ fn: lmx_msg_find_tree (@: LmxMsg m; LmxMsgAddr: addr) @: LmxMsg
     ---
 return: 0
 
+# S5: R0 is the one root, so the lookup is R0's tree.
 fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
-    @: LmxMsg fam
-    @: LmxMsg f
     if: rt = 0 || addr = 0U
         return: 0
-    fam: rt\root
-    while: fam != 0
-        f: lmx_msg_find_tree(fam, addr)
-        if: f != 0
-            return: f
-        fam: fam\next_sibling
-    ---
-return: 0
+return: lmx_msg_find_tree(rt\root, addr)
 
 fn: lmx_msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @: LmxMsg
     @: LmxMsg d
@@ -1059,13 +1051,11 @@ fn: lmx_msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; @: LmxMsg p) int
     if: rt = 0 || slot = 0
         return: c.LMX_MSG_INVALID
     if: p = 0
-        if: rt\root_seq + 1U = 0U
-            return: c.LMX_MSG_NOMEM
+        # S5: only R0 is created without a parent, so its path is [1].
         st: c.lmx_msg_path_grow(@ slot\path, @ slot\path_cap, 1)
         if: st != c.LMX_MSG_OK
             return: st
-        rt\root_seq: rt\root_seq + 1U
-        slot\path[0]: rt\root_seq
+        slot\path[0]: 1U
         slot\path_n: 1
         return: c.LMX_MSG_OK
     if: p\path_n < 1 || p\path_n = 2147483647
@@ -1085,7 +1075,6 @@ return: c.LMX_MSG_OK
 
 fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
     @: LmxMsg slot
-    @: LmxMsg ch
     @: LmxMsg p 0
     @: uchar initp 0
     @: char dst_chars 0
@@ -1176,8 +1165,8 @@ fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx sour
         ---
         c.lmx_msg_exec_unlock(rt)
         return: st
-    slot\addr: rt\next_addr
-    rt\next_addr: rt\next_addr + 1U
+    # S5: the address comes from the runtime's order-free atomic counter (no owner lane).
+    slot\addr: c.lmx_msg_addr_take(rt)
     slot\parent: parent
     if: top != 0
         slot\parent: p\addr
@@ -1194,15 +1183,9 @@ fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx sour
     slot\alloc_next: rt\slots
     rt\slots: slot
     rt\n: rt\n + 1
+    # S5: top = 0 with no parent means no root exists yet; this is R0.
     if: parent = 0U && top = 0
-        if: rt\root = 0
-            rt\root: slot
-        else:
-            ch: rt\root
-            while: ch\next_sibling != 0
-                ch: ch\next_sibling
-            ch\next_sibling: slot
-        ---
+        rt\root: slot
     ---
     if: p != 0
         lmx_msg_child_link(p, slot)
@@ -1425,7 +1408,6 @@ fn: lmx_msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
 return: st
 
 sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
-    @: LmxMsg ch
     @: LmxMsgCopy inb 0
     @: LmxMsgCopy outb 0
     int: ust
@@ -1445,19 +1427,10 @@ sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     if: m\parent_msg != 0
         lmx_msg_child_unlink(m\parent_msg, m)
     ---
+    # S5: only R0 has no parent, and it is the one root.
     if: rt != 0 && m\parent = 0U
         if: rt\root = m
-            rt\root: m\next_sibling
-        else:
-            ch: rt\root
-            while: ch != 0
-                if: ch\next_sibling = m
-                    ch\next_sibling: m\next_sibling
-                    ch: 0
-                else:
-                    ch: ch\next_sibling
-                ---
-            ---
+            rt\root: 0
         ---
         m\next_sibling: 0
     ---
@@ -2196,7 +2169,6 @@ return: n
 
 fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap) int
     @: LmxMsg m
-    @: LmxMsg fam
     int: n 0
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         return: -1
@@ -2205,10 +2177,9 @@ fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned:
         m: lmx_msg_self_or_find(rt, who)
         n: lmx_msg_poll_mark(rt, m, now, threshold, out, cap, n)
     else:
-        fam: rt\root
-        while: fam != 0
-            n: lmx_msg_poll_kids(rt, fam, now, threshold, out, cap, n)
-            fam: fam\next_sibling
+        # S5: R0 is the one root.
+        if: rt\root != 0
+            n: lmx_msg_poll_kids(rt, rt\root, now, threshold, out, cap, n)
         ---
     ---
     c.lmx_msg_exec_unlock(rt)

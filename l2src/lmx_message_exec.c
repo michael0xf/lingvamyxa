@@ -452,6 +452,13 @@ int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who) {
     return LMX_MSG_OK;
 }
 
+/* S5: the runtime's address counter is one order-free atomic cell with no owner
+ * lane. Every create takes the next value; addresses are unique and their order
+ * does not matter. */
+LmxMsgAddr lmx_msg_addr_take(LmxMsgRuntime *rt) {
+    return (LmxMsgAddr)__atomic_fetch_add_n(&rt->next_addr, 1U, __ATOMIC_RELAXED);
+}
+
 /* Stage 5 (e): the clock is R0's management state, read from R0's policy record
  * (a late read changes nothing); the logical clock once lmx_msg_set_now set it. */
 unsigned lmx_msg_now(LmxMsgRuntime *rt) {
@@ -924,13 +931,6 @@ static int drive_walk_list(LmxMsgRuntime *rt, LmxMsg *parent, LmxMsg *head) {
         if (parent != 0) {
             ok = (tab[i]->parent_msg == parent
                 && tab[i]->state != LMX_MSG_STATE_RELEASED);
-        } else {
-            for (ch = rt->root; ch != 0; ch = ch->next_sibling) {
-                if (ch == tab[i]) {
-                    ok = (tab[i]->state != LMX_MSG_STATE_RELEASED);
-                    break;
-                }
-            }
         }
         if (ok != 0) {
             st = lmx_msg_drive_tree(rt, tab[i]);
@@ -958,11 +958,36 @@ int lmx_msg_drive_walk_children(LmxMsgRuntime *rt, LmxMsg *m) {
     return drive_walk_list(rt, m, m->first_child);
 }
 
+/* S5: R0 is the one root, so the roots' drive is R0's. The same steps as
+ * drive_walk_list over a one-element list: the exec lock is held on entry and on
+ * return; R0 is pinned across the unlocked window, and driven only if it is still
+ * the root and not released. */
 int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt) {
+    LmxMsg *r0;
+    int st = LMX_MSG_OK;
     if (rt == 0) {
         return LMX_MSG_OK;
     }
-    return drive_walk_list(rt, 0, rt->root);
+    r0 = rt->root;
+    if (r0 != 0 && lmx_msg_endp_retain(r0) == 0) {
+        return LMX_MSG_NOMEM;
+    }
+    lmx_msg_exec_unlock(rt);
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_test_after_drive_snap != 0) {
+        lmx_msg_test_after_drive_snap(rt, 0);
+    }
+#endif
+    if (r0 != 0) {
+        lmx_msg_exec_lock(rt);
+        if (rt->root == r0 && r0->state != LMX_MSG_STATE_RELEASED) {
+            st = lmx_msg_drive_tree(rt, r0);
+        }
+        lmx_msg_exec_unlock(rt);
+        lmx_msg_endp_release(r0);
+    }
+    lmx_msg_exec_lock(rt);
+    return st;
 }
 
 void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain) {
@@ -1175,23 +1200,11 @@ int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }
-    /* A root uses next_sibling as the runtime root-list link.  It must leave
-     * that index before its slot/storage is freed, otherwise concurrent
-     * msg_at_addr() walks a dangling tree and may loop through reused memory. */
-    prev = 0;
-    cur = rt->root;
-    while (cur != 0) {
-        if (cur == m) {
-            if (prev != 0) {
-                prev->next_sibling = m->next_sibling;
-            } else {
-                rt->root = m->next_sibling;
-            }
-            m->next_sibling = 0;
-            break;
-        }
-        prev = cur;
-        cur = cur->next_sibling;
+    /* S5: R0 is the one root. It leaves rt->root before its slot/storage is
+     * freed, otherwise a concurrent msg_at_addr() walks a dangling tree. */
+    if (rt->root == m) {
+        rt->root = 0;
+        m->next_sibling = 0;
     }
     prev = 0;
     cur = rt->slots;
