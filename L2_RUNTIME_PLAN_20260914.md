@@ -2571,3 +2571,7 @@ ruled: they go as REST's own group under Mikhail's (b) ("REST-провайдер
 реестр парсера уходят вместе с ним"), each named with its role, after a
 grep for rest_lmx and LmMessageThread across the live chain (l2src, root
 l1src, stg's l1src) finds no user.
+b5's pre-check for the REST group: git grep for rest_lmx and LmMessageThread
+across stg/l1_baseline/l2src, root l1src and stg/l1_baseline/l1src finds
+one documentation hit (LOCK_REMOVAL_O0_MEASUREMENT.txt) and no code; the
+live chain has no REST user; the group goes when the deletion resumes.
