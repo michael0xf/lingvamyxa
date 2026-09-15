@@ -21,15 +21,21 @@ $hashes = @{}
 foreach ($source in $sources) { $hashes[$source] = (Get-FileHash -LiteralPath $source).Hash }
 $evidence = [ordered]@{ compiler=$compiler; compilerSHA256=$pin; sources=$hashes; optimization='O2'; stages=@(); result='RUNNING' }
 function Invoke-StaleStage([string]$Name, [string]$Tool, [string[]]$NativeArgs) {
-    $options = @{}
-    if ($NativeArgs.Count -gt 0) { $options.ArgumentList = ($NativeArgs | ForEach-Object { '"' + $_ + '"' }) -join ' ' }
+    $quoted = ($NativeArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
     $stdout = Join-Path $run "$Name.stdout.txt"
     $stderr = Join-Path $run "$Name.stderr.txt"
-    $process = Start-Process -FilePath $Tool @options -WorkingDirectory $baseline -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-    $evidence.stages += [ordered]@{ name=$Name; tool=$Tool; arguments=$NativeArgs; exit=$process.ExitCode }
-    if ($process.ExitCode -ne 0) {
+    # cmd /c, not Start-Process -Wait, which costs about 1 s per launch.
+    Push-Location -LiteralPath $baseline
+    try {
+        cmd /c "`"$Tool`" $quoted > `"$stdout`" 2> `"$stderr`""
+        $code = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    $evidence.stages += [ordered]@{ name=$Name; tool=$Tool; arguments=$NativeArgs; exit=$code }
+    if ($code -ne 0) {
         Get-Content -LiteralPath $stdout,$stderr
-        throw "$Name failed: $($process.ExitCode)"
+        throw "$Name failed: $code"
     }
 }
 try {
