@@ -62,5 +62,12 @@ shape is in question under this frame and goes to him before M's commit.
   is deleted, with the property named (round-robin cursor persistence). Check whether any policy cell survives.
 - lmx_message_exec_selftest.c: 24 turn_step_child, 5 run_child_turn, 14 root_turn, 3 sched_step, 2 exec_ui_step,
   31 AFFINITY_UI. Read by section; the UI-affinity sections are the largest deletion.
-- tests/cancel_spin_host.c: 4 turn_step_child, 2 sched_step. Read.
+- tests/cancel_spin_host.c (read at 80101431, l2src/tests/cancel_spin_host.c, built and run by run_lmx -Suite Cancel):
+  three composite turns. turn_step_child (136-143: run_child_turn from the parent's turn) and the R0 helper at
+  166-171 plus the parent step at 176-188 step a child on a foreign lane: child property (the spin child's
+  cancellation), convert to the child on its own thread through map_child. turn_map_child (145-151) is already the
+  own-thread launch and stays. turn_sched_step (154-160; the spin-step case at 425-430, "spin-step sched_step") is
+  the parent's scheduler step itself: a mapping property, deleted with its check. The emergency_cancel calls from a
+  CreateThread worker (202, 219, 223) are S4's (the coordinator's ruling on cancel_spin_host: cancellations on the
+  host thread, or the worker mails the host), not M's.
 - run_turn_step_child_copies.ps1: the runner that checks the helper's copies agree. Goes with the helper.
