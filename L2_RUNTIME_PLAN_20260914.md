@@ -5985,3 +5985,26 @@ not hours); the isolation plan runs later, in a git-freeze window the
 coordinator announces to all sessions between S6-1's landing and
 S6-2's builds, since it needs every session's git held for about 40
 minutes.
+b5's S6 pre-read landed on sonnet/s6-preread ce26dd46 off 8eeb094f (on the
+re-based census sonnet/s6-rebase-2 dd90673b; checked by the coordinator):
+80 holds DELETE (the hold's own guard or caller chain already
+establishes one writer lane), 1 CONTRADICTION, 1 row (lmx_msg_pump's
+transport-pop lock) left uncounted as Y3's mailbox track, not S6's.
+The contradiction: lmx_msg_set_orphan_until (exec.c 3011) has no
+caller-identity guard and no production caller, its one call site a
+test fixture (lmx_message_exec_selftest.c 3852); the field's real
+writer, lmx_msg_orphan_sweep, is single-lane through drive's
+require_owner and !holding_any, so set_orphan_until is a live second
+writer with no discipline, racing the sweep if it ever gained a
+production caller. Found by reading nine rows fresh (the other eight
+clean: endp_try_retire, requeue_if_runnable, exec_start_contexts,
+exec_unbound_close, set_orphan_retain, drive_one, orphan_sweep,
+first_settled_child). Ruling (coordinator, no lock, wait or signal, by
+Mikhail's rule on checks the spec does not require and on dead code):
+S6-1 deletes lmx_msg_set_orphan_until (no production caller) and the
+fixture reaches the orphan-until state through the model's own path
+(set_now and drive, the sweep writing it on its one lane); if the
+fixture cannot reach it that way, the function stays as a test hook
+guarded like drive (require_owner and !holding_any), the lead reading
+the fixture and choosing; either way one writer lane and no
+contradiction remains.
