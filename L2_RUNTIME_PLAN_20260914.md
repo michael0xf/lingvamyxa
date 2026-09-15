@@ -3681,3 +3681,18 @@ would need a lock, a wait or a signal flagged as a contradiction to stop
 on; one file LOCK_REMOVAL_M_FIELDS.txt beside the S3 one on
 sonnet/m-fields, noting that children on the parent's thread is an
 implementation choice the model allows either way.
+b5's M field pass landed on sonnet/m-fields 18d5e3e2 (off d6/lock-removal;
+stg/l1_baseline/l2src/LOCK_REMOVAL_M_FIELDS.txt; checked by the
+coordinator: run_child_turn 13 hits, Mikhail's sentence quoted, the
+"no site needs a lock, wait or signal" statement present). Core: 
+lmx_msg_sched_step (lm1 2584-2626, lm2 mirror) tail-calls
+lmx_msg_run_child_turn, the forced relay; child_turn_core (exec.c
+3530-3568) is the same-thread execution itself, gated on holding the
+parent's turn; also exec_ui_step and its lane, exec_bind_mode/map_child's
+affinity decision, take_this, context_worker, ctx_visit_first_launchable,
+UI_LANE_ID creation and detection. Two flags: LmxMsgExec (ui_lane,
+contexts_live, its own lock) has zero rows in LOCK_REMOVAL_FIELDS.txt
+though central to the UI-stepping sites (a row set to add before M's
+design note, as CtxPack was for S3); the S3-owned fields ready and
+launching appear at M sites but are gone by then. No site whose removal
+needs a new lock, wait or signal.
