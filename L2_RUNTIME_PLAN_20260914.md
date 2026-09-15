@@ -4798,3 +4798,26 @@ release returns" is read before the map point) and orphan_mapped_17
 maps the orphan after P's release instead of g_go; the close read on
 later rounds. Gate-time ticket parked: no build/gates directory
 survives, 139 run_gates chain outputs remain in the scratchpads.
+e9's M conversions, second interim (2026-09-15): claude-0c/m-tests-scenario
+388fc0eb on 793c267f, four tests green twice each (root_record_5e 22/0,
+root_ingress_5b 11/0, scenario36 51/0, family_close_32 26/0), the grep 0.
+Core facts at 793c267f shaping them: (a) require_turn lets the host act
+as a Message outside a turn only while exec_workers = 0 and
+contexts_live = 0, so once any child is mapped the host's recv, send,
+stop, create and end_turn for P move into P's entry turns
+(run_entry_turn), while complete, dispose_child, adopt_failed,
+live_check, set_now, drive, pump and host_drain stay on the host; (b)
+mapping is one-way while the runtime lives (unbind_slot_locked retires
+the record but never clears mapped; only exec_stop's visits and
+exec_drop_binds do), so a mapped child takes every runnable input on
+its own thread. liveness_33 section 3 (262-285) asserted P's answers to
+D and E still pending when the close requests arrive at 3100, an
+ordering only the sequential mapping gave. Ruling (coordinator, test
+shape, ours): option (b): D's and E's consuming turns stay as written,
+the "still pending" claims and the heard-at pins encoding that order go,
+and the property "a closing child's turn consumes the input it had" is
+stated where it is deterministic, a child receiving an input and a stop
+in one publication (one end-turn of P) consuming the input in its
+closing turn, read on later rounds; no order between two publications
+asserted anywhere. family_release_17 and orphan_mapped_17 in progress
+on the map-after-release rule.
