@@ -1,0 +1,13 @@
+predef: "l2src/tests/repro_zeroarg_ptr_cross_unit.h.lm1"
+
+fn: probe_zeroarg_ptr_source () @: LmP0StreamEvent
+    return: 0
+end: probe_zeroarg_ptr_source
+
+fn: probe_zeroarg_int_source () int
+    return: 1
+end: probe_zeroarg_int_source
+
+fn: main () int
+    return: 0
+end: main

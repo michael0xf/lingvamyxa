@@ -1,0 +1,6 @@
+include: "l1src/p0.lm1.h"
+
+prototype:
+    fn: probe_zeroarg_ptr_source () @: LmP0StreamEvent
+    fn: probe_zeroarg_int_source () int
+end: prototype
