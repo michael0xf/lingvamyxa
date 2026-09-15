@@ -1267,6 +1267,26 @@ S5. The runtime-level lists (L5). Waits on 5.1.
         "drive_walk_list(rt, 0, rt->root)" 1, "cur = rt->root;" 1, "rt->root = m->next_sibling;" 1.
       These are the sites this section names: find and poll, create_prepare's tail append, release_slot's unlink,
       drive_walk_list and walk_roots, and endp_try_retire's unlink.
+    - S5's code is d6's (the coordinator, 2026-09-15), on d6/lock-s5 off c9ac4dda. Edits only until S4 lands.
+    - STOPPED on item (b), 2026-09-15: a finding against answer (1)'s premise, sent to the coordinator.
+      Read at c9ac4dda:
+      - lmx_msg_create_prepare increments rt\next_addr and pushes rt\slots. For parent != 0 it runs under
+        require_turn(rt, parent), so every parent's own lane writes both.
+      - lmx_msg_endp_try_retire (exec.c 1155-1209) unlinks slots and decrements n. lmx_msg_endp_release
+        (exec.c 395/406) calls it on whichever lane drops the last reference.
+      - lmx_root_record.lm2's contract: R0's record is written only on R0's lane.
+      So moving next_addr, slots and n into R0's record would put foreign-lane writes into R0's data.
+      root_seq is written once, for R0's own creation (assign_path with p = 0), before R0 exists; with one root it
+      is always 1.
+      Readers beyond the core: the slots port module lmx_msg_slots.lm1/.lm2 (slots_n/slots_at, behind exec.c
+      tab_n_locked/tab_addr_locked and run_port_msg_slots.ps1), and rt\n in tests: exec selftest 44,
+      family_release_17 19, orphan_mapped_17 8, slots selftest 6, entry_turn 1, two lm2 units.
+      Options sent to the coordinator, none adding a lock, wait or signal:
+      - (i) root_seq becomes the constant 1;
+      - (ii) next_addr stays one order-free atomic counter;
+      - (iii) slots and n wait for S6: once refs goes, a released child is freed by its parent at settle.
+      Recommended: S5 = (a) + (c) + (i), with (ii) as a record and (iii) in S6's scope. Items (a) and (c) proceed as
+      edits.
 
 S6. The lock deleted (L4, L7, L8 and what remains).
     - Red: lmx_msg_exec_lock and unlock defined to abort() in a test build. Every remaining call site is red by name
