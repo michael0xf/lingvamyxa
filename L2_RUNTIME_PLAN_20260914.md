@@ -1198,7 +1198,19 @@ itself, anything copying source text, identifiers included, is growable;
 b5's data: slices f and g nothing over 200 characters, e5 six conditions up
 to 345 with argument lists near 310, nothing over 512, so e5 needs 147 and
 148 both; the leaf set adds a 2218-character condition and a 300-character
-identifier probe measured today first), then the
+identifier probe measured today first: locals are unbounded, two
+300-character names distinct with no truncation, so nothing to fix there;
+method names and formal names are capped at 62 by three explicit bounds,
+l2trans.lm1:5133 entry formals, 9609 method names, 9632 method formals,
+refused "name too long" (frame=fn) with a located line, never truncated;
+ruled 2026-09-15 as their own pin, not part of 147, because the storage
+behind those bounds is a different mechanism from the expression buffers
+and the refusal is honest and blocks nothing measured; its place: b5
+measures the longest method name and formal name in l1src/parser.lm1 over
+the slices still to port, over 62 puts the name pin at 149 right after 148,
+otherwise it follows U4 and the handler deletion; field names and type
+names are probed in that pin's design; until it lands the 62-byte bound is
+a labelled gap, not a language limit), then the
 zero-argument cross-unit prototype with a pointer return (10f294a2,
 `block_event: p0_stream_event_new()` "unsupported body" cross-unit while the
 same call works in-unit and an int return works; blocks e5, WIP on a side
