@@ -11,6 +11,39 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File stg/l1_baseline/l2src/run_gates.ps1
 #   ... -SchedRecordSource <copy.lm2>   run_sched_record against another source
 #   ... -L2MessageRoot                  also run the opt-in l2_message_root gate, last
+#
+# The default set (RUNNER_HAZARDS (e), 6f's decision): the eleven core gates,
+# then the turn_step_child corpus check, the entry turn, the 18 port parity
+# runners and the graph ABI runner. run_l2trans, run_port_parser and
+# run_l2_message_root stay outside the defaults.
+#
+# The L1 module selftest runners stay opt-in. No port parity runner duplicates
+# its L1 runner exactly: a parity runner compiles the selftest with no -O level
+# and -Werror on four warnings only, compares reference and generated output,
+# runs nm on the generated object only, and pins none of the L1 runner's counts.
+#   port_array_owned, port_array_ref_owned, port_chars_owned: not exact;
+#     run_array_owned, run_array_ref_owned and run_chars_owned add -O2 -Werror,
+#     nm imports and symbols of the module object, allocations equal releases.
+#   port_msg_blocks: not exact; run_msg_blocks pins checks=143 frees=147
+#     callbacks=2 at each requested level and checks the module's imports.
+#   port_mail_chain: not exact; run_msg_mail_chain pins checks=26 at each level
+#     and requires no imports.
+#   port_path_storage: not exact; run_msg_path_storage builds O0 and O2, requires
+#     exactly the realloc import and pins 541/543 checks with allocations=11.
+#   port_slots: not exact; run_msg_slots builds O0 and O2, requires no imports,
+#     pins checks=278. port_slots' reference build compiles the same selftest
+#     against the L1 module, so it covers run_msg_slots' compile; run_msg_slots
+#     stays opt-in (6f, after 6cb55982 broke both unnoticed).
+#   port_storage: not exact; run_msg_storage builds O0 and O2, checks the
+#     module imports, pins checks=77.
+#   port_owned_ranges: not exact; run_owned_ranges builds O0 and O2, requires no
+#     imports and no mutable data, pins checks=439.
+#   port_history, port_roots_stale, port_visit, port_liveness: their L1 runners
+#     (history, roots_stale, visit, liveness) are defaults already.
+#   port_branch_owned, port_value_owned, port_graph_copy, port_merge_owned,
+#     port_msg_graph_copy: their selftests (graph_abi, graph_copy, merge,
+#     message_graph_copy) run inside graph_abi, a default.
+#   run_foreign_alloc has no port parity runner.
 param(
     [string]$SchedRecordSource,
     [switch]$L2MessageRoot,
@@ -46,7 +79,28 @@ $gates = @(
     @('liveness', 'run_msg_liveness.ps1', '', 'liveness checks='),
     @('send_local', 'run_msg_send_local.ps1', '', 'send local checks='),
     @('family_handoff', 'run_msg_family_handoff.ps1', '', 'family handoff checks='),
-    @('c_scanners', 'run_candidate_c_scanners.ps1', '', 'candidate scanner parity cases=')
+    @('c_scanners', 'run_candidate_c_scanners.ps1', '', 'candidate scanner parity cases='),
+    @('turn_step_child', 'run_turn_step_child_copies.ps1', '', 'turn_step_child copies:'),
+    @('entry_turn', 'run_entry_turn.ps1', '', 'entry turn PASS'),
+    @('port_array_owned', 'run_port_array_owned.ps1', '', 'lmx_array_owned parity PASS'),
+    @('port_array_ref_owned', 'run_port_array_ref_owned.ps1', '', 'lmx_array_ref_owned parity PASS'),
+    @('port_branch_owned', 'run_port_branch_owned.ps1', '', 'lmx_branch_owned parity PASS'),
+    @('port_chars_owned', 'run_port_chars_owned.ps1', '', 'lmx_chars_owned parity PASS'),
+    @('port_graph_copy', 'run_port_graph_copy_owned.ps1', '', 'lmx_graph_copy_owned parity PASS'),
+    @('port_merge_owned', 'run_port_merge_owned.ps1', '', 'lmx_merge_owned parity PASS'),
+    @('port_msg_graph_copy', 'run_port_message_graph_copy.ps1', '', 'lmx_message_graph_copy parity PASS'),
+    @('port_msg_blocks', 'run_port_msg_blocks.ps1', '', 'lmx_msg_blocks parity PASS'),
+    @('port_history', 'run_port_msg_history_owned.ps1', '', 'lmx_msg_history_owned parity PASS'),
+    @('port_liveness', 'run_port_msg_liveness.ps1', '', 'lmx_msg_liveness parity PASS'),
+    @('port_mail_chain', 'run_port_msg_mail_chain.ps1', '', 'lmx_msg_mail_chain parity PASS'),
+    @('port_path_storage', 'run_port_msg_path_storage.ps1', '', 'lmx_msg_path_storage parity PASS'),
+    @('port_roots_stale', 'run_port_msg_roots_stale.ps1', '', 'lmx_msg_roots_stale parity PASS'),
+    @('port_slots', 'run_port_msg_slots.ps1', '', 'lmx_msg_slots parity PASS'),
+    @('port_storage', 'run_port_msg_storage.ps1', '', 'lmx_msg_storage parity PASS'),
+    @('port_visit', 'run_port_msg_visit.ps1', '', 'lmx_msg_visit parity PASS'),
+    @('port_owned_ranges', 'run_port_owned_ranges.ps1', '', 'lmx_owned_ranges parity PASS'),
+    @('port_value_owned', 'run_port_value_owned.ps1', '', 'lmx_value_owned parity PASS'),
+    @('graph_abi', 'run_graph_abi.ps1', '', 'graph ABI runner PASS')
 )
 if ($L2MessageRoot) { $gates += , @('l2_message_root', 'run_l2_message_root.ps1', '', 'Historical catalog audit PASS') }
 
@@ -59,7 +113,7 @@ foreach ($g in $gates) {
     $name = $g[0]
     $log = Join-Path $LogDir "$name.log"
     if ($red) {
-        $rows += '{0,-17} not run' -f $name
+        $rows += '{0,-20} not run' -f $name
         continue
     }
     $started = Get-Date
@@ -86,9 +140,9 @@ foreach ($g in $gates) {
         }
     }
     if ($evidence -ne '-' -and $verdict.Contains($evidence)) {
-        $rows += '{0,-17} {1} {2}s | {3} | log {4}' -f $name, $state, $seconds, $verdict, $log
+        $rows += '{0,-20} {1} {2}s | {3} | log {4}' -f $name, $state, $seconds, $verdict, $log
     } else {
-        $rows += '{0,-17} {1} {2}s | {3} | evidence {4} | log {5}' -f $name, $state, $seconds, $verdict, $evidence, $log
+        $rows += '{0,-20} {1} {2}s | {3} | evidence {4} | log {5}' -f $name, $state, $seconds, $verdict, $evidence, $log
     }
     Write-Output $rows[-1]
     if ($code -ne 0) {
