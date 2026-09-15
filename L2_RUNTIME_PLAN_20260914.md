@@ -3804,3 +3804,11 @@ reaching the target as a STOP Message the target acts on itself; the
 mechanism (flag write or Message) is implementation, Mikhail's "0 is the
 parent's stop request" holds either way. No site needs a new lock, wait
 or signal; all run under today's executor lock.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only: the S6 census,
+LOCK_REMOVAL_S6_LOCK_SITES.txt on sonnet/s6-lock-sites: at c063fd00 every
+site in l2src that takes or releases the executor lock or any other lock
+or Interlocked primitive outside the mailbox's MAIL lock (LmxMsgExec's own
+lock and the host lock included), file:line, function, the data the hold
+protects (FIELDS rows or a runtime list), and the stage that removes the
+need for it (S3 landed, M, S4, S5, Y, S6), counts per stage at the top; a
+site no stage covers is a contradiction to stop on.
