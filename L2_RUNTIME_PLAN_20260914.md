@@ -3348,3 +3348,21 @@ both counts from the landed tree itself (git ls-files -- l1src/ for the
 sources, the script's @('l1src/ map entries for the generated C) and
 requires the exact pass line with them; his install_pin.ps1 refuses any
 source whose SHA256 is not the announced hash and re-hashes each copy.
+Kernel paragraph landed (the lead, d6/lock-removal 2d4eff4e, LOCK_REMOVAL_DESIGN
+KERNEL before FIELDS/S0, read by the coordinator on the branch): the kernel
+in L1 is Lmx; LmxMsg {running, success, handoff_safe, root}; one arena per
+Message reached from its root; the mailbox as the synchronized collection
+of Messages, the one lock; the thread with its loop over turns (each round
+a look into its mailbox and a turn when there is a Message, never blocking;
+runs while success is 0, leaves when user code sets success to 1;
+running=0 is the parent's stop request seen by user code, not the loop's
+exit). Of the field table's 99 rows 16 are kernel: 4 MSG (running, success,
+handoff_ready as handoff_safe, graph as root), 7 arena rows inside root
+(init, init_n, blocks, ranges, eternal_ranges, method_ranges, roots), 5
+mailbox rows (inbox, inbox_tail, mail as the mailbox's monitor, and the
+runtime's transport pair as admissions into R0's mailbox with the queue
+itself deleted); 36 rows (26 L3T, 10 PAR) are functionality written on the
+kernel in the generated shape, the thread handle and thread id among them;
+47 rows deleted; sum 99, one category per row checked by script. Stages
+S2-S6, M, Y and A stay as the lock removal that reduces today's C to that
+kernel. Table state: 81 ruled, 18 proposed, 0 held.
