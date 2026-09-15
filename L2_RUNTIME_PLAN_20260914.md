@@ -4585,3 +4585,21 @@ family_release_17 restatement as DECIDED; cancel_spin_host read
 (13dae4cd: its step helpers convert, turn_map_child stays, the spin-step
 sched_step case goes, the foreign-thread cancels are S4's). M's first
 build may start; the machine is free after e9's record.
+e9's cold gate record on the one-root tip (2026-09-15; this entry was
+lost once to a failed fast-forward and is re-entered): after_landed_gate.sh
+80101431 exit 0; the tip's L1_PIN.txt 0B3D85B3, 0 tracked under the old
+baseline directory, no build/ before the run; gate.ps1 "gate: all
+green" in 298 s, 27 of 27 steps (buildCore 4 s, run_seed 3 s, run_gen 69
+s, 12 of 12 on gen0 and on gen2, l2 run_lmx 37 s and 33 s); tree clean.
+run_self_build first: PASS 8 of 8 in 18 s; tag selfbuild/80101431
+pushed 6 s after the PASS (peels to 80101431; the generated-C blob ids
+the same as on 5cee1426 and f5f50954); the log commit
+claude-0c/selfbuild-log-80101431 0c917268 (6 to 7 lines, only the log)
+merged by the lead into integration 00b04751, all entries resolving
+(e9's entry check fixed to read every line after the header, three
+mutations refused). Pins: the refusal test (pin + 1 byte) exit 2 twice
+with gen2/gen3 absent and present, unchanged; real installs
+wt0c_oneroot absent to 0B3D85B3 on both, wt0c_oneroot_gate after its
+gate run E7B20A6A/5EF62F14 to 0B3D85B3; the 13 old-layout wt0c_* trees
+untouched, now e9's ticket to retire (name, branch, last pushed hash)
+keeping only the trees used on the new layout, re-based onto 00b04751.
