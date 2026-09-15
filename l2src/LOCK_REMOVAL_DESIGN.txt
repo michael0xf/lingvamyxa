@@ -1392,6 +1392,11 @@ S5. The runtime-level lists (L5). Waits on 5.1.
     - Acceptance record by d6: red 85953500 (28/7/4/14), green ddab10a0 (0/0/0/0, parity PASS, UAF 165 of 165),
       falsifier root_list_loops=1. Handed to the coordinator for the green re-measure; landing is land_s5.sh
       (land_base2.sh, the union base plus lmx_cancel; the probe is never folded in).
+    - Acceptance record complete (the coordinator, 2026-09-15): ddab10a0 merged locally with 85953500 (parents
+      checked). The probe exits 0 with 0/0/0/0; run_port_message plain parity PASS in 47 s (102 methods). With
+      d6's UAF 165 of 165 and the falsifier, the record is red 85953500, green ddab10a0, falsifier 1.
+      Before launch, integration was 3e6fc02a, the three-dot diff was exactly 5 M core files, and the probe was not
+      in the branch. Landing started with land_s5.sh ddab10a0 onto 3e6fc02a.
     - UAF kit for S5's green, rebuilt in scratch (never committed):
       - q_alloc.c: a poisoning quarantine allocator (0xDD, 8192 blocks, 256 MB, free-site frames, eviction and
         atexit checks, double free);
