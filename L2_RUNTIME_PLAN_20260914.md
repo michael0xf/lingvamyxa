@@ -4840,3 +4840,10 @@ R0-direct child's own turn; reads use lmx_msg_state STOPPED for a
 closing turn or the kernel's success flag set as the handler's last
 act, never lmx_msg_exec_holding_turn (per-thread TLS, always false to an
 observer; found by gdb on a hung first draft, fixed).
+Ticket to b5 (the coordinator, 2026-09-15), doc-only: the exec selftest's
+gate census, l2src/LOCK_REMOVAL_EXEC_SELFTEST_GATES.txt on sonnet/exec-gates
+off 793c267f: every scenario block of lmx_message_exec_selftest.c with a
+gate (Sleep, event, go cell, GetTickCount loop, exec_lock around test
+cells), the block's name and lines, each gate's kind and line, and the
+stage whose subject the block is (M, S2, S4, S5, S6, Y); counts by stage
+and by kind; this is the test-debt list the block ruling requires.
