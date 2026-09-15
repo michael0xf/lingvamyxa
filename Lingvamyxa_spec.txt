@@ -1097,7 +1097,10 @@ longer than the timeout; the scheme is reinforced concrete; a program
 can crash, but hang on what, resources or the like? C has a way to kill
 a thread by force, to be done later, now the kernel has to run at all;
 in the end the root thread's timeout fires and simply leaves the OS
-process; there can be no hangs here).
+process; there can be no hangs here). And on deadlock, verbatim: "deadlock никогда не случится если синхронизация только внутри очереди сообщений на чтение-запись письма в минималистическом java-стиле. Там вообще нечему зависать"
+(a deadlock never happens if synchronization is only inside the message
+queue, on reading and writing a letter, in the minimalist Java style;
+there is nothing there to hang on).
 And on what L1 is for, verbatim: "Вы пытаетесь писать на Си, а на Си (L1) надо просто пилить ядро _на котором_ уже пилить дальнейший функционал самого ядра. Это как я бы попросил на goto имитировать все циклы, а вы бы заменили задание на "написать примеры while и for"  -- совершенно разне задачи" (you are trying to write in
 C, while in C, that is L1, one simply builds the kernel on which the further
 functionality of the kernel itself is then built; as if I asked you to

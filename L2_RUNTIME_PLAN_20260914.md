@@ -6320,3 +6320,13 @@ own small stage after S6-2 and before Y ("R0P: the root's parent stub"),
 designed by the lead in the (a) format with its acceptance (a root that
 stops answering is left by the process at the timeout; red today, the
 process hangs); the forced thread kill is Mikhail's "later".
+Mikhail (2026-09-15, verbatim): "deadlock никогда не случится если синхронизация только внутри очереди сообщений на чтение-запись письма в минималистическом java-стиле. Там вообще нечему зависать" Entered verbatim in spec section 2
+and model section 2 after his no-hangs sentence. Read by the
+coordinator: with the mailbox's monitor the only synchronization, held
+only around reading or writing a letter and released before any other
+mailbox is touched (a send is an admission into another mailbox after
+leaving one's own), no two monitors are ever held together and no
+deadlock can form; S6-1's move of the transport queue under R0's
+mailbox monitor keeps to "only inside the message queue", and the
+coordinator's earlier "one monitor at a time" implementation note is
+this sentence, not an addition to it.
