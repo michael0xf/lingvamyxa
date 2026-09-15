@@ -318,6 +318,20 @@ Survey method (on d925e600)
   exit=0 'LANE WRITE FAIL' x1 0s | lmx_message parity PASS: stub | evidence -". A stub with exit 0 and no
   parity line: "gates RED: stopped at lane_oracle after 0s", row "lane_oracle FAIL exit=0 no 'lmx_message
   parity PASS' line 0s | lmx_message stub: no parity line | evidence -".
+(l) A batch exit inside a for body that also holds a `|| exit /b` line returns 0 (0c, 2026-09-15)
+  stg/l1_baseline/buildCore.lm0.bat, before the lead's rewrite 29b739eb, checked the pinned old-chain archives
+  in a for loop whose body held both an `if not exist ... ( echo ... & exit /b 1 )` and a
+  `copy ... || exit /b 1` line. Without the archives it printed "pinned seed prerequisite missing:
+  oldchain\lib\libparser.lm0.a" and exited 0, so gate.ps1's Step marked buildCore "ok" (the lead's cold red
+  on 88934463 was judged by that diagnosis, not the exit).
+  Replicas (0c), each run from PowerShell as `cmd /c ".\<name>.bat"` with $LASTEXITCODE read on the next line:
+    for body with `exit /b 1` and a `copy <missing> <dst> >nul || exit /b 1` line   exit 0, after "missing one"
+    the same for body without the `||` line                                          exit 1
+    a top-level `copy <missing> <dst> >nul || exit /b 1`                             exit 1
+  The lead measured the same three from bash and in gate.ps1's own `cmd /c ... $LASTEXITCODE` form.
+  Rule (6f): a batch step's verdict reads its log's diagnosis, not only its exit code, and no `exit /b` goes
+  inside a for body; use a top-level `failing-command || exit /b 1`. The lead's rewrite removed the loop and
+  keeps only the top-level form; the root's buildCore.lm0.bat has no such loop.
 (c) Cold run per runner
   Complete: 46 of 46 runners cold on d925e600 (every run_*.ps1 but run_gates, whose time is its defaults' sum),
   sequential in a fresh private worktree; the machine rebooted during row 20 and the batch resumed from
