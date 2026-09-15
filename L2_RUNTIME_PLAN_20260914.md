@@ -3741,3 +3741,12 @@ permits it (item (2) supervision cells, item (3) control flags, admission)
 or none, a write with none being a contradiction to stop on, and any site
 that would need a lock, wait or signal to keep flagged; the mailbox rows
 (the Y file) and the S3-owned fields excluded.
+S3 measurement in progress (the lead, 2026-09-15): d6/s3-no-wake c41089f3 =
+R1-R8 (c026c5a6) + b5's R9 (d41e5941) + fable/s3-acceptance 74146146
+merged for the measurement, conflicts resolved to S3's side (the oracle's
+markers inside deleted functions dropped with them; its host_shutdown
+marker removed since that signal is gone; the oracle function and its
+arming stay). Local run on 322eed3a before the oracle merge: -LaneCheck
+exit 0, plain parity PASS. measure_s3.sh on c41089f3 runs the red at
+74146146, the green, then the stop_event falsifier (one signal put back
+with its marker must turn the oracle red again, proving it still armed).
