@@ -11652,7 +11652,12 @@ running is set to 0; an ended L3 Thread reads !running, and success says
 whether it ended by success, verbatim: "завершённый L3 Thread читается как success && !running" -- если пользовательский код не поставит success=1 то success останется 0 если running стал 0 (if user code does not set
 success = 1, success stays 0 when running became 0). And:
 "то есть цикл не бесконечный -- из него есть выход хоть по return хоть как" (that is, the loop is not infinite: there is a way out of it,
-by return or however). And, to the lead's "running = 0 is the parent's stop
+by return or however). And on the round between turns, verbatim: "L3 Thread нечего делать на endturn???"
+(has an L3 Thread nothing to do at end_turn?): the round after a turn is
+the L3 Thread's own work at end_turn (its supervision of its direct
+children and their polling, 19.29.7.1; its closing and settling, 19.29.8;
+its arena maintenance), then the look into its mailbox; a round is never
+empty in the model. And, to the lead's "running = 0 is the parent's stop
 request, not the loop's exit", verbatim: "L3 Thread это модель же а не реализация. Да, 0 это запрос остановки от родителя. Что значит "не выход из цикла"? Как можно остановить не выходя в конечном итоге из цикла?" (the L3 Thread is a
 model, not an implementation; yes, 0 is the parent's stop request; what
 would "not the loop's exit" mean? how can one stop without, in the end,

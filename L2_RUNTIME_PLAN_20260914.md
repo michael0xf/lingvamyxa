@@ -3616,3 +3616,12 @@ goes out. Rule restated for every stage: implementation choices that add
 no lock, no wait on a primitive and no signal are ours; only a fix that
 would need another lock, or a contradiction between his sentences, stops
 a stage and goes to him.
+Mikhail (2026-09-15, verbatim, on the "empty round"): "L3 Thread нечего делать на endturn???" So the premise
+of the EMPTY-ROUND question was wrong: the round after a turn is the L3
+Thread's own end_turn work (supervision of its direct children and their
+polling, closing and settling, arena maintenance, the L3T rows'
+functionality), then the look into its mailbox; no round is empty in the
+model. The design's R8 and R9 are to say so, the name EMPTY-ROUND goes;
+the scheduler yield stays only as an implementation line, the
+coordinator's, after a round that found neither mail nor work, and is no
+part of the model. Entered verbatim in spec 19.28.R2.2 and model 31.
