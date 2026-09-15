@@ -3246,3 +3246,10 @@ from that L2 code, so it is written in the translator's output shape
 and the later port is writing the L2 source whose translation is that C.
 Entered verbatim in spec section 2 and the model's section 2 after the
 LmxMsg record.
+Mikhail (2026-09-15, verbatim, on the shape of that L1 code): "В точности как имитируется L2 на Си -- функция с аргументами ,скрытми ргументами и узлом графа."
+So the hand-written C for an L3 Thread's internals takes the form l2trans
+already emits for an L2 method: a C function with the declared formals, the
+hidden through-arguments (l2trans's DynRequired names, following the
+declared formals in intern name order) and the graph node; its data are
+Structure nodes in the Message's arena reached from root. Entered verbatim
+in spec section 2 and the model's section 2.
