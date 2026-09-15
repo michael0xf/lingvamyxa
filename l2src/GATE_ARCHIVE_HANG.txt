@@ -1,0 +1,119 @@
+GATE_ARCHIVE_HANG: the intermittent git archive hang in run_candidate_c_scanners.ps1, and how to isolate it
+Written by 0c from logs and code at integration 8eeb094f, 2026-09-15. A plan only: nothing below has been run.
+
+What the logs show
+  Both recurrences are in the lead's landing worktree build\fable\wti (a worktree of the shared
+  C:\Nyasha_Planet\lingvamyxa repository), both at the same step:
+  - 08:31:03, evidence build\fable\wti\build\codex\candidate_c_scanners\20260915_083103_395: the last file is
+    l2trans.current.exe (08:31:13); no core.zip, nothing under source\. No gate log directory of that time
+    exists under wti, so this was a direct runner invocation; wti's HEAD was the S3 landing merge e9d43e0c
+    (08:25:15), checked out again at 08:37:59, and the next scanner run started 08:43:43.
+  - 16:37:05, evidence ...\20260915_163705_541: the last file is l2trans.current.exe (16:37:14); no core.zip,
+    nothing under source\. It ran inside gate chain build\fable\wti\build\gates\20260915_163435 (the S5
+    landing at d6e00998): family_handoff.log was written at 16:37:05, c_scanners.log was created empty in the
+    same second, and the chain wrote no summary (killed). The next scanner run started 19:10:24.
+  - 2 of the 31 scanner runs made in wti today hang; 1 run each in wtm and wts, none in wtp, did not. In the
+    50 completed c_scanners gate rows on disk the gate took 22-51 s, and no finished chain stopped there.
+  In the runner (l2src/run_candidate_c_scanners.ps1 at 8eeb094f), l2trans.current.exe is the output of line 42;
+  the next statement is line 49:
+      git -C $repo archive --format=zip "--output=$run/core.zip" HEAD -- l1src l2src lm1/build/l1src/p0.lm1.h
+  so each hang is inside that git archive, before it created its output file. It is a direct PowerShell native
+  call under $ErrorActionPreference='Stop' (line 4), with no stdout or stderr file and no timeout; the gate
+  itself runs as cmd /c "powershell -File ... > log 2>&1" (run_gates.ps1:116), unbounded, so the hang holds the
+  whole chain. The four other runners that archive (send_local, family_handoff, mail_chain, slots) run git
+  through their Invoke-*Stage wrapper, cmd /c "git" args > stage.stdout.txt 2> stage.stderr.txt with the exit
+  recorded. Whether any of them has hung was not checked here (only candidate_c_scanners' evidence was scanned).
+
+What was around it (git side, shared repository)
+  - git 2.37.0.windows.1; 41 registered worktrees on one object store; 21 packs, 5835 loose objects; no
+    fsmonitor daemon, no maintenance repos registered, no gc.pid, no index.lock now.
+  - 08:29-08:35: other sessions were active in the same repository: d6 commits and pushes (wtl, 08:29:22,
+    08:29:42), b5 creating and checking out a branch in worktrees/parser-l2 (08:31:48), a commit there
+    (08:33:13), and pushes from docs-tmp (08:33:47, 08:34:06).
+  - 16:34-16:40: the last git activity before the hang was a push at 16:35:13 and wti's own merge and commit at
+    16:34:19-16:34:29; nothing in 16:36-16:40.
+  So concurrent git activity is present at one hang and not near the other: a hypothesis to test, not a cause.
+
+Hypotheses the plan separates
+  H1  git archive itself stalls intermittently on this repository (object store, packs, worktree metadata).
+  H2  the stall needs the PowerShell native call as the runner makes it (inherited console handles or stdin under
+      cmd /c powershell > log 2>&1, EAP Stop), not git alone.
+  H3  it needs concurrent git activity on the shared store (a checkout, commit or push in another worktree).
+  H4  the output file cannot be created (something holding build\...\core.zip's directory), seen as git waiting
+      before the file exists.
+
+Isolation plan (to run only when the coordinator says; the machine held for it; each stage logs to
+scratchpad\archive_hang\<stage>\)
+  Tree: a detached worktree at 8eeb094f under C:\Nyasha_Planet (0c's own), pin installed; the output path under
+  that tree's build\codex\archive_hang\ like the runner's. Both recorded hangs were in wti: one set of stage A in
+  wti itself, only if the lead lends it, as the last step.
+  Git activity held: before and after each stage, every ref's reflog head (git for-each-ref plus
+  git log --walk-reflogs -1 per worktree HEAD) is recorded; a stage counts only if no ref moved during it.
+  Stage A (H1): the bare command alone, 200 iterations, each
+      cmd /c "git -C <tree> archive --format=zip --output=<dir>\core_<i>.zip HEAD -- l1src l2src
+      lm1/build/l1src/p0.lm1.h > a_<i>.out 2> a_<i>.err", started as a child with a 60 s watch.
+  Stage B (H2): the same line exactly as the runner makes it: a one-line script with
+      $ErrorActionPreference='Stop' and line 49 verbatim, launched as
+      cmd /c "powershell -NoProfile -ExecutionPolicy Bypass -File b.ps1 > b_<i>.log 2>&1" (run_gates.ps1:116's
+      form), 200 iterations, 60 s watch.
+  Stage C (in situ): run_candidate_c_scanners.ps1 alone, 30 runs as run_gates launches it, 180 s watch each.
+  Stage D (H3), only if A-C are clean: stage A again, 200 iterations, while a second loop in another 0c worktree
+  does git checkout of two commits and git commit --allow-empty (local, never pushed) every 2 s.
+  Repetitions: 2 hangs in 31 runs is about 6.5 per 100; if one archive call carries that rate, 200 clean
+  iterations happen by chance with probability about 0.935^200 = 1.5e-6, and 30 clean runner runs with about
+  0.935^30 = 0.13 (stage C confirms, it does not exclude).
+  Logged per iteration (all stages): start and end time to the millisecond, elapsed ms, exit code, zip size,
+  the .out/.err text, and GIT_TRACE2_EVENT=<dir>\t2_<i>.json with GIT_TRACE2_PERF=<dir>\p2_<i>.txt set for the
+  child (region timings show which phase took the time).
+  Logged at a hang (the watch expires), before anything is killed:
+  - the process tree: Get-CimInstance Win32_Process for git.exe, powershell.exe and cmd.exe with ProcessId,
+    ParentProcessId, CommandLine and CreationDate;
+  - CPU time of the hung git.exe sampled twice 5 s apart (busy loop against blocked);
+  - all threads' stacks: gdb -batch -p <pid> -ex "thread apply all bt 30" (C:\Qt\Tools\mingw1310_64\bin\gdb.exe);
+  - whether core_<i>.zip exists and its size; lock files under .git (index.lock, packed-refs.lock,
+    objects\pack\*.lock, objects\pack\tmp_*) and under .git\worktrees\<tree>;
+  - the trace2 file up to the stall.
+  Then the tree is killed (taskkill /PID <pid> /T /F) and the stage continues.
+  Report: per stage, iterations, hangs, elapsed-ms percentiles (50/99/max), and for each hang the stack and the
+  last trace2 region.
+
+Proposed change: bound the archive step at 120 s (not applied, not run)
+  Normal archive time is about a second; the whole gate takes 22-51 s, so 120 s cannot fail a working run.
+  The change runs git as a child with its own stdout and stderr files, kills the process tree at 120 s and fails
+  the gate with a named line instead of holding the chain. Process.Handle is read right after the start so
+  ExitCode stays valid after the process exits (Start-Process -PassThru otherwise loses it in PowerShell 5.1).
+
+--- a/l2src/run_candidate_c_scanners.ps1
++++ b/l2src/run_candidate_c_scanners.ps1
+@@ -46,8 +46,24 @@
+     Set-Location $savedLocation
+ }
+ $l2exe=$currentL2Exe
+-git -C $repo archive --format=zip "--output=$run/core.zip" HEAD -- l1src l2src lm1/build/l1src/p0.lm1.h
+-if($LASTEXITCODE -ne 0){throw 'Archive failed'}
++# The archive has hung intermittently (GATE_ARCHIVE_HANG.txt): run it as a child with its own
++# output files and a 120 s bound, so a stall fails this gate with its name instead of holding the chain.
++$archiveOut=Join-Path $run 'archive_core.stdout.txt'
++$archiveErr=Join-Path $run 'archive_core.stderr.txt'
++$archiveArgs=@('-C',"`"$repo`"",'archive','--format=zip',"`"--output=$run/core.zip`"",'HEAD','--','l1src','l2src','lm1/build/l1src/p0.lm1.h')
++$archiveStart=Get-Date
++$archive=Start-Process -FilePath 'git' -ArgumentList $archiveArgs -NoNewWindow -PassThru -RedirectStandardOutput $archiveOut -RedirectStandardError $archiveErr
++$null=$archive.Handle
++if(-not $archive.WaitForExit(120000)){
++    & taskkill /PID $archive.Id /T /F *> $null
++    throw ('Archive timed out after 120 s (git pid {0}, started {1:HH:mm:ss.fff}); see {2}' -f $archive.Id,$archiveStart,$archiveErr)
++}
++$archive.WaitForExit()
++if($archive.ExitCode -ne 0){
++    Get-Content -LiteralPath $archiveOut,$archiveErr
++    throw ('Archive failed with exit {0}' -f $archive.ExitCode)
++}
++$archiveMs=[int]((Get-Date)-$archiveStart).TotalMilliseconds
+ Expand-Archive -LiteralPath "$run/core.zip" -DestinationPath $sourceRoot
+ $work=$sourceRoot
+ $out='build/c_scanners'
+  and, in the evidence record (line 55), archiveMs=$archiveMs beside coreCommit, so every run records the
+  archive's time and a slow one is visible before it hangs.
+  Falsifier for the change, when it is run: with a stub git.cmd earlier on PATH that sleeps 130 s, the runner
+  fails in about 120 s with "Archive timed out after 120 s" and leaves no git.exe or stub behind; with the real
+  git it passes as today and records archiveMs.
