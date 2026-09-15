@@ -658,10 +658,13 @@ static int turn_send_once(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
 }
 static int turn_hold_until_peer(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
+    /* Read once: the main thread clears the global while this still-runnable turn
+     * re-runs in its owner's rounds; checking and dereferencing it twice raced. */
+    volatile LONG *peer = g_fair_peer_done;
     DWORD dl;
     InterlockedIncrement(&c->done);
     dl = GetTickCount() + 2000;
-    while (g_fair_peer_done != 0 && InterlockedCompareExchange(g_fair_peer_done, 0, 0) == 0
+    while (peer != 0 && InterlockedCompareExchange(peer, 0, 0) == 0
         && GetTickCount() < dl) {
         Sleep(5);
     }
