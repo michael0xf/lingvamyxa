@@ -4550,3 +4550,25 @@ section does not name, fates differing from the FIELDS rows at
 LOCK_REMOVAL_M_REVIEW.txt on sonnet/m-review off 80101431 at l2src/.
 The pin is installed at the new root path in the coordinator's exec-3a
 (gen2 and gen3, 0B3D85B3, L1_PIN.txt 0B3D85B3) for the M red measure.
+Integration 00b04751 (the lead, 2026-09-15, no machine) = 80101431 + b5's
+sonnet/inventories fc8ce769 (ten adds at l2src/) + e9's
+claude-0c/selfbuild-log-80101431 0c917268 (SELF_BUILD_LOG.txt, three
+entries); main e45ef8ca carries it, 0 non-doc diff. d6/lock-removal
+merged 80101431 (31c46a2a, six file-location conflicts resolved to
+l2src/); 37a594fc makes M cite fable/m-acceptance-oneroot 199dab84, red
+pending the coordinator's line. M's worktree wtm at 80101431 on
+d6/m-sequential, pin at build/l1trans/gen2, no builds until e9's record.
+M test question, ruled by the coordinator (no lock, ours):
+lmx_model_family_release_17's checks "C4 has not yet run its closing
+turn" and "R releases P4 at once, with C4 still to run its closing turn"
+hold today only because nothing runs C4 until the host steps it; on its
+own thread C4 runs when its closing flag is set. No rendezvous cell in
+the test (holding C4 inside its turn until an atomic go cell flips is a
+semaphore-shaped device, outside the Message frame for a core test):
+restate the property as "the release does not wait for C4" (the spec's
+own property: a close never joins a thread or waits for a child's
+closing turn), observed by flag reads at the moment of release (C4's
+running still 1, its success 0) and by the release's return before C4's
+closing turn is required, with no ordering claim between two lanes.
+Same rule for every M test conversion: state properties through
+Messages, turns and flag reads, never through a wait.
