@@ -1966,8 +1966,8 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
 }
 
 /* S3 (R3): start_contexts maps every bound, unmapped record and marks it ready
- * (a UI-mapped one asks the UI lane for its turn) inside one lock hold; a pool
- * worker takes its first Message from its mailbox in its own round. */
+ * inside one lock hold; a pool worker takes its first Message from its mailbox in
+ * its own round. */
 static int ctx_visit_start_map(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
     (void)arg;
     if (rec->msg == 0 || rec->msg->mapped != 0 || rec->addr == 0U) {
