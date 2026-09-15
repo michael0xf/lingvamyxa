@@ -1,0 +1,77 @@
+Stage 5 step (f) inventory (d6, working notes; measured by grep on d6/stage5e 275b50f9 in wtp, 2026-09-14)
+
+Scope from 6f: (1) runtime_delete becomes R0's close (decision 17 chain from R0 down, rules 1 and 3; the sweep's
+failed orphans included; then R0's slot, then the runtime); measure what today's slot loop frees that the chain
+would not. (2) The host forms retire: host_is_owner as an authority, the host lock and host_wait, the ingress V0
+flag and runtime_shutdown's flag if R0's close covers them. (3) The lifecycle authority's strict form (the parent's
+own turn only), with family_handoff's section-34 half. (4) runtime_new and runtime_delete the only host calls left.
+(5) 6f writes the acceptance first.
+
+host_is_owner call sites (grep count, *.lm1/*.lm2/*.c/*.h):
+- lmx_message.lm1 9, lmx_message.lm2 9 (mirror), lmx_message_exec.c 8, lmx_message_host.c 3, lmx_message_host.h 1.
+- Per API (enclosing function, line on 275b50f9's tree):
+  lmx_message.lm1 (lm2 mirrors each):
+  - lmx_msg_handoff_supervision 652: parent's turn, else host outside any turn (lifecycle host form)
+  - lmx_msg_require_owner 843: host_is_owner alone (a helper; its callers listed below)
+  - lmx_msg_require_turn 852: host_is_owner && no workers && no live contexts (the single-thread shortcut)
+  - lmx_msg_runtime_delete 1006: host_is_owner alone
+  - lmx_msg_dispose_child 1608: parent's turn, else host outside any turn (lifecycle host form)
+  - lmx_msg_adopt_failed 1627: parent's turn, else host outside any turn (lifecycle host form)
+  - lmx_msg_set_now 2208: R0's turn, else host outside any turn ((e)'s R0 lane)
+  - lmx_msg_live_check 2784: parent's turn, else host outside any turn
+  - lmx_msg_complete 2880: own turn, else host outside any turn
+  lmx_message_exec.c:
+  - mapping_authority_locked 2209: host outside any turn, else the parent's (or nearest unsettled ancestor's) turn
+  - exec_bind_mode 2232: owner = host outside any turn (bind's authority input)
+  - lmx_msg_exec_start_contexts 3151: host_is_owner alone
+  - lmx_msg_exec_unbound_close 3249: host_is_owner alone (drive's maintenance)
+  - lmx_msg_exec_stop 3337: host_is_owner alone
+  - lmx_msg_run_entry_turn 3518: host_is_owner && holding_any == 0 (the bootstrap)
+  - lifecycle_authority 3650: own turn, else host outside any turn
+  - lmx_msg_set_orphan_retain 4028: R0's turn, else host outside any turn ((e)'s R0 lane)
+  lmx_message_host.c:
+  - lmx_msg_host_shutdown 175, lmx_msg_host_wait 199: host_is_owner alone
+- lmx_msg_require_owner's callers (lm1, host_is_owner through the helper):
+  - runtime_shutdown 887
+  - host_drain 973 (with holding_any == 0: the host outside any turn)
+  - create_prepare's parent-0 path 1099 (a top-level create, R0's child)
+  - pump 1925, poll 2187, drive 2293 (drive with holding_any == 0)
+  - host-side readers when the caller holds no turn slot: state 2325, inbox_n 2345, path_n 2368, path_at 2392,
+    child_n 2417, child_at 2452, the init read 2497
+  - live_test_set_seq 2853, live_test_set_wait_th 2866
+- Lifecycle calls in tests (adopt_failed, settle_child, dispose_child, adopt_child; grep count): release_17 6,
+  family_handoff 4, orphan_mapped_17 1, scenario36 1. Read per site: all 12 run from main outside any turn (the
+  lifecycle host form), each right after a step_from_root / step_via_root2 / drive:
+  - release_17: dispose_child 187 (P1, C1), 194 (R, P1), 212 (R, P2), 229 (R, P3), 244 (R, P4), 263 (R, P5)
+  - orphan_mapped_17: dispose_child 195 (R, P)
+  - scenario36: adopt_failed 332 (P, B)
+  - family_handoff: dispose_child 313 (parent, K); adopt_failed 337 (sibling, G: must refuse), 341 (C, G: the
+    section-34 "G to C"), 353 (P, C: "C to P")
+  Under (f)'s strict form (the parent's own turn only) each moves into the parent's turn, as d's steps did.
+- The executor selftest (lmx_message_exec_selftest.c, grep of dispose_child, adopt_failed, complete,
+  handoff_supervision; 40 sites): inside turn callbacks 177 (a dispose in a turn), 751, 859, 901 (complete in a
+  turn); the other 36 run from main outside any turn: handoff_supervision 3674, 3694-3697; dispose_child 3757,
+  3817, 4485, 4503, 5747, 5824, 8789, 8925; adopt_failed 4394, 4404, 4409 (x2), 4419, 4443, 4492, 4595, 4660, 4673,
+  4746, 4755, 5882, 5947, 6122, 6134, 6205, 6213, 6304, 6341; complete 4176, 8581, 8584, 8789, 8868.
+  Under (f)'s strict form each moves into the parent's (or, for complete, its own) turn.
+
+runtime_delete today (lmx_message.lm1 999-1046):
+1. refuses unless host_is_owner (no holding_any check);
+2. lmx_msg_host_shutdown(rt), lmx_msg_exec_stop(rt), lmx_msg_exec_drop_binds(rt);
+3. under the exec lock with retire off: for every slot on rt->slots, take and free its inbox and outbox copies;
+4. free rt->transport;
+5. for every slot on rt->slots: free init and path, lmx_msg_slot_free(m) (the slot's arena, blocks, ranges, roots);
+6. rt->slots = 0, rt->n = 0; exec_detach, host_detach, free(rt).
+No close chain: it frees in allocation order, not from R0 down, and does not run any Message's close, settle or
+dispose; a running descendant is freed as a slot, not closed.
+
+lmx_message_host.c:
+- host_attach / host_detach (CRITICAL_SECTION or pthread mutex + wake);
+- host_is_owner (99), host_lock / host_unlock (112/126), host_is_shutdown (139), host_wake (148),
+  host_shutdown (170), host_wait (194, timed wait on the wake).
+
+To measure before any claim:
+- the residue: with a running tree (mapped child on its context, a failed orphan retained, a UI request pending),
+  count frees through a wrap in today's runtime_delete, and what a chain from R0 would free, per block;
+- each host_is_owner caller's lane meaning after (f);
+- which tests use the lifecycle host form (adopt_failed / settle_child from main outside any turn).
