@@ -2647,3 +2647,12 @@ reads root lm2 (58-62) and trans.lm0, the old seed, and goes with it. b5's
 grouping adjusted: CMake configuring clean is the branch's final check,
 per group the greps and stg's gates; the branch lands whole through the
 lead. S3's strict re-probe with the launch site is in the design.
+O1 landed on integration as c94d3e31 (d6/o1-turn-arena 06ab81b0 merged
+onto d7f3b569: the turn Message's arena through the core's blocks,
+lmx_msg_turn_current, lmx_msg_turn_new_zero and _copy_bytes in lm1 and
+lm2, the O1 test 23/0 in scenario36's defaults, scenario36's --wrap hook):
+measured on the merge run_model_scenario36 PASS, run_port_message
+-LaneCheck PASS, run_gates 11 of 11 in 209 s; before landing red, green,
+the defaults, the parent_msg falsifier and plain port_message. Next: 57's
+32-gate set ad3fc6b8 onto c94d3e31, then D1 (trial merge clean), then the
+probe, the root regeneration and the slice refresh with the .pyc removal.
