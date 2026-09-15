@@ -2236,3 +2236,12 @@ measuring on d6/lock-s2-red (reference.exe twice with LMX_LOOKUP_COUNT=1);
 then 57's quiet window on d7f3b569; then O1 (the turn Message's arena, the
 red test written against lmx_message.lm1/lm2 and own.lm1's LmOwnArena) in
 the lead's lane.
+0c's S3 wake oracle (written in wt0c_s3o on d66a4ec1, uncommitted and
+unbuilt until the quiet window on d7f3b569): per lane, take-wakes may never
+exceed the admissions counted into its mailbox, both counts kept beside the
+mail lock, aborting "LANE WAKE FAIL site=... owner=... admits=... wakes=...";
+retire wakes named as unchecked; a probe run lists every violating site with
+the Message's input and closing flags, and a Message failing with input
+still in its inbox would expose a miscount in the oracle itself. The
+generated-C regeneration gate and the lm2 chain's fixed point are planned
+rows awaiting O0's runner and base.
