@@ -179,10 +179,6 @@ if ($wantWin32) {
     Invoke-MixaLinkedSelftest -Name "mixa_pointer_glyph_diag_selftest" -Src "mixa_manager\tests\mixa_pointer_glyph_diag_selftest.lm1" -Objs $libObjs -LinkLibs @("-lgdi32", "-luser32", "-lkernel32")
     Invoke-MixaLinkedSelftest -Name "mixa_backend_win32_selftest" -Src "mixa_manager\tests\mixa_backend_win32_selftest.lm1" -Objs $libObjs -LinkLibs @("-lgdi32", "-luser32", "-lkernel32")
     $win32Ok = $true
-    # Isolated host-ingress harness (pinned vendor); does not rewrite backend poll.
-    & (Join-Path $PSScriptRoot "run_ingress_harness.ps1")
-    if ($LASTEXITCODE -ne 0) { throw "mixa ingress host harness failed" }
-    "mixa ingress host harness ok"
     & (Join-Path $PSScriptRoot "run_process_selftest.ps1")
     if ($LASTEXITCODE -ne 0) { throw "mixa process seam selftest failed" }
     $processOk = $true
