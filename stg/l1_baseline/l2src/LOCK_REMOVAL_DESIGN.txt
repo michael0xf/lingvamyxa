@@ -49,7 +49,15 @@ S0. The proof tool (57): the lane tripwire red on a lane write from a thread wit
 S1. Dead code and the order's direct deletions (no question open).
     - Delete adopt_push (exec.c 3628, unused; its only occurrence is its definition).
     - Red: none needed for dead code. The proof is the grep at 0 and the gates green.
-    Pending Mikhail's answer, not in S1: lm2/own.lm2's unused native mutex/condition wrappers (9 lines).
+    - NOT dead, corrected 2026-09-15: lm2/own.lm2's native mutex and condition wrappers (lm_native_mutex_* /
+      lm_native_condition_*) are called by own.lm2's public lm_mutex_* / lm_condition_* (2808-2885), and those by a
+      whole lock-based message-thread runtime in own.lm2 itself: runtime\route_mutex, pool\mutex,
+      pool\work_ready, thread\state_mutex, thread\stopped_condition (lines 581-1688 and on), plus own_abi.lm2 (41)
+      and tests/message_thread_*.c and thread_provider_native.c (C, no runner found by grep). The lead's earlier
+      "no caller" came from a grep that counted own.lm2 twice under two paths. Mikhail's answer ("Да всё удаляйте
+      потому что это совершенно очевидно лишнее. Одна арена на Message, арены присоединяются при потреблении -- это
+      ядро") was given to the wrong premise and is put to him again with the real extent. Out of S1: this runtime
+      needs its own inventory (locks, conditions, threads, allocations) under the same order.
 
 S2. Capabilities instead of address lookups inside the runtime (L1), locking unchanged.
     Every call site of the spine's C1, C2 and C5 takes the record its caller already holds. The site no longer
@@ -67,6 +75,52 @@ S3. One wake per lane (L6), no lock around a signal (Mikhail on wait signals).
     - Red: two mapped workers A and B. Readying A must not wake B. A test-build counter of wake returns that took
       nothing is nonzero for B today (run_one 2587 wakes all).
     - Green: B's empty-wake count at 0 over the same run; the executor selftest's wait tests green.
+
+M. The sequential mapping removed (X), after S3 and before S4.
+    Mikhail on 5.5, verbatim (2026-09-15): "мы же обсудили миллион раз. Закрытие родителя это авария. _Каждый ребенок
+    закрывает себя сам и для его детей это такая же авария_. Если дети L3 Thread но реализация такая что у них нет
+    своего потока, а они последовательно выполняются, то это нюансы реализации. Разумеется в этом случае закрытие
+    родителя затягивается так как планировщик должен пройтись и выполнить чужую работу -- но зачем вам вообще сейчас
+    такие потоки если вы не можете даже ядро архитектуры запилить точно по спеке?". The reading "for now every L3
+    Thread runs on its own OS thread; the sequential mapping is removed until the core is exact by the spec" was put
+    to him and he answered "ДА" (recorded on main by the coordinator, spec 19.28.R2.2 and model section 29).
+    A child is launched on its own thread or not at all.
+    What goes (surface counted by grep on cf326822):
+    - lmx_msg_run_child_turn and child_turn_core's step path (exec.c, declared in lmx_message.h/exec.h, lm1/lm2 1
+      each); lmx_msg_sched_step (lm1) and the scheduler record's cursor (lmx_sched_record.lm2
+      lmx_sched_record_cursor/set_cursor); exec_bind_mode's launch = 0 host mapping.
+    - The UI lane's stepping of UI-bound children: lmx_msg_exec_ui_step, lmx_msg_exec_take_ui_locked,
+      lmx_msg_exec_take_addr, the MAP request (ui_request_locked, ui_request_if_ready_locked, ui_pending) and
+      LMX_MSG_AFFINITY_UI as a bind affinity (exec.c 19 uses, the executor selftest 31).
+    - What stays: R0's own turn on the bootstrap thread (lmx_msg_root_turn, lmx_msg_run_entry_turn). R0 is the
+      bootstrap thread's own L3 Thread, not a child stepped by another thread; lmx_msg_map_child, which launches a
+      child on its own thread.
+    The UI lane without stepping: an L3 Thread whose lane is the UI thread, which takes its own Messages from its own
+    mailbox. 19.28.R2.2 as written: "A request to another lane (mapping a child onto the UI lane) is a Message to that
+    lane's mailbox" (11503-11506). Work a Message wants done on the UI thread is a Message sent to the UI lane. No
+    other Message's turn runs on the UI thread. Proposed here, for Mikhail's agreement before any doc carries it.
+    Tests migrated onto turn_step_child / run_child_turn in stage 5 (d), by name (grep counts of
+    turn_step_child / run_child_turn / root_turn):
+      lmx_model_family_close_32_selftest (3/1/1), lmx_model_family_release_17_selftest (7/2/4),
+      lmx_model_liveness_33_selftest (4/1/4), lmx_model_orphan_mapped_17_selftest (5/1/2),
+      lmx_model_root_ingress_5b_selftest (2/1/1), lmx_model_root_record_5e_selftest (2/1/3),
+      lmx_model_scenario36_selftest (3/1/1), lmx_msg_adopt_unrooted_selftest (2/1/1),
+      lmx_msg_family_handoff_selftest (4/1/1), lmx_msg_send_local_selftest (6/1/2, plus sched_step 1),
+      lmx_sched_record_selftest (2/1/1, plus sched_step 1), tests/cancel_spin_host.c (4/1/2, sched_step 2),
+      lmx_message_exec_selftest.c (24/5/14, sched_step 3, exec_ui_step 2, AFFINITY_UI 31),
+      lmx_model_ui_lane_3d_selftest (exec_ui_step 1, AFFINITY_UI 1), and the runner run_turn_step_child_copies.ps1.
+    Each becomes a test of a child on its own thread (the child's turn is the property, run on its context worker
+    through map_child), or it is deleted with the property it checked named in the commit. Decided per test in M's
+    commit after reading it. The rule for the decision: a property of the sequential mapping itself (round-robin
+    order, the cursor, the UI take) is deleted; a property of the child (its close, its settle, its mail) moves
+    onto its own thread.
+    - Red: an S2-style test-build counter of step entries (child_turn_core with bootstrap = 0, sched_step,
+      exec_ui_step), nonzero over the executor selftest and the model tests today.
+    - Green: the functions deleted (grep at 0 for run_child_turn, sched_step, exec_ui_step, turn_step_child,
+      AFFINITY_UI), every converted test green on its own thread, run_port_message -LaneCheck with the S0 tripwire.
+    Effect on the other stages: S2's green loses the C1 walks from run_child_turn and sched_step, which go with the
+    mapping instead of being threaded. S4 no longer has a host arm or a UI take to decide, and C3/C4 are decided on
+    own-thread children only. S5's ui_lane becomes R0's child L3 Thread on the UI thread, not an executor pointer.
 
 S4. The family tree and the mapping written only on the owner's lane (L2, L3), then read without the lock.
     Each tree cell and mapping cell has one writer by decision 18's ownership list (1)-(3), Mikhail's own
