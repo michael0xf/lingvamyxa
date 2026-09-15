@@ -2314,6 +2314,9 @@ if ($sizeofArgL1.IndexOf("c.sizeof(c.wchar_t)") -lt 0 -or $sizeofArgL1 -match 'c
 Invoke-Leaf "l2src\tests\unit_byvalue_foreign.lm2" "unit_byvalue_foreign" 0 "byvalue"
 $byvalueL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_byvalue_foreign.lm1")))
 if ($byvalueL1 -notmatch '; LmP0NodeKind: l2_p\d+_0\) LmP0NodeKind' -or $byvalueL1 -notmatch '; LmP0FrameFlags: l2_p\d+_0\) LmP0FrameFlags' -or $byvalueL1 -match 'c\.LmP0FrameFlags' -or $byvalueL1 -notmatch 'LmP0NodeKind: l2_t\d+' -or $byvalueL1 -notmatch 'LmP0FrameFlags: l2_t\d+') { throw "unit_byvalue_foreign did not spell the by-value foreign types as written" }
+# A foreign int alias as a local's declared type (5e's repro, parser-l2 Stage d
+# slice 5): `LmP0TrailerRole: trailer_role` translates as an int own local.
+Invoke-Leaf "l2src\tests\repro_foreign_int_alias_local.lm2" "repro_foreign_int_alias_local" 0 "probe_foreign_int_alias_local"
 # LmP0Document is a foreign pointer type like LmP0Frame (Stage B step 3): its
 # fields resolve as a formal and as a local.
 Invoke-Leaf "l2src\tests\unit_p0_document_field.lm2" "unit_p0_document_field" 0 "doc_field"
