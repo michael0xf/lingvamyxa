@@ -2255,3 +2255,22 @@ stage M removes run_child_turn and sched_step, which account for part of
 C1, S2's threading waits for M and its green is measured after M on the C1
 sites that remain. The machine is 57's (quiet on d7f3b569); the lead reads
 for O1's design with no builds.
+O1 concrete at d6/lock-removal 133f9f76, approved 2026-09-15: the core
+already has the Message's arena as 19.29.2 describes (LmxMsg.blocks, a list
+of LmxMsgBlock {base, n, class, dispose, next}, owner-local with no sync,
+and LmxMsg.ranges for the domains; the owned constructors allocate into
+that pair; settle moves it into the parent; slot free disposes it);
+own.lm1's LmOwnArena is a different allocator the core does not link and
+O1 leaves it out. The addition: lmx_msg_turn_current (C, a read of the
+thread's turn identity, T) and lmx_msg_turn_new_zero(size) /
+lmx_msg_turn_copy_bytes(source, length) in lm1 and lm2 in one commit, each
+allocating one block pushed onto the turn Message's own list, 0 outside a
+turn, the Message's own lane the writer (M), freed by what already frees
+the arena. Red first: a model test with A allocating on its context worker
+and B on R0's turn, each allocation in its own Message's blocks only, 0
+outside a turn, the two-cycle balance; falsifier, pushing onto the parent's
+list. Branch d6/o1-turn-arena off d7f3b569, edits only while 57 has the
+machine. O2's order corrected by the coordinator from "0 outside a turn":
+O2.1 the main scaffold becomes R0's entry turn with allocations still on
+the heap, O2.2 the allocations onto the turn arena, O2.3 the REST C, each a
+full self-build.
