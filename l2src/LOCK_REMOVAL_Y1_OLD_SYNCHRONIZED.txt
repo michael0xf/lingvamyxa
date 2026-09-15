@@ -1,0 +1,201 @@
+LOCK_REMOVAL_Y1_OLD_SYNCHRONIZED: what the old tree has of the synchronized
+receiver, read-only, against the current spec's own description
+(sonnet/y1-old-sync, 2026-09-15, doc-only, no machine, read-only on another
+tree). No proposal of my own below -- only what is there and what the spec
+says.
+
+Tree: C:\Nyasha_Planet\lingvamyxa_old_worked_version, a git repository at
+620db8612c32569c8dd507cca135d5d076144e9f ("Structure memory model is a
+graph, not a tree"), the same commit already cited elsewhere in this
+session's work (LOCK_REMOVAL_M_FIELDS.txt's p0_tree_contract goldens, "620
+parser reference"). All line numbers below are in that tree at that commit.
+Mikhail's own framing (relayed in the ticket): "в старом проекте был даже до
+какой-то степени реализован" (in the old project it was even, to some
+degree, implemented) -- "to some degree" is exactly what this file measures.
+
+--- Where it is
+
+Receiver registration (recognized as an ordinary receiver descriptor, not
+given P0-parser special-casing -- the P0 receiver ABI doc,
+Lingvamyxa_parser_P0_receiver_abi.txt, has zero mentions of synchronized;
+it parses through P0's uniform receiver grammar like any other head):
+  lm2/core.lm2:149 -- `synchronized  descriptor`, in the reserved-word table
+  lm2/trans_registry.lm2:612 -- `synchronized  receiver.statement`
+  lm2/trans_registry.lm2:700 -- `synchronized  lm_trans_statement_emit_synchronized`
+  lm2/trans_registry.lm2:793 -- `synchronized  name  0`, in
+    receiver.positional-name (one positional object-expression argument,
+    same shape as fn/sub/thread)
+  lm2/trans_l1_statement.lm2:14377 -- the dispatch-table binding call,
+    lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized",
+    @lm_trans_statement_emit_synchronized)
+
+Emission (the actual L2-to-C lowering):
+  lm2/trans_l1_statement.lm2:11884-11891 --
+    lm_trans_statement_emit_synchronized, a thin wrapper that requires a
+    non-empty body then delegates to schedule_synchronized
+  lm2/trans_l1_statement.lm2:11103-11135ish --
+    lm_trans_statement_stack_schedule_synchronized: refuses an empty body
+    ("synchronized expects an object expression"), allocates a cleanup id,
+    emits the enter sequence, opens a new scope and pushes the cleanup
+  lm2/trans_l1_statement.lm2:483-502 -- lm_trans_emit_cleanup, the leave
+    emission (or, for a `finally`-shaped cleanup entry, the equivalent
+    statement-list -- the same cleanup-stack machinery serves both
+    receivers)
+  lm2/trans_l1_statement.lm2:3690-3860ish --
+    lm_trans_emit_return_statement's interaction with the cleanup stack:
+    lm_trans_emit_cleanups_until is called before every emitted `return`,
+    including the value-returning path, which first captures the return
+    value into a compiler-generated temporary name (lm_trans_emit_return_name)
+    and only then unwinds the cleanups (releasing any active synchronized
+    monitors) before emitting the final `return <temp>;`
+
+Other reference to the keyword in the translator stack:
+  stg/implementsABC/lm2/uses.lm2:40 -- a separate, self-hosting bootstrap
+    layer's own reserved-head-word check lists "synchronized" alongside
+    if/else/while/for/return/throw/catch/assert/fn/sub/external/table/
+    finally/L2/end, confirming the keyword was treated as reserved at more
+    than one layer of the stack, not just the primary translator
+
+Test:
+  tests/trans_synchronized_cleanup.lm2 (59 lines, whole file) -- the only
+  test found. It supplies its OWN local lm_synchronized_enter/leave as two
+  one-line subs operating on a `void object` reinterpreted as `int*`:
+  depth[0] += 1 on enter, depth[0] -= 1 on leave -- no lock, no atomicity,
+  no thread involved at all. Four cases exercise every structured-exit path
+  the spec's cleanup rule names: leaveByReturn (a return inside the block),
+  leaveByWrappedReturn (synchronized: @lock (return: ...), the inline-body
+  form), leaveByBreak (break out of a while loop from inside synchronized),
+  leaveByContinue (continue from inside synchronized). main asserts the
+  combined result equals 22, i.e. that enter/leave stayed balanced (the
+  L2:.table:.source: fn.thread-context.none rows pin lm_synchronized_enter
+  and lm_synchronized_leave to value 1 each, a thread-context assertion the
+  L2 self-check framework applies, not a runtime lock check).
+
+Real (non-test) usage, one generation older within the same old tree, in a
+subtree its own path already calls "old":
+  lm2/mix/old/Mix.lm2:6-22 -- the identical local placeholder
+    lm_synchronized_enter/leave pattern (a bare depth counter, not a lock),
+    defined again from scratch rather than shared with the test
+  lm2/mix/old/Mix.lm2: 16 uses of `synchronized: @<expr>\lock` across the
+    file (lines 190, 191, 210, 211, 227, 228, 270, 305, 486, 500, 501, 527,
+    542, 543, plus two more on the same lines as nested pairs), locking on
+    page\lock, n\lock, p\lock, next\lock and prev\lock -- a page/node
+    linked-structure locking pattern, nested synchronized blocks in several
+    places (e.g. :190-191, :227-228, :500-501, :542-543 each lock an outer
+    page then an inner neighbor)
+  lm2/mix/old/Mix_model.lm2:79-80 -- the same thread-context pin
+    (lm_synchronized_enter/leave -> 1) as the test file, for this earlier
+    Mix.lm2 source
+  memory_model_development_plan.txt:380-381 (and 389-390, the Russian
+    paraphrase) -- the design-plan's own cross-reference: "Locks stay
+    `synchronized` on the page monitor (already in `lm2/mix`)," confirming
+    this was known and intentional at the time, not accidental leftover code
+  Lingvamyxa_development_plan.txt:22-23 -- synchronized listed among the
+    L1/L2 lowering targets in the project's early roadmap, alongside
+    if/while/return/break/continue
+
+--- What the translator emitted: the C shape
+
+For `synchronized: @lock <body>`:
+
+    void *__sync_N = (void *)(<lock-expression>);
+    lm_synchronized_enter(__sync_N);
+    {
+        <body, as an ordinary statement list>
+    }
+    lm_synchronized_leave(__sync_N);   /* fall-through */
+
+and, at every early exit inside <body> (return, break, continue), the same
+lm_synchronized_leave(__sync_N) call is re-emitted just before that exit's
+own C control transfer, via the cleanup-stack walk (lm_trans_emit_cleanups_until),
+so the block is not a plain C brace pair but a per-exit-path duplicated
+release, matching a structured try/finally shape rather than a single
+guaranteed-once cleanup. Reentrancy: none tracked by the emitted code
+itself -- __sync_N is a bare void* holding whatever the lock-expression
+evaluated to; no generation counter, no owning-thread field, no depth field
+in the emitted C, only in the two ad hoc test/Mix stand-ins for enter/leave
+themselves (and even there, the depth field enforces nothing: it counts,
+it does not block).
+
+What it locked on: exactly the evaluated `<lock-expression>` value, cast to
+void*, passed opaquely to enter/leave -- the translator never inspects or
+requires anything about that value (no type check tying it to a monitor
+type); "the object" in the spec's sense is whatever expression the caller
+wrote.
+
+--- How far it was implemented
+
+Parsed: yes, but not specially -- synchronized is an ordinary P0 receiver
+head with a one-argument positional-name signature (trans_registry.lm2:793),
+parsed by the same general receiver grammar as fn/sub/thread; P0 itself
+does nothing synchronized-specific.
+
+Emitted: yes, completely, including the harder part -- correct cleanup
+insertion on every structured-exit path (return, including value-returns
+with correct value-capture-before-release ordering; break; continue) via
+the shared cleanup-stack machinery also used by `finally`.
+
+Runtime-implemented: no. grep across the whole old tree (source and the
+generated lm1/build/trans.lm1.c and trans_library.lm1.c) finds
+lm_synchronized_enter/lm_synchronized_leave called and referenced, but
+defined nowhere as a real runtime primitive -- no header, no .c file, no
+generated C function body anywhere provides them. The only two definitions
+in the entire tree are the local, non-thread-safe test/Mix.lm2 stand-ins
+described above, each private to its own translation unit. Any other
+program using `synchronized` would translate and compile but fail to link.
+lm_resolve_lock_handle, the resolution helper the current spec's own
+illustrative ANSI C names (see below), does not exist anywhere in this
+tree either.
+
+Tested: only the translator's own cleanup-ordering correctness (the one
+test file, four structured-exit cases), never real mutual exclusion, never
+reentrancy, never any concurrent or multi-thread access.
+
+--- Where it fell short of the spec's receiver description (Lingvamyxa_spec.txt
+    on main, section 20.5.7, `synchronized`, lines 15045-15125)
+
+1. "The runtime hook must implement the selected monitor policy, including
+   Java-style reentrant entry for the same thread when that profile is
+   selected" (spec:15111-15112). Not implemented at all, anywhere, in any
+   form -- no monitor, no policy selection, no reentrant-entry tracking.
+   The only two functions bearing these names in the whole tree are
+   non-atomic depth counters with no locking semantics.
+
+2. The spec's own illustrative ANSI C (spec:15090-15091) resolves the lock
+   handle through a named helper first: `Lmx *lock_handle =
+   lm_resolve_lock_handle(containing_structure, /* object */);` before
+   calling enter. The old tree's actual emission skips straight from the
+   evaluated expression to a bare `(void *)(...)` cast -- no
+   lm_resolve_lock_handle or equivalent resolution step exists anywhere in
+   this tree (checked by name).
+
+3. The spec ties safe value-return handling to "the fixed
+   status-plus-typed-outputs ABI (21.13.4)" (spec:15118). That section
+   number and that phrase do not appear anywhere in the old tree's own copy
+   of Lingvamyxa_spec.txt -- this ABI postdates the old tree entirely. The
+   STRUCTURAL requirement it is used to justify (value made safe before
+   monitors release) does appear to already hold in the old tree's own
+   terms -- lm_trans_emit_return_statement captures the return value into a
+   temporary before calling lm_trans_emit_cleanups_until -- but that match
+   is coincidental to a simpler, unnamed mechanism, not an implementation
+   of the ABI the current spec cites; recorded as a partial correspondence,
+   not a full one, since the ABI it is measured against did not exist yet.
+
+4. No code or test anywhere in the tree exercises `synchronized` under
+   actual concurrency (multiple threads, or even multiple fibers/turns
+   contending for the same lock expression) -- consistent with finding 1,
+   since there is no real monitor to contend over. The spec's own
+   framing of `synchronized` as belonging to "the Message mechanism" and
+   coordinating through Messages (20.5.7's second paragraph, echoing
+   19.28.R2.2) has no counterpart in the old tree at all: Mix.lm2's usage
+   predates the Message model entirely (it locks page/node structures in a
+   flat page-table design, not Messages), and the test file's usage is
+   single-threaded by construction.
+
+--- Falsifier
+Verified directly: grep -c "synchronized" on this file returns 39. Sites
+listed above: 14 (core.lm2; three trans_registry.lm2 rows; the
+dispatch-table bind; the two emission functions; the cleanup emitter; the
+return-cleanup interaction; uses.lm2; the test file; Mix.lm2; Mix_model.lm2;
+memory_model_development_plan.txt; Lingvamyxa_development_plan.txt).
+39 >= 14, as the ticket asks.

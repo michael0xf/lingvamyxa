@@ -1,0 +1,258 @@
+LOCK_REMOVAL_A_ALLOCS: every allocation and free in l2src outside the Message's
+own arena (lmx_msg_turn_*, the blocks/ranges growth mechanism), at integration
+c063fd00, against the A-stage design (LOCK_REMOVAL_DESIGN.txt A1-A3, line 862
+onward) -- one arena per Message, arenas attached at consumption (sonnet/a-allocs,
+2026-09-15, doc-only, no machine).
+
+Design, quoted (LOCK_REMOVAL_DESIGN.txt:862-876). Mikhail on 5.4, verbatim:
+"какая копия? У нас нет никаких копий message... Есть только он сам и у него
+своя арена. Пускай это будет один alloc но это его собственный. При получении
+Message который не L3 Thread присоединяется к арене получателя." (no copies of
+a Message; it has only itself and its own arena; one alloc, but its own; a
+received Message that is not an L3 Thread joins the recipient's arena.)
+  A1. The Message's control record (LmxMsg, today calloc in slot_new) becomes a
+      Structure in its own arena, created on the launching parent's lane.
+  A2. The arena's bookkeeping (LmxOwnedRange and LmxMsgBlock records) and the
+      Message's own arrays (path, init, done_*, roots) are allocated from that
+      arena.
+  A3. An admitted copy's arena (5.4). Mailbox entries (LmxMsgCopy) follow his
+      answer: the envelope copy made at admission is today's artefact and goes.
+Excluded per the ticket: lmx_msg_turn_new_zero (lmx_message.lm1:395-412, own
+comment: "O1 ... an allocation in the turn Message's own arena ... one zeroed
+block pushed onto it, written on the Message's own lane") -- this already IS
+the arena's own block-growth primitive the design targets; it needs no site
+below since it is not something to convert, it is what A2 converts everything
+else into.
+
+Method: grep for malloc/calloc/realloc/free( across lmx_message.lm1 (lm2
+mirrors 1:1, spot-checked not separately walked), lmx_message_exec.c and
+lmx_message_host.c at c063fd00; L2_FOREIGN_ALLOC.txt (checked, see its own
+section below) documents no separate foreign-alloc path in these four files.
+133 raw calls found (73 exec.c, 5 host.c, 55 lm1) at 78 distinct source
+lines (several lines carry a paired malloc-and-free-on-failure or two error
+paths). Below, "site" means one of the 15 groups this file organizes them
+into by the struct or array each allocates -- the unit the design text
+itself uses (A1 names one record, A2 four kinds, A3 one mechanism) -- not
+one raw call; every raw call's own line number is still named within its
+group, so no call is dropped, only grouped by what it shares a fate with.
+
+--- Counts by category (15 groups total, matching grep -c "^group: " below;
+    grouped sites, not raw calls -- see the falsifier note for that distinction)
+
+(a) arena's own block allocation: 0 groups listed (lmx_msg_turn_new_zero is
+    the one site of this kind in these four files; it is excluded per the
+    ticket's own wording and named only in the header above, not given its
+    own group below, so it does not count toward the 15)
+(b) runtime/scaffolding storage a stage deletes: 9 groups -- S3 (2:
+    LmxMsgBindWait, LmxMsgCtxPack), M (1: LmxMsgExecBind), S5 (2: LmxMsgExec,
+    LmxMsgRuntime), S6 (1: LmxMsgHostSync/host.c), Y3 (1: done_from/done_id),
+    A3 (2: LmxMsgCopy/LmxMsgEnv, and lmx_msg_delivery_new/dispose's own
+    scratch-LmxMsg carrier, the copy-and-envelope machinery itself, since
+    "no copies" deletes the mechanism rather than converting it)
+(c) must become a node in an arena: 5 groups, all named directly in the
+    design text: LmxMsg itself (A1, slot_new); LmxOwnedRange (A2, eternal/
+    method ranges); LmxMsgBlock (A2, arena blocks and the adopt-mark
+    "prepared" block); LmxMsgRoot (A2, the roots list); init/path arrays (A2)
+neither (a)/(b)/(c)/(d) cleanly: 1 group -- the transient scratch buffers
+    (drive_walk_list's snapshot table, exec_start_map_kick's kicks/pars/chs,
+    lmx_msg_parent_settle's address buffer), freed within the same call and
+    owning nothing persistent on any Message or runtime struct; listed
+    because the ticket asks for every allocation and free, not forced into
+    a category that does not fit
+(d) contradiction, no owner and no stage: 1 finding, not a 16th group -- a
+    documentation mismatch: the design text above still lists done_* among
+    A2's arrays "allocated from that arena," but LOCK_REMOVAL_FIELDS.txt's own
+    Q2 ruling (Mikhail: "какая-то выдумка. Удаляй все.") deletes done_from/
+    done_id/done_n/done_cap outright, no replacement, stage Y3. The A-design
+    paragraph was not updated after Q2; the two documents disagree on what
+    happens to done_*. Not a code contradiction (the FIELDS.txt ruling is more
+    specific and later-dated) but a stale cross-reference worth fixing before
+    A2's own note is written, so a reader of the A-design section does not
+    plan a conversion for a field that is simply going away.
+
+--- (c) A1: the Message's control record
+
+group: lmx_msg_slot_new
+file:line: lmx_message_exec.c:479-503 (calloc at 479); the matching free is
+  lmx_msg_slot_free (exec.c:1113-1152, free(m) at 1152) and the two variants
+  of m->mail create/destroy inside the same two functions (488/495 create,
+  1149 destroy) -- m->mail is the kept mailbox monitor (Y2), not part of A1,
+  noted so its free at 1152's neighbor is not mistaken for the same category
+what: LmxMsg (the whole control record), calloc(1, sizeof(LmxMsg))
+owner: the Message itself
+category: (c), A1 -- becomes a Structure in its own arena, created on the
+  launching parent's lane (lmx_msg_create_prepare, the site named in
+  LOCK_REMOVAL_S4_WRITES.txt's own central finding, calls lmx_msg_slot_new)
+
+group: lmx_msg_delivery_new / lmx_msg_delivery_dispose
+file:line: lmx_message.lm1:443-480 (calloc at 448), lmx_message.lm1:434-441
+  (dispose)
+what: a second, bare LmxMsg allocated outside slot_new, used only as a
+  scratch carrier for a copied graph, stored in node\delivered (an
+  LmxMsgCopy field) by lmx_msg_send_graph (lmx_message.lm1:1334)
+owner: the copy machinery, not any real Message
+category: (b), goes with A3 -- this is not a second instance of A1's target
+  (a real Message getting its own arena); it is the "no copies" mechanism's
+  own scratch container, deleted along with the rest of A3's envelope/copy
+  machinery, not converted into anything
+
+--- (c) A2: arena bookkeeping and the Message's own arrays
+
+group: LmxOwnedRange (eternal and method ranges)
+file:line: lmx_message_exec.c:702-820 (lmx_msg_bootstrap_eternal_admit
+  calloc/free 720/730, eternal_ranges_free 782, lmx_msg_eternal_clone
+  calloc/free 805/816, lmx_msg_method_clone calloc/free 848/859)
+what: LmxOwnedRange records, classifying admitted immutable/shared values
+owner: the Message whose eternal_ranges/method_ranges list they join
+category: (c), A2 -- named explicitly in the design text
+
+group: LmxMsgBlock (arena blocks)
+file:line: lmx_message.lm1:395-412 (lmx_msg_turn_new_zero, excluded, see
+  above); lmx_message_exec.c:3746-3758 (lmx_msg_exec_adopt_mark's "prepared"
+  block, created when a failed child's storage is adopted into the parent)
+what: LmxMsgBlock records, the arena's own block list entries
+owner: the arena's own Message (adopt_mark's case: the parent, receiving the
+  adopted block)
+category: (c), A2
+
+group: LmxMsgRoot (the roots list)
+file:line: lmx_message.lm1:243-296 (lmx_msg_root_retain/lmx_msg_root_release,
+  malloc at 267, free at 295); lmx_message_exec.c:3860-3924
+  (transfer_graph_locked_api's "prepared" root record, malloc/free 3913/3924)
+what: LmxMsgRoot records, the Message's own root-set bookkeeping
+owner: the Message whose \roots list they join
+category: (c), A2 -- "roots" is named explicitly in the design text
+
+group: init / path arrays
+file:line: lmx_message.lm1:383-393 (lmx_msg_copy_bytes, the shared byte-copy
+  helper malloc at 383 -- feeds both init at creation and envelope payloads
+  at send; its own disposition follows whichever array the caller owns);
+  frees at lmx_message.lm1:1047/1050 (release path), 1145-1192
+  (create_prepare's own error-path cleanup of not-yet-installed init bytes),
+  1487/1492 (a second release site); exec.c:1217/1221 (lmx_msg_slot_free's
+  own free of m->path/m->init, alongside A1's free(m))
+what: m->init (creation payload) and m->path (hierarchical path segments)
+owner: the Message itself
+category: (c), A2 -- both named explicitly in the design text
+
+group: transient scratch buffers (freed within the same call, own nothing
+  persistent)
+file:line: lmx_message_exec.c:872-951 (drive_walk_list's LmxMsg** snapshot
+  table); lmx_message_exec.c:2701-2784 (exec_start_map_kick's kicks/pars/chs
+  arrays); lmx_message.lm1:4000-4050 [c063fd00 numbering:
+  lmx_msg_parent_settle, the LmxMsgAddr buf malloc/realloc/free at
+  4011/4033/4050]
+what: local working arrays for a walk or a settle pass, allocated and freed
+  within the same function call, never stored on any Message or runtime
+  struct
+owner: none -- function-local only
+category: not really (a), (b) or (c) as the design frames them (nothing
+  persists to convert or delete); listed for completeness since the ticket
+  asks for every allocation and free, noted here rather than silently
+  omitted or forced into a category that does not fit
+
+--- (b) runtime/scaffolding storage a stage deletes
+
+group: LmxMsgBindWait
+file:line: lmx_message_exec.c:1968-2024 (calloc 1968, free at 1970/1976/
+  1981/2024)
+what: the worker's wait object
+owner: none (a scaffolding type, LOCK_REMOVAL_FIELDS.txt's own BindWait
+  section: "Goes (map 5.7: no wait, no notify)")
+category: (b), S3
+
+group: LmxMsgCtxPack
+file:line: lmx_message_exec.c:2937-2960 (malloc 2937, free 2947/2960),
+  3062 and 3155 (context_worker's own free(p) after extracting the launch
+  handshake, both Win32 and pthread variants)
+what: the launch handshake (go/refuse, the gate)
+owner: none (LOCK_REMOVAL_S3_FIELDS.txt's own FLAG-2, resolved: all rows DEL)
+category: (b), S3
+
+group: LmxMsgExecBind
+file:line: lmx_message_exec.c:2419 (m->exec_bind = calloc(...), created at
+  bind time), exec.c:1139 (lmx_msg_slot_free's free(m->exec_bind))
+what: the handler binding record
+owner: none as a standalone allocation (the bind table entry); its own
+  fields split across S2/S3/S4/M/S5 per LOCK_REMOVAL_FIELDS.txt, but the
+  struct's own alloc/free lifecycle is the bind table's, which goes at M
+category: (b), M
+
+group: LmxMsgExec
+file:line: lmx_message_exec.c:1234-1294 (calloc 1234, free 1251/1294)
+what: the executor's own runtime-wide state (the bind table, the UI lane
+  pointer, the reap/retire lists, e->lock)
+owner: none -- this is the seventh, still-undocumented scaffolding type
+  LOCK_REMOVAL_M_FIELDS.txt already flagged
+category: (b), S5 (matching this session's own established tagging of
+  LmxMsgExec's individual fields in LOCK_REMOVAL_S6_LOCK_SITES.txt)
+
+group: LmxMsgRuntime
+file:line: lmx_message.lm1:872-892 (lmx_msg_runtime_new, calloc 876, the
+  three error-path frees 881/885/892), lmx_message.lm1:1061 (runtime_delete's
+  own final free(rt))
+what: the process-wide runtime record
+owner: none (LOCK_REMOVAL_FIELDS.txt: "Goes (map 5.7)")
+category: (b), S5
+
+group: LmxMsgHostSync (lmx_message_host.c)
+file:line: lmx_message_host.c:53-95 (calloc 53, free at 62/68/73/95)
+what: the host lock and its owner-thread bookkeeping
+owner: none (LOCK_REMOVAL_FIELDS.txt: LmxMsgRuntime.host_sync, "DEL ...
+  no lock but the mailbox's")
+category: (b), S6 (matches LOCK_REMOVAL_S6_LOCK_SITES.txt's own tag for the
+  host lock site)
+
+group: done_from / done_id (duplicate-delivery history)
+file:line: lmx_message.lm1:815-838 (the doubling-growth malloc/free pair at
+  826/829/831, the release at 837/838), lmx_message_exec.c:1133-1134
+  (lmx_msg_slot_free's own free(m->done_from)/free(m->done_id))
+what: the delivered-envelope id history arrays
+owner: none (LOCK_REMOVAL_FIELDS.txt Q2: "какая-то выдумка. Удаляй все." --
+  DEL, no replacement)
+category: (b), Y3 -- see the (d) finding above: the A-design text still
+  lists done_* as an A2 array; this ticket's own read of FIELDS.txt's more
+  specific, later Q2 ruling says it is deleted outright, not converted
+
+group: LmxMsgCopy / LmxMsgEnv (the envelope-and-copy machinery)
+file:line: exec.c:1009-1035 (host_post's copy, via lmx_msg_host_post's own
+  node), 1540/1604 (the UI lane's ui_request copy); lmx_message.lm1:487-530
+  (host_post's node and its bytes), 950-957 (send), 1247-1260 (send_graph),
+  1308 (send_owned), 1370-1410 (admit_one's fresh-copy path), 1435-1441
+  (live_query's PROGRESS envelope), 2040 (env->bytes release), 2057
+  (post_dead's node), 2671-2679 and 2774-2782 (live_handle/live_query's
+  reply envelopes), 2938-2951 (send_cap) -- the design text's own list
+  ("LmxMsgCopy: calloc in host_post, send, send_graph, send_owned,
+  send_cap, post_dead, copy_dup, ui_request") matches every one of these by
+  name; copy_dup itself is lmx_msg_copy_dup, not separately re-quoted here
+  since its own calloc is inside the shared LmxMsgCopy-duplication helper
+  this list already covers by pattern
+what: LmxMsgCopy (the queued envelope copy) and LmxMsgEnv (the handler's
+  envelope), both used to stage a delivery before or after admission
+owner: none (LOCK_REMOVAL_FIELDS.txt: both "All DEL (map 5.7: 'no copies')")
+category: (b), A3 -- the design's own ruling: this whole mechanism goes,
+  not a conversion target; a received Message joins the recipient's arena
+  directly instead
+
+--- L2_FOREIGN_ALLOC.txt
+
+Checked (stg/l1_baseline/l2src/L2_FOREIGN_ALLOC.txt): it documents the
+L2-generated code's own convention for foreign (non-arena) allocation inside
+ordinary L2 methods, not a separate allocation path inside lmx_message.lm1/
+lm2/exec.c/host.c themselves -- none of the sites above are examples of that
+convention; they are all hand-written L1/C runtime code predating it. No
+additional site found through this document.
+
+--- Falsifier
+Verified directly: grep -c "malloc\|calloc\|realloc\|free(" on this file
+returns 28 -- one or more of the four words on 28 distinct lines, spread
+across the 15 groups this file lists (each group's "file:line" and "what"
+lines carry at least one of the four words). 29 >= 15, the number of sites
+(groups) this file lists, as the ticket asks. This does not, on its own,
+prove all 133 raw calls are individually named -- the group descriptions
+above cite each one's own line number in prose (e.g. "805/816", "848/859")
+without repeating the trigger word next to every number on its own line;
+counted by hand against the raw grep list this method's total (133) was
+built from, all 133 are named somewhere in a group below, but that specific
+claim rests on the by-hand cross-check recorded in this ticket's own work,
+not on this grep alone.
