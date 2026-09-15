@@ -257,6 +257,20 @@ void lmx_msg_test_wake_site(const char *site, unsigned owner) {
     fflush(stderr);
     abort();
 }
+
+/* M's acceptance: a Message's turn run by another Message's lane (the sequential
+ * mapping of a child onto its parent's thread, the UI step from R0's turn) aborts
+ * under LMX_LANE_CHECK; the host's bootstrap entry turn is the host mapping and is
+ * not marked. Green is 0 sites. */
+void lmx_msg_test_map_site(const char *site, unsigned owner) {
+    if (lmx_msg_test_lane_check == 0) {
+        return;
+    }
+    fprintf(stderr, "LANE MAP FAIL site=%s owner=%u: a Message's turn was run on another Message's lane; each L3 Thread runs its turns on its own thread (M)\n",
+        site, owner);
+    fflush(stderr);
+    abort();
+}
 #endif
 
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
@@ -2500,6 +2514,7 @@ int lmx_msg_exec_ui_step(LmxMsgRuntime *rt) {
         return LMX_MSG_EMPTY;
     }
     lmx_msg_exec_unlock(rt);
+    lmx_msg_test_map_site("ui_step", snap.addr);
     run_one(rt, &snap);
     return LMX_MSG_OK;
 }
@@ -2744,6 +2759,9 @@ static int child_turn_core(LmxMsgRuntime *rt, LmxMsgAddr child, int bootstrap) {
     if (bootstrap == 0 && (m->parent == 0U || lmx_msg_exec_holding_turn(rt, m->parent) == 0)) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
+    }
+    if (bootstrap == 0) {
+        lmx_msg_test_map_site("run_child_turn", child);
     }
     /* Stage 3a-2: the child's own record (m resolved above). */
     rec = bind_rec_locked(m);
