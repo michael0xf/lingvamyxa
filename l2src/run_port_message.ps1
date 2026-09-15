@@ -288,6 +288,19 @@ if ($collectBody -notmatch 'eternal_ranges' -or $collectBody -notmatch 'method_r
 $endBody = MethodBody 'msg_end_turn'
 if ($endBody -notmatch 'committed = 0 && [a-z_0-9\\]+state = c\.LMX_MSG_STATE_INACTIVE') { throw 'msg_end_turn does not release exactly the uncommitted inactive children' }
 if ($endBody -notmatch 'c\.lmx_msg_after_outbox_xfer\(') { throw 'msg_end_turn does not report the outbox transfer' }
+# S6-1 (a2): the runtime's transport relay is R0's own hop (root's inbox ->
+# host_drain -> transport -> pump -> the destination's inbox), ordered under R0's
+# mailbox monitor -- the one cross-lane synchronization the model permits, SPEC
+# 11551 -- and under no runtime-wide lock. Each site takes that monitor and
+# releases it in its own body. Falsified by dropping one unlock line from any of
+# them: the counts stop matching and this throws.
+foreach ($u in @('msg_host_drain', 'msg_pump', 'msg_post_dead', 'msg_end_turn', 'msg_runtime_delete')) {
+    $b = MethodBody $u
+    $takes = ([regex]::Matches($b, 'c\.lmx_msg_mail_lock\(')).Count
+    $frees = ([regex]::Matches($b, 'c\.lmx_msg_mail_unlock\(')).Count
+    if ($takes -lt 1) { throw "$u does not order its transport work under a mailbox monitor" }
+    if ($takes -ne $frees) { throw "$u takes a mailbox monitor $takes times and releases it $frees times" }
+}
 
 # ---------------------------------------------------------------------------
 # 4. The parity binary.
