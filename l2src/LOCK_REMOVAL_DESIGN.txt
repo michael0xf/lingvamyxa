@@ -1358,6 +1358,16 @@ S5. The runtime-level lists (L5). Waits on 5.1.
       The probe (85953500) run on the e75263d7 tree, via a temporary copy, prints 0/0/0/0. That is a text count,
       not the green. A first run printed next_addr_nonatomic=2 from new comments naming the field; the comments
       were reworded and the probe left as accepted.
+    - First green attempt, RED at compile (2026-09-15):
+      - d6/lock-s5 47a22942 = e75263d7 merged with integration 3e6fc02a (S4 landed), no conflict. Measure tree
+        ded1f088 = 47a22942 + 85953500.
+      - The probe exited 0 with 0/0/0/0.
+      - run_port_message exited 1 in 3 s at compile_lmx_message_exec: "implicit declaration of function
+        '__atomic_fetch_add_n'". GCC has generic __atomic_load_n and __atomic_store_n, but fetch_add only in
+        sized forms. The helper was committed without being built, which is d6's miss.
+      Fix: __atomic_fetch_add_4 on the unsigned next_addr, with a file-scope typedef that fails the compile unless
+      the field is 4 bytes. __sync_fetch_and_add is not used, because the accepted probe excludes only
+      __atomic_ lines. exec.c is syntax-checked with the port_message headers before the green is re-run.
     - UAF kit for S5's green, rebuilt in scratch (never committed):
       - q_alloc.c: a poisoning quarantine allocator (0xDD, 8192 blocks, 256 MB, free-site frames, eviction and
         atexit checks, double free);
