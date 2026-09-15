@@ -11567,6 +11567,11 @@ R0's arena); there is no walk at deletion (the close is R0's own closing
 end-turn); the slot list served only the L1 delete loop and its address lookup
 and goes without replacement; the retire queue goes (a closed child's storage
 is its parent's settle write); a lane's own queue is that Message's mailbox.
+Mikhail, 2026-09-15, verbatim: "Синхронизация только локальная в почтовом
+ящике каждого L3 Thread -- больше в проекте нет (за исключением поддержки
+ресивера \"synchronized\")" (synchronization is only local, in the mailbox
+of each L3 Thread; there is none else in the project, except the support of
+the receiver "synchronized", 20.5.7).
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own

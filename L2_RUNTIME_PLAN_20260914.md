@@ -1881,3 +1881,15 @@ thread. The lead's order: S1's measure (24 of 28 runners green, gates
 last); S0 cf326822 lands; a quiet window for 57's lane_oracle and S3 red;
 S1 merges; S2's red measured; b5's mixa deletion; then M, D, O per the
 design; b5 holds the stage O inventory ticket after its current work.
+Standing rule (Mikhail, 2026-09-15, verbatim): "в случае возникновения
+каких-то багов или противоречий -- формулируйте, останавливайтесь и ждите
+моего ответа. Синхронизация только локальная в почтовом ящике каждого L3
+Thread -- больше в проекте нет (а исключением поддержки ресивера
+\"synchronized\")" (in case of any bugs or contradictions, formulate, stop
+and wait for my answer; synchronization is only local, in the mailbox of
+each L3 Thread; there is none else in the project, except the support of
+the receiver "synchronized"). Relayed to the lead, 0c and b5 the same
+hour: on any bug or contradiction met in a stage, the stage stops with the
+contradiction formulated in one paragraph and waits for his word through
+the coordinator; the synchronization sentence entered in spec 19.28.R2.2
+and the model's section 29.
