@@ -2851,3 +2851,16 @@ any wake site. Y2 reentrant enter/leave only; Y3 the mailbox's reads and
 writes under it, looked into by that loop, its green requiring the three
 lifecycle signals gone. The earlier wake-matching rules kept as
 superseded, the record of where the wake sites are. D1's landing running.
+The printTree goldens' layout (0c, approved): one store at
+tests/l1/goldens/printTree.lm0/ with <key>.exit, <key>.stdout (raw bytes,
+accepts and rejects alike) and <key>.p0 ("code@line:col" for non-zero exits),
+<key> the fixture's repo-relative path flattened with _ (run_legacy_p0's
+key, run_parser switching to it, since the 130 manifest fixtures span
+tests/, tests/l1/ and tests/p0_tree_contract/ and basenames collide), a
+nested .gitattributes "* -text" against the repo's eol=lf so the goldens
+stay byte-exact, and README.txt with the provenance (printTree.lm0.exe
+505210 bytes, sha256 8FA2A403..., the lm2 chain's printTree via CMake from
+lm1/build/printTree.lm1.c generated from lm2/printTree.lm2, the command,
+the deduplicated fixture list, the date) and the rule that a disagreement
+is a question, never a regeneration. Given to the lead for
+buildCore.lm1's staged-test script.
