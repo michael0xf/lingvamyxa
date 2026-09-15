@@ -1256,6 +1256,17 @@ S5. The runtime-level lists (L5). Waits on 5.1.
           the kit's bar). The falsifier is one item put back. The probe is never folded in.
       (3) The S6 census re-base onto 952d8e31 is b5's next doc ticket after S4 lands: deleted functions dropped,
           line numbers renewed, the lock-site count re-tallied.
+    - Red measured by d6 (2026-09-15, oracle branch d6/lock-s5-red 7ae76896 = 952d8e31 plus
+      l2src/run_lock_s5_probe.ps1; the probe builds nothing): exit 1, "S5 probe: retire_queue=28 runtime_fields=4
+      root_list_loops=14".
+      - retire_queue by file: lmx_message.h 3, lmx_message.lm1 3, lmx_message.lm2 3, lmx_message_exec.c 17,
+        lmx_message_exec.h 2.
+      - runtime_fields: slots, n, next_addr, root_seq.
+      - root_list_loops: lmx_message.lm1 and lmx_message.lm2 each "fam: rt\root" 2, "ch: rt\root" 2,
+        "rt\root: m\next_sibling" 1; lmx_message_exec.c "for (ch = rt->root; ch != 0; ch = ch->next_sibling)" 1,
+        "drive_walk_list(rt, 0, rt->root)" 1, "cur = rt->root;" 1, "rt->root = m->next_sibling;" 1.
+      These are the sites this section names: find and poll, create_prepare's tail append, release_slot's unlink,
+      drive_walk_list and walk_roots, and endp_try_retire's unlink.
 
 S6. The lock deleted (L4, L7, L8 and what remains).
     - Red: lmx_msg_exec_lock and unlock defined to abort() in a test build. Every remaining call site is red by name
