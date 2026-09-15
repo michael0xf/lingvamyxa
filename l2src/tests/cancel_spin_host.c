@@ -116,16 +116,22 @@ static int turn_child_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
  * the host is inside this very call for as long as it runs. A spawned
  * thread can no longer cancel p mid-spin under S4's guard -- that was
  * the old prototype's host cancel, not a model operation. The spin
- * moves to a real child instead (spin_boot's own c, now bound with
- * turn_spin, a lawfully mapped child whose parent -- c's own parent --
- * the host may cancel once outside any turn, same as run_map's c). p's
- * own turn just receives its posted mail and returns. */
+ * moves to a real child instead: spin_boot's own exec_bind (launch=1)
+ * never actually launches c's worker here, since contexts_live is 0
+ * (this file never calls exec_start_contexts) -- only lmx_msg_map_child
+ * calls launch_ctx_thread_rec unconditionally (exec.c:2635), and it
+ * requires holding_turn(parent), so p's own turn is where c actually
+ * gets mapped and launched, same act run_map's turn_map_child performs.
+ * The host cancels c once outside any turn, same as run_map's c. */
 static int turn_parent_spin(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    SpinCtx *c = (SpinCtx *)ctx;
     LmxMsgEnv got;
-    (void)ctx;
     memset(&got, 0, sizeof(got));
     lmx_msg_recv(rt, who, &got);
     lmx_msg_env_release(&got);
+    if (c == 0 || lmx_msg_map_child(rt, who, c->child) != LMX_MSG_OK) {
+        return 1;
+    }
     return 0;
 }
 
