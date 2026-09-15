@@ -12624,6 +12624,31 @@ a default, settable per runtime like the liveness deadlines. A settled
 Message (not running, handoff-safe) has no lane; the lane that settles it
 writes its cells (the endpoint step), which is how the chain's writes fit
 the one-lane rule of 19.28.R2.2.
+Deleting the runtime is the root Message's close by the same chain
+(clarified 2026-09-15, review chat, stage 5 (f); Mikhail may overrule):
+the root's direct children get their closing flags, each closing turn runs
+on its own lane (a host-run child stepped by the root's maintenance, a
+child on its own context on that context, a child with no handler closed
+by the maintenance's bookkeeping), settled children are reclaimed by the
+chain, and only then the root's own storage and the runtime go; nothing is
+freed as a slot of the runtime behind a Message's back. Once the root
+closes no adopter remains, so a failed orphan retained under the
+orphan-retention timeout is reclaimed by the root's close without waiting
+for that timeout; storage still used by native code holds the close
+instead, with no timeout (19.29.8). A child served by the UI lane whose
+request is still pending is closed without a handler and the request goes
+with the lane's mailbox, until the root's own loop carries the UI child's
+turn adapter. The close first makes the root's mailbox refuse new
+admissions, the mailbox's own state under its own lock, since outside code
+reaches the runtime only through that mailbox (iii); a post after the
+deletion returns is the embedder's use of a freed handle. Deletion is
+refused from inside any turn, the root's own included, and from any thread
+that is not the root's lane; the root's lane outside any turn is the
+bootstrap thread, so no second OS thread runs the root's maintenance
+concurrently. With this the host forms of the lifecycle calls retire: a
+child is disposed or adopted only from its parent's own turn, and creating
+the runtime and deleting it are the only two calls made on no Message's
+lane.
 
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire
