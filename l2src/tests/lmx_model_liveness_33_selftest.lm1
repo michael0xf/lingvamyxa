@@ -356,6 +356,8 @@ fn: main () int
     int: n
     int: k 0
 
+    # Unbuffered: a run the runner kills still shows its reading lines and FAILs.
+    c.setvbuf(c.stdout, 0, c._IONBF, 0U)
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: env = 0 || got = 0
@@ -389,6 +391,13 @@ fn: main () int
     check(observed_kind = c.LMX_MSG_KIND_NUMBER && observed_number = 5, "C's turn ran on its input")
     check(lmx_msg_inbox_n(rt, p) = 1 && lmx_msg_inbox_n(rt, c1) = 0, "C's end-turn published exactly one liveness query to P")
     check(cm\live_query_id != 0U && cm\live_query_at = 1000U, "C keeps its own expectation: the outstanding query and when it was made")
+    # A rebind is refused while C's worker still holds the record of the turn
+    # it just ended (held, cleared by run_one after the end-turn that published
+    # the report); native_users reaches 0 only after that.
+    c.printf("reading: C's native users 0, its worker out of the turn, before the rebind\n")
+    while: lmx_msg_native_users(rt, c1) != 0
+        c.SwitchToThread()
+    ---
     check(lmx_msg_exec_bind(rt, c1, turn_child_handle, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C's next turn handles answers: rebound before P answers")
     check(p_turn(rt, p, 5U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK && g_in_kind = c.LMX_MSG_KIND_PROGRESS && g_in_number = c.LMX_MSG_PROF_LIVE_Q && g_in_reply_to = c1, "P reads the query as an ordinary Message of the liveness profile")
     check(g_st2 = c.LMX_MSG_STAGED, "P answers within its own turn")
@@ -401,6 +410,10 @@ fn: main () int
 
     # --- 2. The parent goes silent: the child closes itself.
     check(lmx_msg_set_now(rt, 2000U) = c.LMX_MSG_OK, "clock 2000")
+    c.printf("reading: C's native users 0, its worker out of the turn, before the rebind\n")
+    while: lmx_msg_native_users(rt, c1) != 0
+        c.SwitchToThread()
+    ---
     check(lmx_msg_exec_bind(rt, c1, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C will query again")
     env\id: 2U
     g_to: c1
@@ -523,6 +536,10 @@ fn: main () int
     zm: lmx_msg_find(rt, z)
     check(zm != 0 && zm\live_query_id != 0U, "Z's turn polls its parent R0: a query is outstanding")
     check(lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 1, "the query reaches R0's mailbox")
+    c.printf("reading: Z's native users 0, its worker out of the turn, before the rebind\n")
+    while: lmx_msg_native_users(rt, z) != 0
+        c.SwitchToThread()
+    ---
     check(lmx_msg_exec_bind(rt, z, turn_child_handle, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "Z rebound to take R0's answer before R0 answers")
     g_root_observed_kind: 0
     st: lmx_msg_root_turn(rt, turn_root_answer, 0)
