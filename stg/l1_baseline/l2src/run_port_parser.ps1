@@ -836,7 +836,8 @@ foreach ($stage in $Stages) {
                 if ($skip -and $line -eq "}") { $skip = $false; continue }
                 if (-not $skip) { $keptLines.Add($line) }
             }
-            [IO.File]::WriteAllLines($unitFixedC, $keptLines)
+            # .NET resolves a relative path against the process directory, not Set-Location.
+            [IO.File]::WriteAllLines((Join-Path (Get-Location).ProviderPath $unitFixedC), $keptLines)
             $unitFixedCs += $unitFixedC
         } else {
             $unitFixedCs += $unitC
@@ -873,7 +874,7 @@ foreach ($stage in $Stages) {
     for ($i = 0; $i -le $firstIncludeIdx; $i++) { $finalLines.Add($srcLines[$i]) }
     foreach ($p in $protos) { $finalLines.Add($p) }
     for ($i = $firstIncludeIdx + 1; $i -lt $srcLines.Count; $i++) { $finalLines.Add($srcLines[$i]) }
-    [IO.File]::WriteAllLines($patchedC, $finalLines)
+    [IO.File]::WriteAllLines((Join-Path (Get-Location).ProviderPath $patchedC), $finalLines)
 
     # -- Build & link the Port executables: each driver + patched
     #    oracle + every unit landed through this stage + the runtime
