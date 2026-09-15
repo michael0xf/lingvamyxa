@@ -531,6 +531,100 @@ d) stack/stream event machine -- l2src/parser_stack_stream_port.lm2
    dispatch breaks parsing outright for those inputs. Reverted, clean
    diff, 36/36 restored, also cold.
 
+e) field-parsing state machine -- l2src/parser_field_parse_port.lm2
+   (new unit, header l2src/parser_field_parse_port_l2.h.lm1, no
+   `profile: runtime`, l1src/parser.lm1 is the twin, unedited).
+   6 slices, accepted by e2/6f 2026-09-14: e1 lifecycle, e2 field
+   appenders, e3 field scanning primitives, e4 compact-atom/C-surface
+   scanning, e5 the main loop, e6 thin wrappers. One commit per slice.
+   Every gate runs through both existing drivers at 36/36, no new
+   driver needed -- parsing already exercises all of this on every
+   golden.
+
+   Cross-unit rule (d6, 2026-09-14, resolving an earlier open
+   question): run_port_parser's stages link only their own cumulative
+   Units list (run_port_parser.ps1 L645 translates/compiles exactly
+   that list; L704-710 links each driver, the patched oracle, every
+   unit landed through the stage, and the runtime trio), and the
+   stage's Funcs give a blanket -Dlm_p0_x=p0_x on that one gcc
+   invocation, which rewrites the call inside a DIFFERENT unit's own
+   generated C too (not just the porting unit's). So: when e3/e4 port
+   a function Stage d already reached through a prototype: pointing
+   at the oracle name (scan_quoted, find_colon, starts_c_prefixed_
+   quote, scan_c_char, scan_c_prefixed_quote), Stage d's own header
+   (parser_stack_stream_port_l2.h.lm1) keeps pointing at the oracle
+   name -- no source edit there, ever. The retarget is entirely the
+   porting stage's Funcs entry; the runner's own invariant (the
+   redirect set covers every ported name) is the proof, not a second
+   implementation living anywhere. The MEASURED proof per slice: e3's
+   and e4's own falsifier must move a Stage d stage's own golden
+   output, not just the new Stage e stage's -- confirming the -D
+   redirect actually reached the Stage d caller's C, not merely the
+   Stage e unit's. Each e3/e4 falsifier note below names which Stage d
+   caller it reaches.
+
+   e1 (lifecycle, 5 fns) -- l2src/parser_field_parse_port.lm2:
+   p0_field_parse_loop_frame_delete_any, p0_field_parse_loop_stack_
+   new, p0_field_parse_loop_stack_delete, p0_field_parse_loop_push,
+   p0_field_parse_fail. Lifecycle for the field-parsing loop's own
+   explicit continuation stack (LmOwnPtrStack of LmP0FieldParseLoop
+   Frame frames) -- the same explicit-stack-not-recursion shape as
+   p0_dump_run and Stage d's event machine. Formals/locals named node
+   in the oracle renamed nd, same rule as every other renamed formal.
+   36/36 goldens identical, both drivers (stage e_lifecycle), cold.
+   Falsifier: p0_field_parse_loop_stack_new forced to return 0
+   unconditionally (simulated allocation failure) -- measured 71
+   mismatches across 36 goldens x 2 drivers (not the full 72). Rerun
+   with full output captured (d6, 2026-09-14 -- the first attempt's
+   per-golden detail was lost to an over-narrow `Select-Object -Last
+   20` before it could be diffed, then overwritten by the revert-
+   confirmation rebuild): every one of the 36 goldens appears at
+   least once in the mismatch list; exactly one, invalid_triple_
+   unclosed, appears only once instead of twice -- "meta EXIT
+   MISMATCH invalid_triple_unclosed: ref=1 port=0" is the sole line
+   for it, meaning its dump-driver comparison did NOT diverge. Same
+   golden and same driver as d1/d2's own exception: this
+   already-malformed fixture's dump-driver path converges to the
+   same (empty/error) output on both Ref and Port regardless of
+   whether the field-parse loop stack ever gets created, while the
+   meta driver's own exit-code check is stricter and does catch the
+   difference. Reverted, clean diff, 36/36
+   restored, also cold.
+
+   e2 (field appenders, 4 fns) -- l2src/parser_field_parse_port.lm2:
+   p0_append_atom_slice, p0_append_positional_skip, p0_append_
+   compact_atom_pieces, p0_parse_append_node_and_update. Turns a
+   scanned text slice into an atom/positional-skip node and appends
+   it to the structure being built. Header gains two cross-unit
+   entries (p0_new_node, Stage c's parser_alloc_port.lm2; p0_
+   position_in_slice, Stage b's parser_scan_port.lm2) and four more
+   still-oracle-native entries (lm_p0_append_field, lm_p0_document_
+   register_lazy_text, lm_p0_find_matching_bracket, lm_p0_scan_
+   compact_atom_piece -- e4, not yet ported -- and lm_p0_parse_
+   fields_until -- e6, not yet ported; p0_append_compact_atom_pieces
+   calls it for bracketed sub-fields).
+   36/36 goldens identical, both drivers (stage e_appenders), cold.
+   Falsifier: p0_append_atom_slice forced to return 0 unconditionally
+   -- measured 64 mismatches across 36 goldens x 2 drivers (verified
+   with full output captured, not truncated this time): exactly 4 of
+   the 36 goldens are completely unaffected (0 mismatches on either
+   driver) -- D_utf8_inline, D_utf8_vertical, invalid_eq_unclosed,
+   invalid_triple_unclosed. The two invalid_* fixtures fail parsing
+   before reaching any atom-slice appending, same shape as e1/d1/d2's
+   own exceptions. Traced (d6, 2026-09-14): D_utf8_inline/_vertical
+   are both `L1: utf8: === raw text ===` fenced block-string bodies,
+   containing no field-level atoms at all -- their sole content is a
+   single BLOCK_STRING stream event, created by p0_stream_apply_item_
+   event's own LM_P0_STREAM_EVENT_BLOCK_STRING branch (Stage d,
+   l2src/parser_stack_stream_port.lm2, already ported and falsified
+   in d5), which builds the atom node directly via p0_new_node +
+   lm_p0_document_register_lazy_text and never calls append_atom_
+   slice at all -- append_atom_slice is field-parsing-only, for atoms
+   that appear as fields inside a structure's own field list, which
+   these two fixtures never have. Not a coverage gap in e2; a fact
+   about the fixtures' shape, now measured rather than assumed.
+   Reverted, clean diff, 36/36 restored, also cold.
+
 Remaining stages (e2's plan)
 -----------------------------
 c) COMPLETE -- allocation, dump-printer Slices 1-4 (leaves, frame/

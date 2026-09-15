@@ -1,0 +1,166 @@
+predef: "l2src/parser_field_parse_port_l2.h.lm1"
+
+# L2 port of l1src/parser.lm1's field-parsing state machine (Stage e
+# of the parser-in-L2 port ticket). Bodies are ported straight from
+# the oracle, unedited. Named p0_*, never lm_p0_*, per the ticket.
+#
+# Slice e1: lifecycle for the field-parse loop's own explicit
+# continuation stack (LmOwnPtrStack of LmP0FieldParseLoopFrame
+# frames -- see p0_stream_apply_item_event and this port's own d5
+# narrative for the same explicit-stack-not-recursion shape).
+# Formals/locals named node in the oracle renamed nd, same rule as
+# every other renamed formal in this port.
+
+sub: p0_field_parse_loop_frame_delete_any (@: void object)
+    @: LmP0FieldParseLoopFrame frame
+    frame: (cast: (@: LmP0FieldParseLoopFrame) object)
+    if: (frame = 0)
+        return
+    if: frame\indent_stack_owned
+        lm_p0_indent_stack_delete(frame\indent_stack)
+    lm_own_delete(frame, 0)
+end: p0_field_parse_loop_frame_delete_any
+
+fn: p0_field_parse_loop_stack_new (@: LmP0Document document; size_t: line; size_t: column) @: LmOwnPtrStack
+    @: LmOwnPtrStack stack
+    stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
+    if: (stack = 0)
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating parser field stack")
+        return: 0
+    lm_own_ptr_stack_init(stack, p0_field_parse_loop_frame_delete_any)
+    return: stack
+end: p0_field_parse_loop_stack_new
+
+sub: p0_field_parse_loop_stack_delete (@: LmOwnPtrStack stack)
+    if: (stack = 0)
+        return
+    lm_own_ptr_stack_destroy(stack)
+    lm_own_delete(stack, 0)
+end: p0_field_parse_loop_stack_delete
+
+fn: p0_field_parse_loop_push (@: LmP0Document document; @: LmOwnPtrStack stack; @: LmP0IndentStack indent_stack; int: indent_stack_owned; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: layout_base_level; size_t: i; size_t: current_source_level; int: allow_empty_fields; int: expect_field; int: headless_group_after_separator; LmP0FieldParseLoopContinuation: continuation; @: LmP0Node nd; size_t: start; size_t: close_index) int
+    @: LmP0FieldParseLoopFrame frame
+    frame: (cast: (@: LmP0FieldParseLoopFrame) lm_own_new_zero(c.sizeof(frame[0])))
+    if: (frame = 0)
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while growing parser field stack")
+        return: 0
+    frame\indent_stack: indent_stack
+    frame\structure: structure
+    frame\text: text
+    frame\length: length
+    frame\line: line
+    frame\column: column
+    frame\offset: offset
+    frame\flags: flags
+    frame\short_source_level: short_source_level
+    frame\layout_base_level: layout_base_level
+    frame\i: i
+    frame\current_source_level: current_source_level
+    frame\allow_empty_fields: allow_empty_fields
+    frame\expect_field: expect_field
+    frame\headless_group_after_separator: headless_group_after_separator
+    frame\indent_stack_owned: indent_stack_owned
+    frame\continuation: continuation
+    frame\node: nd
+    frame\start: start
+    frame\close_index: close_index
+    if: (lm_own_ptr_stack_push(stack, frame) != 0)
+        p0_field_parse_loop_frame_delete_any(frame)
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while growing parser field stack")
+        return: 0
+    return: 1
+end: p0_field_parse_loop_push
+
+fn: p0_field_parse_fail (@@: LmOwnPtrStack parse_stack; @@: LmP0IndentStack indent_stack; @: int indent_stack_owned) int
+    if: ((((indent_stack_owned != 0) && indent_stack_owned[0]) && (indent_stack != 0)) && (indent_stack[0] != 0))
+        lm_p0_indent_stack_delete(indent_stack[0])
+        indent_stack[0]: 0
+        indent_stack_owned[0]: 0
+    if: (parse_stack != 0)
+        p0_field_parse_loop_stack_delete(parse_stack[0])
+        parse_stack[0]: 0
+    return: 0
+end: p0_field_parse_fail
+
+# Slice e2: field appenders -- the functions that turn a scanned
+# text slice into an atom/positional-skip node and append it to the
+# structure being built. Ported straight from the oracle; no
+# fragment exists for any of these. Formals/locals named node in the
+# oracle renamed nd, same rule as every other renamed formal.
+
+fn: p0_append_atom_slice (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; size_t: start; size_t: end_index) int
+    @: LmP0Node nd
+    nd: p0_new_node(document, c.LM_P0_NODE_ATOM)
+    if: (nd = 0)
+        return: 0
+    nd\as\atom\data: (text + start)
+    nd\as\atom\length: (end_index - start)
+    nd\span\line: line
+    p0_position_in_slice(text, length, start, line, column, @ nd\span\line, @ nd\span\column)
+    nd\span\offset: (offset + start)
+    nd\span\length: (end_index - start)
+    if: (lm_p0_document_register_lazy_text(document, nd\as\atom\data, nd\as\atom\length, @ nd\as\atom\data, nd\span\line, nd\span\column) = 0)
+        return: 0
+    return: lm_p0_append_field(document, structure, nd)
+end: p0_append_atom_slice
+
+fn: p0_append_positional_skip (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; size_t: index) int
+    @: LmP0Node nd
+    nd: p0_new_node(document, c.LM_P0_NODE_ATOM)
+    if: (nd = 0)
+        return: 0
+    nd\flags: nd\flags | c.LM_P0_NODE_POSITIONAL_SKIP
+    nd\as\atom\data: ""
+    nd\as\atom\length: 0U
+    nd\span\line: line
+    p0_position_in_slice(text, length, index, line, column, @ nd\span\line, @ nd\span\column)
+    nd\span\offset: (offset + index)
+    nd\span\length: 0U
+    return: lm_p0_append_field(document, structure, nd)
+end: p0_append_positional_skip
+
+fn: p0_append_compact_atom_pieces (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; size_t: start; size_t: end_index) int
+    size_t: i
+    int: allow_signed_number
+    i: start
+    allow_signed_number: 1
+    while: (i < end_index)
+        size_t: piece_end
+        if: p0_is_field_space(text[i])
+            i: i + 1U
+            continue
+        if: (text[i] = '[')
+            size_t: close_index
+            size_t: inner_index
+            if: (p0_append_atom_slice(document, structure, text, length, line, column, offset, i, (i + 1U)) = 0)
+                return: 0
+            if: (lm_p0_find_matching_bracket(document, text, end_index, i, line, column, @ close_index) = 0)
+                return: 0
+            inner_index: 0U
+            if: (lm_p0_parse_fields_until(document, structure, ((text + i) + 1U), ((close_index - i) - 1U), line, ((column + i) + 1U), ((offset + i) + 1U), 0U, 0U, 0U, @ inner_index) = 0)
+                return: 0
+            if: (p0_append_atom_slice(document, structure, text, length, line, column, offset, close_index, (close_index + 1U)) = 0)
+                return: 0
+            i: (close_index + 1U)
+            allow_signed_number: 0
+            continue
+        piece_end: lm_p0_scan_compact_atom_piece(text, end_index, i, allow_signed_number)
+        if: (piece_end <= i)
+            piece_end: (i + 1U)
+        if: (p0_append_atom_slice(document, structure, text, length, line, column, offset, i, piece_end) = 0)
+            return: 0
+        i: piece_end
+        allow_signed_number: 0
+    return: 1
+end: p0_append_compact_atom_pieces
+
+fn: p0_parse_append_node_and_update (@: LmP0Document document; @: LmP0Structure structure; @: LmP0Node nd; unsigned: flags; int: allow_empty_fields; @: int expect_field; @: int headless_group_after_separator) int
+    if: (lm_p0_append_field(document, structure, nd) = 0)
+        return: 0
+    expect_field[0]: 0
+    if: ((allow_empty_fields && (nd\kind = c.LM_P0_NODE_FRAME)) && ((nd\as\frame\flags & c.LM_P0_FRAME_SEPARATOR_CLOSED) != 0U))
+        expect_field[0]: 1
+    if: ((((flags & c.LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR) != 0U) && (nd\kind = c.LM_P0_NODE_FRAME)) && ((nd\as\frame\flags & c.LM_P0_FRAME_SEPARATOR_CLOSED) != 0U))
+        headless_group_after_separator[0]: 1
+    return: 1
+end: p0_parse_append_node_and_update
