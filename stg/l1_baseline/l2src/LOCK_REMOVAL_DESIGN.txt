@@ -98,6 +98,8 @@ HELD 2026-09-15 under Mikhail's standing rule, a contradiction sent through the 
     S3's green (57, as 6f recorded): the wake oracle in the defaults with no LANE WAKE FAIL (lane_oracle's
     -LaneCheck), and the strict probe with the credit dropped printing 0 LANE WAKE PROBE lines and no cap line; no
     lane reaches wakes > admits at any site.
+    SUPERSEDED the same day by Mikhail's "no notify" ruling (S3 below): there is no wake to match against admissions.
+    The measurements above stay as the record of where the wake sites are; the oracle becomes "no wake site".
 
 S0. The proof tool (57): the lane tripwire red on a lane write from a thread with no turn. It is the proof for S2-S5
     and lands first.
@@ -130,16 +132,21 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       with the counter built in, and there are no report lines without the variable. The threading comes after
       stage M, because run_child_turn and sched_step are part of C1 and are deleted, not threaded.
 
-S3. One wake per lane (L6), no lock around a signal (Mikhail on wait signals).
-    exec_wake_locked, which signals every worker after any turn, goes. A turn's end wakes only the lanes it readied,
-    through each readied Message's own wake primitive (an implementation detail of this runtime, not agreed wording;
-    it does not go into the spec or the model). exec_ready signals without taking the lock. Reference counts on
+S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and every wake-matching rule above.
+    Mikhail, verbatim (relayed by the coordinator): "тупейший вложенный synchronized по локу на чтение и запись как в
+    Java, без остальных усложнений вообще. \"notify получает не «поток», а поток-владелец ящика\" -- ну а смысл его
+    нотифицировать если он занят в turn?!!! Выйдет и посмотрит".
+    So the mailbox has no wait, no notify, no condition variable and no wake primitive. The owner thread looks at its
+    own mailbox when it comes out of a turn. The three wake sources outside admission (run_one's wake-all,
+    exec_start_map_kick, the launch wake) and exec_wake_locked go, and nothing replaces them. Reference counts on
     Message records (refs, endp_retain/release) were a prop of the lock in the C record and go with it in S6
     (Mikhail: a Message references nothing shared but immutable values in the root's arrays and order-free atomic
     cells; the message queue is a synchronized collection).
-    - Red: two mapped workers A and B. Readying A must not wake B. A test-build counter of wake returns that took
-      nothing is nonzero for B today (run_one 2587 wakes all).
-    - Green: B's empty-wake count at 0 over the same run; the executor selftest's wait tests green.
+    OPEN, asked of Mikhail by the coordinator (not by the lead): what the owner thread does when its mailbox is empty
+    after a turn (the thread ends and the next admission launches a turn, or it waits on something). Until his word
+    nothing is coded for the empty case.
+    - Red: 0c's oracle, checking that no wake exists: any wake site at all is red. Red today on the three sources.
+    - Green: the oracle reports no wake site in the defaults and under -LaneCheck; the executor selftest green.
 
 M. The sequential mapping removed (X), after S3 and before S4.
     Mikhail on 5.5, verbatim (2026-09-15): "мы же обсудили миллион раз. Закрытие родителя это авария. _Каждый ребенок
@@ -433,8 +440,12 @@ Y. The mailbox's one synchronization as a Java monitor through the synchronized 
     делается в Java, причем максимально упрощенно (ресивер synchronized в спеке описан), в старом проекте он был даже
     до какой-то степени реализован C:\Nyasha_Planet\lingvamyxa_old_worked_version". The coordinator's rule on it:
     the mailbox's one lock is a Java monitor in its simplest form, entered through the language's synchronized
-    receiver on the mailbox object. wait/notify is the monitor's own condition (one per monitor): notify on
-    admission, wait in take. Nothing else.
+    receiver on the mailbox object. [Superseded:] wait/notify is the monitor's own condition (one per monitor): notify on
+    admission, wait in take.
+    RULED 2026-09-15 (Mikhail, verbatim in S3): "тупейший вложенный synchronized по локу на чтение и запись как в
+    Java, без остальных усложнений вообще ... ну а смысл его нотифицировать если он занят в turn?!!! Выйдет и
+    посмотрит". The mailbox's synchronization is synchronized on the mailbox object for every read and write,
+    reentrant as Java's, and nothing else: no wait, no notify, no condition. The empty-mailbox case is open (S3).
     Facts:
     - Spec 20.5.7 (origin/main, 15154-15232): "`synchronized` consumes an object/address expression and a statement
       Structure owned by the `synchronized` receiver. It is a structured synchronization receiver, not a raw
@@ -466,18 +477,18 @@ Y. The mailbox's one synchronization as a Java monitor through the synchronized 
         - Green: the case translates, compiles and returns its balance (22), with each exit path's leave counted.
           The historical case pin is updated in L2_MESSAGE_ROOT.txt.
     Y2. The native monitor hook (C primitive per rule (c)): lm_synchronized_enter/leave with Java-style reentrant
-        entry for the owning thread, and lm_synchronized_wait/notify on the same monitor. Internally one OS mutex
-        and one condition per monitor object: the mail collection's own lock, the only one the project keeps.
-        - Red: a hook test (two threads, a counter under synchronized, reentrant entry from the owner, a waiter
-          woken by notify) that does not link before the hook exists.
-    Y3. The mailbox in L2: inbox and outbox push and take under synchronized on the mailbox object, notify on
-        admission, wait in a take with nothing to take. It replaces m->mail and the lmx_msg_mail_* C functions.
-        A lane's wake is its mailbox's notify, so S3's rule holds by construction.
-        - Red: S3's oracle (57, claude-0c/s3-wake-oracle ee5b2cb0), "LANE WAKE FAIL site=ctx_visit_wake ..." red
-          today. Green: the oracle green with the bind waits' events and conditions gone.
+        entry for the owning thread, and nothing else (no wait, no notify, no condition; ruled 2026-09-15).
+        Internally one OS mutex per monitor object: the mail collection's own lock, the only one the project keeps.
+        - Red: a hook test (two threads, a counter under synchronized, reentrant entry from the owner) that does not
+          link before the hook exists.
+    Y3. The mailbox in L2: inbox and outbox reads and writes under synchronized on the mailbox object, nothing else.
+        It replaces m->mail and the lmx_msg_mail_* C functions. The owner looks at its mailbox after its turn; the
+        empty-mailbox case is open (S3) and nothing is coded for it until Mikhail answers.
+        - Red: S3's no-wake oracle red today. Green: the oracle green with the bind waits' events and conditions
+          gone.
     Under option (b) (self-build first, the L2 port after), the design's reading: Y1, the synchronized receiver in
     l2trans, belongs to the L2 port after the self-build. Until then the mailbox is written in L1
-    (lmx_message.lm1 and its lm2 mirror), calling Y2's monitor hook explicitly: enter, leave, wait, notify. Y2 and
+    (lmx_message.lm1 and its lm2 mirror), calling Y2's monitor hook explicitly: enter and leave only. Y2 and
     that L1 mailbox carry the lock removal now. Whether an explicit enter/leave pair in L1 is acceptable until the
     receiver arrives (spec 20.5.7: "not a raw lock/unlock pair in source syntax", said of the L2 receiver) is the
     coordinator's ruling to confirm, or a question for Mikhail if it reads as a contradiction.
@@ -485,12 +496,12 @@ Y. The mailbox's one synchronization as a Java monitor through the synchronized 
     ("Necessary thread, wait/wake and synchronized-mailbox primitives belong to the Message implementation in L2
     (temporarily L1/native bootstrap)"), and 20.5.7's sentence is about the L2 receiver. He is told so he can overrule.
     Conditions:
-    - Y2's hook is exactly Java's monitor: reentrant enter/leave for the same thread, one mutex and one condition per
-      monitor, wait releasing and reacquiring, notify and notifyAll. The receiver's later lowering to
-      lm_synchronized_enter/leave with the same wait/notify then changes nothing in the mailbox.
-    - Y3 calls the hook only through the mailbox's own functions (admission notifies, take waits), with no other
-      caller. Y3's proof is a grep at 0 for the hook's names outside lmx_message.lm1/lm2 and the hook's own unit,
-      beside 57's S3 oracle.
+    - Y2's hook is Java's synchronized mutual exclusion only: reentrant enter/leave for the same thread, one mutex
+      per monitor, no wait/notify/notifyAll (ruled 2026-09-15). The receiver's later lowering to
+      lm_synchronized_enter/leave then changes nothing in the mailbox.
+    - Y3 calls the hook only through the mailbox's own read and write functions, with no other caller. Y3's proof
+      is a grep at 0 for the hook's names outside lmx_message.lm1/lm2 and the hook's own unit, beside S3's no-wake
+      oracle.
     - Y1 is the first item of the L2 port after the self-build. Its red is the old trans_synchronized_cleanup as a
       run_l2trans leaf.
     Order: Y after M and D.
