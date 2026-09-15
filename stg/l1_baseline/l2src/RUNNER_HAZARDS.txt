@@ -230,8 +230,25 @@ Survey method (on d925e600)
   (e): the run_gates default set (32 gates) is not committed yet; it re-runs cold on the integration
     that holds 9ad7e6bf, and its commit prints that time.
   (b): claude-0c/runner-wait-launches 64df50cc (12 runner-only commits, on c0d743b3) is pushed and not
-    landed. Each red line is unchanged under a broken selftest. Six before/after times in those commit
-    messages overlapped a graph_abi cold run and are being re-measured; the clean numbers go here.
+    landed. Each red line is unchanged under a broken selftest (a non-lm1 line appended to the
+    runner's selftest .lm1). Clean seconds, before -> after, same launch count on both sides:
+      run_msg_send_local 7b55368a       69.9 -> 27.7    45 launches
+      run_msg_family_handoff 7987229d   75.4, 73.1 -> 32.0, 27.2   45
+      run_lmx_msg_history_owned 6f6da8c3  15.9, 15.9 -> 1.6, 1.5   15
+      run_lmx_msg_roots_stale 9b089975  15.9, 15.9 -> 1.7, 1.5     15
+      run_msg_liveness ed739534         12.9, 13.0 -> 1.5, 1.6     12
+      run_msg_visit 8b967dc8            10.1 -> 1.6     9
+      run_msg_slots 0eec5030            21.9 -> 3.2     20
+      run_msg_storage 6c1db5f1          22.4 -> 2.9     21
+      run_msg_mail_chain 49789a6b       16.6 -> 2.1     15
+      run_msg_blocks f0d17779           9.0 -> 1.6      8
+      run_msg_path_storage af7bdddd     15.0, 15.0 -> 1.9, 1.7     14
+      run_owned_ranges 64df50cc         11.9, 11.9 -> 1.8, 2.2     11
+    The six default users together lose about 135 s per run_gates. Two-value rows were re-measured
+    interleaved (before, after, before, after) with the version on disk checked by git diff --quiet,
+    because the times in their commit messages overlapped a graph_abi cold run; the message times of
+    those six are not the measurement. A first re-time was invalid (the unfixed version never reached
+    disk; git rejected a PS 5.1 --source=(...) argument) and is not used.
 (c) Cold run per runner
   Complete: 46 of 46 runners cold on d925e600 (every run_*.ps1 but run_gates, whose time is its defaults' sum),
   sequential in a fresh private worktree; the machine rebooted during row 20 and the batch resumed from
