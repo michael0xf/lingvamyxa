@@ -3505,3 +3505,20 @@ run_port_parser, and the allowlist checked by status: one add, .gitignore
 and CMakeLists.txt modified, deletions only in lm2/, stg lm2/, the three
 dead lm1/build files and tests/ outside tests/l1); it does not wait for
 0c's return, whose verify-only run stays a re-measurement.
+Stage O landing, first run (the lead, 2026-09-15): merge c063fd00 of
+sonnet/stage-o 6eb6729a on 64c4af01, unpushed. Green: allowlist 1 A / 172 D
+/ 2 M, 0 tracked files left under lm2/ and stg lm2/; stg gate.ps1 all green
+(276 s); root buildCore, run_seed, run_gen; run_legacy_p0 ok n=131;
+run_self_build 8 of 8; run_slice_equal 16 of 16 and 8 of 8;
+run_p0_tree_contract ok n=36; CMake extract and configure ok. Red: the
+three pinned runners (run_gates stopped at lane_oracle in 0 s; run_l2trans
+"gen2 l1trans does not match L1_PIN.txt"; run_port_parser got A45828C5...,
+want 0B3D85B3...). Cause, the runner and not the branch: stg gate.ps1
+rebuilds gen2 l1trans.exe (gcc is not reproducible here) over the
+installed pin; land_c.sh re-installed the pin after gate.ps1, land_o.sh
+did not. Rule from it: after any gate.ps1 run, re-install the pin
+hash-checked from build\pin_<hash> before any pinned runner. Fix running:
+resume_o.sh on the same merge (guards HEAD c063fd00, origin 64c4af01, a
+clean tree; re-installs the pin hash-checked; runs only the 33 gates,
+run_l2trans and run_port_parser; pushes if green); land_o.sh fixed for
+next time.
