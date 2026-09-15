@@ -2991,3 +2991,23 @@ identically on "Bundled libsodium source was not found", the script having
 skipped the ExtractThirdPartyZips step lm_build_full_project runs first);
 rerun with extraction running; then probe (a), then 0c's goldens and seed
 red-first, then (b).
+Probe (a) at 7200294b, cold, one fresh worktree per variant, answering
+question 3: A (control), B (root lm2/ and root lm1/build's trans and
+rest_lmx_http_* aside) and C (root lm1/ and lm2/ aside whole) run stg's
+buildCore, run_seed and run_gen green with an identical fixed point (gen2
+== gen3 = 25DC4758...), so the stg route reads nothing of the root's lm1 or
+lm2 and the snapshot README's prerequisites are stale text; D (stg's
+pinned trans.lm0.exe removed): buildCore exits 1 ("pinned old-chain binary
+missing") and run_seed exits 1 ("missing external prerequisite
+(trans.lm0)") while run_gen stays green, the native boot needing no lm0,
+the need removed by d6/stg-buildcore and 0c's seed branch; E (the root
+route, root buildCore and run_gen, with B's moves): buildCore green,
+run_gen at its fixed point (gen2 == gen3 = CBC779B1...), then red at "gen2
+smoke failed" on root tests/l1/run_smoke.ps1:175/180's lm2 reads (in 0c's
+seed branch; the root's run_seed.ps1 46-62 also reads lm2 but is not on
+E's route). Consequences: b5's root lm2 deletion lands with or after 0c's
+seed branch; the CMake group (010271f7, configure green after the
+third-party extraction) and the stg-mirror deletions need nothing beyond
+it; (b) runs root run_gen with root lm2 present, unblocked. b5 finishes
+groups (4) and CMake now; 0c has the machine for the goldens and the seed
+red-first; (b) follows.
