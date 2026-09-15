@@ -5650,3 +5650,21 @@ put back. S5 (a) committed on d6/lock-s5 8e528532 off c9ac4dda: the
 retire queue deleted, 58 lines across exec.c, exec.h, lmx_message.h,
 lm1 and lm2, 0 retire names left in the core; edits only; (c), (i) and
 (ii) next.
+S5's code complete as edits (the lead, 2026-09-15): d6/lock-s5 e75263d7 off
+c9ac4dda (checked by the coordinator: lmx_msg_addr_take declared in
+lmx_message.h, root_seq gone from it): 8e528532 (a) the retire queue
+deleted; e75263d7 (c) one root (lmx_msg_find is R0's tree, lmx_msg_poll
+polls R0's kids, create_prepare sets rt\root once for R0, release_slot
+and endp_try_retire clear rt->root when R0 leaves, lmx_msg_drive_walk_roots
+drives R0 with drive_walk_list's own steps for one element, its
+parent-0 branch gone), (i) assign_path gives R0 the path [1] and
+root_seq is deleted, (ii) lmx_msg_addr_take is one __atomic_fetch_add_n
+on rt->next_addr; all mirrored in lm2; FIELDS rows updated at
+d6/lock-removal 5decda9a. The probe's text count on the e75263d7 tree
+(a temp copy) prints 0/0/0/0 (a first try printed
+next_addr_nonatomic=2 from the lead's own comments naming the field;
+the comments reworded, the probe unchanged); the green proper is the
+merge with 85953500 plus parity, the union base, the UAF kit's 165 runs
+and the falsifier, after S4's landing. Meanwhile the lead rebuilds the
+UAF kit's sources (the quarantine allocator, the crash driver) in
+scratch, no builds.
