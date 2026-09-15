@@ -3253,3 +3253,7 @@ hidden through-arguments (l2trans's DynRequired names, following the
 declared formals in intern name order) and the graph node; its data are
 Structure nodes in the Message's arena reached from root. Entered verbatim
 in spec section 2 and the model's section 2.
+Mikhail (2026-09-15, verbatim, the fourth sentence): "Поэтому структура Message как данные остается и на Си -- в точности как стуктура Lmx" So the
+four-field LmxMsg is a C data type beside Lmx for good, the native record
+the generated code operates on; only its inside (what root reaches) is
+written in LMX. Entered verbatim in spec section 2 and the model's section 2.

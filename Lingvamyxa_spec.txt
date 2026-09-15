@@ -1067,7 +1067,10 @@ himself the same minute: "то есть записывается в "struct Lmx 
 `root` reaches; on L2 that is where the code working with these Messages
 lies; on L1 there is simply the code that will be generated). And on the
 shape of that code: "В точности как имитируется L2 на Си -- функция с аргументами ,скрытми ргументами и узлом графа." (exactly as L2 is imitated in C: a function
-with arguments, hidden arguments and the graph node).
+with arguments, hidden arguments and the graph node). Hence, verbatim:
+"Поэтому структура Message как данные остается и на Си -- в точности как стуктура Lmx" (therefore the Message structure as data stays in C as well,
+exactly like the Lmx structure): the record above is a C data type beside
+Lmx, not something later rewritten in LMX.
 
 `node` is the Structure's lexical parent. Merge and Message creation copy the
 complete used graph with the same traversal, including lexical node chains to
