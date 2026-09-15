@@ -5703,3 +5703,9 @@ explicitly; diagnosed by gdb thread backtraces on the hung process.
 S4's acceptance record: red a3576110 (emergency_cancel from a spawned
 thread returned 0), green 97fb41fd, falsifier the inverted condition.
 The lead lands 97fb41fd with land_base2.sh onto c9ac4dda.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only, at S4's landed tip:
+the S6 census re-base, l2src/LOCK_REMOVAL_S6_LOCK_SITES.txt on
+sonnet/s6-rebase: the functions S3, M, S2 and D2 deleted dropped, every
+line number renewed, the counts per stage re-tallied (S3 and M rows
+"done, landed"), the rows the lead's S5 (e75263d7) deletes marked "S5,
+pending", so the S6 section reads the true remaining lock sites.
