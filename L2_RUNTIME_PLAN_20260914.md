@@ -1918,3 +1918,21 @@ the string lmx_msg_host_ingress_v0 remains once, mixa_console_window.txt:202,
 a design note, named in the commit); it lands through the lead after the
 S-stages in flight, allowlist mixa_manager. b5 is on the lead's own.lm2
 inventory (stage O's first line).
+S1 green: d6/lock-s1 aef95e1c (adopt_push deleted from exec.c, off c067bed9),
+measured cold with the pinned l1trans: all 28 runners that compile exec.c at
+their pass lines (send_local 146/0, family_handoff 63/0, port_message parity
+PASS with 100 methods redirected, scenario36, entry_turn 24/0, sched_record
+22/0, graph_abi, lmx and l2trans gen2 ok, the 18 port parity runners),
+run_gates 11 of 11 in 210 s, no build log naming adopt_push. S0 is landing
+(57's cf326822 merged into integration, the five runners cold); S1 lands
+on S0's merge after 57's quiet window.
+A contradiction raised by 0c (2026-09-15) and withdrawn by 0c the same hour:
+the workers' wait events, stop_ev, the condition-variable signal and the
+order-free Interlocked cells against "synchronization only in each L3
+Thread's mailbox"; Mikhail's recorded words already cover them (wait
+signals need no lock; atomic state whose order does not matter); what
+remains reportable is each lock outside the mailbox, all already "to go":
+the host selftest's g_go_mu, the pthread worker's pthread_cond_wait bound to
+the exec lock (goes with it), the launch pack gate if it is a mutex. 0c's
+inventory section 5 is rewritten against those quotes; the S3 red test
+proceeds.
