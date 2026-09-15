@@ -6411,3 +6411,30 @@ written only in its own turn; A and B each with their own
 arrived/saw/turns cell, reading only the other's), unbuilt. Next: the
 mechanical deletion in lm1, lm2, exec.c and exec.h, the three easy
 selftest sites, the probe and the union base.
+S6-1 acceptance green measured by the coordinator (2026-09-15) in exec-3a
+(pin 0B3D85B3): the S6-1 tip d6/lock-s6 baa8ec23 merged locally with the
+probe 695d54fc (parents checked; never pushed): the probe -Part 1
+"exec_lock_calls=0 exec_lock_decl=0 host_lock=0 exec_fields=0", S6-1
+GREEN (S6-2 still refs=342 runtime_lists=36, RED as expected);
+run_port_message plain parity PASS in 43 s with 103 methods (the new
+lmx_msg_maintenance_close_ok); -LaneCheck exit 0 in 43 s, parity PASS;
+lmx_msg_exec_lock( 0 in l2src's sources. The lead's own green agrees
+(the probe 0/0/0/0; parity 103; run_lmx -Suite Message ok;
+run_model_scenario36 PASS over all ten fixtures twice, the rewritten
+checks_19_29_6 32/0 and the three unbound-close fixtures family_close_32
+26/0, family_release_17 58/0, liveness_33 76/0, the evidence that the
+close still happens with no lock anywhere). What (a3) removed: 588 lines
+(191 lm1, 191 lm2, 172 exec.c, 2 declarations in exec.h) and the lock
+object itself (the field in both branches of LmxMsgExec, its
+InitializeCriticalSection and recursive pthread_mutex_init in
+exec_attach, its destruction in exec_detach, the two functions); the
+TLS turn identity stays (identity, not synchronization); the mailbox
+monitor untouched, 19 m->mail sites in exec.c; the deletion through a
+guard refusing any matching line that was not a plain call statement,
+the two definitions removed by hand, lm1/lm2 dry-run first. The three
+test rewrites as agreed. S6-1's acceptance record: red 695d54fc
+(601/11/43/27), green baa8ec23 (0/0/0/0), falsifier one hold put back
+(the lead's, to be run on the merge before "landed"). Landing next:
+land_base3.sh with the union base plus lmx_cancel and scenario36, the
+allowlist the S6-1 files plus e9's archive-timeout runner; the probe
+never folded in.
