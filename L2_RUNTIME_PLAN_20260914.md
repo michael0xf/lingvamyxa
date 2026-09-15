@@ -3604,3 +3604,15 @@ EMPTY-ROUND line in R8 and R9 waits on Mikhail ((a) nothing, (b)
 SwitchToThread/sched_yield, (c) a sleep tick). Green: -LaneCheck exit 0
 plus the plain run on the merge with 74146146, falsified per R by putting
 one signal back. b5's R9 sub-ticket goes out with his answer.
+Mikhail (2026-09-15, verbatim, on the EMPTY-ROUND question): "уступка
+планировщику, тик сна,чтение почты, просмотр кино, выгул собакм -- ты
+издеваешься?" The question was an implementation detail and should not
+have gone to him (his standing rule: where the return stands is
+implementation; "Планируйте как вам удобно"). Decided by the coordinator,
+not a spec matter: (b), a scheduler yield (SwitchToThread / sched_yield)
+between empty rounds, no object, no signal, no timeout; the live check
+inside each round. S3 goes to code now on that line; b5's R9 sub-ticket
+goes out. Rule restated for every stage: implementation choices that add
+no lock, no wait on a primitive and no signal are ours; only a fix that
+would need another lock, or a contradiction between his sentences, stops
+a stage and goes to him.
