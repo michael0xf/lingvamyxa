@@ -4641,3 +4641,15 @@ and whether it is unaffected, asserts a mechanism M deletes (the
 assertion line named), or measures timing that own-thread children
 change; counts at the top; the lead's LOCK_REMOVAL_STAGE_M_TESTS.txt
 cited where the two meet.
+b5's M review landed on sonnet/m-review b16f91b8 (l2src/LOCK_REMOVAL_M_REVIEW.txt,
+against the M section at ba1aa1ad lines 446-541 and its FIELDS table;
+checked by the coordinator): sites unnamed 2 (context_worker,
+ctx_visit_first_launchable), both covered in content by the section's
+"14 branches" AFFINITY_UI list under worker_round_rec_locked (the S3
+refactor that took context_worker's inline check), so a naming gap, not
+a missing site; fates differing from the FIELDS rows 0; contradictions
+0. The "no UI lane in the core" decision supersedes one claim in b5's
+own M_FIELDS file (that creating the UI lane is not itself M's to
+remove), accurate when written; the S2 file's Q class (exec_take_ui_locked)
+is resolved by M's deletion of that site. The lead adds the two function
+names to the section's site list.
