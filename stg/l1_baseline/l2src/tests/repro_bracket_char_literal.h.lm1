@@ -1,0 +1,10 @@
+include: "l1src/p0.lm1.h"
+
+prototype:
+    fn: p0_is_horizontal_space (char: value) int
+    fn: p0_is_line_break (char: value) int
+    fn: lm_p0_consume_brace_mark (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
+    fn: p0_source_level_after_line_break (@: LmP0Document document; @: LmP0IndentStack indent_stack; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column; size_t: base_level; @: size_t content_index; @: size_t out_level) int
+    sub: p0_position_in_slice (const: @(char text); size_t: length; size_t: index; size_t: base_line; size_t: base_column; @: size_t out_line; @: size_t out_column)
+    sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))
+end: prototype

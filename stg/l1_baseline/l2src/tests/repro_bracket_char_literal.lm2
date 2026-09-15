@@ -1,0 +1,76 @@
+predef: "l2src/tests/repro_bracket_char_literal.h.lm1"
+
+# Repro for lingvamyxa-ba (d6), 2026-09-14: l1trans fails with
+# "unclosed index bracket form" (parse error 5) on the GENERATED
+# .lm1 output of an l2trans translate that never mentions that
+# string at all.
+#
+# CORRECTED FINDING (earlier attempts in this file's git history
+# targeted the wrong function -- see those commits' messages for the
+# dead ends: a standalone '['/']' comparison loop, the actual calling
+# function p0_field_start_looks_explicit_frame with stub and then
+# real callee bodies transplanted in, and a compound flags-bitwise
+# if condition in isolation -- none reproduced it). Re-reading the
+# real error location (build/.../parser_field_parse_port.lm1 line
+# 3056, inside generated function l2_uE2CD1CA2AD221393_m14) shows it
+# is actually inside p0_skip_field_space (l1src/parser.lm1:2154-2187
+# / this port's l2src/parser_field_parse_port.lm2:287-320), right at
+# the TOP of its while loop body, BEFORE any of the if-branches that
+# use text[index[0]] are reached. The malformed lines are:
+#     int: l2_t2
+#     l2_t2: [
+#     int: l2_t3
+#     l2_t3: ]
+# i.e. two bare bracket punctuation tokens as a temp's entire RHS,
+# not a missing-quote char literal as first suspected. text[index[0]]
+# is read 4 times in this loop body (is_horizontal_space, == '#',
+# == '{', is_line_break) on an own-tracked pointer parameter that
+# also needs per-iteration escape-poll checkpointing (document,
+# indent_stack, structure are all own-pointer params) -- looks like
+# an l2trans common-subexpression-hoisting bug for a repeated
+# own-tracked array-index read, specifically when combined with the
+# checkpoint/escape-poll injection this port's other while loops also
+# use (see Stage c/d/e's shared "explicit stack, not recursion"
+# pattern notes in PARSER_L2_PORT.txt for why so many of this port's
+# loops carry own-pointer params). This file is a verbatim transplant
+# of p0_skip_field_space with its non-essential callees stubbed by
+# prototype so it stands alone.
+
+fn: p0_skip_field_space (@: LmP0Document document; @: LmP0IndentStack indent_stack; @: LmP0Structure structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column; unsigned: flags; size_t: short_source_level; size_t: layout_base_level; @: size_t current_source_level; @: int stopped_by_source_level) int
+    stopped_by_source_level[0]: 0
+    while: (index[0] < length)
+        if: p0_is_horizontal_space(text[index[0]])
+            index[0]: index[0] + 1U
+            continue
+        if: (text[index[0]] = '#')
+            while: ((index[0] < length) && (p0_is_line_break(text[index[0]]) = 0))
+                index[0]: index[0] + 1U
+            continue
+        if: (text[index[0]] = '{')
+            if: (lm_p0_consume_brace_mark(document, structure, text, length, index, line, column) = 0)
+                return: 0
+            continue
+        if: p0_is_line_break(text[index[0]])
+            size_t: content_index
+            size_t: next_level
+            if: (p0_source_level_after_line_break(document, indent_stack, text, length, index[0], line, column, layout_base_level, @ content_index, @ next_level) = 0)
+                return: 0
+            if: ((((((flags & c.LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL) != 0U) && (next_level < short_source_level)) && (content_index < length)) && (text[content_index] != ')')) && (text[content_index] != ']'))
+                size_t: diagnostic_line
+                size_t: diagnostic_column
+                p0_position_in_slice(text, length, content_index, line, column, @ diagnostic_line, @ diagnostic_column)
+                lm_p0_set_diagnostic(document, 13, diagnostic_line, diagnostic_column, "bounded form continuation must stay inside the form")
+                return: 0
+            if: (((flags & c.LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL) != 0U) && (next_level <= short_source_level))
+                stopped_by_source_level[0]: 1
+                return: 1
+            current_source_level[0]: next_level
+            index[0]: content_index
+            continue
+        break
+    return: 1
+end: p0_skip_field_space
+
+fn: main () int
+    return: 0
+end: main
