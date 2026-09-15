@@ -243,6 +243,22 @@ void lmx_msg_test_unbind_refused(LmxMsgRuntime *rt, LmxMsg *m, int st, const cha
 #define lmx_msg_test_lane_take(r, o, h, s) ((void)0)
 #endif
 
+#if defined(LMX_MSG_EXEC_TEST)
+/* S3 (Mikhail 2026-09-15): an owner thread loops forever, looks into its own
+ * mailbox each round and waits on no primitive, so nothing signals a lane thread.
+ * Under LMX_LANE_CHECK=1 every such signal aborts with its site named; green is 0
+ * sites. Called before each signal in exec.c and lmx_message_host.c. */
+void lmx_msg_test_wake_site(const char *site, unsigned owner) {
+    if (lmx_msg_test_lane_check == 0) {
+        return;
+    }
+    fprintf(stderr, "LANE WAKE FAIL site=%s owner=%u: a lane thread was signalled; an owner loops over its mailbox and waits on nothing (S3)\n",
+        site, owner);
+    fflush(stderr);
+    abort();
+}
+#endif
+
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
 int lmx_msg_test_copy_fail;
 int lmx_msg_test_copy_should_fail(void) {
