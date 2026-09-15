@@ -3406,3 +3406,14 @@ message-thread .lm2 tests (trans_invalid_thread_predef,
 trans_message_thread_source_import) deleted, tests/p0_tree_contract/
 p0_meta_dump.c restored (its earlier deletion was b5's own mistake; it is
 a live P0 contract dumper). It lands after (c), re-checked on (c)'s tip.
+Mikhail (2026-09-15, in the lead's chat, verbatim, correcting the
+over-correction): "«цикл выходит по success == 1», а это описание реализации, а не модели." -- просто по модели L3 Thread не может повторять turn когда success == 1, это не деталь реализации. Деталь реализации это где будет стоять return." So "the kernel fixes no loop shape" (the
+coordinator's gloss, taken by the lead) is wrong too: the model rule is
+that an L3 Thread does not repeat a turn once success == 1; only where the
+return stands is implementation. Replaced on main in spec 19.28.R2.2 and
+model 31 with the rule and his sentence; the lead applies it to KERNEL,
+S3, Y3 and the FIELDS success comment. The full reading now: no turn once
+success == 1 (model); user code sets success; running is polled while root
+executes, and running = 0 from the parent is the stop request that in the
+end leaves the loop; running is set to 0 at exit; a finished L3 Thread
+reads success && !running.
