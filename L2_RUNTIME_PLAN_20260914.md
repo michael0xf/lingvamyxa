@@ -1077,6 +1077,46 @@ prototype, largest first.
    join deleted before the runtime's free makes the join line red; one
    free dropped on the close path (a slot's path array) makes the balance
    line red by that block.
+   The (f) design (d6/stage5f-design 18f9ba54, STAGE5F_DESIGN.txt on
+   ffeb1094; measured on 402b2919: no closing turn runs in today's delete,
+   the chain exists as request_children_close, settle_child, parent_settle,
+   orphan_sweep and drive_one, root_turn is run_entry_turn(R0), the host
+   forms have 2 + 4 test callers and host_is_owner 30 lines): runtime_delete
+   returns int, INVALID from inside any turn or off R0's lane; the close is
+   R0's maintenance: request_children_close(R0), then a loop of internal R0
+   turns stepping closing children (host-run bound by run_child_turn on R0's
+   lane, unbound by exec_unbound_close, mapped ones ending on their workers
+   as they see closing), after each turn the reaped workers joined, settled
+   non-orphans settled from R0's turn and settled orphans reclaimed
+   regardless of orphan_until; end order the transport list, R0's own slot
+   (its arena and the root record), exec_detach, free(rt), no host_detach;
+   the host forms retire with their test callers; the lifecycle calls drop
+   the host branch and 48 test sites move into the parent's turn; the
+   main-callable set is R0's lane outside a turn (create with parent 0,
+   host_post, host_drain, set_now, set_orphan_retain, exec_bind, drive,
+   emergency_cancel, root_turn). Answered 2026-09-15, all the lead's
+   recommendations: Q1 (a) a UI-bound child is unbound and closed by
+   exec_unbound_close, no handler, the pending request going with the
+   lane's mailbox (the UI child's turn adapter belongs to the R0 loop step);
+   Q2 (a) block on the bind waits with no timeout (19.29.8: a timeout never
+   grants permission to free memory still used by native code); Q3 (a) R0's
+   mailbox refuses admissions with STOPPED under its own mail lock before
+   the chain starts (19.29.6 (iii)), a post after the delete returns being
+   the embedder's use of a freed handle; Q4 (a) runtime_shutdown deleted
+   under decision 12; Q5 (a) the bootstrap-thread identity named once,
+   lmx_msg_r0_lane, any-thread rejected for concurrent maintenance; Q6
+   confirmed. Added measure: a mapped child blocked inside recv with an
+   empty inbox must be woken by the close request as by an admission (a
+   scratch probe; the fix, if missing, in request_children_close's ready).
+   Falsifier for Q2 in the commit's note: a mapped child that never reads
+   its closing flag holds runtime_delete (a 3 s watchdog reporting "held"),
+   the same probe reading the flag returns. Conditions: spec quotes from
+   origin/main before final; lm1 and lm2 mirrored in one commit; each
+   migrated site keeps its label and count with its runner run on the
+   landing; the two acceptance tests join scenario36's defaults; the
+   tripwired grep at 0 for the retired host forms on any receiver. Lands
+   after the chain and the response-file branch on its own integration
+   merge.
 
 ## 4. Acceptance
 
