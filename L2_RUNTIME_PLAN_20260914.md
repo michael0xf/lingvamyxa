@@ -5373,3 +5373,15 @@ b5's revert pushed: sonnet/d2-create-id 3a37ca87 (the harness hunk at 223/228
 back to the vendored six-argument form; the harness file's diff against
 1bdbfca0 empty, checked by the coordinator); the lead re-lands D2 with
 the union base.
+D2's re-landing, a script defect (the lead, 2026-09-15): merge 6fe7924e
+(3a37ca87 onto 1bdbfca0, 34 M); run_self_build PASS 8 of 8, local tag
+selfbuild/6fe7924e, log commit 391b5062; the self-build push rejected
+as non-fast-forward because land_base.sh always pushes to
+"<branch>-landing" and sonnet/d2-create-id-landing already holds the
+first attempt's ed00470d (checked by the coordinator); no force-push;
+the runners continue; if all green the lead pushes 391b5062 to
+sonnet/d2-create-id-landing-6fe7924e with the tag, then integration
+with the tip check, by hand after reading every runner line; if any
+red, nothing is pushed; land_base2.sh names the landing branch per
+merge from now on. Rule kept: a self-build mark is pushed as its own
+ref, never over another attempt's.
