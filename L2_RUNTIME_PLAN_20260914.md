@@ -6330,3 +6330,39 @@ deadlock can form; S6-1's move of the transport queue under R0's
 mailbox monitor keeps to "only inside the message queue", and the
 coordinator's earlier "one monitor at a time" implementation note is
 this sentence, not an addition to it.
+S6-1, unbound_held resolved by measurement (the lead, 2026-09-15): the
+coordinator's ordering rule (1), "a parent refuses to bind a child whose
+close it requested", is wrong and withdrawn: implemented literally,
+port_message hung at the close-path case ("the stopped closer's closing
+turn on its own context ends stopped", the 300 s watchdog), because the
+fixture binds uc after its close is requested precisely so the closing
+Message runs its own closing turn on its own context, as the spec says
+at 12762-12765 ("a child on its own context runs its closing turn
+there"): binding a child whose close is requested is the normal path.
+The real window is the one unbound_held always named: while R0's
+maintenance writes this address's close, a bind would hand it a worker
+behind the maintaining lane's back and the parent's dispose could
+settle an executing Message. So unbound_held stays as an atomic cell
+with one writer, R0's maintenance (__atomic_store_n around the close,
+__atomic_load_n in exec_bind_mode; the bind refused only while the
+cell names this address; the S6-1 probe's exec_fields count 0 on the
+tree). Also on d6/lock-s6, unbuilt: end_turn's guard takes a second
+branch, lmx_msg_maintenance_close_ok (the host is owner, the Message
+unbound, closing, not exec_live), in lm1 and lm2, so exec_unbound_close
+no longer borrows the identity (the TLS borrow was only the code's way
+to reach end_turn; everything after the guard works on the record);
+require_turn untouched; the runner's pins allow both (msg_end_turn's
+signature unchanged, a helper added; the mail_lock pin scoped to
+msg_send's body; the method count "at least 80"); one defect caught
+before building (the flag first added inside the _WIN32 branch of
+LmxMsgExec, now platform-neutral). Coordinator's addition from the same
+spec lines, to make the cell defence and not the ordering: the
+maintaining lane's scope is the unbound closing Messages whose parent
+has no lane (stopped, gone, or re-rooted under R0 after the parent's
+disposal, 12762-12765), while a live parent's unbound closing child is
+the parent's act on the parent's lane (bind it to run its closing turn,
+or write its bookkeeping there); then no two lanes act on one child,
+and the cell only catches a violation. The lead checks the fixtures'
+cases against that scope and names any with both lanes. Next: build
+port_message and the Message suite, the transport move onto R0's
+monitor, then the lock. R0P noted for after S6-2's section.
