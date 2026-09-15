@@ -5254,3 +5254,23 @@ what S4 adds or changes at each: nothing, a guard (the emergency_cancel
 ruling), an edge before a cross-lane read, or a move of the write to
 the owner's lane; the cancel_spin_host test change included; counts at
 the top.
+M's miss found before D2's landing (the lead, 2026-09-15; checked by the
+coordinator: ui_pending absent from lmx_message.h at d8f758e6, present
+twice in the unit): run_l2trans is red at d8f758e6, exit 1 after 97 s,
+"gcc failed: build\l2trans\unit_runtime_struct_field.c", "'LmxMsg' has
+no member named 'ui_pending'": M deleted LmxMsg.ui_pending, while
+l2src/tests/unit_runtime_struct_field.lm2 (from 45166cd4) still spells
+it at line 9 and run_l2trans.ps1 2389 pins "if:
+l2_p\d+_0\ui_pending != 0"; run_l2trans was not in M's landing set. The
+lead retargets the unit and the pin onto an LmxMsg field that exists,
+on a branch off integration, baselines it red then green, and lands it
+before D2; D2's set stays. Rule from it (coordinator): run_l2trans is
+in every landing set from now, with the self-build, the gates and
+port_message; a landing set is the union of every runner the previous
+landings ran, never a subset chosen per stage. For S2's form, a case
+e9's impact list misses: l2_message_root_driver.lm1 84 wraps
+lmx_msg_find and its mode 3 returns 0 to fail the generated
+l2_program_turn's own lookup (binds=0); S2's C2 replaces that lookup by
+lmx_msg_turn_self, so mode 3 retargets its wrap onto lmx_msg_turn_self
+and run_l2_message_root.ps1 530's wrap list names it; both in S2's
+allowlist.
