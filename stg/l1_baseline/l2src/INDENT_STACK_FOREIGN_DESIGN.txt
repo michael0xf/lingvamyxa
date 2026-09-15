@@ -1,0 +1,83 @@
+LmP0IndentStack becomes a foreign pointer type (d6, draft on e6bb09e7, 2026-09-14)
+
+SCOPE (6f's ruling (a), 2026-09-14)
+Trigger: 5e's repro 23e2dbb7 (parser-l2 Stage e slice 3). `stack\columns[idx]: value` with `@: LmP0IndentStack stack`
+fails l2trans "unsupported index". LmP0IndentStack keeps legacy codes (14 `@:`, 15 `const: @(`, return 13), a
+hand-written field table and dedicated sizeof and lm_own_new_zero cases; (b), widening l2_index_head for 14/15, would
+add a feature to a legacy code, which decision 12 forbids. So: LmP0IndentStack becomes a foreign pointer type, as
+LmP0Document (Stage B, the comment at l2trans.lm1 ~9485) and LmP0Stack; its codes, field table entries and the sizeof
+and new_zero cases go; its field reads and writes use the foreign path, spelled as written and checked by C.
+Order: after the bracket fix (d6/l2trans-bracket e6bb09e7).
+
+MEASURED
+- Tripwired l2trans copy (c.exit(97) before l2_index_head's final `return: 3`): the repro exits 97. The same file
+  without probe_indent_stack_store_direct (5e's `cell` workaround only) exits 0 with the tripwire silent.
+- l2_index_head admits a `formal\field[...]` base only for a formal code >= 100 (l2trans.lm1 6338); likewise slots
+  (6357). The formal parser gives LmP0IndentStack 14 and 15, so no base matches and it returns 3.
+- LmP0Stack interns as foreign and parser_stack_stream_port.lm2 writes `stack\hard[i]: 0U` (167, 182), allocates with
+  `(cast: (@: LmP0Stack) lm_own_new_zero((1U * c.sizeof(c.LmP0Stack))))` (42).
+
+SITES on e6bb09e7 (5e's inventory, re-grepped here; its line numbers came from an older tree)
+Assignments of the legacy codes, the only ones in l2trans.lm1:
+  A1  8032-8034   l2_own_decl local type `LmP0IndentStack` -> 14 (a method local slot)
+  A2  9489-9493   formal `@: LmP0IndentStack` -> 14
+  A3  9569-9571   formal `const: @(LmP0IndentStack x)` -> 15
+  A4  9747-9748   return `@: LmP0IndentStack` -> l2_m_ret 13
+  A2 and A3 are the name exclusions at 9547 (the list that otherwise interns a foreign type).
+Uses that exist only because of them:
+  U1  6064-6072, 6094-6102  l2_raw_path field table columns=2, count=3, capacity=4 (data=0 and length=1 are LmP0Text's
+      and stay); U1's only consumers are the rf = 2/3/4 emissions at 13896-13900.
+  U2  10425-10429 raw write gates: ft = 15 in the const list, ft != 14 and st != 14 exclusions
+  U3  11149-11153 `c.sizeof(LmP0IndentStack)` / `c.sizeof(c.LmP0IndentStack)` -> `c.sizeof(c.LmP0IndentStack)`
+  U4  11182 lm_own_new_zero: argument text containing "IndentStack" -> an `@: LmP0IndentStack` temp and cast
+  U5  11419, 11421, 11902, 11904, 12026, 12028 return code 13 emission and its int-return exclusions
+  U6  11804, 11806, 11983, 11985, 11992, 11997 formal code 14/15 emission and exclusion lists
+  U7  14280 slot code 14 emission
+Code 13 as a formal/local type (11802, 11981, 12751, 6124, 11992, 12773) emits `@: LmP0Document`, but no site assigns
+13 except A4 (a return code): LmP0Document formals intern as foreign since Stage B. Those comparisons read a code
+nothing writes. See Q3.
+Units and gates:
+  - l2src/parser_indent_stack.lm2 (pre-ticket fragment): 8 fns; locals at 60 and 96 (A1); `return:
+    lm_own_new_zero(c.sizeof(c.LmP0IndentStack))` at 57 (U4); c.sizeof(c.LmP0IndentStack) at 53, 79 (U3); field
+    reads/writes through U1. Translated by run_l2trans (Invoke-IndentStack) and linked by run_candidate_indent against
+    the hand-written l2src/indent_stack_abi.c, which declares the generated signatures as `LmP0IndentStack *` (11-21).
+  - l2src/parser_field_parse_port.lm2 (5e's e3, not landed): formals and returns only; `cell` stopgap in
+    p0_indent_stack_push.
+  - Mentions only, no code path: FABLE_GRAPH_ABI.txt, OPEN_POINTS.txt; lm2/parser.lm2 and l1src are the L1/lm2
+    parsers, not translated by l2trans.
+
+DESIGN
+1. Delete A1-A4 and the two name exclusions at 9547: the type interns through l2_foreign_intern like any foreign
+   pointer (formal, const formal, local slot, return), with l2_need_p0 set as LmP0Document's is.
+2. Delete U1's columns/count/capacity entries and the rf = 2/3/4 emissions; `stack\columns` reads and writes take the
+   foreign field path (out_fld 5), spelled as written.
+3. Delete U2's 14/15 terms, U5, U6's 14/15 lines, U7.
+4. Delete U3: `c.sizeof(c.LmP0IndentStack)` reaches the general foreign branch (11162-11171), which emits it as
+   written.
+5. Delete U4's IndentStack line; parser_indent_stack.lm2:57 is rewritten to the spelling parser_stack_stream_port
+   already uses, `return: (cast: (@: LmP0IndentStack) lm_own_new_zero(c.sizeof(c.LmP0IndentStack)))`. See Q2.
+6. The generated C signatures stay `LmP0IndentStack *` and `const LmP0IndentStack *`, so indent_stack_abi.c is
+   unchanged; run_candidate_indent measures it.
+
+REDS AND ACCEPTANCE (6f's list)
+1. 5e's repro translates with exit 0 and the tripwire (as measured above) stays silent; a committed leaf writes
+   `stack\columns[idx]: value` and reads it back, red on e6bb09e7.
+2. Each retired case is gone by grep count: `"LmP0IndentStack"` in l2trans.lm1 only in the U3/U4-free general
+   paths (expected 0), no `= 14`/`= 15` type comparisons, no rf = 2/3/4, no `IndentStack` strstr.
+3. run_l2trans (all cases, Invoke-IndentStack included) and run_candidate_indent green through the foreign path; a case
+   that passed only through a legacy code is rewritten to the foreign spelling or named here as retired.
+4. 5e's `cell` stopgap is removed in the same landing or the next, named.
+5. run_gates N of N; run_port_parser cold.
+
+QUESTIONS (each to be measured before it is claimed)
+Q1. The local slot (A1). (a) A method-local `@: LmP0IndentStack stack` interns as a foreign local like LmP0Stack's
+    locals; (b) keep a local code. (a) is the ruling's reading; to measure: parser_indent_stack.lm2:60/96 translate
+    and run_candidate_indent stays green.
+Q2. The uncast allocation (U4). (a) Rewrite parser_indent_stack.lm2:57 to the explicit cast (the LmP0Stack spelling);
+    (b) keep a type sniff for foreign pointer returns. Recommend (a): U4's remaining default casts any other argument
+    to `@: LmP0Text`, itself a sniff; changing that default is out of scope and named here.
+Q3. The unwritten code 13 comparisons (LmP0Document at 11802, 11981, 12751 and the lists at 6124, 11992, 12773).
+    (a) Delete them in the same commit, since A4 was the only writer of 13 and it is deleted; (b) leave them for a
+    separate cleanup. Recommend (a), measured by the grep in red 2 and the gates.
+Q4. Leaf for red 1. (a) A new unit_indent_stack_field_index.lm2 run by run_l2trans (historical pin 142); (b) extend an
+    existing IndentStack case. Recommend (a), the same shape as unit_call_nested_index.
