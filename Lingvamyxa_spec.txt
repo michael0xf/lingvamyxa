@@ -1089,9 +1089,9 @@ mutually, with the child's poll the priority since it is the child that
 must leave the trace that it is alive, is perfectly reliable too; there
 will never be leaks there, since it does not depend on the user's
 single-threaded L3 code; L2 and L1 are the user's responsibility, but we
-can write without that). And on why nothing can hang, verbatim: "если у тебя у каждого родителя стоит таймаут на ребенка и у ребенка на родителя таймаут и в каждой буквально точке (цикл, вход, выход) проверяетс runnable, у одной арены строго один поток, то у тебя зависание никогда не будет дольше чем таймаут, это схема железобетонная. Программа может упасть, но завсинуть -- с чего, на чем? На ресурсах или что-то в этом роде? В Си есть механизм прибить поток принудительно (потом реализуем, сейчас бы хоть ядро запустить) , в конце концов по таймауту сработает корневой поток и тупо выйдет из процесс ОС. Тут не может быть никаких зависаний"
+can write without that). And on why nothing can hang, verbatim: "если у тебя у каждого родителя стоит таймаут на ребенка и у ребенка на родителя таймаут и в каждой буквально точке (цикл, вход, выход) проверяетс running, у одной арены строго один поток, то у тебя зависание никогда не будет дольше чем таймаут, это схема железобетонная. Программа может упасть, но завсинуть -- с чего, на чем? На ресурсах или что-то в этом роде? В Си есть механизм прибить поток принудительно (потом реализуем, сейчас бы хоть ядро запустить) , в конце концов по таймауту сработает корневой поток и тупо выйдет из процесс ОС. Тут не может быть никаких зависаний"
 (if every parent has a timeout on its child and every child a timeout on
-its parent, and at literally every point, loop, entry, exit, runnable is
+its parent, and at literally every point, loop, entry, exit, running is
 checked, and one arena has strictly one thread, then no hang ever lasts
 longer than the timeout; the scheme is reinforced concrete; a program
 can crash, but hang on what, resources or the like? C has a way to kill
