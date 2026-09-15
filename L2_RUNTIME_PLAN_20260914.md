@@ -1205,7 +1205,14 @@ carrying a quote), so the two failure texts are distinguishable in the
 logs; the branch is claude-0c/port-parser-cwd 673c3475 on 7a1eb5fc on
 cd8c9028, the guard line "cmdline guard ok: 137 arguments, 8855 characters
 inline, through a response file", green from the worktree root in 318 s;
-lands through the lead after slots as one branch.
+landed as 458c8875 over dbcc3f88 (run_port_parser cold from the baseline
+exit 0 with the guard line and 18 stage ok lines; 57's two escape
+falsifiers rerun on the merge). 0c's step 3 (64df50cc, the 12 runners
+launched through cmd /c) landed as dbcc3f88 over 1542217d: the
+history_owned falsifier 16 s before and 2 s after at "history checks=65
+failures=0", each two-line runner printing its O0 and O2 lines at 0
+failures (slots 278, storage 77, path storage 541, owned ranges 439), the
+other eight at 0 failures, run_gates 11 of 11 in 221 s.
 
 Translator repairs driven by the parser port's Stage e (2026-09-14/15, the
 lead, each a leaf in run_l2trans's historical set with its pin, red on the
