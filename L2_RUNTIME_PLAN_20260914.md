@@ -2839,3 +2839,15 @@ onto 88934463 (29b739eb the bat rewrite, e5da89f5 oldchain/ deleted), to be
 measured cold after D1's gates and pushed for 0c. For (b) the lead needs
 0c's goldens path under tests/l1 (the staged-test script's change in the
 root's l1src/buildCore.lm1); 0c names it before writing.
+S3 and Y written to Mikhail's final wording at d6/lock-removal 7aa91564
+(both quotes verbatim): S3, the owner thread's infinite loop, each round its
+self-maintenance (liveness queries to its parent, timers), a look into its
+mailbox under synchronized and a turn when there is a Message, never
+blocking on a primitive, never exiting for lack of mail, ending only when
+user code ends it; no wake, wait or notify anywhere; going with nothing in
+their place: the wake-all, exec_start_map_kick, the launch wake,
+bind_wait_retire, the unbind join and stop's retire walk; the oracle red on
+any wake site. Y2 reentrant enter/leave only; Y3 the mailbox's reads and
+writes under it, looked into by that loop, its green requiring the three
+lifecycle signals gone. The earlier wake-matching rules kept as
+superseded, the record of where the wake sites are. D1's landing running.
