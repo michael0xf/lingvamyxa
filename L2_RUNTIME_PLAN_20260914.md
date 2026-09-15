@@ -4572,3 +4572,16 @@ running still 1, its success 0) and by the release's return before C4's
 closing turn is required, with no ordering claim between two lanes.
 Same rule for every M test conversion: state properties through
 Messages, turns and flag reads, never through a wait.
+M acceptance red on the one-root tip (the coordinator, 2026-09-15):
+fable/m-acceptance-oneroot 199dab84 (80101431 plus the two oracle edits
+at l2src/lmx_message_exec.[ch]), in exec-3a with the pin at
+build/l1trans/gen2: run_port_message -LaneCheck exit 1 in 14 s, "LANE
+MAP FAIL site=ui_step owner=6"; plain exit 0 in 52 s, parity PASS, 101
+methods redirected. Green for M: d6/m-sequential merged with 199dab84
+gives -LaneCheck exit 0 and the plain run passes; falsifier: one site's
+mapping and marker put back. The lead's LOCK_REMOVAL_STAGE_M_TESTS.txt
+(d6/lock-removal 1a30ab2e) carries the conversion rule and the
+family_release_17 restatement as DECIDED; cancel_spin_host read
+(13dae4cd: its step helpers convert, turn_map_child stays, the spin-step
+sched_step case goes, the foreign-thread cancels are S4's). M's first
+build may start; the machine is free after e9's record.
