@@ -416,6 +416,46 @@ fn: msg_copy_bytes (const: @(uchar src); size_t: n) @: uchar
     return: p
 end: msg_copy_bytes
 
+# O1 (lock removal, 2026-09-15): an allocation in the turn Message's own arena,
+# reached without a runtime handle. The arena is the Message's blocks list (spec
+# 19.29.2): one zeroed block pushed onto it, written on the Message's own lane.
+# 0 outside any turn; on refusal nothing is pushed. Freed with the arena: the
+# slot's free at its release, or its parent's settle write when adopted.
+fn: msg_turn_new_zero (size_t: size) @: void
+    @: LmxMsg m
+    @: LmxMsgBlock b
+    @: void p
+    m: c.lmx_msg_turn_current()
+    if: m = 0 || size = 0U
+        return: 0
+    b: (cast: (@: LmxMsgBlock) c.calloc(1U, c.sizeof(c.LmxMsgBlock)))
+    if: b = 0
+        return: 0
+    p: c.calloc(1U, size)
+    if: p = 0
+        c.free((cast: (@: void) b))
+        return: 0
+    b\base: p
+    b\n: size
+    if: lmx_msg_blocks_push(@ m\blocks, b) != c.LMX_MSG_BLOCKS_OK
+        c.free(p)
+        c.free((cast: (@: void) b))
+        return: 0
+    return: p
+end: msg_turn_new_zero
+
+fn: msg_turn_copy_bytes (const: @(char source); size_t: length) @: char
+    @: char copy
+    if: length = (cast: size_t -1)
+        return: 0
+    copy: (cast: (@: char) msg_turn_new_zero(length + 1U))
+    if: copy = 0
+        return: 0
+    if: source != 0 && length > 0U
+        c.memcpy(copy, source, length)
+    return: copy
+end: msg_turn_copy_bytes
+
 # Ordinary delivery (SPEC 19.29.7, model §23/§27, decision 15): the delivered
 # Message is created by the copier in its own arena, one copy by the same
 # traversal as create, and moves from the sender's outbox through the
