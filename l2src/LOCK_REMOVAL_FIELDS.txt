@@ -93,8 +93,8 @@ LmxMsg.next_sibling | h:148 | link in the parent's child list | PAR (a link of t
 LmxMsg.ready | h:154 | readiness flag set by senders | DEL | ruled (Mikhail: "готовность к чему?! Удаляй"; the 2026-09-14 readiness sentence and the ready clauses of ownership items (1) and (3) leave 19.28.R2.2 and the model) | M (staged S3 before; S3 as landed kept it: exec_ready marks it, take_this clears it)
 LmxMsg.sched_rec | h:160 | the scheduler record, already an L2 Structure in this arena | L3T | ruled (map 5.7: scheduler state as Structure data) | done (3c-2b)
 LmxMsg.ui_pending | h:164 | a UI mapping request outstanding | DEL (the UI lane is a full L3 Thread; the sequential mapping goes) | ruled (stage M, Mikhail "ДА") | M
-LmxMsg.retire_next | h:167 | link on the runtime's retire queue | DEL (the executor frees its own memory) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | S5
-LmxMsg.retire_queued | h:168 | on that queue | DEL | ruled (same) | S5
+LmxMsg.retire_next | h:167 | link on the runtime's retire queue | DEL (the executor frees its own memory; the queue had no append site) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | S5 (deleted, d6/lock-s5 8e528532)
+LmxMsg.retire_queued | h:168 | on that queue | DEL | ruled (same) | S5 (deleted, d6/lock-s5 8e528532)
 LmxMsg.turn | h:169 | the handler function | L3T (the handler is the L3 Thread's own Structure data in its arena) | ruled (coordinator) | A1
 LmxMsg.turn_ctx | h:170 | the handler's context | L3T | ruled (coordinator) | A1
 LmxMsg.exec_bind | h:173 | pointer to its LmxMsgExecBind | L3T or PAR (the binding as Structure data) | ruled (map 5.7) | S4/M
@@ -134,15 +134,15 @@ LmxMsgCopy.dest_msg, .delivered | h:113-114 | delivery bookkeeping | DEL | ruled
 LmxMsgCopy.next | h:115 | list link | DEL (the collection's own link, MBOX) | ruled (map 5.7) | Y3/A3
 
 --- LmxMsgRuntime (lmx_message.h 211-228): the process-wide record. Goes (map 5.7)
-LmxMsgRuntime.root | h:212 | the root list | L3T of R0 (R0's children, in R0's arena) | ruled (map 5.7) | S5
-LmxMsgRuntime.slots | h:213 | every slot | L3T of R0 (the root's record of its Messages) | ruled (coordinator, after b5's crosscheck f36fb2e3) | S5
-LmxMsgRuntime.n | h:214 | slot count | L3T of R0 (the count in the root's record of its Messages) | ruled (coordinator, after b5's crosscheck f36fb2e3) | S5
+LmxMsgRuntime.root | h:212 | R0 itself (one root; the root list collapses to R0) | L3T of R0 (R0's children, in R0's arena) | ruled (map 5.7; S5 collapse, coordinator 2026-09-15) | S5
+LmxMsgRuntime.slots | h:213 | every slot | S6 with refs (creates push it on every parent's lane and the last release unlinks it on any lane, so R0 cannot own it without a message to R0) | ruled (coordinator 2026-09-15, withdrawing "L3T of R0" after d6's writer finding) | S6
+LmxMsgRuntime.n | h:214 | slot count | S6 with refs (the count of slots, same writers) | ruled (coordinator 2026-09-15, same) | S6
 LmxMsgRuntime.transport | h:215 | host transport queue | MBOX (host posts are admissions into R0's mailbox); the queue DEL | proposed | S5/Y3
 LmxMsgRuntime.transport_tail | h:216 | its tail | MBOX (host posts are admissions into R0's mailbox); the queue DEL | proposed | S5/Y3
 LmxMsgRuntime.host_sync | h:217 | the host lock | DEL | ruled (census 2.6; no lock but the mailbox's) | S6
 LmxMsgRuntime.exec | h:218 | the executor pointer | DEL | ruled (map 5.7) | S5/S6
-LmxMsgRuntime.next_addr | h:219 | address counter | L3T of R0 (R0's children's addresses) | ruled (map 5.7) | S5
-LmxMsgRuntime.root_seq | h:220 | root segment counter | L3T of R0 | ruled (map 5.7) | S5
+LmxMsgRuntime.next_addr | h:219 | address counter | atomic counter, no owner lane (one order-free fetch-add per create: addresses unique, order irrelevant) | ruled (coordinator 2026-09-15, within Mikhail's allowance of order-free atomic state) | S5
+LmxMsgRuntime.root_seq | h:220 | root segment counter | DEL (only R0 is created without a parent, so its path is the constant [1]) | ruled (coordinator 2026-09-15) | S5
 LmxMsgRuntime.root_record | h:227 | R0's policy record, already Structure data in R0's arena | L3T of R0 | ruled (map 5.7; stage 5 (e)) | done
 
 --- LmxMsgBindWait (lmx_message_exec.c 34-55 at 7200294b; 39-43 at b4e1296d after S3: {worker_on, retired, rec}): the
@@ -188,7 +188,7 @@ LmxMsgExec.contexts_live | c:98 | contexts started (start_contexts to stop) | DE
 LmxMsgExec.rt | c:99 | back pointer to the runtime | DEL (LmxMsgRuntime goes) | ruled (map 5.7) | S5
 LmxMsgExec.ui_lane | c:104 | the UI lane's record, stepped from R0's turn today | L3T of R0 (the UI lane is R0's child L3 Thread on its own thread) | ruled (Mikhail: "Полоса на экране не может не быть L3 Thread"; today's lane "это просто кривая реализация") | M/S5
 LmxMsgExec.reap_head | c:115 at 7200294b | the reap list's head (joined workers' records) | DEL (each thread frees itself; no join) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | done (S3, b4e1296d)
-LmxMsgExec.retire_head, .retire_tail | c:105-106 | the deferred retire list flushed after turns | DEL (the parent's settle frees an ended child, 19.29.8) | proposed | S5
+LmxMsgExec.retire_head, .retire_tail | c:105-106 | the deferred retire list flushed after turns | DEL (the parent's settle frees an ended child, 19.29.8; the list had no append site) | ruled (coordinator 2026-09-15, S5 (a)) | S5 (deleted, d6/lock-s5 8e528532)
 LmxMsgExec.unbound_held | c:107 | the address whose close borrows an identity in unbound_close | DEL (the close of an unbound child is its parent's settle, no borrowed identity) | ruled (coordinator: census 65a7ec63 places exec_unbound_close at S5) | S5
 LmxMsgExec.test_fail_ctx, .test_fail_adopt_block, .test_boot_tid | c:109-116 | test-build failure injection and the lane tripwire's boot thread | DEL with the mechanisms they test (launch, adopt block, the host outside any turn) | proposed | M/S4
 
