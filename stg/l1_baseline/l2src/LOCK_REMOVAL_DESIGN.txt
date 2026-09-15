@@ -112,9 +112,13 @@ KERNEL. What L1 is for (Mikhail, spec section 2 line 1078 and model section 2, m
     - one arena per Message, reached from its root;
     - the mailbox as the synchronized collection of Messages, the one lock;
     - the thread with its loop over turns: each round a look into its mailbox and a turn when there is a Message,
-      never blocking; the loop runs while success is 0 and leaves when success becomes 1, written by user code
-      (Mikhail: "цикл в L3 Thread очеивдно прерывается по success==1"). running = 0 is the parent's stop request,
-      which user code sees; it is not the loop's exit.
+      never blocking; the loop leaves when success becomes 1, written by user code (Mikhail: "цикл в L3 Thread
+      очеивдно прерывается по success==1"), and with the exit running is set to 0, so a finished L3 Thread is
+      success && !running. Mikhail, 2026-09-15, verbatim: "success && !running, с выходом выставляется running = 0.
+      Просто running опрашивается при выполнении Lmx* root и я же не знаю как кокнретный планировщик устроен и когда
+      выйдет. Но условия выхода очевидно есть!". running is polled by the code executing under root; when a particular
+      scheduler leaves is that scheduler's own affair. running therefore has two writers: the parent (its close) and
+      the L3 Thread itself at its loop's exit.
     Of the 99 rows of LOCK_REMOVAL_FIELDS.txt, 16 are kernel:
     - 4 MSG: running, success, handoff_ready as handoff_safe, graph as root;
     - 7 arena rows inside root: init, init_n, blocks, ranges, eternal_ranges, method_ranges, roots;
@@ -130,12 +134,12 @@ FIELDS. Every stage names its fields' owners (coordinator, 2026-09-15; map secti
     verbatim: "Почему вам не хватает typedef struct LmxMsg { volatile ... running = 1; volatile ... success = 0; struct
     LmxRoot *root; } ????", and of LmxMsgBindWait, LmxMsgExecBind, LmxMsgRuntime, LmxMsgEnv and LmxMsgCopy: "Это все на
     L1 не является корневым Message, и при портировании все алгоритмы записываются на LMX но не описывают Message".
-    A Message is {running, success, root}. An L3 Thread is a Message plus its mailbox plus its scheduler and maintenance
+    A Message is {running, success, handoff_safe, root}. An L3 Thread is a Message plus its mailbox plus its scheduler and maintenance
     state as Structure data in its own arena. Today's C record is the L3 Thread's; the five types are scaffolding.
     Rule: each stage's note names, for every field it touches, its owner in LMX (the parent's Structure, the L3
     Thread's Structure, the arena from root, the mailbox, R0's arena) or its deletion. A field with
     neither is a contradiction, and the stage stops. The table of every field is LOCK_REMOVAL_FIELDS.txt; its
-    "proposed" lines and questions Q1-Q4 wait for the coordinator.
+    questions Q1-Q4 are answered (0 held); its 18 "proposed" rows are confirmed stage by stage in each stage's note.
     The record, documented (spec section 2, model section 2, main c7f9d375): LmxMsg { running; success; handoff_safe;
     Lmx *root }. The inside of a Message (spec section 2, main c2b86f16, Mikhail verbatim): it is written into what
     root reaches; on L2 that is the code working with these Messages; on L1 the code that will be generated, "В
@@ -202,8 +206,9 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
       liveness queries to its parent, its timers) and looks into its mailbox under synchronized, and runs a turn when
       there is a Message;
     - it never blocks on any primitive and never exits for lack of mail; it leaves the loop when success becomes 1,
-      written by user code (Mikhail, correction 2026-09-15: "цикл в L3 Thread очеивдно прерывается по success==1");
-      running = 0 is the parent's stop request, which user code sees, not the loop's exit;
+      written by user code (Mikhail, correction 2026-09-15: "цикл в L3 Thread очеивдно прерывается по success==1"),
+      and running is set to 0 with the exit, so a finished L3 Thread is success && !running (Mikhail, verbatim in
+      KERNEL); running is polled by the code under root, and the parent's close also writes it;
     - no wake, no wait, no notify anywhere. Going, with nothing in their place: run_one's wake-all,
       exec_start_map_kick, the launch wake, and the three worker-lifecycle signals (bind_wait_retire, the unbind
       join, stop's retire walk), since no worker ever waits.
@@ -573,8 +578,8 @@ Y. The mailbox's one synchronization as a Java monitor through the synchronized 
         - Red: a hook test (two threads, a counter under synchronized, reentrant entry from the owner) that does not
           link before the hook exists.
     Y3. The mailbox in L2: inbox and outbox reads and writes under synchronized on the mailbox object, nothing else.
-        It replaces m->mail and the lmx_msg_mail_* C functions. The owner thread's loop (S3), running while success
-        is 0 and leaving when user code sets it to 1, looks into the
+        It replaces m->mail and the lmx_msg_mail_* C functions. The owner thread's loop (S3), leaving when user code
+        sets success to 1 and setting running to 0 as it leaves, looks into the
         mailbox under synchronized each round and runs a turn when there is a Message; it never blocks and never
         exits for lack of mail.
         - Red: S3's no-wake oracle red today. Green: the oracle green with the bind waits' events and conditions,
