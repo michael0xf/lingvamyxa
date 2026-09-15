@@ -1,6 +1,0 @@
-L2:
-    thread: lm_test_invalid_route (IncomingMessage: message)
-        route: "/bad?query"
-        return:
-    end: lm_test_invalid_route
-end: L2
