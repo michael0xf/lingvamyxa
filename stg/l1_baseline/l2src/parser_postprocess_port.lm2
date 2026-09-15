@@ -1,0 +1,202 @@
+predef: "l2src/parser_postprocess_port_l2.h.lm1"
+
+# L2 port of l1src/parser.lm1's postprocess family (Stage f of the
+# parser-in-L2 port ticket). Bodies are ported straight from the
+# oracle, unedited. Named p0_*, never lm_p0_*, per the ticket.
+# Formals/locals named node in the oracle renamed nd, same rule as
+# every other renamed formal in this port. Explicit-stack-not-
+# recursion pattern, same shape as Stage c's dump-printer and Stage
+# e's field-parse loop.
+
+sub: p0_structure_recount (@: LmP0Structure structure)
+    @: LmP0Field field
+    structure\field_count: 0U
+    structure\last_field: 0
+    field: structure\first_field
+    while: (field != 0)
+        structure\field_count: structure\field_count + 1U
+        structure\last_field: field
+        field: field\next
+    ---
+end: p0_structure_recount
+
+fn: p0_postprocess_frame_new (int: phase) @: LmP0PostprocessFrame
+    @: LmP0PostprocessFrame frame
+    frame: (cast: (@: LmP0PostprocessFrame) lm_own_new_zero(c.sizeof(frame[0])))
+    if: (frame != 0)
+        frame\phase: phase
+    return: frame
+end: p0_postprocess_frame_new
+
+fn: p0_postprocess_push_frame (@: LmOwnPtrStack stack; @: LmP0PostprocessFrame frame) int
+    if: ((stack = 0) || (frame = 0))
+        lm_own_delete(frame, 0)
+        return: 1
+    if: (lm_own_ptr_stack_push(stack, frame) != 0)
+        lm_own_delete(frame, 0)
+        return: 1
+    return: 0
+end: p0_postprocess_push_frame
+
+fn: p0_postprocess_push_node (@: LmOwnPtrStack stack; @: LmP0Node nd) int
+    @: LmP0PostprocessFrame frame
+    if: (nd = 0)
+        return: 0
+    frame: p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_NODE)
+    if: (frame != 0)
+        frame\node: nd
+    return: p0_postprocess_push_frame(stack, frame)
+end: p0_postprocess_push_node
+
+fn: p0_postprocess_push_structure (@: LmOwnPtrStack stack; @: LmP0Structure structure) int
+    @: LmP0PostprocessFrame frame
+    if: (structure = 0)
+        return: 1
+    frame: p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_STRUCTURE)
+    if: (frame != 0)
+        frame\structure: structure
+        frame\field: structure\first_field
+    return: p0_postprocess_push_frame(stack, frame)
+end: p0_postprocess_push_structure
+
+fn: p0_postprocess_push_trailer (@: LmOwnPtrStack stack; @: LmP0Trailer trailer) int
+    @: LmP0PostprocessFrame frame
+    if: (trailer = 0)
+        return: 0
+    frame: p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_TRAILER)
+    if: (frame != 0)
+        frame\trailer: trailer
+    return: p0_postprocess_push_frame(stack, frame)
+end: p0_postprocess_push_trailer
+
+fn: p0_postprocess_push_frame_wrap (@: LmOwnPtrStack stack; @: LmP0Node nd) int
+    @: LmP0PostprocessFrame frame
+    if: (nd = 0)
+        return: 1
+    frame: p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_FRAME_WRAP)
+    if: (frame != 0)
+        frame\node: nd
+    return: p0_postprocess_push_frame(stack, frame)
+end: p0_postprocess_push_frame_wrap
+
+fn: p0_postprocess_stack_new () @: LmOwnPtrStack
+    @: LmOwnPtrStack stack
+    stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
+    if: (stack != 0)
+        lm_own_ptr_stack_init(stack, lm_own_delete_plain)
+    return: stack
+end: p0_postprocess_stack_new
+
+sub: p0_postprocess_stack_delete (@@: LmOwnPtrStack stack)
+    if: ((stack != 0) && (stack[0] != 0))
+        lm_own_ptr_stack_destroy(stack[0])
+        lm_own_delete(stack[0], 0)
+        stack[0]: 0
+    ---
+end: p0_postprocess_stack_delete
+
+fn: p0_postprocess_run (@: LmP0Document document; @: LmOwnPtrStack stack) int
+    @: LmP0PostprocessFrame frame
+    @: LmP0Node nd
+    @: LmP0Structure structure
+    int: status
+    status: 1
+    while: (((status != 0) && (stack != 0)) && (stack\count != 0U))
+        frame: (cast: (@: LmP0PostprocessFrame) lm_own_ptr_stack_top(stack))
+        if: (frame = 0)
+            status: 0
+            break
+        if: (frame\phase = c.LM_P0_POSTPROCESS_NODE)
+            nd: frame\node
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            if: (nd = 0)
+                continue
+            if: (nd\kind = c.LM_P0_NODE_FRAME)
+                status: (((p0_postprocess_push_trailer(stack, nd\as\frame\trailer) = 0) && (p0_postprocess_push_frame_wrap(stack, nd) = 0)) && (p0_postprocess_push_structure(stack, nd\as\frame\body) = 0))
+            else:
+                if: (nd\kind = c.LM_P0_NODE_STRUCTURE)
+                    status: ((p0_postprocess_push_trailer(stack, nd\as\structure\trailer) = 0) && (p0_postprocess_push_structure(stack, nd\as\structure) = 0))
+                ---
+            continue
+        if: (frame\phase = c.LM_P0_POSTPROCESS_STRUCTURE)
+            while: ((frame\field != 0) && (frame\field\value = 0))
+                frame\field: frame\field\next
+            if: (frame\field = 0)
+                p0_structure_recount(frame\structure)
+                lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+                continue
+            nd: frame\field\value
+            frame\field: frame\field\next
+            status: (p0_postprocess_push_node(stack, nd) = 0)
+            continue
+        if: (frame\phase = c.LM_P0_POSTPROCESS_TRAILER)
+            if: (frame\trailer = 0)
+                lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+                continue
+            structure: frame\trailer\body
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            status: (p0_postprocess_push_structure(stack, structure) = 0)
+            continue
+        if: (frame\phase = c.LM_P0_POSTPROCESS_FRAME_WRAP)
+            nd: frame\node
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            if: (((nd != 0) && ((nd\as\frame\flags & c.LM_P0_FRAME_INLINE_BODY) != 0U)) && (p0_wrap_fields_from_line(document, nd\as\frame\body, nd\span\line, (nd\span\offset + nd\span\length)) = 0))
+                status: 0
+            continue
+        status: 0
+    return: status
+end: p0_postprocess_run
+
+fn: p0_postprocess_node (@: LmP0Document document; @: LmP0Node nd) int
+    @: LmOwnPtrStack stack
+    int: status
+    if: (nd = 0)
+        return: 1
+    stack: p0_postprocess_stack_new()
+    if: (stack = 0)
+        return: 0
+    status: ((p0_postprocess_push_node(stack, nd) = 0) && p0_postprocess_run(document, stack))
+    p0_postprocess_stack_delete(@ stack)
+    return: status
+end: p0_postprocess_node
+
+fn: p0_wrap_fields_from_line (@: LmP0Document document; @: LmP0Structure structure; size_t: head_line; size_t: inline_event_end_offset) int
+    @: LmP0Field field
+    @: LmP0Field previous
+    @: LmP0Field group_first
+    @: LmP0Node group_node
+    @: LmP0Field move
+    previous: 0
+    field: structure\first_field
+    while: (field != 0)
+        if: (((field\value != 0) && (field\value\span\line != head_line)) && (field\value\span\offset >= inline_event_end_offset))
+            break
+        previous: field
+        field: field\next
+    if: (field = 0)
+        return: 1
+    group_first: field
+    group_node: p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
+    if: (group_node = 0)
+        return: 0
+    group_node\span[0]: group_first\value\span[0]
+    move: group_first
+    while: (move != 0)
+        @: LmP0Field next_move
+        @: LmP0Node value
+        next_move: move\next
+        value: move\value
+        move\value: 0
+        if: (lm_p0_append_field(document, group_node\as\structure, value) = 0)
+            p0_free_node(group_node)
+            return: 0
+        move: next_move
+    group_first\value: group_node
+    group_first\next: 0
+    if: (previous = 0)
+        structure\first_field: group_first
+    else:
+        previous\next: group_first
+    p0_structure_recount(structure)
+    return: 1
+end: p0_wrap_fields_from_line

@@ -1,0 +1,27 @@
+include: "l1src/p0.lm1.h"
+
+# Header unit for the clean L2 port of l1src/parser.lm1's postprocess
+# family (parser-in-L2 port ticket, Stage f). Same explicit-stack-
+# not-recursion pattern Stage c's dump-printer and Stage e's field-
+# parse loop already use (lm_own_ptr_stack_top/pop/push/init/destroy,
+# lm_own_delete_plain -- L1-implemented, l1src/own.lm1, same spelling
+# as l2src/parser_dump_port_l2.h.lm1). Two cross-unit entries for
+# functions already ported into other units (p0_new_node, p0_free_
+# node -- Stage c's l2src/parser_alloc_port.lm2). One still-oracle-
+# native entry: lm_p0_append_field (not yet ported by any stage).
+# f has no dependency on any Stage e unit -- none of its functions
+# call anything from l2src/parser_field_parse_port.lm2.
+
+prototype:
+    fn: lm_own_new_zero (size_t: size) @: void
+    sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
+    sub: lm_own_delete_plain (@: void object)
+    sub: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item)
+    sub: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack)
+    fn: lm_own_ptr_stack_push (@: LmOwnPtrStack stack; @: void item) int
+    fn: lm_own_ptr_stack_pop (@: LmOwnPtrStack stack) @: void
+    fn: lm_own_ptr_stack_top (const: @(LmOwnPtrStack stack)) @: void
+    fn: p0_new_node (@: LmP0Document document; LmP0NodeKind: kind) @: LmP0Node
+    sub: p0_free_node (@: LmP0Node nd)
+    fn: lm_p0_append_field (@: LmP0Document document; @: LmP0Structure structure; @: LmP0Node nd) int
+end: prototype
