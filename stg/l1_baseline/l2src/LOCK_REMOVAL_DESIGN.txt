@@ -266,8 +266,8 @@ O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced 
              Allocations keep today's form for this step. Proposed by the lead instead of a heap interval: inside
              R0's entry turn the old thread object is still created, only as the holder of the arena
              lm_own_arena_new_zero(thread, lm_message_thread_owner(thread), ...) allocates in, with no mailbox or
-             turn loop used. No step then runs arena-less ("без арены Message не имеет смысла"). If the coordinator
-             prefers heap allocations for the one step, that is recorded here. Full self-build, fixed point.
+             turn loop used. No step then runs arena-less ("без арены Message не имеет смысла"). Ruled in by the
+             coordinator (2026-09-15); the heap variant is out. Full self-build, fixed point.
         O2.2 Allocation: trans_l1_statement.lm2 and trans_l1_expr.lm2 emit lmx_msg_turn_new_zero /
              lmx_msg_turn_copy_bytes (O1) instead of lm_own_arena_new_zero(thread, lm_message_thread_owner(...)) in the
              ~130 sites and their dynamic variants, and the thread object from O2.1 goes. Full self-build, fixed
