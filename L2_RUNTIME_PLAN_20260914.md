@@ -4383,3 +4383,23 @@ L2 stage (l2trans built from the fixed point regenerating the .lm2
 sources' C identically, and the compiled result passing parity with the
 L1 reference); his sentence arrived cut off, the coordinator asked him
 to finish it, with a fourth run_self_build pass proposed if yes.
+Baseline table for the mixa runners (the lead, 2026-09-15; runner |
+b4e1296d | moved tree 5cee1426): run_mixa exit 0 | exit 0;
+app_controller parity exit 1 (unsupported body) | same; app_panel exit 1
+(lmx_msg_sched_ready header) | same; app_win32 exit 1 (array element
+adapter) | same; audio_mp3 exit 1 (missing candidate translator) | same;
+backend_ctors_win32 exit 2 barrier | same; backend_win32 exit 2 barrier |
+same; run_mixa_l2_parity without -Module hung at the parameter prompt
+(killed) | exit 1. Differing: none, so the 7 parity runners leave ONE
+ROOT's set (run_mixa stays); none reaches the generated-C compile, so
+the L2_RUNTIME_ROOT include spelling was exercised by run_l2trans and
+the port gates (green on the moved tree), not by them.
+UI-step measurement (wtor at d6/one-root, instrumentation reverted, 0
+tracked changes; the exec selftest under 16 busy processes on 16
+logical cores, 50 runs): 31 of 50 failed earlier, at "fast turn did not
+overlap slow wait", before live-cascade; the 19 that reached it all
+printed "MEASURE ui-step drain=0 inbox=1 runnable=1 step=0 recvd=1", so
+neither falsifier result is established (no EMPTY with drain OK, and 19
+samples are not "never"); the load exposes an eighth timing assumption
+(the fast turn must overlap the slow wait's window). Next: 100 runs at
+6 busy processes; the lead stops before any fix.
