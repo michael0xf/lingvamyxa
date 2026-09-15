@@ -4109,3 +4109,21 @@ s, "LANE MAP FAIL site=ui_step owner=6"; plain exit 0 in 56 s, parity
 PASS. Green criterion for M: the M branch merged with 03fc0f65 gives
 -LaneCheck exit 0 and the plain run passes; falsifier: one site's marker
 and mapping put back turns it red.
+ONE ROOT code on d6/one-root e93bc49d (the lead, 2026-09-15; checked by the
+coordinator: 0 tracked files under stg/l1_baseline, the l2src tree at the
+root, 109 files in commit 2): 1/3 e68fb874 the moves (599 R, 630 D); 2/3
+e93bc49d the runners (109 files, all inside the allowlist by the script
+check: 17 double Split-Path climbs, 6 archive sets and work dirs, the
+port_parser/self_build/candidate_indent/run_lmx climbs, run_legacy_p0's
+STG column and run_import_capacity's mirror block removed, mixa per b5's
+list with counts matched, the A-climb to "..", L2_RUNTIME_ROOT "l2src/",
+the lib header tree, backend_win32 on Add-L2RuntimeSupport, comments,
+the L1_PIN_SOURCE distributed line); static checks only so far (101
+.ps1 parse, the .py parses, run.sh sh -n). Two items left outside the
+allowlist, ruled by the coordinator: l2src/l2trans.lm1:135's comment is
+M, text only, in the same landing (the docs ruling: source comments in
+the same commit); l2src/tools_seed_drift.py, dead since stage O (it
+reads the deleted stg lm2), is D with that reason; the allowlist gains
+both. RUNNER_HAZARDS' stg lines are dated survey rows and stay. Next:
+3/3 the current instructions (CORE_LEAD ru/en, the model), then the red
+measure and land_oneroot.sh after e9's "done".
