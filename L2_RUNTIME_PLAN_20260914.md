@@ -2111,3 +2111,10 @@ oracles (the tripwire, S3's wake rule) may live in exec.c under
 LMX_MSG_EXEC_TEST as proof tools, not design. The holds are lifted: S1
 lands on the lane_oracle merge, S2's red is measured, S3 proceeds as the
 wake oracle rule.
+lane_oracle landed on integration as d66a4ec1 (57's 38a91c86 merged into
+e88dab64; the allowlist held exactly run_gates.ps1 and RUNNER_HAZARDS.txt):
+run_gates 11 of 11 in 203 s with the row "lane_oracle PASS 54s". S1
+(aef95e1c) landing on d66a4ec1 with run_port_message -LaneCheck,
+send_local, family_handoff, scenario36 and run_gates; then S2's red
+measure; then 57's window for the 32-gate default set and S3 on the S1
+merge hash.
