@@ -157,7 +157,39 @@ O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced 
     lm_own_arena_new_zero(thread, lm_message_thread_owner(thread), ...) in every translated program's main and every
     heap allocation (123 matches), parser.lm2's per-thread registry component, and the REST providers'
     runtime_admit_lmx / set_rest_lmx_provider. Whole deletion breaks every lm2-translated program, and the one core
-    has no lm2 entry point today. The stage waits for his word; nothing is deleted.
+    has no lm2 entry point today.
+    ANSWERED 2026-09-15, Mikhail verbatim, choosing option (b): "да, все имиации из кода немедленно убираем. Это не L2
+    код если он так себя ведет. Переводите его в L1 и помечайте в комментариях что механизм MEssage временно не
+    используется. На самом деле пользовательский L2 может синхронизировать что хочет _но мы пишем в своей филососфии
+    Message чтобы потом переводить на L3_".
+    O in the (a) format on that answer:
+    Measured facts: b5's inventory 19a95a26. 109 definitions and 432 uses in the named families, plus
+    lm_native_message_thread_* (48 definitions, 344 uses, no external caller). 58 consumer files outside
+    own.lm2/own_abi.lm2. The translator's emission is in lm2/trans_l1_statement.lm2 (123 matches). lm2/ and
+    stg/l1_baseline/lm2/ copies are byte-identical. The L1 baseline's own.lm1.c has no message-thread symbol.
+    O1. The emission stops. trans_l1_statement.lm2 no longer writes lm_message_thread_new/_begin_turn/_end_turn or
+        lm_own_arena_new_zero(thread, lm_message_thread_owner(thread), ...) into translated programs. Programs build
+        without an arena context until the core serves them.
+        - Red first: the translator's historical case set and its fixtures still contain the boilerplate. A grep of
+          the emitted C over the fixtures' outputs is nonzero today, and the fixtures' expected texts pin it.
+        - Green: that grep at 0, every translator fixture's expected text updated in the same commit, the lm2
+          chain's own gates green (buildCore's core build).
+    O2. The runtime moves to L1 without imitations. The lock-based message-thread runtime in own.lm2 is not L2 by
+        his words. What stays is translated into L1 with a comment at each moved unit: "the Message mechanism is
+        temporarily not used here". Its locks and condition variables go (route_mutex, pool mutex and work_ready,
+        state_mutex, stopped_condition, lm_mutex_*/lm_condition_*, lm_native_mutex_*/condition_*). Which parts
+        stay at all is decided by the consumers left after O3.
+        - Stop condition: if a part cannot run without a lock once O3 is done, that is a lock-needing bug. The stage
+          stops and it goes to him.
+    O3. Deletions. The REST providers' runtime_admit_lmx / set_rest_lmx_provider path, parser.lm2's per-thread
+        registry component, the 13 native C tests of the module and the fixtures that only test it, the
+        buildCore.lmx steps building them, CMake's refresh_own_lm1 target (it breaks configuration once own.lm2
+        moves). Each deleted test is named with the property it checked.
+        - Green: grep at 0 across the tree for lm_mutex_, lm_condition_, lm_native_mutex_, lm_native_condition_ and
+          lm_message_thread_ (O's proof, the coordinator's ruling), and the lm2 chain's builds green.
+    Owner of the lm2 chain for O: proposed b5 (lingvamyxa-b5), who wrote the inventory and works on the L2 parser
+    port. The coordinator confirms or names another session. The landing is the lead's, with an allowlist of lm2/,
+    stg/l1_baseline/lm2/, tests/, CMakeLists.txt, and nothing in l2src.
     Inventory, the stage's first line: who builds and uses it, by grep on cf326822.
     - lm2/own.lm2 (and its stg/l1_baseline/lm2 copy): the externals lm_message_thread_* (43: runtime_new/delete,
       pool_new/pump/delete/request_stop, new/start/join/destroy, send_lmx, begin_turn/end_turn, component_*,
