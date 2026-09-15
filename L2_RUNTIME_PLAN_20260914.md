@@ -5874,3 +5874,44 @@ D2, S2, S4, S5): the runtime keeps no cross-Message list but slots/n
 (S6) and transport (Y). Next: main; S6's section on b5's re-based
 census 0783c86b and the S6 pre-read; e9's gate record on 8eeb094f; the
 machine is free.
+S6 draft (the lead, d6/lock-removal 7fc9ea5a; checked): census 69 holds
+(0783c86b's 82 minus the 13 S5 rows); measured at 8eeb094f:
+lmx_msg_exec_lock( lm1 61, lm2 61, exec.c 56, lmx_msg_exec_unlock( 136,
+136, 119; the host lock one call site in lm1 and lm2 plus host.c's
+mutex around shutting_down; two InterlockedCompareExchange on refs with
+endp_retain 20+20+7 and endp_release 31+31+10; direct exec lock calls in
+tests (the exec selftest 10, checks_19_29_6 20); LmxMsgExec's lock, tls,
+nworkers, stopping, stopped, no_retire, contexts_live, rt, unbound_held.
+Code proposed: (a) the exec lock and its 69 holds go, a hold with more
+than one writer lane stopping the stage unless it is an order-free
+single flag; (b) nworkers and contexts_live order-free atomics or gone,
+stopping, stopped and no_retire atomic flags, unbound_held gone; (c)
+the host lock gone, shutting_down an atomic flag; (d) refs,
+endp_retain/release and slots/n gone together, the parent freeing a
+released child at settle, runtime_delete walking R0's tree. The lead's
+dependency question on (d): a sender pins a sibling destination on
+another lane (C3) and a child queries its parent (C4); without refs
+nothing keeps the destination alive across the window, and a
+refcount's zero-then-free is not order-free; is 5.6 still open?
+Ruling (coordinator, from the spec): 5.6 is settled in Mikhail's agreed
+wording (Lingvamyxa_spec.txt 12885-12891, "давай так"): a capability is
+the target's mailbox handle; a closing Message's mailbox is settled into
+its parent with the rest of its storage, so a late send lands in a
+mailbox the parent owns and is refused there, on the parent's lane, with
+a status to the sender; there is no count of holders. So (d) is
+designed on that: a child's storage is never freed while its parent
+lives (it is settled into the parent's arena, whose blocks do not
+move), a handle held by a sender stays valid, a send after the close is
+refused on the parent's lane, and no count is needed; a child's query
+to its parent has the parent alive by the cascade (children stop with
+the parent), the abrupt-death case being the liveness poll's. S6 is
+split for landing: S6-1 = (a)+(b)+(c), S6-2 = (d) on 5.6's wording,
+each with its own acceptance; if (d)'s design needs a lock, a wait or a
+signal, the stage stops. Acceptance (the S2/S5 pattern, accepted): a
+probe runner on d6/lock-s6-red off 8eeb094f printing exec_lock_calls,
+exec_lock_decl, host_lock, exec_fields (non-atomic) for S6-1 and refs,
+runtime_lists (slots, n) for S6-2; red all nonzero now; green all 0 on
+the tip merged with the probe plus the union base via land_base3.sh
+plus lmx_cancel, the UAF kit's 165 runs and scenario36; falsifier one
+lock/unlock pair put back around one census site (exec_lock_calls >= 1)
+and, for S6-2, one retain put back.
