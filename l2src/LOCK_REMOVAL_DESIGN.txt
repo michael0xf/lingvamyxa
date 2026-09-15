@@ -1607,6 +1607,36 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         P's lane settles it.
       No fixture is in the third state the coordinator asked me to stop on (a committed child never launched whose
       parent is stopped and gone): in both unlaunched cases the creator's lane still exists at the close.
+    - STOPPED again (2026-09-15), this time by the search the new rule asks for, which came back NOT empty and
+      contradicts the ruling above. The unbound close is a mechanism the spec keeps, not an invention of the
+      prototype. Lingvamyxa_spec.txt on origin/main, 12766-12771, verbatim: "An unbound closing Message has no
+      handler and no lane, so its close is end-turn bookkeeping written by the maintaining lane (the host's drive
+      today, the root's maintenance later), not a step, and it leaves the Message stopped and handoff-safe so that
+      its parent's dispose or adopt can settle it; a Message that nothing could ever settle would be the retention
+      rule (1) forbids (clarified 2026-09-14)."
+      - The two sentences govern two different Messages and do not replace one another: 13166-13177 (the poll) is
+        for a Message that HAS a lane; 12766-12771 is for one with no lane and no handler, whose close is written
+        by the maintaining lane. The spec moves that work from drive to R0's maintenance later; it does not delete
+        it. 12762-12765 adds "nothing else steps it (no ancestor rule, no maintenance step, no authority of a
+        stopped Message)", which is also why the owning-executor candidate was wrong.
+      - Measured after deleting the branch as ruled, on d6/lock-s6 (the deletion is saved as a patch and the tree
+        restored, so the rest of (a) proceeds on a green base):
+        - run_port_message red at the executor selftest's close-path case, "unbound child state=1" (RUNNING): cc is
+          a committed, never-launched, closing child of a LIVE parent, and nothing closes it any more;
+        - handoff_ready is left with one writer, native_leave_addr (lmx_message_exec.c:1829), which runs only as a
+          turn's last step on the Message's own lane; exec_unbound_close held the only other write;
+        - lmx_msg_settle_child_msg (lmx_message.lm1:1568) refuses unless "child\handoff_ready != 0".
+        So a Message that never ran a turn can never become handoff-safe and can never be settled by its creator's
+        lane -- precisely the state 12771 forbids. The ruling's second branch (an unlaunched Message settled on the
+        creator's lane) is not expressible in the code as it stands, and no fixture edit makes it so.
+      - The conversion set is also wider than the four fixtures, and every extra one is an unbound close: the
+        executor selftest's close-path case (cc) and its ingress-close case at 7320 (the cancelled R0 itself,
+        closed by drive after the drain), lmx_message_selftest.lm1:489, and lmx_msg_family_handoff_selftest.lm1:350
+        (handoff_ready read after exec_unbind + drive).
+      - d6's reading, sent to the coordinator for Mikhail: unbound_held and the TLS impersonation are the spelling
+        of 12766-12771's bookkeeping, so (a) keeps the mechanism and deletes only what S6 is about, the exec lock.
+        If the impersonation is what is objected to, the honest S6-1 change writes that bookkeeping without
+        borrowing the identity, rather than removing the close.
     - Red measured by d6 (2026-09-15, d6/lock-s6-red 695d54fc = 8eeb094f plus l2src/run_lock_s6_probe.ps1; builds
       nothing): -Part all exits 1 with "S6 probe: exec_lock_calls=601 exec_lock_decl=11 host_lock=43 exec_fields=27
       | refs=349 runtime_lists=36", S6-1 RED, S6-2 RED.
