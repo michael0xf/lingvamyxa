@@ -926,6 +926,14 @@ prototype, largest first.
    pre-test allocation count moved with R0 and the UI child); both fixed
    runner-only by isolating the module under test; the survey's section
    (e) decides which non-default runners join run_gates.
+   The host pick deleted 2026-09-14: 10523360 merged as 849f6bdd over
+   b3b13a86 (lm1 and lm2 sched_step identical: the `p = 0` branch gone, a
+   missing slot INVALID, the in-turn sibling pick unconditional;
+   lmx_msg_sched_pick_host_child with its cursor argument, the
+   after_sched_snap hook and the exec selftest's snap case deleted; no
+   deleted name left in code; run_gates 11 of 11, parity 100 methods,
+   entry_turn 24, run_lmx, run_l2trans, run_l2_message_root green). 3c-2b's
+   remaining C in the parent's step is gone with it.
 
 ## 4. Acceptance
 
