@@ -1,0 +1,152 @@
+LOCK_REMOVAL_S6_1_REVIEW: review of d6/lock-s6 baa8ec23 (S6-1, "the executor
+lock is gone") against integration 11f581e0, cross-checked against
+LOCK_REMOVAL_S6_PREREAD.txt (sonnet/s6-preread ce26dd46), per 6f's standing
+review ticket (sonnet/s6-1-review, 2026-09-15, doc-only, no builds).
+
+Method: `git diff 11f581e0 baa8ec23 -- l2src/` read in full (10 files, 368
+insertions, 900 deletions). Per Mikhail's standing rule (relayed by 6f,
+verbatim in L2_RUNTIME_PLAN_20260914.md: "просто поищи в доках" -- an
+apparent gap is a search not yet done), every place this review's own
+first pass looked unresolved was read against its own governing code or
+spec citation before being called anything -- none needed escalating to
+Mikhail; every one resolved by reading the function or the spec passage
+the landing's own comments already point to.
+
+--- Every DELETE row's hold gone (LOCK_REMOVAL_S6_PREREAD.txt, 80 rows)
+
+Verified directly, not sampled: `grep -rc "lmx_msg_exec_lock(" l2src/*.lm1
+l2src/*.c l2src/*.h` sums to 0 (6f's own falsifier, re-run here). lmx_msg_
+exec_lock/unlock themselves are deleted (lmx_message_exec.c), along with
+LmxMsgExec's CRITICAL_SECTION/pthread_mutex_t field and its Initialize/
+Delete and Enter/Leave-pair calls in exec_attach/exec_detach. lmx_msg_
+host_lock/unlock are deleted the same way (lmx_message_host.c/.h),
+LmxMsgHostSync's own lock field gone. No hold survives whose row was not
+DELETE: read every remaining lmx_msg_exec_lock/unlock call site left in
+the pre-landing tree (11f581e0) against the diff -- each one is inside a
+function this review's own pre-read already marked DELETE, and each is
+now gone in the diff. No new CRITICAL_SECTION/pthread_mutex_t/mutex_init
+introduced anywhere (grep across the full diff's added lines, 0 hits).
+
+--- The named LmxMsgExec atomics (nworkers, contexts_live, stopping,
+    stopped, no_retire) and unbound_held
+
+All five read fresh in the diff: nworkers (__atomic_add_fetch_4/
+__atomic_sub_fetch_4 in launch_ctx_thread_rec, __atomic_load_n in
+lmx_msg_exec_workers), contexts_live (__atomic_load_n/store_n in exec_
+bind_mode, lmx_msg_exec_contexts_live, lmx_msg_exec_start_contexts, lmx_
+msg_exec_stop), stopping/stopped (__atomic_load_n/store_n in launch_ctx_
+thread_rec, lmx_msg_exec_stop, lmx_msg_exec_detach), no_retire (__atomic_
+load_n in lmx_msg_endp_try_retire, both the fast check and the locked-
+window check collapsed to the same atomic read since there is no lock to
+distinguish them by any more). unbound_held moved to the top of the
+struct with its own comment ("An atomic cell on both platforms, not a
+lock") and is now __atomic_store_n/load_n throughout (exec.c:94, 1645,
+2174, 2181, 2254) -- its one writer is lmx_msg_exec_unbound_close, called
+only under lmx_msg_host_is_owner's own guard (exec.c:2167), matching "R0's
+maintenance" as its one writer per the ticket's own wording.
+
+exec_bind_mode's own guard against unbound_held changed shape, not just
+mechanism: the pre-landing code refused *any* bind to the held address
+unconditionally; the new comment (exec.c:1633-1644) says this was wrong
+-- the executor selftest's own close-path case binds a closing Message on
+purpose, and spec 12762-12765 has a child run its closing turn on its own
+context there -- so the real guard is narrower, exactly the one address
+R0's maintenance is mid-close on, not every closing Message. Read the
+cited spec range and the selftest case this comment names before
+accepting the narrowing, not just the comment's own claim: spec 12762-
+12765 does describe a child's own context running its closing turn as a
+normal path, consistent with the narrower guard being correct and the
+old blanket refusal being the actual bug.
+
+--- exec_unbound_close without the identity borrow
+
+Confirmed: the pre-landing body did get_tls/set_tls around lmx_msg_end_
+turn to impersonate the target's own turn identity before calling it (a
+TLS-level borrow). The new body (exec.c:2161-2197) calls lmx_msg_end_turn
+directly with no TLS manipulation at all, relying on a new function, lmx_
+msg_maintenance_close_ok (lmx_message.lm1:1669-1682), consulted inside
+end_turn's own guard (lm1:1692: `require_turn(rt,who) != OK && maintenance_
+close_ok(rt,who) = 0` -- a fallback, not a replacement) only when require_
+turn's own normal check fails. maintenance_close_ok's own five conditions
+read directly: host is owner, the address is NOT bound (no worker
+context), the Message exists, it is already marked closing, and it has no
+live execution context -- a narrow admission for exactly the "closing,
+unbound, no worker" case, not a general bypass. Its own comment cites
+spec 12766-12771 for the underlying rule (the close of a handler-less,
+lane-less Message is the maintaining lane's own bookkeeping act); the
+cited range does describe exactly that closing-without-a-handler case,
+read before accepting the citation.
+
+--- The host lock gone
+
+Confirmed (lmx_message_host.c/.h): LmxMsgHostSync's lock field removed on
+both platforms; lmx_msg_host_lock/unlock deleted; shutting_down is now an
+__atomic_load_n/store_n cell. lmx_msg_host_post no longer calls host_lock/
+unlock at all.
+
+--- The transport move's hold order
+
+Confirmed, and it is a real design move, not a mechanical substitution:
+transport is no longer touched under lmx_msg_exec_lock anywhere. lmx_msg_
+host_post now does an early unlocked lmx_msg_host_is_shutdown check (a
+fast path only, its own comment says so) and a second check *inside*
+lmx_msg_mail_lock(root)/mail_unlock(root) right before the actual q_push
+-- ordering a late post against runtime_shutdown under R0's own mailbox
+monitor, the one lock the model keeps. lmx_msg_host_drain takes the same
+root mail_lock/unlock around its own transport-queue push, sequentially
+after (not nested with) the earlier inbox-take window, per its own
+comment. lmx_msg_runtime_shutdown now locks/unlocks root's mailbox around
+its own call to lmx_msg_host_shutdown, so shutdown and a late post are
+ordered against each other by the same monitor on both sides. Cited spec
+11551 for "the one cross-lane synchronization the model permits" -- not
+independently re-verified against the spec text this pass (out of scope
+for a lock-removal review; already the standing rule this project has
+operated under all session, "no locks except the mailbox collection").
+run_port_message.ps1 gained a new gate (its own diff, +13 lines) counting
+lmx_msg_mail_lock/unlock calls in every transport-touching function by
+name and throwing on any imbalance -- a real, falsifiable regression
+guard for this specific property, not just a comment.
+
+--- set_orphan_until, ruled
+
+Confirmed exactly as the coordinator's ruling on my own pre-read
+prescribed: lmx_msg_set_orphan_until (exec.c:2817) now opens with
+`if (lmx_msg_host_is_owner(rt) == 0 || lmx_msg_exec_holding_any(rt) != 0)
+return LMX_MSG_INVALID;` -- the same host-outside-any-turn guard lmx_msg_
+drive's own require_owner+!holding_any chain uses to reach orphan_sweep,
+the field's real production writer. The new comment names this review by
+name ("the coordinator's ruling on b5's pre-read") and states the fixture
+still has no production caller, kept as a guarded test hook rather than
+deleted -- matching the second option the ticket that raised it offered.
+
+--- Three test rewrites
+
+lmx_message_exec_selftest.c: release_tree_hook/release_tree_reader (the
+"no reader takes the exec lock inside release_slot's tree window" case)
+are deleted outright -- the property they tested no longer exists to
+test, since there is no exec lock to take or not take. drive_mail_
+overlap_helper is rewritten to test the property that replaces it: two
+different Messages' own mailbox monitors can be held concurrently by two
+threads without blocking each other (the monitor belongs to one mailbox,
+not the runtime) -- read the new comment and the rewritten body, the
+property tested genuinely changed, not just renamed.
+
+tests/lmx_model_checks_19_29_6_selftest.lm1: the old shared g_arrived/
+g_saw_other/g_rendezvous_turns cells, written by two different lanes
+under the now-gone exec lock, are split into per-lane cells (g_arrived_a/
+_b, g_saw_a/_b, g_turns_a/_b) so each lane writes only its own cell and
+reads the other's -- the correct fix for a two-writer cell once the lock
+that serialized it is gone, not a workaround; the new header comment
+cites 19.28.R2.2's own one-arena-one-lane-one-writer rule for it.
+
+run_candidate_c_scanners.ps1's own diff (the git-archive timeout/retry
+hardening, GATE_ARCHIVE_HANG.txt) is unrelated to S6-1's own subject,
+bundled into the same landing; out of this review's scope, noted only so
+it is not mistaken for an S6-1 change.
+
+--- Falsifier
+`grep -rc "lmx_msg_exec_lock(" l2src/*.lm1 l2src/*.c l2src/*.h` on baa8ec23
+sums to 0, verified directly (6f's own falsifier). Every claim above
+checked by reading the actual diff hunk or the actual function body it
+describes, not inferred from the commit message or this ticket's own
+summary of itself.
