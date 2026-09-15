@@ -164,10 +164,10 @@ fn: main () int
     if: env = 0 || got = 0
         return: 2
     rt: lmx_msg_runtime_new()
-    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created")
-    check(lmx_msg_create(rt, p, 2U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "C created and published")
-    check(lmx_msg_create(rt, c1, 3U, @ ini, 1U, @ g1) = c.LMX_MSG_OK && lmx_msg_create(rt, c1, 4U, @ ini, 1U, @ g2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, c1, 1) = c.LMX_MSG_OK, "G1 and G2 created by C and published")
-    check(lmx_msg_create(rt, g1, 5U, @ ini, 1U, @ h) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, g1, 1) = c.LMX_MSG_OK, "H created by G1 and published")
+    check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created")
+    check(lmx_msg_create(rt, p, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "C created and published")
+    check(lmx_msg_create(rt, c1, @ ini, 1U, @ g1) = c.LMX_MSG_OK && lmx_msg_create(rt, c1, @ ini, 1U, @ g2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, c1, 1) = c.LMX_MSG_OK, "G1 and G2 created by C and published")
+    check(lmx_msg_create(rt, g1, @ ini, 1U, @ h) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, g1, 1) = c.LMX_MSG_OK, "H created by G1 and published")
     cm: lmx_msg_find(rt, c1)
     g1m: lmx_msg_find(rt, g1)
     g2m: lmx_msg_find(rt, g2)

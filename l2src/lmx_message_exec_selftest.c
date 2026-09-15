@@ -290,7 +290,7 @@ static int turn_slow(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
         uchar b = 1;
         for (k = 0; k < 20; k++) {
             ch = 0;
-            if (lmx_msg_create(rt, who, (unsigned)(40 + k), &b, 1, &ch) != LMX_MSG_OK) {
+            if (lmx_msg_create(rt, who, &b, 1, &ch) != LMX_MSG_OK) {
                 return 1;
             }
         }
@@ -356,7 +356,7 @@ static int turn_factory(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     lmx_msg_env_release(&got);
     for (k = 0; k < 8; k++) {
         extra = 0;
-        if (lmx_msg_create(rt, who, (unsigned)(200 + k), &b, 1, &extra) != LMX_MSG_OK || extra == 0) {
+        if (lmx_msg_create(rt, who, &b, 1, &extra) != LMX_MSG_OK || extra == 0) {
             return 1;
         }
         c->extras[k] = extra;
@@ -778,7 +778,7 @@ static int turn_bind_then_omit(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
         return 1;
     }
     lmx_msg_env_release(&got);
-    s->st = lmx_msg_create(rt, who, 9, &ini, 1, &s->child);
+    s->st = lmx_msg_create(rt, who, &ini, 1, &s->child);
     if (s->st == LMX_MSG_OK) {
         s->st = lmx_msg_exec_bind(rt, s->child, turn_just_end, &g_hook_ctx, LMX_MSG_AFFINITY_ANY);
     }
@@ -988,7 +988,7 @@ static int turn_mix_parent(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
         return 1;
     }
     lmx_msg_env_release(&got);
-    if (lmx_msg_create(rt, who, 11, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_create(rt, who, 12, &ini, 1, &c2) != LMX_MSG_OK) {
+    if (lmx_msg_create(rt, who, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_create(rt, who, &ini, 1, &c2) != LMX_MSG_OK) {
         return 1;
     }
     if (lmx_msg_exec_bind(rt, c1, turn_mark_tid, m->a1, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK || lmx_msg_exec_bind(rt, c2, turn_mark_tid, m->a2, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -1073,7 +1073,7 @@ static int turn_spawn(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
         return 1;
     }
     lmx_msg_env_release(&got);
-    if (lmx_msg_create(rt, who, 9, &ini, 1, &s->child) != LMX_MSG_OK || s->child == 0) {
+    if (lmx_msg_create(rt, who, &ini, 1, &s->child) != LMX_MSG_OK || s->child == 0) {
         return 1;
     }
     s->child_rec->expect = 9;
@@ -1124,7 +1124,7 @@ static int turn_spawn_race(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     if (s->go != 0 && WaitForSingleObject(s->go, 2000) != WAIT_OBJECT_0) {
         return 1;
     }
-    if (lmx_msg_create(rt, who, 9, &ini, 1, &s->child) != LMX_MSG_OK) {
+    if (lmx_msg_create(rt, who, &ini, 1, &s->child) != LMX_MSG_OK) {
         return 1;
     }
     s->child_rec->expect = 9;
@@ -1350,23 +1350,23 @@ int main(int argc, char **argv) {
     slow.rt = rt;
     fast.rt = rt;
     uic.rt = rt;
-    if (lmx_msg_create(rt, 0, 1, init, 1, &parent) != LMX_MSG_OK) {
+    if (lmx_msg_create(rt, 0, init, 1, &parent) != LMX_MSG_OK) {
         fprintf(stderr, "create parent\n");
         return 1;
     }
-    if (lmx_msg_create(rt, parent, 2, init, 1, &w1) != LMX_MSG_OK) {
+    if (lmx_msg_create(rt, parent, init, 1, &w1) != LMX_MSG_OK) {
         fprintf(stderr, "create w1\n");
         return 1;
     }
-    if (lmx_msg_create(rt, parent, 3, init, 1, &w2) != LMX_MSG_OK) {
+    if (lmx_msg_create(rt, parent, init, 1, &w2) != LMX_MSG_OK) {
         fprintf(stderr, "create w2\n");
         return 1;
     }
-    if (lmx_msg_create(rt, parent, 4, init, 1, &ui) != LMX_MSG_OK) {
+    if (lmx_msg_create(rt, parent, init, 1, &ui) != LMX_MSG_OK) {
         fprintf(stderr, "create ui\n");
         return 1;
     }
-    if (lmx_msg_create(rt, parent, 5, init, 1, &w3) != LMX_MSG_OK) {
+    if (lmx_msg_create(rt, parent, init, 1, &w3) != LMX_MSG_OK) {
         fprintf(stderr, "create w3\n");
         return 1;
     }
@@ -1430,7 +1430,7 @@ int main(int argc, char **argv) {
             extra = 0;
             payload[k] = (uchar)(k + 1);
             g_mass[k].expect = payload[k];
-            if (lmx_msg_create(rt, parent, (unsigned)(100 + k), init, 1, &extra) != LMX_MSG_OK) {
+            if (lmx_msg_create(rt, parent, init, 1, &extra) != LMX_MSG_OK) {
                 fprintf(stderr, "mass create %d\n", k);
                 return 1;
             }
@@ -1536,11 +1536,11 @@ int main(int argc, char **argv) {
         }
         fprintf(stderr, "fail rt ok\n");
         fflush(stderr);
-        if (lmx_msg_create(rtf, 0, 1, &ini, 1, &pf) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtf, 0, &ini, 1, &pf) != LMX_MSG_OK) {
             fprintf(stderr, "fail create pf\n");
             return 1;
         }
-        if (lmx_msg_create(rtf, pf, 2, &ini, 1, &wf) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtf, pf, &ini, 1, &wf) != LMX_MSG_OK) {
             fprintf(stderr, "fail create wf\n");
             return 1;
         }
@@ -1652,8 +1652,8 @@ int main(int argc, char **argv) {
         fflush(stderr);
         memset(&err_after, 0, sizeof(err_after));
         rte = lmx_msg_runtime_new();
-        lmx_msg_create(rte, 0, 1, &ini, 1, &pe);
-        lmx_msg_create(rte, pe, 2, &ini, 1, &we);
+        lmx_msg_create(rte, 0, &ini, 1, &pe);
+        lmx_msg_create(rte, pe, &ini, 1, &we);
         lmx_msg_end_turn(rte, pe, 1);
         memset(&ee, 0, sizeof(ee));
         ee.kind = LMX_MSG_KIND_BYTES;
@@ -1693,8 +1693,8 @@ int main(int argc, char **argv) {
         fflush(stderr);
         memset(&omit, 0, sizeof(omit));
         rto = lmx_msg_runtime_new();
-        lmx_msg_create(rto, 0, 1, &ini, 1, &po);
-        lmx_msg_create(rto, po, 2, &ini, 1, &wo);
+        lmx_msg_create(rto, 0, &ini, 1, &po);
+        lmx_msg_create(rto, po, &ini, 1, &wo);
         lmx_msg_end_turn(rto, po, 1);
         memset(&eo, 0, sizeof(eo));
         eo.kind = LMX_MSG_KIND_BYTES;
@@ -1734,9 +1734,9 @@ int main(int argc, char **argv) {
         fflush(stderr);
         rtc = lmx_msg_runtime_new();
         memset(&uictx, 0, sizeof(uictx));
-        lmx_msg_create(rtc, 0, 1, &ini, 1, &pc);
-        lmx_msg_create(rtc, pc, 2, &ini, 1, &uc);
-        lmx_msg_create(rtc, pc, 3, &ini, 1, &cc);
+        lmx_msg_create(rtc, 0, &ini, 1, &pc);
+        lmx_msg_create(rtc, pc, &ini, 1, &uc);
+        lmx_msg_create(rtc, pc, &ini, 1, &cc);
         lmx_msg_end_turn(rtc, pc, 1);
         if (lmx_msg_path_n(rtc, uc) < 1 || lmx_msg_init_copy(rtc, uc, &ec) != LMX_MSG_OK) {
             fprintf(stderr, "path/init_copy owner serial failed\n");
@@ -1772,7 +1772,7 @@ int main(int argc, char **argv) {
         }
         lmx_msg_exec_stop(rtc);
         /* parent-loss: fail parent (workers stopped so owner turn fallback), poll descendants */
-        lmx_msg_create(rtc, pc, 4, &ini, 1, &bc);
+        lmx_msg_create(rtc, pc, &ini, 1, &bc);
         lmx_msg_end_turn(rtc, pc, 1);
         if (lmx_msg_fail(rtc, pc) != LMX_MSG_OK) {
             fprintf(stderr, "fail parent after exec_stop\n");
@@ -1795,11 +1795,11 @@ int main(int argc, char **argv) {
         LmxMsg *pm;
         LmxMsg *cm2;
         rtd = lmx_msg_runtime_new();
-        if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rtd, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rtd == 0 || lmx_msg_create(rtd, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtd, dummy, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtd, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtd, p, 3, &ini, 1, &c1) != LMX_MSG_OK
-            || lmx_msg_create(rtd, p, 4, &ini, 1, &c2) != LMX_MSG_OK
+            || lmx_msg_create(rtd, p, &ini, 1, &c1) != LMX_MSG_OK
+            || lmx_msg_create(rtd, p, &ini, 1, &c2) != LMX_MSG_OK
             || lmx_msg_end_turn(rtd, p, 1) != LMX_MSG_OK) {
             fprintf(stderr, "drive-snap create\n");
             if (rtd != 0) {
@@ -1841,9 +1841,9 @@ int main(int argc, char **argv) {
         g_mail_entered = CreateEventA(0, 1, 0, 0);
         g_mail_go = CreateEventA(0, 1, 0, 0);
         if (rtd == 0 || g_mail_entered == 0 || g_mail_go == 0
-            || lmx_msg_create(rtd, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtd, 0, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_end_turn(rtd, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtd, 0, 2, &ini, 1, &closer) != LMX_MSG_OK
+            || lmx_msg_create(rtd, 0, &ini, 1, &closer) != LMX_MSG_OK
             || lmx_msg_end_turn(rtd, closer, 1) != LMX_MSG_OK) {
             fprintf(stderr, "drive-mail create\n");
             if (g_mail_entered != 0) {
@@ -1939,23 +1939,23 @@ int main(int argc, char **argv) {
             fprintf(stderr, "live-cascade setup runtime\n");
             return 1;
         }
-        if (lmx_msg_create(rtl, 0, 1, &ini, 1, &rl) != LMX_MSG_OK || rl == 0) {
+        if (lmx_msg_create(rtl, 0, &ini, 1, &rl) != LMX_MSG_OK || rl == 0) {
             fprintf(stderr, "live-cascade create root\n");
             return 1;
         }
-        if (lmx_msg_create(rtl, rl, 2, &ini, 1, &pl) != LMX_MSG_OK || pl == 0) {
+        if (lmx_msg_create(rtl, rl, &ini, 1, &pl) != LMX_MSG_OK || pl == 0) {
             fprintf(stderr, "live-cascade create parent\n");
             return 1;
         }
-        if (lmx_msg_create(rtl, pl, 3, &ini, 1, &cl) != LMX_MSG_OK || cl == 0) {
+        if (lmx_msg_create(rtl, pl, &ini, 1, &cl) != LMX_MSG_OK || cl == 0) {
             fprintf(stderr, "live-cascade create child\n");
             return 1;
         }
-        if (lmx_msg_create(rtl, cl, 4, &ini, 1, &gl) != LMX_MSG_OK || gl == 0) {
+        if (lmx_msg_create(rtl, cl, &ini, 1, &gl) != LMX_MSG_OK || gl == 0) {
             fprintf(stderr, "live-cascade create grandchild\n");
             return 1;
         }
-        if (lmx_msg_create(rtl, rl, 6, &ini, 1, &fl) != LMX_MSG_OK || fl == 0) {
+        if (lmx_msg_create(rtl, rl, &ini, 1, &fl) != LMX_MSG_OK || fl == 0) {
             fprintf(stderr, "live-cascade create factory\n");
             return 1;
         }
@@ -2114,11 +2114,11 @@ int main(int argc, char **argv) {
         ra.peer = rb.entered;
         rb.peer = ra.entered;
         rtc = lmx_msg_runtime_new();
-        if (rtc == 0 || ra.entered == 0 || rb.entered == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtc == 0 || ra.entered == 0 || rb.entered == 0 || lmx_msg_create(rtc, 0, &ini, 1, &p) != LMX_MSG_OK) {
             fprintf(stderr, "ctx family setup\n");
             return 1;
         }
-        if (lmx_msg_create(rtc, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rtc, p, 3, &ini, 1, &b) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtc, p, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rtc, p, &ini, 1, &b) != LMX_MSG_OK) {
             fprintf(stderr, "ctx children\n");
             return 1;
         }
@@ -2258,11 +2258,11 @@ int main(int argc, char **argv) {
         memset(&child, 0, sizeof(child));
         spawn.child_rec = &child;
         rts = lmx_msg_runtime_new();
-        if (rts == 0 || lmx_msg_create(rts, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rts == 0 || lmx_msg_create(rts, 0, &ini, 1, &p) != LMX_MSG_OK) {
             fprintf(stderr, "spawn family\n");
             return 1;
         }
-        if (lmx_msg_create(rts, p, 2, &ini, 1, &parent) != LMX_MSG_OK) {
+        if (lmx_msg_create(rts, p, &ini, 1, &parent) != LMX_MSG_OK) {
             fprintf(stderr, "spawn parent\n");
             return 1;
         }
@@ -2318,10 +2318,10 @@ int main(int argc, char **argv) {
         fa.peer = fb.entered;
         fb.peer = fa.entered;
         rtf = lmx_msg_runtime_new();
-        if (rtf == 0 || fa.entered == 0 || lmx_msg_create(rtf, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtf == 0 || fa.entered == 0 || lmx_msg_create(rtf, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtf, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rtf, p, 3, &ini, 1, &b) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtf, p, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rtf, p, &ini, 1, &b) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_end_turn(rtf, p, 1) != LMX_MSG_OK) {
@@ -2389,10 +2389,10 @@ int main(int argc, char **argv) {
         memset(&tryui, 0, sizeof(tryui));
         memset(&other, 0, sizeof(other));
         rta = lmx_msg_runtime_new();
-        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rta == 0 || lmx_msg_create(rta, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rta, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rta, p, 3, &ini, 1, &b) != LMX_MSG_OK) {
+        if (lmx_msg_create(rta, p, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rta, p, &ini, 1, &b) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_end_turn(rta, p, 1) != LMX_MSG_OK) {
@@ -2456,10 +2456,10 @@ int main(int argc, char **argv) {
         memset(&keep, 0, sizeof(keep));
         memset(&g_hook_ctx, 0, sizeof(g_hook_ctx));
         rth = lmx_msg_runtime_new();
-        if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rth == 0 || lmx_msg_create(rth, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rth, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rth, p, 3, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_create(rth, p, 4, &ini, 1, &c2) != LMX_MSG_OK) {
+        if (lmx_msg_create(rth, p, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rth, p, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_create(rth, p, &ini, 1, &c2) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
@@ -2519,10 +2519,10 @@ int main(int argc, char **argv) {
         spawn.started = CreateEventA(0, 1, 0, 0);
         spawn.go = CreateEventA(0, 1, 0, 0);
         rtr = lmx_msg_runtime_new();
-        if (rtr == 0 || spawn.started == 0 || spawn.go == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtr == 0 || spawn.started == 0 || spawn.go == 0 || lmx_msg_create(rtr, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtr, p, 2, &ini, 1, &parent) != LMX_MSG_OK || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtr, p, &ini, 1, &parent) != LMX_MSG_OK || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_exec_bind(rtr, parent, turn_spawn_race, &spawn, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -2581,11 +2581,11 @@ int main(int argc, char **argv) {
         mix.a2 = &a2;
         rtp = lmx_msg_runtime_new();
         seen_new(rtp);
-        if (rtp == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtp == 0 || lmx_msg_create(rtp, 0, &ini, 1, &p) != LMX_MSG_OK) {
             fprintf(stderr, "mix family\n");
             return 1;
         }
-        if (lmx_msg_create(rtp, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtp, p, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_exec_bind(rtp, a, turn_mix_parent, &mix, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -2639,10 +2639,10 @@ int main(int argc, char **argv) {
         memset(&rec, 0, sizeof(rec));
         rtm = lmx_msg_runtime_new();
         seen_new(rtm);
-        if (rtm == 0 || lmx_msg_create(rtm, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtm == 0 || lmx_msg_create(rtm, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtm, p, 2, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtm, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtm, p, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtm, p, 1) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_exec_bind(rtm, c, turn_tid, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -2705,10 +2705,10 @@ int main(int argc, char **argv) {
         if (lmx_msg_set_now(rtl, 1000U) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtl, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtl, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtl, p, 2, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtl, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtl, p, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtl, p, 1) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_exec_bind(rtl, c, turn_live_wait, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -2762,10 +2762,10 @@ int main(int argc, char **argv) {
         memset(&rec, 0, sizeof(rec));
         rtr = lmx_msg_runtime_new();
         seen_new(rtr);
-        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtr == 0 || lmx_msg_create(rtr, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtr, p, 2, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtr, p, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_exec_bind(rtr, c, turn_live_wait, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -2809,13 +2809,13 @@ int main(int argc, char **argv) {
         TurnCtx rec;
         memset(&rec, 0, sizeof(rec));
         rtb = lmx_msg_runtime_new();
-        if (rtb == 0 || lmx_msg_create(rtb, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtb == 0 || lmx_msg_create(rtb, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtb, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtb, p, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtb, p, 3, &ini, 1, &c1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtb, p, &ini, 1, &c1) != LMX_MSG_OK) {
             return 1;
         }
         n0 = rtb->n;
@@ -2859,10 +2859,10 @@ int main(int argc, char **argv) {
             LmxMsgAddr tp = 0, tc1 = 0, tc2 = 0;
             HANDLE th;
             rtt = lmx_msg_runtime_new();
-            if (rtt == 0 || lmx_msg_create(rtt, 0, 1, &ini, 1, &tp) != LMX_MSG_OK
-                || lmx_msg_create(rtt, tp, 2, &ini, 1, &tc2) != LMX_MSG_OK
+            if (rtt == 0 || lmx_msg_create(rtt, 0, &ini, 1, &tp) != LMX_MSG_OK
+                || lmx_msg_create(rtt, tp, &ini, 1, &tc2) != LMX_MSG_OK
                 || lmx_msg_end_turn(rtt, tp, 1) != LMX_MSG_OK
-                || lmx_msg_create(rtt, tp, 3, &ini, 1, &tc1) != LMX_MSG_OK) {
+                || lmx_msg_create(rtt, tp, &ini, 1, &tc1) != LMX_MSG_OK) {
                 fprintf(stderr, "release-tree create\n");
                 if (rtt != 0) {
                     lmx_msg_runtime_delete(rtt);
@@ -2950,14 +2950,14 @@ int main(int argc, char **argv) {
             venv.bytes = &ini;
             rtv = lmx_msg_runtime_new();
             seen_new(rtv);
-            if (rtv == 0 || lmx_msg_create(rtv, 0, 1, &ini, 1, &vp) != LMX_MSG_OK
-                || lmx_msg_create(rtv, 0, 2, &ini, 1, &vq) != LMX_MSG_OK
-                || lmx_msg_create(rtv, vp, 3, &ini, 1, &vc) != LMX_MSG_OK
+            if (rtv == 0 || lmx_msg_create(rtv, 0, &ini, 1, &vp) != LMX_MSG_OK
+                || lmx_msg_create(rtv, 0, &ini, 1, &vq) != LMX_MSG_OK
+                || lmx_msg_create(rtv, vp, &ini, 1, &vc) != LMX_MSG_OK
                 || lmx_msg_end_turn(rtv, vp, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rtv, vc, turn_live_wait, &vctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_send(rtv, vp, vc, &venv) != LMX_MSG_STAGED
                 || lmx_msg_end_turn(rtv, vp, 1) != LMX_MSG_OK
-                || lmx_msg_create(rtv, vc, 4, &ini, 1, &vg) != LMX_MSG_OK) {
+                || lmx_msg_create(rtv, vc, &ini, 1, &vg) != LMX_MSG_OK) {
                 fprintf(stderr, "handoff create\n");
                 if (rtv != 0) {
                     lmx_msg_runtime_delete(rtv);
@@ -3035,10 +3035,10 @@ int main(int argc, char **argv) {
             int qst;
             rtq = lmx_msg_runtime_new();
             seen_new(rtq);
-            if (rtq == 0 || lmx_msg_create(rtq, 0, 1, &ini, 1, &qr) != LMX_MSG_OK
-                || lmx_msg_create(rtq, qr, 2, &ini, 1, &qp) != LMX_MSG_OK
+            if (rtq == 0 || lmx_msg_create(rtq, 0, &ini, 1, &qr) != LMX_MSG_OK
+                || lmx_msg_create(rtq, qr, &ini, 1, &qp) != LMX_MSG_OK
                 || lmx_msg_end_turn(rtq, qr, 1) != LMX_MSG_OK
-                || lmx_msg_create(rtq, qp, 3, &ini, 1, &qc) != LMX_MSG_OK
+                || lmx_msg_create(rtq, qp, &ini, 1, &qc) != LMX_MSG_OK
                 || lmx_msg_end_turn(rtq, qp, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rtq, qp, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rtq, qc, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
@@ -3088,8 +3088,8 @@ int main(int argc, char **argv) {
             oe.bytes = &ini;
             rto = lmx_msg_runtime_new();
             if (rto == 0 || (r0 = lmx_msg_root_addr(rto)) == 0U
-                || lmx_msg_create(rto, 0, 2, &ini, 1, &op) != LMX_MSG_OK
-                || lmx_msg_create(rto, op, 3, &ini, 1, &oc) != LMX_MSG_OK
+                || lmx_msg_create(rto, 0, &ini, 1, &op) != LMX_MSG_OK
+                || lmx_msg_create(rto, op, &ini, 1, &oc) != LMX_MSG_OK
                 || lmx_msg_send(rto, op, oc, &oe) != LMX_MSG_STAGED
                 || lmx_msg_end_turn(rto, op, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rto, oc, turn_recv_stay, (void *)&oentered, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -3142,13 +3142,13 @@ int main(int argc, char **argv) {
         c1 = 0;
         c2 = 0;
         memset(&rec, 0, sizeof(rec));
-        if (rtb == 0 || lmx_msg_create(rtb, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtb == 0 || lmx_msg_create(rtb, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtb, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtb, p, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtb, p, 3, &ini, 1, &c1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtb, p, &ini, 1, &c1) != LMX_MSG_OK) {
             return 1;
         }
         held = lmx_msg_find(rtb, c1);
@@ -3217,8 +3217,8 @@ int main(int argc, char **argv) {
             int stu;
             memset(&recu, 0, sizeof(recu));
             rtu = lmx_msg_runtime_new();
-            if (rtu == 0 || lmx_msg_create(rtu, 0, 1, &iniu, 1, &pu) != LMX_MSG_OK
-                || lmx_msg_create(rtu, pu, 2, &iniu, 1, &cu) != LMX_MSG_OK) {
+            if (rtu == 0 || lmx_msg_create(rtu, 0, &iniu, 1, &pu) != LMX_MSG_OK
+                || lmx_msg_create(rtu, pu, &iniu, 1, &cu) != LMX_MSG_OK) {
                 fprintf(stderr, "unbound record setup\n");
                 return 1;
             }
@@ -3256,10 +3256,10 @@ int main(int argc, char **argv) {
             DWORD dl;
             memset(&omit, 0, sizeof(omit));
             omit.rt = rtb;
-            if (rtb == 0 || lmx_msg_create(rtb, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+            if (rtb == 0 || lmx_msg_create(rtb, 0, &ini, 1, &p) != LMX_MSG_OK) {
                 return 1;
             }
-            if (lmx_msg_create(rtb, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
+            if (lmx_msg_create(rtb, p, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
                 return 1;
             }
             n0 = rtb->n;
@@ -3323,13 +3323,13 @@ int main(int argc, char **argv) {
         c1 = 0;
         c2 = 0;
         memset(&rec, 0, sizeof(rec));
-        if (rtb == 0 || lmx_msg_create(rtb, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtb == 0 || lmx_msg_create(rtb, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtb, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtb, p, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtb, p, 3, &ini, 1, &c1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtb, p, &ini, 1, &c1) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_exec_bind(rtb, c1, turn_just_end, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -3386,16 +3386,16 @@ int main(int argc, char **argv) {
         memset(&rec, 0, sizeof(rec));
         rtc = lmx_msg_runtime_new();
         seen_new(rtc);
-        if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtc == 0 || lmx_msg_create(rtc, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtc, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtc, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtc, p, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtc, p, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtc, p, 3, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_end_turn(rtc, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtc, p, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_end_turn(rtc, p, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtc, c1, 4, &ini, 1, &g) != LMX_MSG_OK || lmx_msg_end_turn(rtc, c1, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtc, c1, &ini, 1, &g) != LMX_MSG_OK || lmx_msg_end_turn(rtc, c1, 1) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_exec_bind(rtc, c1, turn_just_end, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -3449,13 +3449,13 @@ int main(int argc, char **argv) {
         memset(&rec, 0, sizeof(rec));
         rtp = lmx_msg_runtime_new();
         seen_new(rtp);
-        if (rtp == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtp == 0 || lmx_msg_create(rtp, 0, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtp, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtp, p, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rtp, p, 3, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rtp, p, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_exec_bind(rtp, c1, turn_just_end, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK || entry_map(rtp, p, c1) != LMX_MSG_OK) {
@@ -3508,12 +3508,12 @@ int main(int argc, char **argv) {
         memset(g_admit_log, 0, sizeof(g_admit_log));
         rta = lmx_msg_runtime_new();
         seen_new(rta);
-        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
+        if (rta == 0 || lmx_msg_create(rta, 0, &ini, 1, &dummy) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rta, dummy, 2, &ini, 1, &m0) != LMX_MSG_OK
-            || lmx_msg_create(rta, dummy, 3, &ini, 1, &m1) != LMX_MSG_OK
-            || lmx_msg_create(rta, dummy, 4, &ini, 1, &m2) != LMX_MSG_OK
+        if (lmx_msg_create(rta, dummy, &ini, 1, &m0) != LMX_MSG_OK
+            || lmx_msg_create(rta, dummy, &ini, 1, &m1) != LMX_MSG_OK
+            || lmx_msg_create(rta, dummy, &ini, 1, &m2) != LMX_MSG_OK
             || lmx_msg_end_turn(rta, dummy, 1) != LMX_MSG_OK) {
             return 1;
         }
@@ -3616,16 +3616,16 @@ int main(int argc, char **argv) {
         rth = lmx_msg_runtime_new();
         seen_new(rth);
         memset(&nu, 0, sizeof(nu));
-        if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
+        if (rth == 0 || lmx_msg_create(rth, 0, &ini, 1, &dummy) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rth, dummy, 2, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rth, dummy, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rth, dummy, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rth, dummy, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rth, p, 3, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_create(rth, p, 4, &ini2, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rth, p, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_create(rth, p, &ini2, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rth, c, 5, &ini3, 1, &g) != LMX_MSG_OK || lmx_msg_end_turn(rth, c, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rth, c, &ini3, 1, &g) != LMX_MSG_OK || lmx_msg_end_turn(rth, c, 1) != LMX_MSG_OK) {
             return 1;
         }
         gbase = lmx_msg_find(rth, g)->init;
@@ -3691,7 +3691,7 @@ int main(int argc, char **argv) {
             void *live_init;
             LmxMsgEnv e;
             int pst;
-            if ((cst1 = lmx_msg_create(rth, p, 9, &ini, 1, &live)) != LMX_MSG_OK || (cst2 = lmx_msg_create(rth, p, 10, &ini, 1, &drop)) != LMX_MSG_OK
+            if ((cst1 = lmx_msg_create(rth, p, &ini, 1, &live)) != LMX_MSG_OK || (cst2 = lmx_msg_create(rth, p, &ini, 1, &drop)) != LMX_MSG_OK
                 || (cst3 = lmx_msg_end_turn(rth, p, 1)) != LMX_MSG_OK) {
                 fprintf(stderr, "live create st=%d,%d,%d p_state=%d p_run=%d p_ok=%d\n", cst1, cst2, cst3, lmx_msg_state(rth, p),
                     lmx_msg_find(rth, p) != 0 ? (int)lmx_msg_running_load(lmx_msg_find(rth, p)) : -1,
@@ -3786,10 +3786,10 @@ int main(int argc, char **argv) {
         memset(&os, 0, sizeof(os));
         rto = lmx_msg_runtime_new();
         seen_new(rto);
-        if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
+        if (rto == 0 || lmx_msg_create(rto, 0, &ini, 1, &dummy) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rto, dummy, 2, &ini, 1, &src) != LMX_MSG_OK || lmx_msg_create(rto, dummy, 3, &ini, 1, &dst) != LMX_MSG_OK
+        if (lmx_msg_create(rto, dummy, &ini, 1, &src) != LMX_MSG_OK || lmx_msg_create(rto, dummy, &ini, 1, &dst) != LMX_MSG_OK
             || lmx_msg_end_turn(rto, dummy, 1) != LMX_MSG_OK) {
             return 1;
         }
@@ -3827,15 +3827,15 @@ int main(int argc, char **argv) {
         int i;
         rts = lmx_msg_runtime_new();
         seen_new(rts);
-        if (rts == 0 || lmx_msg_create(rts, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
+        if (rts == 0 || lmx_msg_create(rts, 0, &ini, 1, &dummy) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rts, dummy, 2, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rts, dummy, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rts, dummy, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rts, dummy, 1) != LMX_MSG_OK) {
             return 1;
         }
         memset(kids, 0, sizeof(kids));
         for (i = 0; i < 33; i++) {
-            if (lmx_msg_create(rts, p, (unsigned)(3 + i), &ini, 1, &kids[i]) != LMX_MSG_OK) {
+            if (lmx_msg_create(rts, p, &ini, 1, &kids[i]) != LMX_MSG_OK) {
                 fprintf(stderr, "settle33 create %d\n", i);
                 lmx_msg_runtime_delete(rts);
                 return 1;
@@ -3880,10 +3880,10 @@ int main(int argc, char **argv) {
         void *init_keep;
         rtr = lmx_msg_runtime_new();
         seen_new(rtr);
-        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rtr, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rtr == 0 || lmx_msg_create(rtr, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtr, dummy, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtr, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtr, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_create(rtr, p, &ini, 1, &c) != LMX_MSG_OK
             || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {
             fprintf(stderr, "range lifecycle create\n");
             return 1;
@@ -3962,10 +3962,10 @@ int main(int argc, char **argv) {
         LmxOwnedRange *range_keep;
         rta = lmx_msg_runtime_new();
         seen_new(rta);
-        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rta, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rta == 0 || lmx_msg_create(rta, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rta, dummy, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rta, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rta, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_create(rta, p, &ini, 1, &c) != LMX_MSG_OK
             || lmx_msg_end_turn(rta, p, 1) != LMX_MSG_OK) {
             fprintf(stderr, "adopt nomem create\n");
             return 1;
@@ -4043,8 +4043,8 @@ int main(int argc, char **argv) {
         void *re;
         Lmx *unit;
         rtc = lmx_msg_runtime_new();
-        if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &a) != LMX_MSG_OK
-            || lmx_msg_create(rtc, 0, 2, &ini, 1, &b) != LMX_MSG_OK) {
+        if (rtc == 0 || lmx_msg_create(rtc, 0, &ini, 1, &a) != LMX_MSG_OK
+            || lmx_msg_create(rtc, 0, &ini, 1, &b) != LMX_MSG_OK) {
             fprintf(stderr, "chars collect create\n");
             return 1;
         }
@@ -4124,7 +4124,7 @@ int main(int argc, char **argv) {
         LmxArrayDesc *dead;
         LmxOwnedRange *rg;
         rtv = lmx_msg_runtime_new();
-        if (rtv == 0 || lmx_msg_create(rtv, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+        if (rtv == 0 || lmx_msg_create(rtv, 0, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "slot-value collect create\n");
             return 1;
         }
@@ -4214,8 +4214,8 @@ int main(int argc, char **argv) {
         void *back_a;
         Lmx *unit;
         rta = lmx_msg_runtime_new();
-        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &a) != LMX_MSG_OK
-            || lmx_msg_create(rta, 0, 2, &ini, 1, &b) != LMX_MSG_OK) {
+        if (rta == 0 || lmx_msg_create(rta, 0, &ini, 1, &a) != LMX_MSG_OK
+            || lmx_msg_create(rta, 0, &ini, 1, &b) != LMX_MSG_OK) {
             fprintf(stderr, "array collect create\n");
             return 1;
         }
@@ -4301,7 +4301,7 @@ int main(int argc, char **argv) {
         void *int_back;
         void *share_back;
         rtr = lmx_msg_runtime_new();
-        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+        if (rtr == 0 || lmx_msg_create(rtr, 0, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "ref array collect create\n");
             return 1;
         }
@@ -4452,7 +4452,7 @@ int main(int argc, char **argv) {
         void *char_back;
         void *int_back;
         rte = lmx_msg_runtime_new();
-        if (rte == 0 || lmx_msg_create(rte, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+        if (rte == 0 || lmx_msg_create(rte, 0, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "end_turn array create\n");
             return 1;
         }
@@ -4528,7 +4528,7 @@ int main(int argc, char **argv) {
         void *letters_back;
         void *dead_back;
         rtg = lmx_msg_runtime_new();
-        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+        if (rtg == 0 || lmx_msg_create(rtg, 0, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "emit array create\n");
             return 1;
         }
@@ -4610,7 +4610,7 @@ int main(int argc, char **argv) {
         void *drop_back;
         void *foreign;
         rtr = lmx_msg_runtime_new();
-        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+        if (rtr == 0 || lmx_msg_create(rtr, 0, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "explicit root create\n");
             return 1;
         }
@@ -4694,7 +4694,7 @@ int main(int argc, char **argv) {
         LmxArrayDesc *buf;
         void *buf_back;
         rtg = lmx_msg_runtime_new();
-        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+        if (rtg == 0 || lmx_msg_create(rtg, 0, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "graph root create\n");
             return 1;
         }
@@ -4753,7 +4753,7 @@ int main(int argc, char **argv) {
         void *char_back;
         void *dead_back;
         rtd = lmx_msg_runtime_new();
-        if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+        if (rtd == 0 || lmx_msg_create(rtd, 0, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "ref root create\n");
             return 1;
         }
@@ -4797,7 +4797,7 @@ int main(int argc, char **argv) {
         LmxArrayDesc *keep;
         LmxMsgRoot *saved;
         rto = lmx_msg_runtime_new();
-        if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+        if (rto == 0 || lmx_msg_create(rto, 0, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "root oom create\n");
             return 1;
         }
@@ -4839,10 +4839,10 @@ int main(int argc, char **argv) {
         memset(&tctx, 0, sizeof(tctx));
         rtt = lmx_msg_runtime_new();
         seen_new(rtt);
-        if (rtt == 0 || lmx_msg_create(rtt, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rtt, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rtt == 0 || lmx_msg_create(rtt, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtt, dummy, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtt, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtt, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_create(rtt, p, &ini, 1, &c) != LMX_MSG_OK
             || lmx_msg_end_turn(rtt, p, 1) != LMX_MSG_OK) {
             fprintf(stderr, "root transfer create\n");
             if (rtt != 0) {
@@ -4922,10 +4922,10 @@ int main(int argc, char **argv) {
         memset(&tctx, 0, sizeof(tctx));
         rtg = lmx_msg_runtime_new();
         seen_new(rtg);
-        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rtg, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rtg == 0 || lmx_msg_create(rtg, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtg, dummy, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtg, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtg, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_create(rtg, p, &ini, 1, &c) != LMX_MSG_OK
             || lmx_msg_end_turn(rtg, p, 1) != LMX_MSG_OK
             || lmx_msg_exec_bind(rtg, c, turn_end_complete, &tctx,
                                  LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -5037,11 +5037,11 @@ int main(int argc, char **argv) {
         memset(&tctx, 0, sizeof(tctx));
         rtd = lmx_msg_runtime_new();
         seen_new(rtd);
-        if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &top) != LMX_MSG_OK
-            || lmx_msg_create(rtd, top, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rtd == 0 || lmx_msg_create(rtd, 0, &ini, 1, &top) != LMX_MSG_OK
+            || lmx_msg_create(rtd, top, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtd, top, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtd, p, 3, &ini, 1, &srca) != LMX_MSG_OK
-            || lmx_msg_create(rtd, p, 4, &ini, 1, &dsta) != LMX_MSG_OK
+            || lmx_msg_create(rtd, p, &ini, 1, &srca) != LMX_MSG_OK
+            || lmx_msg_create(rtd, p, &ini, 1, &dsta) != LMX_MSG_OK
             || lmx_msg_end_turn(rtd, p, 1) != LMX_MSG_OK
             || lmx_msg_exec_bind(rtd, srca, turn_end_complete, &tctx,
                                  LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -5113,10 +5113,10 @@ int main(int argc, char **argv) {
         int *cells;
         rth = lmx_msg_runtime_new();
         seen_new(rth);
-        if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rth, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rth == 0 || lmx_msg_create(rth, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rth, dummy, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rth, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rth, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_create(rth, p, &ini, 1, &c) != LMX_MSG_OK
             || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
             fprintf(stderr, "fail-history create\n");
             if (rth != 0) {
@@ -5189,10 +5189,10 @@ int main(int argc, char **argv) {
         LmxMsgRoot *history;
         rtp = lmx_msg_runtime_new();
         seen_new(rtp);
-        if (rtp == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rtp, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rtp == 0 || lmx_msg_create(rtp, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtp, dummy, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtp, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtp, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_create(rtp, p, &ini, 1, &c) != LMX_MSG_OK
             || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
             fprintf(stderr, "primitive history create\n");
             if (rtp != 0) {
@@ -5250,7 +5250,7 @@ int main(int argc, char **argv) {
         int *dead;
         LmxMethod *method;
         rtc = lmx_msg_runtime_new();
-        if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+        if (rtc == 0 || lmx_msg_create(rtc, 0, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "classifier retention create\n");
             if (rtc != 0) {
                 lmx_msg_runtime_delete(rtc);
@@ -5292,7 +5292,7 @@ int main(int argc, char **argv) {
         int *dead;
         LmxMethod *method;
         rtrp = lmx_msg_runtime_new();
-        if (rtrp == 0 || lmx_msg_create(rtrp, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+        if (rtrp == 0 || lmx_msg_create(rtrp, 0, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "primitive root create\n");
             if (rtrp != 0) {
                 lmx_msg_runtime_delete(rtrp);
@@ -5346,10 +5346,10 @@ int main(int argc, char **argv) {
         int *cells;
         rto = lmx_msg_runtime_new();
         seen_new(rto);
-        if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rto, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rto == 0 || lmx_msg_create(rto, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rto, dummy, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rto, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rto, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_create(rto, p, &ini, 1, &c) != LMX_MSG_OK
             || lmx_msg_end_turn(rto, p, 1) != LMX_MSG_OK) {
             fprintf(stderr, "fail-history oom create\n");
             if (rto != 0) {
@@ -5429,12 +5429,12 @@ int main(int argc, char **argv) {
         int *gcells;
         rtn = lmx_msg_runtime_new();
         seen_new(rtn);
-        if (rtn == 0 || lmx_msg_create(rtn, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rtn, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rtn == 0 || lmx_msg_create(rtn, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtn, dummy, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtn, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtn, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_create(rtn, p, &ini, 1, &c) != LMX_MSG_OK
             || lmx_msg_end_turn(rtn, p, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtn, c, 4, &ini, 1, &g) != LMX_MSG_OK
+            || lmx_msg_create(rtn, c, &ini, 1, &g) != LMX_MSG_OK
             || lmx_msg_end_turn(rtn, c, 1) != LMX_MSG_OK) {
             fprintf(stderr, "nested history create\n");
             if (rtn != 0) {
@@ -5529,12 +5529,12 @@ int main(int argc, char **argv) {
         int *gcells;
         rtr = lmx_msg_runtime_new();
         seen_new(rtr);
-        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rtr, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+        if (rtr == 0 || lmx_msg_create(rtr, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtr, dummy, &ini, 1, &p) != LMX_MSG_OK
             || lmx_msg_end_turn(rtr, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtr, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_create(rtr, p, &ini, 1, &c) != LMX_MSG_OK
             || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtr, c, 4, &ini, 1, &g) != LMX_MSG_OK
+            || lmx_msg_create(rtr, c, &ini, 1, &g) != LMX_MSG_OK
             || lmx_msg_end_turn(rtr, c, 1) != LMX_MSG_OK) {
             fprintf(stderr, "role history create\n");
             if (rtr != 0) {
@@ -5644,10 +5644,10 @@ int main(int argc, char **argv) {
         TurnCtx tctx;
         memset(&tctx, 0, sizeof(tctx));
         rts = lmx_msg_runtime_new();
-        if (rts == 0 || lmx_msg_create(rts, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+        if (rts == 0 || lmx_msg_create(rts, 0, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_end_turn(rts, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rts, dummy, 2, &ini, 1, &a) != LMX_MSG_OK
-            || lmx_msg_create(rts, dummy, 3, &ini, 1, &b) != LMX_MSG_OK
+            || lmx_msg_create(rts, dummy, &ini, 1, &a) != LMX_MSG_OK
+            || lmx_msg_create(rts, dummy, &ini, 1, &b) != LMX_MSG_OK
             || lmx_msg_exec_bind(rts, a, turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_exec_bind(rts, b, turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             fprintf(stderr, "exec_start claim create\n");
@@ -5684,9 +5684,9 @@ int main(int argc, char **argv) {
         TurnCtx tctx;
         memset(&tctx, 0, sizeof(tctx));
         rtk = lmx_msg_runtime_new();
-        if (rtk == 0 || lmx_msg_create(rtk, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+        if (rtk == 0 || lmx_msg_create(rtk, 0, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_end_turn(rtk, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtk, dummy, 2, &ini, 1, &a) != LMX_MSG_OK
+            || lmx_msg_create(rtk, dummy, &ini, 1, &a) != LMX_MSG_OK
             || lmx_msg_exec_bind(rtk, a, turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             fprintf(stderr, "exec_start kicks-fail create\n");
             if (rtk != 0) {
@@ -5720,7 +5720,7 @@ int main(int argc, char **argv) {
         TurnCtx tctx;
         memset(&tctx, 0, sizeof(tctx));
         rtr = lmx_msg_runtime_new();
-        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+        if (rtr == 0 || lmx_msg_create(rtr, 0, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_exec_bind(rtr, dummy, turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             fprintf(stderr, "exec_stop ready create\n");
             if (rtr != 0) {
@@ -5776,9 +5776,9 @@ int main(int argc, char **argv) {
         any = 0;
         memset(&ui_ctx, 0, sizeof(ui_ctx));
         memset(&any_ctx, 0, sizeof(any_ctx));
-        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK
-            || lmx_msg_create(rti, dummy, 3, &ini, 1, &any) != LMX_MSG_OK
+        if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rti, dummy, &ini, 1, &ui) != LMX_MSG_OK
+            || lmx_msg_create(rti, dummy, &ini, 1, &any) != LMX_MSG_OK
             || lmx_msg_exec_bind(rti, ui, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_exec_bind(rti, any, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_send(rti, dummy, ui, &env) != LMX_MSG_STAGED
@@ -5816,9 +5816,9 @@ int main(int argc, char **argv) {
         any = 0;
         memset(&ui_ctx, 0, sizeof(ui_ctx));
         memset(&any_ctx, 0, sizeof(any_ctx));
-        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK
-            || lmx_msg_create(rti, 0, 3, &ini, 1, &any) != LMX_MSG_OK
+        if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rti, dummy, &ini, 1, &ui) != LMX_MSG_OK
+            || lmx_msg_create(rti, 0, &ini, 1, &any) != LMX_MSG_OK
             || lmx_msg_exec_bind(rti, ui, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_exec_bind(rti, any, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_send(rti, dummy, ui, &env) != LMX_MSG_STAGED
@@ -5859,11 +5859,11 @@ int main(int argc, char **argv) {
             g_mail_entered = CreateEventA(0, 1, 0, 0);
             g_mail_go = CreateEventA(0, 1, 0, 0);
             if (rti == 0 || g_mail_entered == 0 || g_mail_go == 0
-                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 4, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &d) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec mail-gate create\n");
                 if (g_mail_entered != 0) {
@@ -5985,10 +5985,10 @@ int main(int argc, char **argv) {
             int refs0;
             int st;
             memset(&any_ctx, 0, sizeof(any_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &d) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 fprintf(stderr, "exec mail-oom create\n");
@@ -6027,12 +6027,12 @@ int main(int argc, char **argv) {
             g_mail_entered = CreateEventA(0, 1, 0, 0);
             g_mail_go = CreateEventA(0, 1, 0, 0);
             if (rti == 0 || g_mail_entered == 0 || g_mail_go == 0
-                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 4, &ini, 1, &d) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 5, &ini, 1, &eaddr) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &eaddr) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_send_once, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, b, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
@@ -6125,10 +6125,10 @@ int main(int argc, char **argv) {
             int refs0;
             int refs1;
             memset(&any_ctx, 0, sizeof(any_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &d) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 fprintf(stderr, "exec outbox-gone create\n");
@@ -6172,10 +6172,10 @@ int main(int argc, char **argv) {
             LmxMsgEnv got;
             memset(&any_ctx, 0, sizeof(any_ctx));
             memset(&got, 0, sizeof(got));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &d) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 fprintf(stderr, "exec pin-oom create\n");
@@ -6235,10 +6235,10 @@ int main(int argc, char **argv) {
             g_fifo_n = 0;
             g_fifo_ids[0] = 0;
             g_fifo_ids[1] = 0;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &d) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_send_two, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 fprintf(stderr, "exec fifo-xfer create\n");
@@ -6294,10 +6294,10 @@ int main(int argc, char **argv) {
             HANDLE tha, thb;
             int has11, has12, has21, has22, i;
             memset(&any_ctx, 0, sizeof(any_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &d) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 fprintf(stderr, "exec two-prod create\n");
@@ -6364,11 +6364,11 @@ int main(int argc, char **argv) {
             g_mail_entered = CreateEventA(0, 1, 0, 0);
             g_mail_go = CreateEventA(0, 1, 0, 0);
             if (rti == 0 || g_mail_entered == 0 || g_mail_go == 0
-                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 4, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &d) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
@@ -6420,9 +6420,9 @@ int main(int argc, char **argv) {
             LmxMsgAddr p = 0, a = 0;
             LmxMsgEnv got;
             memset(&got, 0, sizeof(got));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
@@ -6456,11 +6456,11 @@ int main(int argc, char **argv) {
             LmxMsgEnv e1;
             memset(&e1, 0, sizeof(e1));
             e1.kind = LMX_MSG_KIND_BYTES;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &r1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 4, &ini, 1, &r2) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &r1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &r2) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec fail-oom create\n");
                 if (rti != 0) {
@@ -6527,9 +6527,9 @@ int main(int argc, char **argv) {
             LmxMsgAddr p = 0, a = 0;
             LmxMsgEnv got;
             memset(&got, 0, sizeof(got));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
@@ -6556,9 +6556,9 @@ int main(int argc, char **argv) {
             LmxMsgAddr p = 0, a = 0;
             LmxMsgEnv got;
             memset(&got, 0, sizeof(got));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
@@ -6588,9 +6588,9 @@ int main(int argc, char **argv) {
             LmxMsgEnv got;
             int refs0;
             memset(&got, 0, sizeof(got));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
@@ -6628,10 +6628,10 @@ int main(int argc, char **argv) {
             LmxMsg *km;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             memset(&any_ctx, 0, sizeof(any_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &sib) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &sib) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &kid) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &kid) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, sib, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, kid, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_send(rti, p, sib, &env) != LMX_MSG_STAGED
@@ -6695,8 +6695,8 @@ int main(int argc, char **argv) {
             LmxMsgAddr p = 0, c = 0;
             LmxMsg *cm;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &c) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &c) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, c, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || entry_map(rti, p, c) != LMX_MSG_OK
@@ -6737,9 +6737,9 @@ int main(int argc, char **argv) {
             LmxMsgAddr p = 0, kid = 0;
             LmxMsg *pm, *km;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &kid) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &kid) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, kid, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 fprintf(stderr, "exec unlink-contract create\n");
@@ -6773,9 +6773,9 @@ int main(int argc, char **argv) {
             int k;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             memset(extras, 0, sizeof(extras));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &c0) != LMX_MSG_OK) {
+                || lmx_msg_create(rti, p, &ini, 1, &c0) != LMX_MSG_OK) {
                 fprintf(stderr, "exec wait-grow create\n");
                 if (rti != 0) {
                     lmx_msg_runtime_delete(rti);
@@ -6783,7 +6783,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             for (k = 0; k < 16; k++) {
-                if (lmx_msg_create(rti, p, (unsigned)(10 + k), &ini, 1, &extras[k]) != LMX_MSG_OK) {
+                if (lmx_msg_create(rti, p, &ini, 1, &extras[k]) != LMX_MSG_OK) {
                     fprintf(stderr, "exec wait-grow extra create %d\n", k);
                     lmx_msg_runtime_delete(rti);
                     return 1;
@@ -6839,11 +6839,11 @@ int main(int argc, char **argv) {
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             memset(&any_ctx, 0, sizeof(any_ctx));
             memset(&c_ctx, 0, sizeof(c_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 4, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &c) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, b, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
@@ -6941,9 +6941,9 @@ int main(int argc, char **argv) {
             g_self_unbind_st = -1;
             g_self_bind_st = -1;
             g_self_bound_after = -1;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_self_rebind, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
@@ -7010,10 +7010,10 @@ int main(int argc, char **argv) {
             memset(&sib, 0, sizeof(sib));
             sib.bind_st = -1;
             sib.unbind_st = -1;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &b) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec sibling-map create\n");
                 if (rti != 0) {
@@ -7050,11 +7050,11 @@ int main(int argc, char **argv) {
             int n0;
             memset(&dz, 0, sizeof(dz));
             dz.st = -1;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &c) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, c, 3, &ini, 1, &g) != LMX_MSG_OK
+                || lmx_msg_create(rti, c, &ini, 1, &g) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, c, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, c, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, g, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -7111,7 +7111,7 @@ int main(int argc, char **argv) {
             int st;
             /* Stage 5 (d1): the ingress root is R0, so r is R0 and c its child. */
             if (rti == 0 || (r = lmx_msg_root_addr(rti)) == 0U
-                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_create(rti, r, &ini, 1, &c) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec ingress recv create\n");
                 if (rti != 0) {
@@ -7168,7 +7168,7 @@ int main(int argc, char **argv) {
             DWORD until;
             /* Stage 5 (d1): the ingress root is R0, so r is R0 and c its child. */
             if (rti == 0 || (r = lmx_msg_root_addr(rti)) == 0U
-                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_create(rti, r, &ini, 1, &c) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec ingress ready create\n");
                 if (rti != 0) {
@@ -7214,7 +7214,7 @@ int main(int argc, char **argv) {
             LmxMsgEnv ing;
             /* Stage 5 (d1): the ingress root is R0, so r is R0 and c its child. */
             if (rti == 0 || (r = lmx_msg_root_addr(rti)) == 0U
-                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_create(rti, r, &ini, 1, &c) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec ingress close create\n");
                 if (rti != 0) {
@@ -7261,8 +7261,8 @@ int main(int argc, char **argv) {
             memset(&dv, 0, sizeof(dv));
             dv.st = -1;
             if (rti == 0 || (r = lmx_msg_root_addr(rti)) == 0U
-                || lmx_msg_create(rti, 0, 2, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &c) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, c, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 fprintf(stderr, "exec maintain create\n");
@@ -7340,9 +7340,9 @@ int main(int argc, char **argv) {
             LmxMsgAddr p = 0, a = 0, b = 0;
             int st;
             int n0;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &b) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, b, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -7381,8 +7381,8 @@ int main(int argc, char **argv) {
             LmxMsgAddr p = 0, g = 0;
             int st;
             int n0;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &g) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &g) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_emergency_cancel(rti, g) != LMX_MSG_OK) {
                 fprintf(stderr, "exec unbound close create\n");
@@ -7415,9 +7415,9 @@ int main(int argc, char **argv) {
              * R0's turn is started only by the bootstrap. */
             LmxMsgAddr p = 0, a = 0, b = 0;
             int st_map, st;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &b) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_root_count, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, b, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
@@ -7455,7 +7455,7 @@ int main(int argc, char **argv) {
             LmxMsgAddr p = 0;
             int st;
             g_foreign_rt = lmx_msg_runtime_new();
-            if (rti == 0 || g_foreign_rt == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+            if (rti == 0 || g_foreign_rt == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec foreign turn create\n");
                 if (g_foreign_rt != 0) {
@@ -7496,7 +7496,7 @@ int main(int argc, char **argv) {
             int st;
             g_foreign_rt = lmx_msg_runtime_new();
             if (rti == 0 || g_foreign_rt == 0 || lmx_msg_exec_start_contexts(g_foreign_rt) != LMX_MSG_OK
-                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
+                || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec foreign stop create\n");
                 if (g_foreign_rt != 0) {
                     lmx_msg_runtime_delete(g_foreign_rt);
@@ -7551,7 +7551,7 @@ int main(int argc, char **argv) {
         dummy = 0;
         memset(&any_ctx, 0, sizeof(any_ctx));
         if (rti == 0 || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK
-            || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rti, 0, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_exec_bind(rti, dummy, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_host_post(rti, dummy, &env) != LMX_MSG_STAGED) {
             fprintf(stderr, "exec wait boundary create\n");

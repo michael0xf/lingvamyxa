@@ -220,12 +220,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    st = lmx_msg_create(g_rt, 0, 1, init, 1, &parent);
+    st = lmx_msg_create(g_rt, 0, init, 1, &parent);
     if (st != LMX_MSG_OK) {
         fprintf(stderr, "create parent %d\n", st);
         return 1;
     }
-    st = lmx_msg_create(g_rt, parent, 2, init, 1, &child);
+    st = lmx_msg_create(g_rt, parent, init, 1, &child);
     if (st != LMX_MSG_OK) {
         fprintf(stderr, "create child %d\n", st);
         return 1;

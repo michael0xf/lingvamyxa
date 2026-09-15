@@ -652,9 +652,9 @@ sub: boundary_bytes (@: LmxMsg a; @: LmxMsg b)
         value: value + 1
 end: boundary_bytes
 
-fn: make_owner (@: LmxMsgRuntime rt; unsigned: id) @: LmxMsg
+fn: make_owner (@: LmxMsgRuntime rt) @: LmxMsg
     unsigned: addr 0U
-    require(c.lmx_msg_create(rt, 0U, id, 0, 0U, @ addr) = c.LMX_MSG_OK, "create owner")
+    require(c.lmx_msg_create(rt, 0U, 0, 0U, @ addr) = c.LMX_MSG_OK, "create owner")
 return: c.lmx_msg_find(rt, addr)
 
 fn: main () int
@@ -667,10 +667,10 @@ fn: main () int
     int: i 0
     c.array: [5]: char nul_source
     require(rt != 0, "runtime")
-    a: make_owner(rt, 11U)
-    b: make_owner(rt, 12U)
-    failed_node: make_owner(rt, 13U)
-    failed_method: make_owner(rt, 14U)
+    a: make_owner(rt)
+    b: make_owner(rt)
+    failed_node: make_owner(rt)
+    failed_method: make_owner(rt)
     require(a != 0 && b != 0 && failed_node != 0 && failed_method != 0, "owner handles")
     if: c.getenv("LMX_FOCUSED_BRACKET") != 0
         require(open_scanner_unit(a) = 0 && open_scanner_unit(b) = 0, "focused scanner units")

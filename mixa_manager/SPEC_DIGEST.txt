@@ -44,7 +44,7 @@ It was not callable when PROCESS_SEAM was written. It is now:
     lmx_message_selftest.lm1                   selftest
 
     lmx_msg_runtime_new / _delete
-    lmx_msg_create(rt, parent, create_id, init, n, out)
+    lmx_msg_create(rt, parent, init, n, out)
     lmx_msg_send(rt, from, to, env)
     lmx_msg_stop(rt, from, to)
     lmx_msg_end_turn(rt, who, success)
@@ -93,10 +93,8 @@ create (19.29.7.1, from 12280)
     Mix path = parent path with one integer APPENDED from the parent's child
       counter. Concatenation, not arithmetic: 34.3 gives 34.3.1 then 34.3.2,
       and that child's first child is 34.3.1.1. First allocated child is 1.
-    retry of the same (parent, create_id) returns the SAME child and path and
-      consumes no counter value
-    an ABORTED reservation is not reused - a later retry of that create_id gets
-      a new slot and a NEW path segment
+    (D1/D2, 2026-09-15: the retry-by-id semantics this paragraph described are
+      gone -- no stored id, no parameter; create always allocates fresh)
     the child DOES NOT RUN before the creator's successful end-turn publication
     a failed parent turn releases uncommitted children
     LmxMsgAddr, the mailbox slot, is NOT the Mix path

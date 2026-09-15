@@ -117,16 +117,16 @@ fn: main () int
     # Unbuffered: a run the runner kills still shows its reading lines and FAILs.
     c.setvbuf(c.stdout, 0, c._IONBF, 0U)
     rt: lmx_msg_runtime_new()
-    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
+    check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
     if: rt = 0 || r = 0U
         return: 2
-    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ p) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P created and published")
+    check(lmx_msg_create(rt, r, @ ini, 1U, @ p) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P created and published")
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: env = 0
         return: 2
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: 7
-    check(lmx_msg_create(rt, p, 3U, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_send(rt, p, cc, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "C created by P with one input staged; P published")
+    check(lmx_msg_create(rt, p, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_send(rt, p, cc, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "C created by P with one input staged; P published")
     c.free((cast: (@: void) env))
     check(lmx_msg_exec_bind(rt, p, turn_parent_fail, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, cc, turn_orphan_fail, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "P and C bound")
     check(lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, cc) = 1 && lmx_msg_exec_workers(rt) = 0, "C's input admitted; nothing is mapped yet")

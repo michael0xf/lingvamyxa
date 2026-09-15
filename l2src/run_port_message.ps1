@@ -243,7 +243,7 @@ foreach ($r in $redirects) {
     if ($genText -notmatch ('(?m)^    (?:fn|sub): ' + [regex]::Escape($r.unit) + ' \(')) { throw "the public wrapper is missing: $($r.unit)" }
 }
 foreach ($sig in @(
-    'fn: msg_create \(@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; const: @\(uchar init\); size_t: n; @: LmxMsgAddr out\) int',
+    'fn: msg_create \(@: LmxMsgRuntime rt; LmxMsgAddr: parent; const: @\(uchar init\); size_t: n; @: LmxMsgAddr out\) int',
     'fn: msg_send \(@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @\(LmxMsgEnv env\)\) int',
     'fn: msg_end_turn \(@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success\) int',
     'fn: msg_recv \(@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out\) int',

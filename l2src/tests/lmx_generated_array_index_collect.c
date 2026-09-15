@@ -29,7 +29,7 @@ int main(void)
     int rc;
 
     rt = lmx_msg_runtime_new();
-    if (rt == 0 || lmx_msg_create(rt, 0, 1, 0, 0, &a) != LMX_MSG_OK) {
+    if (rt == 0 || lmx_msg_create(rt, 0, 0, 0, &a) != LMX_MSG_OK) {
         fprintf(stderr, "generated array_index create\n");
         return 1;
     }

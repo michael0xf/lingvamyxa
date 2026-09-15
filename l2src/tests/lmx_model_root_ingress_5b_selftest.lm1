@@ -118,10 +118,10 @@ fn: main () int
     # Unbuffered: a run the runner kills still shows its reading lines and FAILs.
     c.setvbuf(c.stdout, 0, c._IONBF, 0U)
     rt: lmx_msg_runtime_new()
-    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
+    check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
     if: rt = 0 || r = 0U
         return: 2
-    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "C and D created and published")
+    check(lmx_msg_create(rt, r, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_create(rt, r, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "C and D created and published")
     g_target: cc
     g_parent: r
 
