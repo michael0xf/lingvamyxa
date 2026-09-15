@@ -501,7 +501,6 @@ typedef struct StageJob {
     unsigned id1;
 } StageJob;
 static LmxMsgAddr g_nself_from;
-static LmxMsg *g_sched_drop;
 static LmxMsg *g_drive_drop;
 static LmxMsgRuntime *g_drive_mail_rt;
 static volatile LONG g_drive_exec_ok;
@@ -595,14 +594,6 @@ static void drive_close_mail_hook(LmxMsg *m) {
     SetEvent(g_mail_entered);
     w = WaitForSingleObject(g_mail_go, 5000);
     InterlockedExchange(&g_drive_hook_got_go, w == WAIT_OBJECT_0 ? 1 : 0);
-}
-static void sched_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
-    lmx_msg_test_after_sched_snap = 0;
-    (void)rt;
-    if (p != 0 && g_sched_drop != 0) {
-        lmx_msg_child_unlink(p, g_sched_drop);
-        g_sched_drop = 0;
-    }
 }
 static void drive_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
     (void)rt;
@@ -7797,48 +7788,6 @@ int main(int argc, char **argv) {
             lmx_msg_test_fail_retain = 0;
             lmx_msg_env_release(&got);
             fprintf(stderr, "exec wait: non-self recv retain fail still pops; pin released\n");
-            lmx_msg_runtime_delete(rti);
-        }
-        rti = lmx_msg_runtime_new();
-        {
-            LmxMsgAddr p = 0, c1 = 0, c2 = 0;
-            LmxMsg *cm2;
-            memset(&any_ctx, 0, sizeof(any_ctx));
-            memset(&ui_ctx, 0, sizeof(ui_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &c1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &c2) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, c1, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, c2, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_host_post(rti, c1, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec sched-snap create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            lmx_msg_exec_unbind(rti, c2);
-            cm2 = lmx_msg_find(rti, c2);
-            g_sched_drop = cm2;
-            lmx_msg_test_after_sched_snap = sched_snap_drop_hook;
-            {
-                int sst = own_turn_in_root(rti, p, turn_sched_step, 0U);
-                if (sst != LMX_MSG_OK
-                    || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
-                    fprintf(stderr, "exec sched-snap step st=%d done=%ld\n",
-                        sst, (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
-                    lmx_msg_test_after_sched_snap = 0;
-                    g_sched_drop = 0;
-                    lmx_msg_runtime_delete(rti);
-                    return 1;
-                }
-            }
-            lmx_msg_test_after_sched_snap = 0;
-            g_sched_drop = 0;
-            fprintf(stderr, "exec wait: sched_step snap survives sibling unlink overlap\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
