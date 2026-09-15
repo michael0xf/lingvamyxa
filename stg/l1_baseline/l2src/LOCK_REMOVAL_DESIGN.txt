@@ -183,7 +183,13 @@ S5. The runtime-level lists (L5). Waits on 5.1.
     rt->slots, rt->n, the retire queue, the reap queue, rt->transport and e->ui_lane each either go or become a cell in
     a Message's arena, by Mikhail's answer to 5.1. With "the executor frees its own memory", reap and join go: each
     worker frees its own wait state and ends. LmxMsgCtxPack, allocated on the parent's lane and freed by the child's
-    thread (alloc inventory 2868/2993/3086), becomes the child's own first state.
+    thread (alloc inventory 2868/2993/3086), becomes the child's own first state. The pack also carries the launch
+    gate (0c's find): on POSIX a pthread_mutex_t gm with a condition variable around the go flag
+    (pack_gate_wait / pack_gate_signal, exec.c 2789-2832 on cf326822), on Win32 a one-shot event. That is a lock
+    outside any mailbox, so it goes (X) with the pack. The proposed replacement, a design point and not agreed
+    wording: the launched child's own mailbox. The launch parameters arrive as its first Message, and its thread
+    waits on its own mailbox's wake. The stage that touches launch_ctx_thread (M or S5, whichever comes first) takes
+    it, red-first by a grep at 0 for pack_gate_ and gm.
     - Red: per list, a test that drops a Message's last reference on a lane other than its parent's, and checks with
       the tripwire that its storage is freed by its parent's settle write on the parent's lane.
 
