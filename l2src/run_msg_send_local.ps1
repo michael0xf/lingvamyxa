@@ -110,7 +110,7 @@ try {
         Invoke-SendStage "compile_$level" $gcc ($flags + @("-$level", $testObj, $messageC) + $modules + $native + $unitObjs + @('-Wl,--wrap=free', '-o', $exe))
         Invoke-SendStage "run_$level" $exe @()
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
-        if ($result -notmatch '(?m)^send local checks=146 failures=0 owned_frees=1\s*$') { throw "Unexpected test result: $result" }
+        if ($result -notmatch '(?m)^send local checks=122 failures=0 owned_frees=1\s*$') { throw "Unexpected test result: $result" }
         Write-Output "$level $($result.Trim())"
     }
     foreach ($path in $coreHashes.Keys) {

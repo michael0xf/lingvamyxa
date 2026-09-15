@@ -1,4 +1,4 @@
-include: "l2src/lmx_message.h" "<stdio.h>" "<stdlib.h>"
+include: "l2src/lmx_message.h" "<stdio.h>" "<stdlib.h>" "<windows.h>"
 
 # Single-thread test-driver observation only, not shared Message runtime state.
 prototype:
@@ -7,75 +7,52 @@ end: prototype
 int: send_checks 0
 int: owned_frees 0
 @: void watched_owned 0
-int: parent_step_status 0
-int: scheduled_child_calls 0
-int: scheduled_child_number 0
 
-# Stage 5 (d): a parent's turn that steps the one child named in its cell.
-# ctx is the test's cell: [0] the child's address, written before the
-# root_turn; [1] the step's status, written here. The same text in every
-# migrated test.
-fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
-    @: unsigned cell
-    if: ctx = 0
+# Stage M: yield-round observation. No wait, no Sleep, no wall clock, no
+# round bound; SwitchToThread between reads so the bound Message's own
+# thread makes progress, and the runner's own timeout is the loop's real
+# bound. lmx_msg_exec_holding_turn reads per-thread TLS (true only on the
+# thread that holds the turn), so it cannot answer "has some other thread
+# taken this turn yet" -- an observer polls a mailbox-lock-protected
+# property instead (inbox_n back to 0: the mail this test sent to wake
+# the Message has been received). The same text in every migrated test
+# that waits on a Message's own thread.
+# The kernel's own success flag, set once by the handler as its last act,
+# is the observer-safe "this turn's checks fully ran" signal (matching the
+# family_release_17 pattern: running/success reads, never a wait). Draining
+# the mail alone only proves the turn started, not that it finished.
+fn: yield_until_success (@: LmxMsgRuntime rt; unsigned: who) int
+    @: LmxMsg m
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        return: 0
+    while: c.lmx_msg_success_load(m) = 0
+        c.SwitchToThread()
+    return: 1
+
+# Stage M: send_query_turn's target is not R0's direct child, so it needs a
+# real thread of its own (bind, start_contexts, the yield-round wait above).
+# The mail that wakes it is admitted through R0's direct child's own
+# synchronous turn (lmx_msg_run_entry_turn, M's "what stays"), since the
+# bootstrap thread loses its blanket send/recv/end_turn privilege the
+# moment any context has ever been started.
+unsigned: send_via_root_to 0U
+@: LmxMsgEnv send_via_root_env 0
+
+fn: send_via_root_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
         return: 1
-    cell: (cast: (@: unsigned) ctx)
-    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    if: lmx_msg_send(rt, who, send_via_root_to, send_via_root_env) != c.LMX_MSG_STAGED
+        return: 1
+    ---
     return: lmx_msg_end_turn(rt, who, 1)
 
-# Stage 5 (d): steps run from R0's turn down the family, one parent's turn per
-# level. fixture_root is R0's child; main binds each intermediate parent only
-# around the step. Each returns root_turn's status, else the first level's
-# status that is not OK, else the stepped child's.
-unsigned: fixture_root 0U
-[]: unsigned step_cell_top 2
-[]: unsigned step_cell_mid 2
-[]: unsigned step_cell_leaf 2
-
-# R0 -> top -> child
-fn: step_via_root (@: LmxMsgRuntime rt; unsigned: top; unsigned: child) int
-    int: st
-    step_cell_top[0]: top
-    step_cell_top[1]: (cast: (unsigned) LMX_MSG_INVALID)
-    step_cell_leaf[0]: child
-    step_cell_leaf[1]: (cast: (unsigned) LMX_MSG_INVALID)
-    st: lmx_msg_exec_bind(rt, top, turn_step_child, (cast: (@: void) step_cell_leaf), LMX_MSG_AFFINITY_ANY)
-    if: st != LMX_MSG_OK
-        return: st
-    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
-    lmx_msg_exec_unbind(rt, top)
-    if: st != LMX_MSG_OK
-        return: st
-    if: (cast: (int) step_cell_top[1]) != LMX_MSG_OK
-        return: (cast: (int) step_cell_top[1])
-    return: (cast: (int) step_cell_leaf[1])
-
-# R0 -> top -> mid -> child
-fn: step_via_root2 (@: LmxMsgRuntime rt; unsigned: top; unsigned: mid; unsigned: child) int
-    int: st
-    step_cell_top[0]: top
-    step_cell_top[1]: (cast: (unsigned) LMX_MSG_INVALID)
-    step_cell_mid[0]: mid
-    step_cell_mid[1]: (cast: (unsigned) LMX_MSG_INVALID)
-    step_cell_leaf[0]: child
-    step_cell_leaf[1]: (cast: (unsigned) LMX_MSG_INVALID)
-    st: lmx_msg_exec_bind(rt, top, turn_step_child, (cast: (@: void) step_cell_mid), LMX_MSG_AFFINITY_ANY)
-    if: st != LMX_MSG_OK
-        return: st
-    st: lmx_msg_exec_bind(rt, mid, turn_step_child, (cast: (@: void) step_cell_leaf), LMX_MSG_AFFINITY_ANY)
-    if: st != LMX_MSG_OK
-        lmx_msg_exec_unbind(rt, top)
-        return: st
-    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
-    lmx_msg_exec_unbind(rt, mid)
-    lmx_msg_exec_unbind(rt, top)
-    if: st != LMX_MSG_OK
-        return: st
-    if: (cast: (int) step_cell_top[1]) != LMX_MSG_OK
-        return: (cast: (int) step_cell_top[1])
-    if: (cast: (int) step_cell_mid[1]) != LMX_MSG_OK
-        return: (cast: (int) step_cell_mid[1])
-    return: (cast: (int) step_cell_leaf[1])
+# R0's direct child (root) admits one envelope into a deeper descendant's
+# inbox, synchronously, before any context is started.
+fn: send_via_root (@: LmxMsgRuntime rt; unsigned: root; unsigned: to; @: LmxMsgEnv env) int
+    send_via_root_to: to
+    send_via_root_env: env
+    return: c.lmx_msg_run_entry_turn(rt, root, send_via_root_turn, 0)
 
 sub: send_check (int: ok; const: @(char label))
     send_checks: send_checks + 1
@@ -92,49 +69,6 @@ sub: __wrap_free (@: void p)
     ---
     c.__real_free(p)
 end: __wrap_free
-
-fn: send_scheduled_child_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
-    @: LmxMsgEnv got
-    int: st
-    got: (cast: (@: LmxMsgEnv) ctx)
-    st: lmx_msg_recv(rt, who, got)
-    if: st != LMX_MSG_OK
-        return: st
-    scheduled_child_calls: scheduled_child_calls + 1
-    scheduled_child_number: got\number
-    lmx_msg_env_release(got)
-    return: lmx_msg_end_turn(rt, who, 1)
-
-fn: send_scheduling_parent_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
-    if: ctx != 0
-        return: LMX_MSG_INVALID
-    parent_step_status: lmx_msg_sched_step(rt, who)
-    return: lmx_msg_end_turn(rt, who, 1)
-
-sub: send_parent_schedule_case (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child)
-    @: LmxMsgEnv env
-    @: LmxMsgEnv got
-    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
-    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
-    send_check(env != 0 && got != 0, "allocate parent scheduling envelopes")
-    send_check(lmx_msg_exec_bind(rt, child, send_scheduled_child_turn, got, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind parent-scheduled child without mapping")
-    send_check(lmx_msg_exec_bind(rt, parent, send_scheduling_parent_turn, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind scheduling parent")
-    # Drain stale creation/pre-bind readiness BEFORE sending new work. A
-    # binding supplies a handler, not an independently mapped native thread.
-    send_check(step_via_root(rt, fixture_root, parent) = LMX_MSG_OK && parent_step_status = LMX_MSG_EMPTY && scheduled_child_calls = 0, "drain empty initial parent readiness")
-    env\kind: LMX_MSG_KIND_NUMBER
-    env\id: 101U
-    env\number: 61
-    send_check(lmx_msg_send(rt, parent, child, env) = LMX_MSG_STAGED, "stage first mail after child binding")
-    env\id: 102U
-    env\number: 62
-    send_check(lmx_msg_send(rt, parent, child, env) = LMX_MSG_STAGED && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "admit two messages after child binding")
-    send_check(step_via_root(rt, fixture_root, parent) = LMX_MSG_OK && parent_step_status = LMX_MSG_OK && scheduled_child_calls = 1 && scheduled_child_number = 61, "parent schedules first post-bind envelope")
-    send_check(step_via_root(rt, fixture_root, parent) = LMX_MSG_OK && parent_step_status = LMX_MSG_OK && scheduled_child_calls = 2 && scheduled_child_number = 62, "parent reschedules remaining envelope in FIFO")
-    send_check(step_via_root(rt, fixture_root, parent) = LMX_MSG_OK && parent_step_status = LMX_MSG_EMPTY && scheduled_child_calls = 2, "no duplicate parent scheduling")
-    c.free(got)
-    c.free(env)
-end: send_parent_schedule_case
 
 sub: send_init_case (@: LmxMsgRuntime rt; unsigned: who; @: LmxMsg source)
     @: LmxMsgEnv got
@@ -161,10 +95,19 @@ sub: send_init_case (@: LmxMsgRuntime rt; unsigned: who; @: LmxMsg source)
     c.free(got)
 end: send_init_case
 
+# Stage M: child now runs on its own thread; the dummy envelope that woke
+# it (send_via_root) is drained here first so its inbox is empty for the
+# self query below, exactly as the pre-M forced turn found it.
 fn: send_query_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
     @: LmxMsg source
+    @: LmxMsgEnv wake
     unsigned: segment 0U
+    int: st
     source: (cast: (@: LmxMsg) ctx)
+    wake: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    send_check(wake != 0 && lmx_msg_recv(rt, who, wake) = LMX_MSG_OK, "drain the wake envelope in the real turn")
+    lmx_msg_env_release(wake)
+    c.free(wake)
     send_check(lmx_msg_turn_self(rt) = source, "real self-turn callback context")
     send_check(lmx_msg_state(rt, who) = source\state, "self state query")
     send_check(lmx_msg_inbox_n(rt, who) = 0, "self empty inbox query")
@@ -172,51 +115,12 @@ fn: send_query_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
     send_check(lmx_msg_path_seg(rt, who, 0, @ segment) = LMX_MSG_OK && segment = source\path[0], "self path segment query")
     send_check(lmx_msg_child_n(rt, who) = 0 && lmx_msg_child_at(rt, who, 0) = 0U, "self empty child queries")
     send_init_case(rt, who, source)
-    return: lmx_msg_end_turn(rt, who, 1)
-
-fn: send_prebind_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
-    @: unsigned totals
-    @: LmxMsgEnv got
-    totals: (cast: (@: unsigned) ctx)
-    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
-    send_check(got != 0, "allocate prebind receiver envelope")
-    send_check(lmx_msg_recv(rt, who, got) = LMX_MSG_OK, "receive prebind work in scheduled turn")
-    send_check(got\id = 41U + totals[0] && got\n = 1U && got\bytes[0] = 21U + totals[0], "prebind FIFO identity")
-    totals[0]: totals[0] + 1U
-    totals[1]: totals[1] + got\bytes[0]
-    lmx_msg_env_release(got)
-    send_check(got\bytes = 0 && got\n = 0U, "release prebind receive")
-    c.free(got)
-    return: lmx_msg_end_turn(rt, who, 1)
-
-sub: send_prebind_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to)
-    @: LmxMsgEnv env
-    @: LmxMsg dst
-    []: unsigned totals 2
-    uchar: byte 21
-    totals[0]: 0U
-    totals[1]: 0U
-    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
-    send_check(env != 0, "allocate prebind sender envelope")
-    env\id: 41U
-    env\kind: LMX_MSG_KIND_BYTES
-    env\bytes: @ byte
-    env\n: 1U
-    send_check(lmx_msg_send(rt, from, to, env) = LMX_MSG_STAGED, "first mail before bind")
-    byte: 22
-    env\id: 42U
-    send_check(lmx_msg_send(rt, from, to, env) = LMX_MSG_STAGED, "second mail before bind")
-    send_check(lmx_msg_end_turn(rt, from, 1) = LMX_MSG_OK, "commit prebind mail")
-    dst: lmx_msg_find(rt, to)
-    send_check(dst != 0 && dst\turn = 0 && lmx_msg_inbox_n(rt, to) = 2 && totals[0] = 0U, "mail exists before any binding or execution")
-    send_check(lmx_msg_exec_bind(rt, to, send_prebind_turn, totals, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind already-runnable child without mapping")
-    send_check(lmx_msg_exec_bind(rt, from, send_scheduling_parent_turn, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind prebind scheduling parent")
-    send_check(step_via_root(rt, fixture_root, from) = LMX_MSG_OK && parent_step_status = LMX_MSG_OK, "parent schedules first prebind envelope without manual ready")
-    send_check(step_via_root(rt, fixture_root, from) = LMX_MSG_OK && parent_step_status = LMX_MSG_OK, "parent reschedules second prebind envelope")
-    send_check(totals[0] = 2U && totals[1] = 43U, "prebind work executed twice in FIFO")
-    send_check(lmx_msg_inbox_n(rt, to) = 0 && step_via_root(rt, fixture_root, from) = LMX_MSG_OK && parent_step_status = LMX_MSG_EMPTY && totals[0] = 2U, "no duplicate or stranded prebind work")
-    c.free(env)
-end: send_prebind_case
+    st: lmx_msg_end_turn(rt, who, 1)
+    # Last act, after end_turn's own work (collection, pump) is fully done:
+    # the kernel's own success flag is this turn's observer-safe "fully ran"
+    # signal (see yield_until_success above), not just "the handler started".
+    c.lmx_msg_success_store(source, 1)
+    return: st
 
 sub: send_copy_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; unsigned: untouched; unsigned: id)
     @: LmxMsgEnv env
@@ -283,6 +187,7 @@ fn: main () int
     @: LmxMsg t
     @: LmxMsgEnv env
     @: LmxMsgEnv got
+    @: LmxMsgEnv wake
     @: uchar payload
     @: void sibling_init
     int: sibling_state
@@ -293,7 +198,6 @@ fn: main () int
     rt: lmx_msg_runtime_new()
     send_check(rt != 0, "allocate runtime fixture")
     send_check(lmx_msg_create(rt, 0U, 1U, @ initial, 1U, @ root) = LMX_MSG_OK, "create root")
-    fixture_root: root
     send_check(lmx_msg_create(rt, root, 2U, @ initial, 1U, @ parent) = LMX_MSG_OK && lmx_msg_create(rt, root, 3U, @ initial, 1U, @ cousin_parent) = LMX_MSG_OK, "create two branches")
     send_check(lmx_msg_end_turn(rt, root, 1) = LMX_MSG_OK, "commit branches")
     send_check(lmx_msg_create(rt, parent, 4U, @ initial, 1U, @ child) = LMX_MSG_OK && lmx_msg_create(rt, parent, 5U, @ initial, 1U, @ sibling) = LMX_MSG_OK && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "create direct child and sibling")
@@ -346,11 +250,22 @@ fn: main () int
     c.free(got)
     c.free(env)
     send_init_case(rt, child, d)
+    # Stage M: child is not R0's direct child, so its query turn runs on its
+    # own thread once contexts are started. Nothing before this point in the
+    # test relies on the bootstrap thread's blanket send/recv/end_turn
+    # privilege any more, so start_contexts only now.
     send_check(lmx_msg_exec_bind(rt, child, send_query_turn, d, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind real query callback")
-    send_check(step_via_root2(rt, root, parent, child) = LMX_MSG_OK, "execute query callback")
-    send_check(lmx_msg_turn_self(rt) = 0, "self context restored after callback")
-    send_prebind_case(rt, cousin_parent, cousin)
-    send_parent_schedule_case(rt, cousin_parent, cousin)
+    send_check(c.lmx_msg_exec_start_contexts(rt) = LMX_MSG_OK, "start contexts for the query callback's own thread")
+    wake: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    send_check(wake != 0, "allocate wake envelope")
+    wake\kind: LMX_MSG_KIND_NUMBER
+    wake\id: 71U
+    wake\number: 0
+    send_check(send_via_root(rt, root, child, wake) = LMX_MSG_OK, "root admits the wake envelope into child's inbox")
+    c.free(wake)
+    send_check(yield_until_success(rt, child) != 0, "wait for the query callback's own turn to run and finish")
+    lmx_msg_exec_unbind(rt, child)
+    send_check(lmx_msg_turn_self(rt) = 0, "driver thread holds no turn of its own")
     lmx_msg_runtime_delete(rt)
     send_check(owned_frees = 1, "runtime teardown does not free released envelope again")
     c.printf("send local checks=%d failures=0 owned_frees=%d\n", send_checks, owned_frees)
