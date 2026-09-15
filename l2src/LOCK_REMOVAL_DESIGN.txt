@@ -602,7 +602,10 @@ M. The sequential mapping removed (X), after S3 and before S4.
       deleted, so run_l2trans went red at gcc ("'LmxMsg' has no member named 'ui_pending'", exit 1 in 97 s). A grep of
       every struct field M's diff deletes finds no other reader. The fix (d6/struct-field-after-m) moves the fixture
       and run_l2trans.ps1's pin to LmxMsg.success, a field of the L3 Thread record that no stage deletes. It lands on
-      its own, before D2.
+      its own, before D2. Measured: run_l2trans on aa156868 exit 0 in 297 s ("l2trans gen2 ok"). Union-base
+      baselines at d8f758e6: run_port_parser exit 0 in 326 s ("run_port_parser ok"), run_ingress_harness exit 0
+      ("mixa ingress fail_keep_runtime path ok"). Landing: land_fix_then_d2.sh (land_base.sh twice: the fix, then
+      D2 plus lmx_cancel).
     - Rule from this miss (the coordinator, 2026-09-15): every landing set is the union of the runners earlier
       landings ran, never a per-stage subset. The fixed base is run_self_build with its tag and log, run_gates
       -L2MessageRoot (31), run_port_message plain and -LaneCheck, run_l2trans, run_port_parser, run_mixa and
