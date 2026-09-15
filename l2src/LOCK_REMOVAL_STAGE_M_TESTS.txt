@@ -32,6 +32,14 @@ Rulings for the conversions (the coordinator, 2026-09-15, after the core commit 
    that splits a converted scenario keeps part of its gates in the neighbouring range (checked per line with
    gate_partial.py: cpu-busy's CreateEvent at 2028 and 3121, rebind_ui's loop at 2737-2739); b5's per-gate review
    is the count of record. 29 + 20 = 49.
+4. A balance acceptance does not compare a process-wide live allocation count across a delete once context
+   workers ran (the coordinator, 2026-09-15, from lmx_model_turn_arena_o1_selftest): lmx_turn_msg, lmx_turn_root
+   and lmx_turn_running are __thread (MinGW emutls), so a worker's thread-local blocks go through the wrapped
+   allocator and are freed at OS thread exit, after exec_stop has seen the worker count reach 0. The claim is
+   pinned to the exact block bases freed once by that runtime's delete. turn_arena_o1 is restated so (d6,
+   d6/m-sequential after d2f5d8c5: 30 direct runs 0 red, before 5 of 30) and joins M's converted list;
+   lmx_model_checks_19_29_6_selftest keeps its 7 wall-clock sites as debt (not M's subject).
+Merged for M: b5's sonnet/m-tests-send 76ad060d (c66bbfcd) and e9's claude-0c/m-tests-scenario 0dfccada (d2f5d8c5).
 Split (accepted): d6 the core, lmx_message_exec_selftest.c and tests/cancel_spin_host.c, the runners and the landing;
 b5 the send_local, family_handoff and adopt_unrooted tests; e9 the run_model_scenario36 set (liveness_33,
 family_close_32, family_release_17, orphan_mapped_17, scenario36, root_ingress_5b, root_record_5e), whose rt\n pins
