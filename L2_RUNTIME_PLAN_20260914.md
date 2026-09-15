@@ -2734,3 +2734,16 @@ sleeping in wait() inside take between its turns, the sender being another
 OS thread under the same monitor, Java's producer/consumer queue in its
 simplest form; a self-send notifies nobody, harmlessly; no other wake in
 the project.
+The seed re-base's scope (0c's reading on d7f3b569, ruled): six more
+tests/l1 suites skip checks on gen0 with the lm2 seed as the reason
+(run_parser 48-50, run_expr 96-97, run_c_array 97-98, run_define 109-110,
+run_ifdef 108-109, run_control 87-90); they join the branch, each skip
+deleted with its justification quoted and the check re-measured on the
+new gen0; run_smoke's second gen0 branch (186-187) is the same deletion;
+cancel_spin.lm2 and tests/l1/invalid_*.lm2 are translator inputs by
+extension and stay; gate.ps1's first step, stg's buildCore.lm0.bat, needs
+the old chain's binaries (63-83), so the lead's buildCore rewrite comes
+first as its own branch off the integration tip after the 32-gate landing,
+0c stacks the seed branch on it and measures the cold green there with
+root lm2 and the dead files moved aside, the two landing together after
+(b), b5's branch after them.
