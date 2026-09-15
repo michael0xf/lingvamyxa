@@ -82,8 +82,6 @@ $slotsHdr = Join-Path $out "headers\l2src\lmx_msg_slots.lm1.h"
 $slotsC = Join-Path $out "lmx_msg_slots.c"
 $mailHdr = Join-Path $out "headers\l2src\lmx_msg_mail_chain.lm1.h"
 $mailC = Join-Path $out "lmx_msg_mail_chain.c"
-$schedHdr = Join-Path $out "headers\l2src\lmx_msg_sched_ready.lm1.h"
-$schedC = Join-Path $out "lmx_msg_sched_ready.c"
 $visitHdr = Join-Path $out "headers\l2src\lmx_msg_visit.lm1.h"
 $visitC = Join-Path $out "lmx_msg_visit.c"
 $liveHdr = Join-Path $out "headers\l2src\lmx_msg_liveness.lm1.h"
@@ -132,10 +130,6 @@ if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_slots.lm1" }
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_mail_chain.h.lm1" }
 & $trans "l2src\lmx_msg_mail_chain.lm1" $mailC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_mail_chain.lm1" }
-& $trans "l2src\lmx_msg_sched_ready.h.lm1" $schedHdr
-if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_sched_ready.h.lm1" }
-& $trans "l2src\lmx_msg_sched_ready.lm1" $schedC
-if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_sched_ready.lm1" }
 & $trans "l2src\lmx_msg_visit.h.lm1" $visitHdr
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_visit.h.lm1" }
 & $trans "l2src\lmx_msg_visit.lm1" $visitC
@@ -232,7 +226,7 @@ function Get-LmxObject([string]$Source, [string[]]$Defines = @()) {
     return $obj
 }
 function Get-LmxSupportObjects([string[]]$Defines = @(), [string[]]$HistoryDefines = $null) {
-    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $schedC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC, $copyC, $msgCopyC)) {
+    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC, $copyC, $msgCopyC)) {
         Get-LmxObject $source $Defines
     }
     $histDefs = $Defines
@@ -434,23 +428,17 @@ $l2out = 'build\l2trans'
 if ($Suite -ne 'Full') { $l2out = Join-Path $out 'l2trans' }
 $l2exe = Join-Path $l2out 'l2trans.exe'
 $l2c = Join-Path $l2out 'l2trans.c'
-$needL2 = -not (Test-Path -LiteralPath $l2exe)
-if (-not $needL2) {
-    if ((Get-Item -LiteralPath "l2src\l2trans.lm1").LastWriteTime -gt (Get-Item -LiteralPath $l2exe).LastWriteTime) {
-        $needL2 = $true
-    }
-}
-if ($needL2) {
-    New-Item -ItemType Directory -Force -Path $l2out | Out-Null
-    & $trans "l2src\l2trans.lm1" $l2c
-    if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: l2src\l2trans.lm1" }
-    # Capture stderr natively: PS5.1 otherwise promotes GCC warnings to errors.
-    $l2CompileLog = Join-Path $log 'l2trans.gcc.log'
-    cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build `"$l2c`" -o `"$l2exe`" > `"$l2CompileLog`" 2>&1"
-    if ($LASTEXITCODE -ne 0) {
-        Get-Content (Join-Path $log "l2trans.gcc.log")
-        throw "$gen gcc failed: l2trans"
-    }
+# Rebuilt every run: a translator reused by presence or timestamp can come from any tree in this
+# worktree, and nothing here would notice (l2src/RUNNER_HAZARDS.txt (a)).
+New-Item -ItemType Directory -Force -Path $l2out | Out-Null
+& $trans "l2src\l2trans.lm1" $l2c
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: l2src\l2trans.lm1" }
+# Capture stderr natively: PS5.1 otherwise promotes GCC warnings to errors.
+$l2CompileLog = Join-Path $log 'l2trans.gcc.log'
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build `"$l2c`" -o `"$l2exe`" > `"$l2CompileLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content (Join-Path $log "l2trans.gcc.log")
+    throw "$gen gcc failed: l2trans"
 }
 $spinLm2 = "l2src\tests\cancel_spin.lm2"
 $spinLm1 = Join-Path $l2out 'cancel_spin.lm1'

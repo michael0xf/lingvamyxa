@@ -1,0 +1,199 @@
+PORT_PARSER_TIMING -- where run_port_parser.ps1's ~30 minutes go (survey, 2026-09-14, lingvamyxa-0c)
+
+How the gate reads (read this before proposing a cut)
+  run_port_parser is DIFFERENTIAL. For each of the 12 stages it builds a Port executable per driver
+  (tests/p0_tree_contract/p0_meta_dump.c and l2src/p0_dump_driver.c). It runs the Ref and the Port executable of
+  each driver on the same 36 tests/p0_tree_contract/*.lmx inputs, and it requires the same exit code
+  and the same stdout text. It never reads the *.meta.txt, *.tree.txt or *.err.txt expected texts
+  in that directory. Those belong to run_p0_tree_contract.ps1 and run_p0_meta.ps1. A one-byte edit
+  in an expected text therefore cannot turn this gate red. A one-byte edit in a .lmx input changes Ref
+  and Port alike and stays green too. The falsifier for a cut is a one-byte change in a ported L2
+  unit that makes the Port's output differ from the Ref's.
+
+Measurement
+  Commit 573ab89b (integration after stage 5 (b)). Private worktree C:\Nyasha_Planet\wt0c_fe000dd6.
+  One cold run: a fresh output directory, so the runtime objects, which the runner caches by file
+  presence, were all rebuilt. The runner was an instrumented scratch copy of run_port_parser.ps1:
+  Stopwatch rows around every step, with the logic and every comparison unchanged. Result: exit 0,
+  1845 s wall ("run_port_parser ok", 12 of 12 stages "36/36 goldens identical"), worktree clean after.
+  Machine: AMD Ryzen 7 5800H, 8 cores / 16 threads, Windows 11, Windows PowerShell 5.1.
+  Concurrent load, sampled every 15 s (115 samples, 16:37:25-17:08:02):
+    CPU mean 3.8 %, median 3 %, max 29 %, min 0 %.
+    Another session's run_port_parser.ps1 ran beside this one in 114 of 115 samples: pid 19444
+    started 16:15, then pid 19804 started 16:49. run_l2trans.ps1 was present in 49 samples and
+    run_l2_message_root.ps1 in 3. gcc/cc1/ld processes appeared in 21 samples.
+    The low CPU means the load did not bind; see "Dominant cost".
+  Today's reported runs: 1683 s and 1687 s. This one: 1845 s, the concurrent run_port_parser beside it.
+
+Table (seconds)
+  setup (once): 10.3
+    l2trans.lm1 translate 0.34; l2trans.exe compile+link 1.56; 17 runtime headers translate 0.63;
+    18 runtime modules translate 0.74 + compile 2.09; message host/exec compile 1.18;
+    L2 runtime units 2.47; alloc counter 0.09; Ref meta exe 0.56; Ref dump exe 0.54
+
+  stage                     total | hdr  l2trans l1trans dedup patch linkM linkD | goldens meta  goldens dump
+  a_parser_text             149.4 | 0.0   0.4     0.1     -    0.6   0.7   0.8  |   73.4          73.4
+  b_parser_scan             150.6 | 0.1   1.4     0.1    0.0   0.9   0.8   0.8  |   73.3          73.1
+  c_parser_alloc            151.3 | 0.1   1.6     0.1    0.0   1.0   0.9   1.0  |   73.3          73.2
+  c_parser_dump_slice1      153.6 | 0.1   2.8     0.2    0.1   1.3   1.3   1.3  |   73.2          73.3
+  c_parser_dump_slice2      153.3 | 0.1   2.7     0.2    0.1   1.4   1.2   1.2  |   73.2          73.2
+  c_parser_dump_run         154.1 | 0.1   2.9     0.2    0.1   1.6   1.4   1.4  |   73.2          73.2
+  c_parser_dump_node        153.3 | 0.1   2.6     0.2    0.1   1.4   1.2   1.1  |   73.2          73.2
+  c_parser_dump_new         153.3 | 0.1   2.6     0.2    0.1   1.5   1.2   1.1  |   73.3          73.3
+  c_parser_dump_take_data   153.4 | 0.1   2.6     0.2    0.1   1.5   1.1   1.2  |   73.4          73.2
+  c_parser_dump_delete      153.6 | 0.1   2.6     0.2    0.1   1.5   1.2   1.3  |   73.3          73.3
+  c_parser_dump_alloc       153.4 | 0.1   2.6     0.2    0.1   1.5   1.1   1.2  |   73.3          73.3
+  d_lifecycle               154.6 | 0.2   2.9     0.2    0.1   2.2   1.3   1.3  |   73.3          73.2
+  (hdr = stage header translate; l2trans/l1trans = its units, 1 to 5; dedup = shared-boilerplate
+   strip; patch = the PowerShell rename/prototype pass over lm1/build/parser.lm1.c, 6282 lines;
+   linkM/linkD = one gcc compiling driver + patched oracle + unit C and linking the runtime objects)
+
+  run total 1844.3 = setup 10.3 + stages 1834.0
+    goldens            1758.4  (95.3 %)
+    unit l2trans         27.6
+    compile+link         27.0
+    oracle patch         16.3
+    unit l1trans          2.1
+    headers + dedup       2.4
+  goldens split: Ref process starts 876.6, Port process starts 880.0, output compares 2.4.
+  1728 processes (12 stages x 2 drivers x 36 inputs x Ref+Port), 1.017 s each.
+
+Dominant cost
+  The goldens account for 95 % of the run. Within them, each process launch takes 1.017 s and the
+  byte compare 0.001 s. The launch time is flat across all 12 stages, Ref and Port, both drivers,
+  every input, while CPU stayed at 4 %. So the second is a wait, not work.
+  The wait is in Start-Process -Wait itself. One benchmark ran after the timed run: the Ref meta executable
+  on the same 36 inputs, each launch form in turn, at 3 % load. Its script is in 0c's scratchpad,
+  bench_process_start.ps1.
+    Start-Process -NoNewWindow -Wait -RedirectStandardOutput (today)   1.019 s per process
+    Start-Process -WindowStyle Hidden -Wait (no redirect)             1.017 s per process
+    cmd /c "exe input > file", exit from $LASTEXITCODE                0.029 s per process
+    System.Diagnostics.Process, stdout ReadToEnd                       0.023 s per process
+    Start-Process -PassThru -Redirect, then $p.WaitForExit()           0.010 s per process
+    one cmd running all 36 (the executable's own run time)             0.011 s per process
+  Evidence equality against today's form, over the 36 inputs (6 of which exit 1: C_nested_short,
+  F_star_fence, invalid_eq_unclosed, invalid_triple_unclosed, return_colon_comment_trailer,
+  return_colon_empty_trailer):
+    cmd /c: stdout bytes identical 36/36, exit codes identical 36/36.
+    .NET Process: stdout text identical 36/36, exit codes identical 36/36.
+    Start-Process -PassThru + WaitForExit(): bytes identical, but ExitCode was EMPTY on all 36. A
+      compare of empty against empty always passes, so the exit-code check would vanish silently.
+      Reading $p.Handle before the wait restores it: 0.013 s per process, codes and bytes identical 36/36.
+  So 1728 x ~1.0 s = ~29 minutes is PowerShell 5.1's -Wait, not the executables, gcc or the load.
+
+Proposal (no code before the lead's (c) merge and your ruling)
+  One cut, in Test-GoldensBetween only: launch each Ref and Port process with
+    cmd /c "`"$exe`" `"$input`" > `"$outFile`""   and copy $LASTEXITCODE on the next line,
+  instead of Start-Process -NoNewWindow -Wait -PassThru -RedirectStandardOutput. Everything else stays:
+  the same 36 inputs x 2 drivers x 12 stages, the same per-input .ref.out/.port.out files, the same
+  exit-code compare and text compare, and the same EXIT MISMATCH / OUTPUT MISMATCH lines and throw.
+  No cache, no skipped comparison, no parallelism.
+  cmd /c is chosen over the faster Start-Process + $p.Handle form because it is the house pattern
+  (l1-runner-pitfalls item 1) and has no hidden condition. The Handle form loses the exit code if a
+  later edit drops the one `$null = $p.Handle` line, and nothing would turn red.
+  Expected: goldens 1758 s -> about 1728 x 0.03 = 50 s, so the run drops from ~1845 s to ~140 s
+  (setup 10 + non-golden stage steps 76 + goldens ~50). That is a prediction and is re-measured on the change.
+
+  Falsifiers, each run on the runner as it is today (red first) and again on the change:
+  1. A one-byte change in a ported unit that makes the Port's output differ: in a scratch copy,
+     l2src/parser_dump_port.lm2 line 65 p0_dump_append_field_count_line " fields=" -> " fieldz=".
+     That function is redirected from stage c_parser_dump_slice1 on, and only the dump driver reaches
+     it. Expected red: "dump OUTPUT MISMATCH <first input>" and
+     "stage c_parser_dump_slice1: N mismatches across 36 goldens x 2 drivers", with the same lines and N
+     before and after the cut. Stages a, b and c_parser_alloc stay green. Not measured yet.
+  2. The exit-code compare still bites: in a scratch copy of the changed runner, add 1 to the
+     captured Port exit code. It must go red at stage a_parser_text with
+     "meta EXIT MISMATCH A_compact_f_paren: ref=0 port=1", the first input by name. Today's
+     runner with the same mutation must give the same line.
+  3. A one-byte change in l2src/parser_stack_stream_port.lm2: the runner keeps no cache of stage
+     units (every stage re-runs l2trans, l1trans, dedup and both links on its units each run) and the
+     cut adds none. So the change rebuilds d_lifecycle, the only stage whose Units list it, and nothing
+     else is downstream of it. Shown by d_lifecycle's parser_stack_stream_port.lm1/.c and both Port
+     executables carrying mtimes after the edit, and by the stage's own result for the edited byte.
+
+  Not proposed now, recorded for later: running Ref once per run (its executables do not change across
+  stages) would save about 12 x 72 x 0.03 = 26 s after the cut. That is too little to argue identity for.
+
+After the cut (e2 approved it as proposed; it lands in the same commit as this section)
+  Change: in Test-GoldensBetween only, each Ref and Port launch is
+    cmd /c "`"$ExeRef`" `"$($_.FullName)`" > `"$refOut`""   then   $refCode = $LASTEXITCODE
+    (and the same for Port). The out files, the exit and text compares, the mismatch lines and the
+    throw are unchanged.
+  stderr: today's launch redirected only stdout (-RedirectStandardOutput), so the cmd line
+    redirects only stdout, with `>`. Measured: both Ref drivers write 0 bytes of stderr on all 36
+    inputs.
+  Quoting, from a probe with a space in both the input and output path: this plain form gave
+    identical bytes and exit codes. Wrapping the whole line in one more pair of quotes
+    (cmd /c ""..."" or cmd /s /c) failed with "The filename, directory name, or volume label syntax is
+    incorrect". On invalid_eq_unclosed it still exited 1, with wrong bytes, so an exit-code match
+    alone proves nothing.
+  After-row: fd88bd8a plus the cut, private worktree, one run, cold output directory. Exit 0 in 157 s,
+    12 of 12 stages "36/36 goldens identical". Another session's run_port_parser was running at launch.
+    stage                     total  goldens
+    a_parser_text               6.8     4.6
+    b_parser_scan               8.7     4.7
+    c_parser_alloc              9.3     4.6
+    c_parser_dump_slice1       14.1     5.7
+    c_parser_dump_slice2       13.1     5.0
+    c_parser_dump_run          13.4     5.5
+    c_parser_dump_node         14.2     5.4
+    c_parser_dump_new          12.7     5.1
+    c_parser_dump_take_data    14.4     5.6
+    c_parser_dump_delete       13.1     5.3
+    c_parser_dump_alloc        13.0     5.3
+    d_lifecycle                14.5     5.1
+    stages 147.3 (goldens 61.9, 0.036 s per launch over 1728), setup and startup about 10.
+    Before -> after: run 1845 s -> 157 s; goldens 1758 s -> 61.9 s.
+  Falsifiers, the runner before the cut (at fd88bd8a) against the runner after it, same harness
+  (mutations are exact string replaces with asserted counts, applied to _fals_ copies):
+    The only red text is the stage's throw line: Test-GoldensBetween writes its EXIT MISMATCH and
+    OUTPUT MISMATCH lines with Write-Output inside a Where-Object filter. There the output becomes
+    the filter's value and is swallowed, in both runners (measured with a probe). Making those
+    lines print is a separate ticket.
+    (a) One byte in l2src/parser_dump_port.lm2, p0_dump_append_field_count_line " fields=" -> " fieldz=":
+        before: exit 1 in 615 s, stages a, b and c_parser_alloc ok, then
+                "stage c_parser_dump_slice1: 36 mismatches across 36 goldens x 2 drivers"
+        after:  exit 1 in  51 s, stages a, b and c_parser_alloc ok, then the same line
+    (b) The captured Port exit code + 1:
+        before: exit 1 in 160 s, "stage a_parser_text: 72 mismatches across 36 goldens x 2 drivers"
+        after:  exit 1 in  19 s, the same line
+    (c) One byte in l2src/parser_stack_stream_port.lm2, p0_stream_event_is_tail_cutter "!= 0" -> "<= 0":
+        before: exit 0 in 1854 s, 12 of 12 stages ok; the same rebuild: only d_lifecycle regenerated
+                the unit's .lm1, .c and dedup .c, and the flipped byte reached the generated lm1
+        after:  exit 0 in 151 s, 12 of 12 stages ok. Only d_lifecycle (the one stage listing the unit)
+                regenerated the unit's .lm1, .c and dedup .c in the run, and the flipped byte reached
+                the generated lm1 and C ("... <= 0) != 0;"). The flip is not observable over the 36
+                inputs, so d_lifecycle stays green: its 36/36 does not exercise the predicate's result
+                (a coverage note routed to 5e). The rebuild falsifier holds; a red one needs an input.
+    (d) The goldens directory copied to a path with a space (scratchpad\p0 goldens space full):
+        after:  exit 0 in 154 s, 12 of 12 stages ok, and all 1728 .ref.out/.port.out files are
+                byte-identical to the unmutated run's
+        before (first stage only, to save 30 min): exit 0 in 159 s, stage a "ok", but all 144 output
+                files are 0 bytes. Start-Process -ArgumentList passes the path unquoted, so the space
+                splits it and neither executable reads the input; empty equals empty. That is a false
+                green, and the cut removes it.
+
+Rejected alternatives
+  - Content-hash cache for translate/compile across stages: everything outside the goldens is 86 s
+    (4.7 %). At best a cache saves most of the 27.6 s l2trans and 27 s compile+link, and it adds a
+    cache whose key must cover the pinned translators, flags and every header. Not worth it against
+    the golden cost.
+  - Running the two drivers' comparisons in parallel: this halves wall time only while the 1 s wait
+    remains, and it doubles the machine's process churn during shared gate windows. It can be layered
+    after the launch cut if still needed.
+  - Skipping Ref re-runs: the Ref executables do not change across stages, so their 72 outputs per
+    stage are the same bytes every time (876.6 s of Ref launches). Computing them once per run would
+    cut half the launches without skipping any comparison: every Port output is still compared.
+    The cost is an argument about identity. Ref is built once, outside the loop, so it is a single
+    binary. Recorded here as a candidate, not proposed first.
+
+Existing cache hazard found in passing (not a timing cut)
+  run_port_parser skips a runtime header or object when the file merely exists
+  (`if (Test-Path $objOut) { continue }`). In a warm build\port_parser a changed lmx_*.lm1 does not
+  rebuild. This timing run was cold, so the numbers are not affected.
+
+Other runners with the same launch form (not measured here)
+  `Start-Process ... -Wait` appears 18 times in 12 .ps1 files under stg/l1_baseline (run_l2trans 4,
+  run_lmx 2, run_port_parser 2, run_import_bare 2, one each in run_gen, run_candidate_indent,
+  run_legacy_p0, run_parser, run_lmx_msg_history_owned, run_lmx_msg_roots_stale, run_msg_liveness,
+  run_msg_visit). Whether each pays 1 s per launch depends on its call count; unmeasured.

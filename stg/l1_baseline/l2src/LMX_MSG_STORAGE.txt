@@ -193,7 +193,7 @@ the family fixture was not rerun for the mailbox-only extraction. Its53-check
 source is unchanged. The public send fixture exercised the new integration at
 O2 (136checks); that does not constitute new family-handoff evidence.
 
-At57b590f the same archive/module-list update adds lmx_msg_sched_ready, now
+At57b590f the same archive/module-list update adds the sched_ready queue helper (retired in 3c-2), then
 called by native parent queue wrappers. Both send/family runner manifests
 were parsed and compared: the same21 core sources including the helper's
 header and module. Only public-send was executed (145checks atO2); the family

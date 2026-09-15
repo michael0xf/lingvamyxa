@@ -1,0 +1,4 @@
+structure fields=1
+  frame head="f" body=structure fields=2
+    atom "a"
+    atom "b"

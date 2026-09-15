@@ -1907,8 +1907,8 @@ throw/Message ABI проверены в `17fef09a`. `independent: const: immutab
 
 Стабильный L1 используется read-only:
 `stg/l1_baseline/build/l1trans/gen2/l1trans.exe`, SHA256
-`722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466`
-(продвинут 2026-09-14 с `65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936`;
+`0B3D85B36E72A5935CA43D76B71B8CBBB060AF041CBB6FAE805796595810B2A2`
+(продвинут 2026-09-15 с `722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466` — обновлением среза, привязка к исходникам в L1_PIN_SOURCE.txt;
 раннеры читают хеш из `stg/l1_baseline/l2src/L1_PIN.txt`).
 
 Критерий L1-гейта — неподвижная точка **gen2 C == gen3 C** (побайтово), а не

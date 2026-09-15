@@ -83,7 +83,7 @@ parent-turn consumer test; the transitional bound/EXEC ring remains and is
 not exercised concurrently with that parent's queue. It is not proof of
 final global-lock/ring removal or stable-promotion readiness.
 
-The57b590f checkpoint additionally archives/translates/links lmx_msg_sched_ready.
+The57b590f checkpoint additionally archives/translates/links the sched_ready queue helper (retired in core stage 3c-2).
 The native parent's three locked wrappers now call these L1 list bodies.
 The same145-check O2 public API fixture passes after integration, including
 post-bind wakeup, FIFO and rescheduling. Evidence:

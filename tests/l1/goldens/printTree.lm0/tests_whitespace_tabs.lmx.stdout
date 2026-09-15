@@ -1,0 +1,23 @@
+structure fields=1
+  frame head="dataset" body=structure fields=2
+    atom "harvest"
+    structure fields=1
+      frame head="meta" body=structure fields=3
+        frame head="title" body=structure fields=1
+          atom ""Regional harvest report""
+        frame head="columns" body=structure fields=3
+          structure fields=1
+            frame head="int" body=structure fields=1
+              atom "id"
+          structure fields=1
+            frame head="Text" body=structure fields=1
+              atom "region"
+          structure fields=1
+            frame head="real" body=structure fields=1
+              atom "tons"
+        frame head="row" body=structure fields=3
+          atom "1"
+          atom "`north field`"
+          atom "12.50"
+    Tail cutter trailer spelling="end" fields=1
+      atom "harvest"

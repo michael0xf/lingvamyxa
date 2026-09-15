@@ -1,0 +1,23 @@
+# c.sizeof of an element names the renamed variable (5e's e3 pre-validation,
+# parser-l2 Stage e slice 3): `c.sizeof(new_columns[0])` kept the source name of
+# a slot local, and `c.sizeof(p[0])` that of a formal, so gcc saw an undeclared
+# name. Both are compared with c.sizeof(c.size_t) outside any allocation.
+fn: formal_width (@: size_t p) size_t
+    return: c.sizeof(p[0])
+end: formal_width
+fn: slot_width () size_t
+    @: size_t cells
+    size_t: w
+    cells: 0
+    w: c.sizeof(cells[0])
+    return: w
+end: slot_width
+fn: main () int
+    size_t: x
+    x: 0U
+    if: formal_width(@ x) != c.sizeof(c.size_t)
+        return: 1
+    if: slot_width() != c.sizeof(c.size_t)
+        return: 2
+    return: 5
+end: main

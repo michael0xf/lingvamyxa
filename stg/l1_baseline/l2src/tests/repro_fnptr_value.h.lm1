@@ -1,0 +1,7 @@
+include: "l1src/p0.lm1.h"
+
+prototype:
+    fn: lm_own_new_zero (size_t: size) @: void
+    sub: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item)
+    sub: lm_own_delete_plain (@: void object)
+end: prototype

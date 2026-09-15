@@ -352,6 +352,16 @@ ends in abort. Running generated code under the executor is the missing seam;
 it is Grok's file and was not touched. Until then the Message-side behaviour of
 this path is unexercised.
 
+Stage 5 step (a), 2026-09-14 (lead): the seam above is closed for the entry.
+The source body is emitted as l2_program_body. l2_program_entry is an adapter
+that refuses (LMX_MSG_INVALID) outside its own Message's turn and hands the
+program's value back through a result cell. The generated main and
+l2_library_open reach it only through lmx_msg_run_entry_turn, which runs the
+root Message's turn on the host thread, so run_one's turn root is installed
+while the body runs. run_entry_turn.ps1 measures the refusal, the bootstrap
+and a library opened from inside another runtime's turn. The abort path's exit
+status under that turn root is not separately exercised there.
+
 Correction to the earlier claim: the previous note said the abort leaves the
 graph as before the store. That was wrong for char, which assigned the rebind
 result into the slot before checking it. The order is fixed: char now validates
@@ -2668,6 +2678,12 @@ and it is deleted with a retirement comment beside msg_bad_type,
 msg_bad_cursor and msg_bad_ret.
 
 Landed 45166cd4 (main 57b5a178).
+
+2026-09-14 (lead): LmxMsg.sched_ready, sched_ready_tail, sched_next and
+sched_queued are deleted from lmx_message.h, since nothing has read them since
+the lmx_msg_sched_ready unit was retired (0c, 3c-2). The fixture now reads
+LmxMsg.ui_pending, another header field that was never in the list, so the
+check is the same one.
 
 C99 OCTAL AND HEXADECIMAL INTEGER CONSTANTS, 2026-09-14
 

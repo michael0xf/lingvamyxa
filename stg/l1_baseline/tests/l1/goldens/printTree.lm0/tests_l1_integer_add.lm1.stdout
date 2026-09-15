@@ -1,0 +1,20 @@
+structure fields=1
+  frame head="external" body=structure fields=1
+    frame head="fn" body=structure fields=4
+      atom "main"
+      structure fields=0
+      atom "int"
+      structure fields=2
+        frame head="int" body=structure fields=2
+          atom "value"
+          atom "1"
+        frame head="value" body=structure fields=3
+          atom "value"
+          atom "+"
+          atom "1"
+      Tail cutter trailer spelling="return" fields=3
+        atom "value"
+        atom "!="
+        atom "2"
+    Tail cutter trailer spelling="end" fields=1
+      atom "external"

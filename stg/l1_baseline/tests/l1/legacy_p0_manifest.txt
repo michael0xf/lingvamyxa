@@ -86,6 +86,7 @@ tests\invalid_string_newline.lmx 1 malformed
 tests\invalid_tail_cutter_does_not_close_parenthesis.lmx 1 malformed
 tests\l1\return_bare.lmx 0 parse
 tests\l1\return_bare_comment.lmx 0 parse
+tests\l1\p0_mix_string_boundary.lmx 0 parse
 tests\multiline_paren.lmx 0 parse
 tests\multiline_quote.lmx 0 parse
 tests\named_end_frame.lmx 0 parse

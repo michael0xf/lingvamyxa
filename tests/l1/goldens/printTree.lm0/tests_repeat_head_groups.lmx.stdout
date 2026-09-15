@@ -1,0 +1,82 @@
+structure fields=1
+  frame head="L2" body=structure fields=1
+    frame head="external" body=structure fields=1
+      frame head="fn" body=structure fields=4
+        atom "main"
+        structure fields=0
+        atom "int"
+        structure fields=13
+          frame head="int" body=structure fields=2
+            atom "x"
+            atom "5"
+          structure fields=2
+            atom "y"
+            atom "10"
+          structure fields=2
+            atom "z"
+            atom "15"
+          frame head="int" body=structure fields=2
+            atom "a"
+            atom "1"
+          structure fields=2
+            atom "b"
+            atom "2"
+          structure fields=2
+            atom "c"
+            atom "3"
+          frame head="@" body=structure fields=3
+            atom "int"
+            atom "px"
+            atom "0"
+          structure fields=2
+            atom "py"
+            atom "0"
+          frame head="[]" body=structure fields=6
+            atom "int"
+            atom "arr"
+            atom "3"
+            atom "1"
+            atom "2"
+            atom "3"
+          structure fields=5
+            atom "other"
+            atom "3"
+            atom "4"
+            atom "5"
+            atom "6"
+          frame head="[2][2]" body=structure fields=1
+            structure fields=2
+              atom "int"
+              atom "grouped"
+          structure fields=1
+            atom "grouped2"
+          frame head="return" body=structure fields=23
+            atom "x"
+            atom "!="
+            atom "5"
+            atom "||"
+            atom "y"
+            atom "!="
+            atom "10"
+            atom "||"
+            atom "z"
+            atom "!="
+            atom "15"
+            atom "||"
+            atom "a"
+            atom "!="
+            atom "1"
+            atom "||"
+            atom "b"
+            atom "!="
+            atom "2"
+            atom "||"
+            atom "c"
+            atom "!="
+            atom "3"
+        Tail cutter trailer spelling="end" fields=1
+          atom "main"
+      Tail cutter trailer spelling="end" fields=1
+        atom "external"
+    Tail cutter trailer spelling="end" fields=1
+      atom "L2"

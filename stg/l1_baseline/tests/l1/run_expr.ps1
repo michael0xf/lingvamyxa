@@ -29,15 +29,25 @@ $cases = @(
     @{ Name = "expr_cast"; Has = "(uchar)259" },
     @{ Name = "expr_index_call"; Has = "xs[pick(1)]" },
     @{ Name = "expr_cast_bound"; Has = "2 * ((uchar)128 + 128)" },
-    @{ Name = "expr_deref_assign"; Regex = '\*+\s*\(?\s*slot\s*\)?\s*=\s*1' },
-    @{ Name = "expr_deref_read"; Regex = '\*\s*\(?\s*p\s*\)?\s*\+\s*1' },
-    @{ Name = "expr_deref_arg"; Regex = 'add\(\s*\(?\s*\*\s*\(?\s*p\s*\)?\s*\)?\s*,\s*1\)' },
+    @{ Name = "expr_deref_assign"; Has = "(*slot) = 1" },
+    @{ Name = "expr_deref_read"; Has = "(* p) + 1" },
+    @{ Name = "expr_deref_arg"; Has = "add((*p), 1)" },
     @{ Name = "expr_deref_call"; Has = "*(getp())" },
-    @{ Name = "expr_deref_mix"; Has = "add(*(getp()), 1)"; Regex = @(
-        '!\s*\(?\s*\*\s*p\s*\)?',
-        '4\s*!=\s*\(?\s*\*\s*p\s*\)?',
-        '&\s*\(?\s*value',
-        '&\s*\(?\s*\*\s*\(?\s*p'
+    @{ Name = "expr_deref_mix"; Has = @(
+        "add(*(getp()), 1)",
+        "! (* p)",
+        "4 != (* p)",
+        "add((*&value), 1)",
+        "add((*&(*p)), 1)",
+        "add((*&(*p)) + 1, 1)"
+    )},
+    @{ Name = "expr_strict_slash"; Has = @(
+        "(*pp)->length = 4U",
+        "add_sz(p->length, (*pv))",
+        "add_sz(value, (*pv))",
+        "xs[add_sz(0U, (*pi))] = 9U",
+        "id_text(p) -> length",
+        "(p) -> length"
     )},
     @{ Name = "expr_inc_arg"; Has = @(
         "take(i--)",
@@ -57,9 +67,9 @@ $cases = @(
         "take(xs[i++])",
         "take(xs[i--])"
     )},
-    @{ Name = "expr_index_deref"; Regex = @(
-        'xs\[\s*\(?\s*\*\s*p\s*\)?\s*\]',
-        'take\(xs\[\s*\(?\s*\*\s*\(?p\)?\s*\)?\s*\]\)'
+    @{ Name = "expr_index_deref"; Has = @(
+        "xs[(* p)]",
+        "take(xs[(*p)])"
     )},
     @{ Name = "expr_str_triple_double"; Has = @(
         'double # not a comment\ncolon: stays data',
@@ -89,14 +99,29 @@ $cases = @(
     @{ Name = "expr_str_quoted"; Has = @(
         '"hello"',
         "'A'"
+    )},
+    @{ Name = "expr_mix_anchor"; Has = @(
+        '"keep {mark: nested} exact"',
+        '"keep {text: \"}\" tail} exact"',
+        '"keep {unclosed exact"'
+    )},
+    @{ Name = "expr_c_surface_reference"; Has = @(
+        "srand(1U)",
+        "add(variable, wrap(add(2, node->length)))",
+        "add((variable), wrap((variable2)))",
+        "box->length = 7U",
+        'box->data = "ok"',
+        "boxes[1].length = 9U",
+        "boxes[add(0, 1)].length = 10U",
+        "node->length = 24U",
+        "(*pointer) = 8",
+        "node->data[0]",
+        "getenv(name)[0]",
+        "variable2 - variable"
     )}
 )
 
 foreach ($c in $cases) {
-    if ($gen -eq "gen0" -and $c.Name -like "expr_str_triple_*") {
-        Write-E "skip $($c.Name) on gen0 (lm2 seed has no A+1 decode)"
-        continue
-    }
     $src = "tests\l1\$($c.Name).lm1"
     $cpath = Join-Path $obj ($c.Name + ".c")
     $cpathB = Join-Path $obj ($c.Name + "_b.c")
@@ -114,12 +139,9 @@ foreach ($c in $cases) {
     $h2 = (Get-FileHash -LiteralPath $cpathB).Hash
     if ($h1 -ne $h2) { throw "C differ $($c.Name)" }
     $ctext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
-    $need = @($c.Has | Where-Object { $null -ne $_ })
+    $need = @($c.Has)
     foreach ($h in $need) {
         if ($ctext.IndexOf($h) -lt 0) { throw "missing '$h' in $cpath" }
-    }
-    foreach ($pattern in @($c.Regex)) {
-        if ($null -ne $pattern -and $ctext -notmatch $pattern) { throw "missing regex '$pattern' in $cpath" }
     }
     Write-E "C $($c.Name) sha256=$h1 has=$($need -join '; ')"
 
@@ -142,7 +164,7 @@ Write-E "BEGIN negative $badSrc"
 cmd /c "$l1trans $badSrc $badC > $log\invalid_deref_target.stdout 2> $badErr"
 if ($LASTEXITCODE -eq 0) { throw "expected translate failure: $badSrc" }
 $errText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $badErr))
-if ($errText -notmatch "dereferenced assignment target expects a name|prefix dereference expects an operand") {
+if ($errText.IndexOf("dereferenced assignment target expects a name") -lt 0) {
     throw "missing deref-target diagnostic: $errText"
 }
 if (Test-Path -LiteralPath $badC) { throw "failed translate created $badC" }

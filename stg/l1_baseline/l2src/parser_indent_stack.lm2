@@ -54,7 +54,7 @@ fn: lm_p0_indent_stack_init (@: LmP0Document document; @: LmP0IndentStack stack)
     return: lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U)
 end: lm_p0_indent_stack_init
 fn: lm_p0_indent_stack_new_empty () @: LmP0IndentStack
-    return: lm_own_new_zero(c.sizeof(c.LmP0IndentStack))
+    return: (cast: (@: LmP0IndentStack) lm_own_new_zero(c.sizeof(c.LmP0IndentStack)))
 end: lm_p0_indent_stack_new_empty
 fn: lm_p0_indent_stack_new (@: LmP0Document document) @: LmP0IndentStack
     @: LmP0IndentStack stack

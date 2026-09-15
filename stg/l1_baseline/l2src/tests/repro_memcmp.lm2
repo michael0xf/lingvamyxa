@@ -1,0 +1,27 @@
+predef: "l2src/tests/repro_memcmp.h.lm1"
+
+# Repro for lingvamyxa-d6, 2026-09-14: a foreign call whose first
+# argument is a compound expression (pointer + struct-field deref)
+# drops its remaining arguments. Minimal shape from mixa_manager's own
+# mixa_calculator_syntax.lm2 (c.memcmp(expr + p\offset, expected, n)),
+# found translating that module to L2 (parser-in-L2 port session,
+# re-verifying against Stage B).
+#
+# Generated C (l1trans, current pin):
+#   l2_t0 = memcmp(l2_p0_0 + p->offset);
+# gcc: error: too few arguments to function 'memcmp'
+#
+# NOT a Stage B regression: reproduces identically against l2trans.lm1
+# as of 62233670 (the commit immediately before Stage B step 1,
+# 06a940e5) and at 06a940e5 and 2620d3f5 -- pre-existing, not
+# introduced by the foreign-type or sizeof work.
+
+fn: test_memcmp_args (const: @(char expr); @(L2TestOp ops); size_t: idx; const: @(char expected); size_t: n) int
+    @: L2TestOp p
+    p: ops + idx
+    return: (cast: (int) (c.memcmp(expr + p\offset, expected, n) = 0))
+end: test_memcmp_args
+
+fn: main () int
+    return: 0
+end: main

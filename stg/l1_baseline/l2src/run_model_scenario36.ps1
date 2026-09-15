@@ -16,7 +16,7 @@ param(
     [string]$TranslatorPath,
     [ValidateRange(1, 3600)][int]$TestTimeoutSeconds = 120,
     [string]$MessageSource = 'l2src/lmx_message.lm1',
-    [string[]]$Tests = @('lmx_model_scenario36_selftest', 'lmx_msg_delivery_selftest', 'lmx_model_checks_19_29_6_selftest', 'lmx_model_liveness_33_selftest', 'lmx_model_family_close_32_selftest', 'lmx_model_family_release_17_selftest')
+    [string[]]$Tests = @('lmx_model_scenario36_selftest', 'lmx_msg_delivery_selftest', 'lmx_model_checks_19_29_6_selftest', 'lmx_model_liveness_33_selftest', 'lmx_model_family_close_32_selftest', 'lmx_model_family_release_17_selftest', 'lmx_model_ui_lane_3d_selftest', 'lmx_model_orphan_mapped_17_selftest', 'lmx_model_root_ingress_5b_selftest', 'lmx_model_root_record_5e_selftest', 'lmx_model_turn_arena_o1_selftest')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,7 +82,7 @@ $ev = [ordered]@{ stamp = $stamp; baseline = $baseline; translator = $l1trans; t
 # 1. The production runtime: every module, lmx_message, executor and host C,
 #    compiled without any test define.
 # ---------------------------------------------------------------------------
-$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
 $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
 foreach ($name in $names) {
     Step "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $out "header_$name.log")) (Join-Path $out "header_$name.log")
@@ -124,7 +124,15 @@ foreach ($test in $Tests) {
     $testObj = Join-Path $out "$test.o"
     Step "compile_$test" (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $testC) + ' -o ' + (Q $testObj)) (Join-Path $out "$test.gcc.log")) (Join-Path $out "$test.gcc.log")
     $exe = Join-Path $out "$test.exe"
-    Step "link_$test" (Invoke-Native ("gcc $cflags " + (Q $testObj) + ' ' + $objList + ' -o ' + (Q $exe)) (Join-Path $out "$test.link.log")) (Join-Path $out "$test.link.log")
+    # Stage 5 (f) acceptance: a test that defines __wrap_NAME (ld --wrap, the
+    # blocks selftest's pattern) is linked with -Wl,--wrap=NAME for each such
+    # name in its translated C. Without the flag its __real_NAME is undefined
+    # and the link is red, so a missing hook cannot pass unnoticed.
+    $wrapNames = @([regex]::Matches([IO.File]::ReadAllText($testC), '__wrap_([A-Za-z0-9_]+)\s*\(') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+    $wrapFlags = ''
+    if ($wrapNames.Count -gt 0) { $wrapFlags = ' ' + (($wrapNames | ForEach-Object { '-Wl,--wrap=' + $_ }) -join ' ') }
+    $ev["wrap_$test"] = @($wrapNames)
+    Step "link_$test" (Invoke-Native ("gcc $cflags " + (Q $testObj) + ' ' + $objList + $wrapFlags + ' -o ' + (Q $exe)) (Join-Path $out "$test.link.log")) (Join-Path $out "$test.link.log")
 
     $runs = @()
     $checks = 0

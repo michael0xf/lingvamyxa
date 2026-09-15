@@ -1,0 +1,56 @@
+structure fields=1
+  frame head="dataset" body=structure fields=2
+    atom "harvest"
+    structure fields=2
+      frame head="meta" body=structure fields=5
+        frame head="title" body=structure fields=1
+          atom ""Regional harvest report""
+        frame head="season" body=structure fields=1
+          atom "2026"
+        frame head="source" body=structure fields=2
+          frame head="organization" body=structure fields=1
+            atom "`Field Bureau`"
+          frame head="system" body=structure fields=1
+            atom "`manual survey`"
+        frame head="location" body=structure fields=2
+          frame head="country" body=structure fields=1
+            atom "Uruguay"
+          frame head="region" body=structure fields=1
+            atom "`north field group`"
+        frame head="note" body=structure fields=1
+          atom ""This part is XML-like tree data: nested named Structures.""
+      frame head="table" body=structure fields=2
+        frame head="columns" body=structure fields=5
+          frame head="int" body=structure fields=1
+            atom "id"
+          frame head="Text" body=structure fields=1
+            atom "region"
+          frame head="Text" body=structure fields=1
+            atom "crop"
+          frame head="real" body=structure fields=1
+            atom "tons"
+          frame head="decimal" body=structure fields=1
+            atom "moisture"
+        frame head="rows" body=structure fields=20
+          atom "1"
+          atom "`north field`"
+          atom "wheat"
+          atom "12.50"
+          atom "0.14"
+          atom "2"
+          atom "`south field`"
+          atom "corn"
+          atom "8.75"
+          atom "0.19"
+          atom "3"
+          atom "`east ridge`"
+          atom "barley"
+          atom "10.00"
+          atom "0.16"
+          atom "4"
+          atom "`river lowland`"
+          atom "rice"
+          atom "21.30"
+          atom "0.22"
+    Tail cutter trailer spelling="end" fields=1
+      atom "harvest"

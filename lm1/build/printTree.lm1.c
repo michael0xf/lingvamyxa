@@ -140,7 +140,7 @@ int lm_own_ptr_stack_push(LmOwnPtrStack * stack, void * item)
     stack->items = items;
     stack->capacity = capacity;
     }
-    stack->items[stack->count] = item;
+    stack->items[stack -> count] = item;
     stack->count = stack -> count + 1U;
     return 0;
 }
@@ -152,7 +152,7 @@ void * lm_own_ptr_stack_pop(LmOwnPtrStack * stack)
     }
     stack->count = stack -> count - 1U;
     item = stack -> items[stack -> count];
-    stack->items[stack->count] = 0;
+    stack->items[stack -> count] = 0;
     return item;
 }
 void * lm_own_ptr_stack_at(const LmOwnPtrStack * stack, size_t index)
@@ -320,7 +320,7 @@ int lm_own_arena_absorb(LmOwnArena * target, LmOwnArena * source)
     }
     i = 0U;
     while (i < n) {
-    target->allocations->items[target->allocations->count] = source -> allocations -> items[i];
+    target->allocations->items[target -> allocations -> count] = source -> allocations -> items[i];
     target->allocations->count = target -> allocations -> count + 1U;
     i = i + 1U;
     }
@@ -849,7 +849,7 @@ int lm_p0_indent_stack_push(LmP0Document * document, LmP0IndentStack * stack, si
     stack->columns = columns;
     stack->capacity = new_capacity;
     }
-    stack->columns[stack->count] = column;
+    stack->columns[stack -> count] = column;
     stack->count = stack -> count + 1U;
     return 1;
 }
@@ -4245,7 +4245,7 @@ int lm_p0_pending_mix_push(LmP0Document * document, LmP0PendingMix * pending, co
     pending->events = events;
     pending->capacity = new_capacity;
     }
-    pending->events[pending->count] = event[0];
+    pending->events[pending -> count] = event[0];
     pending->count = pending -> count + 1U;
     return 1;
 }
@@ -4527,9 +4527,9 @@ int lm_p0_stream_resolve_pending_delimiter(LmP0Document * document, LmP0Stack * 
     lm_p0_free_node(anonymous_node);
     return 0;
     }
-    stack->parents[(event->level + 1U)] = anonymous_node -> as -> structure;
-    stack->owners[(event->level + 1U)] = anonymous_node;
-    stack->hard[(event->level + 1U)] = 1U;
+    stack->parents[(event -> level + 1U)] = anonymous_node -> as -> structure;
+    stack->owners[(event -> level + 1U)] = anonymous_node;
+    stack->hard[(event -> level + 1U)] = 1U;
     lm_p0_stack_truncate_deeper(stack, (event -> level + 1U));
     }
     else {
@@ -5995,7 +5995,7 @@ void lm_p0_dump_append(LmP0Dump * dump, const char * text, size_t length)
     }
     memcpy((dump -> data + dump -> length), text, length);
     dump->length = dump -> length + length;
-    dump->data[dump->length] = '\0';
+    dump->data[dump -> length] = '\0';
 }
 void lm_p0_dump_append_cstr(LmP0Dump * dump, const char * text)
 {

@@ -19,9 +19,90 @@ sub: check (int: ok; const: @(char label))
     ---
 end: check
 
+# Stage 3c-2b: a host-run child's turn records who ran, takes one input and
+# ends successfully.
+unsigned: g_last 0U
+
+fn: turn_take (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    if: ctx != 0
+        return: 1
+    g_last: who
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 1
+    if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
+        lmx_msg_env_release(got)
+    ---
+    c.free((cast: (@: void) got))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# One input posted by the host; the drain admits it and the child is ready.
+fn: post (@: LmxMsgRuntime rt; LmxMsgAddr: to; unsigned: id) int
+    @: LmxMsgEnv env
+    int: ok
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: 0
+    env\id: id
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: (cast: (int) id)
+    ok: lmx_msg_host_post(rt, to, env) = c.LMX_MSG_STAGED
+    c.free((cast: (@: void) env))
+    return: ok
+
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): Q's own turn runs its scheduler step; ctx is the test's cell,
+# [1] the step's status.
+fn: turn_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_sched_step(rt, who))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): R0's turn runs Q's turn, and Q's turn runs Q's scheduler step.
+# main binds Q only around the step. Returns root_turn's status, else the
+# status of R0's step of Q, else the scheduler step's.
+[]: unsigned step_cell_q 2
+[]: unsigned sched_cell_q 2
+
+fn: sched_step_in_q (@: LmxMsgRuntime rt; unsigned: q) int
+    int: st
+    step_cell_q[0]: q
+    step_cell_q[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    sched_cell_q[0]: q
+    sched_cell_q[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_exec_bind(rt, q, turn_sched_step, (cast: (@: void) sched_cell_q), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_q))
+    lmx_msg_exec_unbind(rt, q)
+    if: st != c.LMX_MSG_OK
+        return: st
+    if: (cast: (int) step_cell_q[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_q[1])
+    return: (cast: (int) sched_cell_q[1])
+
 fn: main () int
     @: LmxMsgRuntime rt
     @: LmxMsg pm
+    @: LmxMsg qm
+    unsigned: q 0U
+    unsigned: q1 0U
+    unsigned: q2 0U
     @: Lmx rec
     @: void cursor_cell
     @: void policy_cell
@@ -55,6 +136,23 @@ fn: main () int
     check(lmx_sched_record_set_cursor(rec, c2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P ends a turn with the cursor set")
     check(lmx_owned_ranges_find(pm\ranges, (cast: (@: void) rec)) != 0 && lmx_owned_ranges_find(pm\ranges, cursor_cell) != 0 && lmx_owned_ranges_find(pm\ranges, policy_cell) != 0, "the record and its cells survive collection")
     check(lmx_sched_record_cursor(rec) = c2 && lmx_sched_record_policy(rec) = c.LMX_SCHED_POLICY_SEQUENTIAL, "the record's content is intact after collection")
+
+    # --- Stage 3c-2b (2026-09-14): the parent's own scheduler step creates
+    # its record lazily on its lane (since stage 5 (d) in Q's own turn, which
+    # R0's turn runs: sched_step_in_q)
+    # and keeps the round-robin cursor in it: Q1, then Q2 after the cursor,
+    # then, both ready again, Q1 after Q2 (family order would give Q1 twice).
+    check(lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ q) = c.LMX_MSG_OK && lmx_msg_create(rt, q, 21U, @ ini, 1U, @ q1) = c.LMX_MSG_OK && lmx_msg_create(rt, q, 22U, @ ini, 1U, @ q2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, q, 1) = c.LMX_MSG_OK, "Q created with Q1 and Q2, published")
+    qm: lmx_msg_find(rt, q)
+    check(qm != 0 && qm\sched_rec = 0, "Q has no record before its first step")
+    check(lmx_msg_exec_bind(rt, q1, turn_take, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, q2, turn_take, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "Q1 and Q2 bound, host-run")
+    check(post(rt, q1, 31U) != 0 && post(rt, q2, 32U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "inputs for Q1 and Q2 admitted")
+    check(sched_step_in_q(rt, q) = c.LMX_MSG_OK && g_last = q1 && qm\sched_rec != 0 && lmx_sched_record_cursor(qm\sched_rec) = q1, "Q's first step created its record and gave Q1 the turn: the cursor names Q1")
+    check(lmx_owned_ranges_find(qm\ranges, (cast: (@: void) qm\sched_rec)) != 0 && lmx_sched_record_policy(qm\sched_rec) = c.LMX_SCHED_POLICY_SEQUENTIAL, "the step's record lives in Q's arena, sequential policy")
+    check(sched_step_in_q(rt, q) = c.LMX_MSG_OK && g_last = q2 && lmx_sched_record_cursor(qm\sched_rec) = q2, "the second step continues after the cursor: Q2")
+    check(sched_step_in_q(rt, q) = c.LMX_MSG_EMPTY && lmx_sched_record_cursor(qm\sched_rec) = q2, "nothing ready: the cursor stays")
+    check(post(rt, q1, 33U) != 0 && post(rt, q2, 34U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK && sched_step_in_q(rt, q) = c.LMX_MSG_OK && g_last = q1 && lmx_sched_record_cursor(qm\sched_rec) = q1, "both ready again: the step wraps to Q1 after Q2, round-robin from the record")
+    check(sched_step_in_q(rt, q) = c.LMX_MSG_OK && g_last = q2 && sched_step_in_q(rt, q) = c.LMX_MSG_EMPTY, "then Q2, then empty")
 
     lmx_msg_runtime_delete(rt)
     c.printf("sched record: %d checks, %d failures\n", checks, failures)

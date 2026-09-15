@@ -59,7 +59,7 @@ $ev = [ordered]@{ stamp = $stamp; baseline = $baseline; translator = $l1trans }
 # 1. Support objects. lmx_msg_slots is built too, but kept OUT of the parity
 #    link: there the generated implementation is the only definition.
 # ---------------------------------------------------------------------------
-$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
 $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
 foreach ($name in $names) {
     Step "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $out "header_$name.log")) (Join-Path $out "header_$name.log")
@@ -81,6 +81,10 @@ foreach ($source in $sources) {
     if ($stem -eq 'lmx_msg_slots') { $nativeSlotsObj = $obj } else { $objs += $obj }
 }
 if (-not $nativeSlotsObj) { throw 'the native slots object was not built' }
+# Stage 3c-2a: the production runtime includes the L2 runtime units
+# (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+. l2src/l2units_build.ps1
+$objs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $out 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags)
 $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 
 # ---------------------------------------------------------------------------
@@ -185,7 +189,7 @@ $tail = @'
         if: c.lmx_msg_poll_escape() != 0
             return: 0
         return: 0
-    end: l2_program_entry
+    end: l2_program_body
 '@
 $tail = $tail.Replace("`r`n", "`n")
 if ($driveText.IndexOf($tail) -lt 0) { throw 'the generated entry tail was not found' }
@@ -197,7 +201,7 @@ $drive = @'
         process_result: c.lmx_slots_selftest_main()
         c.fprintf(c.stderr, "port calls=%d early=%d\n", l2_port_calls, l2_port_early)
         return: process_result
-    end: l2_program_entry
+    end: l2_program_body
 '@
 $driveText = $driveText.Replace($tail, $drive.Replace("`r`n", "`n"))
 

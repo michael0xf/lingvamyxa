@@ -1,0 +1,96 @@
+structure fields=3
+  MIX structure fields=1
+    frame head="style" body=structure fields=1
+      atom "system"
+  frame head="dataset" body=structure fields=2
+    atom "harvest"
+    structure fields=2
+      frame head="meta" body=structure fields=11
+        MIX structure fields=1
+          frame head="style" body=structure fields=1
+            atom "title"
+        MIX structure fields=1
+          atom "blue"
+        frame head="title" body=structure fields=1
+          atom ""Regional harvest report""
+        MIX structure fields=1
+          frame head="style" body=structure fields=1
+            atom "date"
+        frame head="season" body=structure fields=1
+          atom "2026"
+        MIX structure fields=1
+          frame head="end" body=structure fields=1
+            atom "title"
+        frame head="month" body=structure fields=1
+          atom "April"
+        MIX structure fields=1
+          frame head="end" body=structure fields=1
+            atom "date"
+        frame head="source" body=structure fields=2
+          frame head="organization" body=structure fields=1
+            atom "`Field Bureau`"
+          frame head="system" body=structure fields=1
+            atom "`manual survey`"
+        frame head="location" body=structure fields=3
+          MIX structure fields=1
+            atom "green"
+          frame head="country" body=structure fields=1
+            atom "Uruguay"
+          frame head="region" body=structure fields=1
+            atom "`north field group`"
+        frame head="note" body=structure fields=1
+          atom ""This part is {red} marked {end} document data over ordinary Structures.""
+      frame head="table" body=structure fields=3
+        frame head="columns" body=structure fields=5
+          structure fields=1
+            frame head="serial" body=structure fields=1
+              atom "id"
+          structure fields=1
+            frame head="Text" body=structure fields=1
+              atom "region"
+          structure fields=1
+            frame head="Text" body=structure fields=1
+              atom "crop"
+          structure fields=1
+            frame head="real" body=structure fields=1
+              atom "tons"
+          structure fields=1
+            frame head="decimal" body=structure fields=1
+              atom "moisture"
+        MIX structure fields=1
+          frame head="end" body=structure fields=1
+            atom "green"
+        frame head="rows" body=structure fields=24
+          MIX structure fields=1
+            atom "gray"
+          atom "1"
+          atom ""north field""
+          atom "wheat"
+          atom "12.50"
+          atom "0.14"
+          MIX structure fields=1
+            atom "cyan"
+          atom "2"
+          atom ""south field""
+          atom "corn"
+          atom "8.75"
+          atom "0.19"
+          MIX structure fields=1
+            atom "gray"
+          atom "3"
+          atom ""east ridge""
+          atom "barley"
+          atom "10.00"
+          atom "0.16"
+          MIX structure fields=1
+            atom "cyan"
+          atom "4"
+          atom ""river lowland""
+          atom "rice"
+          atom "21.30"
+          atom "0.22"
+    Tail cutter trailer spelling="end" fields=1
+      atom "harvest"
+  MIX structure fields=1
+    frame head="end" body=structure fields=1
+      atom "system"

@@ -1,0 +1,22 @@
+include: "l1src/p0.lm1.h"
+
+# Header unit for the clean L2 port of l1src/parser.lm1's dump-printer
+# family (parser-in-L2 port ticket, Stage c continued). lm_own_resize,
+# lm_own_new_zero, lm_own_delete, lm_own_delete_plain,
+# lm_own_ptr_stack_init/push/destroy are L1-implemented (l1src/own.lm1,
+# compiled into the same oracle object this L2 unit links against) --
+# Stage A rule: an LMX name needs a prototype: declaration here, never
+# c.
+
+prototype:
+    fn: lm_own_resize (@: void object; size_t: size) @: void
+    fn: lm_own_new_zero (size_t: size) @: void
+    sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
+    sub: lm_own_delete_plain (@: void object)
+    sub: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item)
+    sub: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack)
+    fn: lm_own_ptr_stack_push (@: LmOwnPtrStack stack; @: void item) int
+    fn: lm_own_ptr_stack_pop (@: LmOwnPtrStack stack) @: void
+    fn: lm_own_ptr_stack_top (const: @(LmOwnPtrStack stack)) @: void
+    fn: p0_node_kind_class_name (LmP0NodeKind: kind) const: @: char
+end: prototype

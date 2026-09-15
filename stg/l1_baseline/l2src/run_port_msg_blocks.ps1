@@ -163,7 +163,7 @@ Step 'generated_translate' (Invoke-Native ((Q $l1trans) + ' ' + (Q $gen) + ' ' +
 
 # The generated unit builds a Message-owned graph on first use, so it needs the
 # Message runtime the graph gate links.
-$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
 $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
 foreach ($name in $names) {
     if ($name -ne 'lmx_msg_blocks') {
@@ -185,13 +185,43 @@ foreach ($src in $sources) {
     Step "compile_$stem" (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -c ' + (Q $src) + ' -o ' + (Q $obj)) $glog) $glog
     $objs += $obj
 }
+# Stage 3c-2a: the production runtime includes the L2 runtime units
+# (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+. l2src/l2units_build.ps1
+$objs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $out 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags)
 $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 
 $redirect = ($defineNames | ForEach-Object { '-D' + $_.abi + '=' + $_.unit }) -join ' '
 $parityExe = Join-Path $out 'parity.exe'
 Step 'generated_compile' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $genC) + ' -o ' + (Q (Join-Path $out 'generated.o'))) (Join-Path $out 'generated.gcc.log')) (Join-Path $out 'generated.gcc.log')
-Step 'selftest_driven_compile' (Invoke-Native ("gcc $cflags $redirect -I " + (Q $hdrs) + ' -c ' + (Q $selfC) + ' -o ' + (Q (Join-Path $out 'selftest_driven.o'))) (Join-Path $out 'selftest_driven.gcc.log')) (Join-Path $out 'selftest_driven.gcc.log')
-Step 'parity_link' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' ' + (Q (Join-Path $out 'selftest_driven.o')) + ' ' + (Q (Join-Path $out 'generated.o')) + ' ' + $objList + ' -Wl,--wrap=free -o ' + (Q $parityExe)) (Join-Path $out 'parity.gcc.log')) (Join-Path $out 'parity.gcc.log')
+Step 'selftest_driven_compile' (Invoke-Native ("gcc $cflags $redirect -Dmain=lmx_blocks_selftest_main -I " + (Q $hdrs) + ' -c ' + (Q $selfC) + ' -o ' + (Q (Join-Path $out 'selftest_driven.o'))) (Join-Path $out 'selftest_driven.gcc.log')) (Join-Path $out 'selftest_driven.gcc.log')
+# The unit opens through lmx_msg_run_entry_turn (stage 5 (a), e64c8083), whose unbind reaps the bind-wait
+# record: the runtime's own free, counted by the process-wide --wrap=free, which the reference link never
+# makes. The parity main opens the unit first, takes and clears the selftest's counter, and reports what
+# it took; the selftest then counts only its own frees, and its stdout must still equal the reference's.
+$openMatch = [regex]::Match([IO.File]::ReadAllText($gen), '(?m)^define: l2_library_open (\S+)\s*$')
+if (-not $openMatch.Success) { throw 'the generated unit does not define l2_library_open' }
+$portMainC = Join-Path $out 'port_main.c'
+@"
+#include <stdio.h>
+extern int frees;
+int lmx_blocks_selftest_main(void);
+int $($openMatch.Groups[1].Value)(void);
+int main(void)
+{
+    int pre;
+    if ($($openMatch.Groups[1].Value)() != 0) {
+        fprintf(stderr, "port library open failed\n");
+        return 3;
+    }
+    pre = frees;
+    frees = 0;
+    fprintf(stderr, "port pre_frees=%d\n", pre);
+    return lmx_blocks_selftest_main();
+}
+"@ | Set-Content -LiteralPath $portMainC -Encoding ascii
+Step 'port_main_compile' (Invoke-Native ("gcc $cflags -c " + (Q $portMainC) + ' -o ' + (Q (Join-Path $out 'port_main.o'))) (Join-Path $out 'port_main.gcc.log')) (Join-Path $out 'port_main.gcc.log')
+Step 'parity_link' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' ' + (Q (Join-Path $out 'port_main.o')) + ' ' + (Q (Join-Path $out 'selftest_driven.o')) + ' ' + (Q (Join-Path $out 'generated.o')) + ' ' + $objList + ' -Wl,--wrap=free -o ' + (Q $parityExe)) (Join-Path $out 'parity.gcc.log')) (Join-Path $out 'parity.gcc.log')
 
 # ---------------------------------------------------------------------------
 # 4. Two runs, so a pass that depends on run order or leftover state shows.
@@ -207,6 +237,9 @@ foreach ($i in 1, 2) {
     $runs += [ordered]@{ exit = $exit; stdout = $text.Trim(); stderr = $errText.Trim() }
     if ($exit -ne $refExit) { throw "parity run $i exit $exit, reference exit $refExit`n$text`n$errText" }
     if ($text.Trim() -ne $refOut.Trim()) { throw "parity run $i stdout differs from the reference`nreference: $($refOut.Trim())`nparity   : $($text.Trim())" }
+    if ($errText -notmatch 'port pre_frees=(\d+)') { throw "parity run $i did not report the runtime's pre-test frees: $errText" }
+    # Pinned: one free before the test, the entry turn's bind-wait record (stage 5 (a), e64c8083).
+    if ([int]$Matches[1] -ne 1) { throw "the runtime freed $($Matches[1]) blocks before the test, expected 1" }
 }
 if ($runs[0].stdout -ne $runs[1].stdout) { throw 'the two parity runs disagree' }
 $ev.parity = $runs

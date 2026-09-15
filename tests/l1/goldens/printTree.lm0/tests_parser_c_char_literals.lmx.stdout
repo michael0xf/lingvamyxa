@@ -1,0 +1,52 @@
+structure fields=14
+  frame head="check" body=structure fields=4
+    atom "':'"
+    atom "'\n'"
+    atom "'\''"
+    atom "'\\'"
+  frame head="wide" body=structure fields=6
+    atom "L"Текст: # ] )""
+    atom "L'Т'"
+    atom "L':'"
+    atom "L'\n'"
+    atom "L'\''"
+    atom "L'\\'"
+  frame head="path" body=structure fields=1
+    frame head="return" body=structure fields=13
+      atom "path"
+      atom "["
+      atom "0"
+      atom "]"
+      atom "!="
+      atom "'\0'"
+      atom "&&"
+      atom "path"
+      atom "["
+      atom "1"
+      atom "]"
+      atom "="
+      atom "':'"
+  frame head="call" body=structure fields=4
+    atom "':'"
+    atom "'\n'"
+    atom "'\''"
+    atom "'\\'"
+  frame head="wideCall" body=structure fields=2
+    atom "L"Текст: # ] )""
+    atom "L':'"
+  atom "array"
+  atom "["
+  atom "':'"
+  atom "]"
+  atom "wideArray"
+  atom "["
+  atom "L':'"
+  atom "]"
+  frame head="mix" body=structure fields=3
+    atom "hello"
+    MIX structure fields=1
+      frame head="text" body=structure fields=2
+        atom "L"}""
+        frame head="char" body=structure fields=1
+          atom "L'{'"
+    atom "world"

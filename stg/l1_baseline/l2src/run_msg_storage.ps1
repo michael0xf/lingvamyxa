@@ -29,12 +29,18 @@ function Invoke-StorageStage([string]$Name, [string]$Tool, [string[]]$NativeArgs
     $quoted = ($NativeArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
     $stdout = Join-Path $run "$Name.stdout.txt"
     $stderr = Join-Path $run "$Name.stderr.txt"
-    $p = Start-Process -FilePath $Tool -ArgumentList $quoted -WorkingDirectory $baseline `
-        -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-    $evidence.stages += [ordered]@{ name = $Name; tool = $Tool; arguments = $NativeArgs; exit = $p.ExitCode }
-    if ($p.ExitCode -ne 0) {
+    # cmd /c, not Start-Process -Wait, which costs about 1 s per launch.
+    Push-Location -LiteralPath $baseline
+    try {
+        cmd /c "`"$Tool`" $quoted > `"$stdout`" 2> `"$stderr`""
+        $code = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    $evidence.stages += [ordered]@{ name = $Name; tool = $Tool; arguments = $NativeArgs; exit = $code }
+    if ($code -ne 0) {
         Get-Content -LiteralPath $stdout, $stderr
-        throw "$Name failed with exit $($p.ExitCode)"
+        throw "$Name failed with exit $code"
     }
 }
 try {

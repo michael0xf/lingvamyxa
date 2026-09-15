@@ -128,6 +128,74 @@ static int turn_parent_nested(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return 0;
 }
 
+/* Stage 5 (d): the stepping calls of the host move into R0's turn. The C form
+ * of the lm1 tests' turn_step_child: a parent's turn that steps the one child
+ * named in its cell, [0] the child's address, [1] that step's status.
+ * turn_map_child and turn_sched_step are the composite turns of a parent whose
+ * own act is a map or a scheduler step. */
+static int turn_step_child(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    unsigned *cell = (unsigned *)ctx;
+    if (cell == 0) {
+        return 1;
+    }
+    cell[1] = (unsigned)lmx_msg_run_child_turn(rt, cell[0]);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
+static int turn_map_child(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    unsigned *cell = (unsigned *)ctx;
+    if (cell == 0) {
+        return 1;
+    }
+    cell[1] = (unsigned)lmx_msg_map_child(rt, who, cell[0]);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
+static int turn_sched_step(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    unsigned *cell = (unsigned *)ctx;
+    if (cell == 0) {
+        return 1;
+    }
+    cell[1] = (unsigned)lmx_msg_sched_step(rt, who);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
+static unsigned g_cell_top[2];
+static unsigned g_cell_parent[2];
+
+/* R0's turn steps child, an R0 child. Returns root_turn's status, else the step's. */
+static int step_in_root(LmxMsgRuntime *rt, LmxMsgAddr child) {
+    int st;
+    g_cell_top[0] = child;
+    g_cell_top[1] = (unsigned)LMX_MSG_INVALID;
+    st = lmx_msg_root_turn(rt, turn_step_child, g_cell_top);
+    return st != LMX_MSG_OK ? st : (int)g_cell_top[1];
+}
+
+/* R0's turn steps parent (an R0 child, unbound), bound only around the step to
+ * a composite turn acting on child. Returns root_turn's status, else R0's step
+ * of parent, else the composite act's. */
+static int own_turn_in_root(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgTurn turn, LmxMsgAddr child) {
+    int st;
+    g_cell_top[0] = parent;
+    g_cell_top[1] = (unsigned)LMX_MSG_INVALID;
+    g_cell_parent[0] = child;
+    g_cell_parent[1] = (unsigned)LMX_MSG_INVALID;
+    st = lmx_msg_exec_bind(rt, parent, turn, g_cell_parent, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    st = lmx_msg_root_turn(rt, turn_step_child, g_cell_top);
+    (void)lmx_msg_exec_unbind(rt, parent);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    if ((int)g_cell_top[1] != LMX_MSG_OK) {
+        return (int)g_cell_top[1];
+    }
+    return (int)g_cell_parent[1];
+}
+
 static DWORD WINAPI cancel_after_settle(void *arg) {
     CancelArg *a = (CancelArg *)arg;
     Sleep(20);
@@ -312,7 +380,7 @@ static int run_map(Lmx *node) {
         fprintf(stderr, "spin-map boot\n");
         return 1;
     }
-    if (lmx_msg_map_child(rt, p, c) != LMX_MSG_OK) {
+    if (own_turn_in_root(rt, p, turn_map_child, c) != LMX_MSG_OK) {
         return fail_rt(rt, "spin-map map_child");
     }
     Sleep(20);
@@ -354,7 +422,7 @@ static int run_step(Lmx *node) {
     if (th == 0) {
         return fail_rt(rt, "spin-step thread");
     }
-    st = lmx_msg_sched_step(rt, p);
+    st = own_turn_in_root(rt, p, turn_sched_step, 0U);
     if (join_canceler(th, rt, "spin-step join") != 0) {
         return 1;
     }
@@ -408,7 +476,7 @@ static int run_nested(Lmx *node) {
     if (th == 0) {
         return fail_rt(rt, "spin-nested thread");
     }
-    st = lmx_msg_run_child_turn(rt, p);
+    st = step_in_root(rt, p);
     if (join_canceler(th, rt, "spin-nested join") != 0) {
         return 1;
     }
@@ -475,7 +543,7 @@ static int run_nested_child_cancel(Lmx *node) {
     if (th == 0) {
         return fail_rt(rt, "spin-ncc thread");
     }
-    st = lmx_msg_run_child_turn(rt, p);
+    st = step_in_root(rt, p);
     if (join_canceler(th, rt, "spin-ncc join") != 0) {
         return 1;
     }
@@ -536,7 +604,7 @@ static int run_nested_precancel(Lmx *node) {
     if (th == 0) {
         return fail_rt(rt, "spin-npc thread");
     }
-    (void)lmx_msg_run_child_turn(rt, p);
+    (void)step_in_root(rt, p);
     if (join_canceler(th, rt, "spin-npc join") != 0) {
         return 1;
     }

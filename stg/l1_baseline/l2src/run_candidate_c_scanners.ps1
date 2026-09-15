@@ -4,52 +4,32 @@ param([string]$OracleEvidence,[switch]$FocusedBracket)
 $ErrorActionPreference='Stop'
 $rootBaseline=Split-Path -Parent $PSScriptRoot
 $repo=Split-Path -Parent (Split-Path -Parent $rootBaseline)
-$compilerRun=Join-Path $repo 'build/codex/l2_nested_continue/20260912_012000/run_012133_172'
-if(-not (Test-Path -LiteralPath (Join-Path $compilerRun 'evidence.json'))){
-    # Linked worktrees share the repository's immutable saved evidence but have
-    # their own build directory. Resolve the common checkout without hardcoding
-    # a machine path so this gate runs from an integration worktree too.
-    $common=(git -C $repo rev-parse --git-common-dir).Trim()
-    if($LASTEXITCODE -ne 0){throw 'Cannot resolve git common directory'}
-    if(-not [IO.Path]::IsPathRooted($common)){$common=[IO.Path]::GetFullPath((Join-Path $repo $common))}
-    $commonRepo=Split-Path -Parent $common
-    $compilerRun=Join-Path $commonRepo 'build/codex/l2_nested_continue/20260912_012000/run_012133_172'
-}
-$compilerProof=Get-Content (Join-Path $compilerRun 'evidence.json') -Raw | ConvertFrom-Json
-$l2exe=Join-Path $compilerRun 'source/stg/l1_baseline/build/nested_control/l2trans.exe'
-$l1trans=$compilerProof.compiler
+# Everything this gate measures comes from the tree: the pinned L1 compiler, the
+# current l2trans, HEAD's l1src/l2src/p0.lm1.h with the listed inputs copied from
+# the working tree, and runtime objects built from the tree by run_l2trans's own
+# builder (routed through the L2 runtime units). It used to archive eaac7c5,
+# overlay saved compiler sources from one machine's build/codex directory and
+# borrow runtime objects from build/fable/graph_abi evidence.
+$l1trans=Join-Path $rootBaseline 'build/l1trans/gen2/l1trans.exe'
 $pin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()
 if ($pin -notmatch '^[0-9A-F]{64}$') { throw "L1_PIN.txt must hold one 64-hex SHA256, got 'pin=$pin'" }
 if((Get-FileHash $l1trans).Hash -ne $pin) {throw 'Stable compiler pin mismatch'}
-$l2key=(Resolve-Path $l2exe).Path
-if((Get-FileHash $l2exe).Hash -ne $compilerProof.artifacts.$l2key) {throw 'Saved L2 compiler changed'}
-$savedL2Source=Join-Path $compilerRun 'source/stg/l1_baseline/l2src/l2trans.lm1'
-if((Get-FileHash $savedL2Source).Hash -ne $compilerProof.sources.'l2trans.lm1') {throw 'Saved compiler source changed'}
-$objects=@($compilerProof.reusedObjects.PSObject.Properties | ForEach-Object Name)
-foreach($obj in $objects) {if((Get-FileHash $obj).Hash -ne $compilerProof.reusedObjects.$obj){throw "Changed runtime object $obj"}}
-$headers=Join-Path (Split-Path -Parent $objects[0]) 'headers'
-$currentL2Hash=(Get-FileHash (Join-Path $PSScriptRoot 'l2trans.lm1')).Hash
-$graphProof=$null
-$graphProofPath=$null
-Get-ChildItem -LiteralPath (Join-Path $repo 'build/fable/graph_abi') -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | ForEach-Object {
-    $candidateProofPath=Join-Path $_.FullName 'evidence.json'
-    if($null -eq $graphProof -and (Test-Path -LiteralPath $candidateProofPath)){
-        $candidateProof=Get-Content $candidateProofPath -Raw | ConvertFrom-Json
-        if($candidateProof.result -eq 'PASS' -and $candidateProof.sources.'l2src/l2trans.lm1' -eq $currentL2Hash){$graphProof=$candidateProof;$graphProofPath=$candidateProofPath}
-    }
-}
-if($null -eq $graphProof){throw 'No current green graph ABI object set for candidate scanner gate'}
-$objects=@($graphProof.supportObjects | ForEach-Object path)
-foreach($entry in $graphProof.supportObjects){if((Get-FileHash $entry.path).Hash -ne $entry.sha256){throw "Changed current runtime object $($entry.path)"}}
-$headers=Join-Path (Split-Path -Parent $objects[0]) 'headers'
-$runtimeObjectHashes=[ordered]@{}
-foreach($entry in $graphProof.supportObjects){$runtimeObjectHashes[$entry.path]=$entry.sha256}
 $run=Join-Path $repo ('build/codex/candidate_c_scanners/'+(Get-Date -Format 'yyyyMMdd_HHmmss_fff'))
 $sourceRoot=Join-Path $run 'source'
 New-Item -ItemType Directory -Path $sourceRoot -Force | Out-Null
-# Build the current frontend with the pinned stable L1 compiler. The saved
-# compiler remains provenance for the reused runtime objects, but it predates
-# later removal of frontend capacity/depth limits and must not gate new ports.
+function Get-TreeRuntimeObjects {
+    # A private scope: run_l2trans's variables ($out, $cflags, ...) stay inside.
+    . (Join-Path $PSScriptRoot 'run_l2trans.ps1') -BuildOnly -OutputDirectory 'build/c_scanners_runtime' -TranslatorPath $l1trans
+    # Its object paths are relative to stg/l1_baseline; this gate compiles and
+    # links from inside its snapshot, so make them rooted.
+    @(Get-L2MessageObjects) | ForEach-Object { if ([IO.Path]::IsPathRooted($_)) { $_ } else { Join-Path $rootBaseline $_ } }
+}
+$objects=@(Get-TreeRuntimeObjects)
+if($objects.Count -eq 0){throw 'No runtime objects built'}
+$headers=Join-Path (Split-Path -Parent $objects[0]) 'headers'
+$runtimeObjectHashes=[ordered]@{}
+foreach($obj in $objects){$runtimeObjectHashes[$obj]=(Get-FileHash $obj).Hash}
+# Build the current frontend with the pinned stable L1 compiler.
 $currentL2C=Join-Path $run 'l2trans.current.c'
 $currentL2Exe=Join-Path $run 'l2trans.current.exe'
 $savedLocation=Get-Location
@@ -66,18 +46,13 @@ try {
     Set-Location $savedLocation
 }
 $l2exe=$currentL2Exe
-git -C $repo archive --format=zip "--output=$run/core.zip" eaac7c5 -- stg/l1_baseline/l1src stg/l1_baseline/l2src stg/l1_baseline/lm1/build/l1src/p0.lm1.h
+git -C $repo archive --format=zip "--output=$run/core.zip" HEAD -- stg/l1_baseline/l1src stg/l1_baseline/l2src stg/l1_baseline/lm1/build/l1src/p0.lm1.h
 if($LASTEXITCODE -ne 0){throw 'Archive failed'}
 Expand-Archive -LiteralPath "$run/core.zip" -DestinationPath $sourceRoot
 $work=Join-Path $sourceRoot 'stg/l1_baseline'
-foreach($file in $compilerProof.sources.PSObject.Properties.Name){
-    $saved=Join-Path $compilerRun "source/stg/l1_baseline/l2src/$file"
-    if((Get-FileHash $saved).Hash -ne $compilerProof.sources.$file){throw "Changed saved compiler overlay $file"}
-    Copy-Item -LiteralPath $saved -Destination (Join-Path $work "l2src/$file")
-}
 $out='build/c_scanners'
 New-Item -ItemType Directory -Path (Join-Path $work $out) -Force | Out-Null
-$evidence=[ordered]@{result='FAIL';stages=@();compiler=$l1trans;compilerSHA256=$pin;l2Compiler=$l2exe;compilerEvidence=(Join-Path $compilerRun 'evidence.json');graphObjectEvidence=$graphProofPath;savedL2TranslatorSourceSHA256=$compilerProof.sources.'l2trans.lm1';currentL2TranslatorSourceSHA256=(Get-FileHash (Join-Path $PSScriptRoot 'l2trans.lm1')).Hash;snapshotOverlays=$compilerProof.sources;sources=@{};reusedObjects=$runtimeObjectHashes}
+$evidence=[ordered]@{result='FAIL';stages=@();compiler=$l1trans;compilerSHA256=$pin;l2Compiler=$l2exe;coreCommit=((git -C $repo rev-parse HEAD) -join '');currentL2TranslatorSourceSHA256=(Get-FileHash (Join-Path $PSScriptRoot 'l2trans.lm1')).Hash;sources=@{};reusedObjects=$runtimeObjectHashes}
 $inputs=@('parser_c_quoted.lm2','parser_c_surface.lm2','parser_text_predicates.lm2','parser_position.lm2','parser_c_quote_diagnostics.lm2','parser_python_string.lm2','parser_python_diagnostics.lm2','parser_quoted_diagnostics.lm2','parser_dash_fence.lm2','parser_matching_paren.lm2','parser_matching_bracket.lm2','lmx.h','lmx_message.h','lmx_array_ref_owned.h.lm1','tests/l2_c_scanners_parse_driver.lm1','run_candidate_c_scanners.ps1')
 foreach($file in $inputs){
     $src=Join-Path $PSScriptRoot $file
@@ -277,7 +252,7 @@ try {
     foreach($flavor in @('oracle','candidate')){
         if($flavor -eq 'oracle' -and $OracleEvidence){
             $cached=Get-Content $OracleEvidence -Raw | ConvertFrom-Json
-            if($cached.compilerSHA256 -ne $pin -or ($cached.snapshotOverlays | ConvertTo-Json -Compress) -ne ($compilerProof.sources | ConvertTo-Json -Compress)){throw 'Oracle cache profile changed'}
+            if($cached.compilerSHA256 -ne $pin){throw 'Oracle cache profile changed'}
             foreach($source in $cached.sources.PSObject.Properties){
                 if($source.Name -match '[\\/]l1src[\\/]' -and (Get-FileHash $source.Name).Hash -ne $source.Value){throw 'Oracle cache frozen source changed'}
             }
@@ -312,6 +287,23 @@ try {
     [IO.File]::WriteAllLines((Join-Path $work "$out/candidate.symbols"),$renames)
     & objcopy "--redefine-syms=$out/candidate.symbols" "$out/parser_candidate.o" "$out/parser_candidate_namespaced.o"
     Check 'candidate_namespace'
+    # A hand-written L1 prototype of the generated entry adapter links by name
+    # against its C definition, so a stale shape compiles, links and hands the
+    # adapter garbage (found on the stage 5 (a) merge: a one-argument
+    # l2_program_entry(owner) call ran as status 1). Every prototype-block
+    # declaration of it in the tree's tests must have the adapter's shape.
+    foreach($lm1 in @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'tests') -Recurse -Filter '*.lm1')){
+        $inPrototype=$false
+        $lineNo=0
+        foreach($line in [IO.File]::ReadAllLines($lm1.FullName)){
+            $lineNo++
+            if($line -match '^prototype:'){$inPrototype=$true;continue}
+            if($line -match '^end: prototype'){$inPrototype=$false;continue}
+            if($inPrototype -and $line -match '^\s+fn: l2_program_entry \(' -and $line -notmatch '^\s+fn: l2_program_entry \(@: LmxMsg process_message; @: int result(; int: argc; @@: char argv)?\) int\s*$'){
+                throw "stale l2_program_entry prototype at $($lm1.FullName):$lineNo (the adapter is (@: LmxMsg process_message; @: int result)): $($line.Trim())"
+            }
+        }
+    }
     & $l1trans 'l2src/tests/l2_c_scanners_parse_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Check 'driver_L1_to_C'
     $prevEap=$ErrorActionPreference

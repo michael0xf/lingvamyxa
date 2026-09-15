@@ -45,15 +45,18 @@ function Invoke-FamilyStage([string]$Name, [string]$Tool, [string[]]$NativeArgs)
     $quoted = ($NativeArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
     $stdout = Join-Path $run "$Name.stdout.txt"
     $stderr = Join-Path $run "$Name.stderr.txt"
-    # Windows PowerShell rejects an explicitly empty ArgumentList.
-    $argumentOption = @{}
-    if ($NativeArgs.Count -gt 0) { $argumentOption.ArgumentList = $quoted }
-    $p = Start-Process -FilePath $Tool @argumentOption -WorkingDirectory $stageWorkingDir `
-        -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-    $evidence.stages += [ordered]@{ name = $Name; tool = $Tool; arguments = $NativeArgs; exit = $p.ExitCode }
-    if ($p.ExitCode -ne 0) {
+    # cmd /c, not Start-Process -Wait, which costs about 1 s per launch.
+    Push-Location -LiteralPath $stageWorkingDir
+    try {
+        cmd /c "`"$Tool`" $quoted > `"$stdout`" 2> `"$stderr`""
+        $code = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    $evidence.stages += [ordered]@{ name = $Name; tool = $Tool; arguments = $NativeArgs; exit = $code }
+    if ($code -ne 0) {
         Get-Content -LiteralPath $stdout, $stderr
-        throw "$Name failed with exit $($p.ExitCode)"
+        throw "$Name failed with exit $code"
     }
 }
 try {
@@ -119,7 +122,7 @@ try {
         Invoke-FamilyStage "compile_$level" $gcc ($flags + @("-$level", $testObj, $messageC) + $modules + $native + $unitObjs + @('-Wl,--wrap=free', '-o', $exe))
         Invoke-FamilyStage "run_$level" $exe @()
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
-        $expected = '(?m)^family handoff checks=61 failures=0 watched_frees=4\s*$'
+        $expected = '(?m)^family handoff checks=63 failures=0 watched_frees=4\s*$'
         if ($Scenario -eq 'UnrootedAdopt') {
             $expected = '(?m)^adopt unrooted checks=\d+ failures=0 owned_frees=2 retained_interior=PASS\s*$'
         }

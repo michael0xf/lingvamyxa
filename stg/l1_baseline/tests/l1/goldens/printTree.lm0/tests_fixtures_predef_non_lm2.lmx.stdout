@@ -1,0 +1,17 @@
+structure fields=1
+  frame head="table" body=structure fields=4
+    atom "source"
+    frame head="name" body=structure fields=1
+      atom "predefNonLm2Marker"
+    frame head="columns" body=structure fields=2
+      structure fields=1
+        frame head="class" body=structure fields=1
+          atom "class"
+      structure fields=1
+        frame head="int" body=structure fields=1
+          atom "value"
+    frame head="rows" body=structure fields=2
+      atom "marker"
+      atom "1"
+    Tail cutter trailer spelling="end" fields=1
+      atom "predefNonLm2Marker"

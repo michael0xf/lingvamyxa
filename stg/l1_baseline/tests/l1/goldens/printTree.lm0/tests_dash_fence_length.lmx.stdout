@@ -1,0 +1,18 @@
+structure fields=6
+  structure fields=1
+    atom "anonymous"
+  frame head="block" body=structure fields=1
+    atom "item"
+  frame head="after4" body=structure fields=1
+    atom "ok"
+  frame head="block80" body=structure fields=1
+    atom "item"
+  frame head="after80" body=structure fields=1
+    atom "ok"
+  frame head="outer" body=structure fields=2
+    frame head="inner" body=structure fields=1
+      atom "item"
+    frame head="after" body=structure fields=1
+      atom "ok"
+    Tail cutter trailer spelling="end" fields=1
+      atom "outer"

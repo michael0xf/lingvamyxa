@@ -1,0 +1,63 @@
+include: "l1src/p0.lm1.h"
+
+# Header unit for the clean L2 port of l1src/parser.lm1's stack/stream
+# event machine (parser-in-L2 port ticket, Stage d). lm_own_new_zero/
+# lm_own_delete are L1-implemented (l1src/own.lm1, compiled into the
+# same oracle object this L2 unit links against) -- Stage A rule: an
+# LMX name needs a prototype: declaration here, never c. --
+# lm_p0_trailer_role/lm_p0_trailer_role_is_tail_cutter are still
+# oracle-native (not yet ported by any stage); p0_stream_event_is_
+# tail_cutter calls them through this same Stage A shape, and the
+# calls retarget automatically once/if those names are ever ported
+# and added to a stage's Funcs list -- no source change needed then.
+# Removed from this header in the same commit that ports each one.
+#
+# p0_new_node/p0_free_node are already ported (Stage c,
+# l2src/parser_alloc_port.lm2) -- cross-unit prototype: entries, the
+# same shape as parser_dump_port_l2.h.lm1's own p0_node_kind_class_
+# name entry. lm_p0_append_field/lm_p0_new_trailer are still
+# oracle-native, Stage A shape like the others above.
+# lm_p0_append_field's own formal is spelled node in the oracle
+# ("node" is a reserved L2 identifier -- d6, 2026-09-14); renamed nd
+# here, matching every other renamed formal in this port. A
+# prototype:'s own formal names don't need to match the C
+# implementation's argument names.
+#
+# Slice d4 adds three cross-unit entries for Stage a functions
+# already ported into a different unit (l2src/parser_text_port.lm2):
+# p0_is_horizontal_space, p0_is_field_separator, p0_starts_python_
+# string -- same cross-unit shape as p0_new_node/p0_free_node above.
+# It also adds Stage A entries for six still-oracle-native names:
+# lm_p0_find_colon, lm_p0_starts_c_prefixed_quote, lm_p0_scan_c_
+# prefixed_quote, lm_p0_scan_c_char, lm_p0_scan_quoted, lm_p0_parse_
+# fields_into (Stage e, not yet ported).
+#
+# Slice d5 adds four more still-oracle-native entries: lm_p0_trailer_
+# role_accepts_target, lm_p0_validate_dash_fence_line, lm_p0_document_
+# register_lazy_text, lm_p0_dash_fence_status_after_comment_trim.
+
+prototype:
+    fn: lm_own_new_zero (size_t: size) @: void
+    fn: lm_own_resize (@: void object; size_t: size) @: void
+    sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
+    sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))
+    fn: lm_p0_trailer_role (const: @(char text); size_t: length) LmP0TrailerRole
+    fn: lm_p0_trailer_role_is_tail_cutter (LmP0TrailerRole: role) int
+    fn: p0_new_node (@: LmP0Document document; LmP0NodeKind: kind) @: LmP0Node
+    sub: p0_free_node (@: LmP0Node nd)
+    fn: lm_p0_append_field (@: LmP0Document document; @: LmP0Structure structure; @: LmP0Node nd) int
+    fn: lm_p0_new_trailer (@: LmP0Document document; const: @(char spelling); size_t: spelling_length; size_t: line; size_t: column) @: LmP0Trailer
+    fn: p0_is_horizontal_space (char: value) int
+    fn: p0_is_field_separator (char: value) int
+    fn: p0_starts_python_string (const: @(char text); size_t: length; size_t: index) int
+    fn: lm_p0_find_colon (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column; @: size_t colon_index) int
+    fn: lm_p0_starts_c_prefixed_quote (const: @(char text); size_t: end_index; size_t: start) int
+    fn: lm_p0_scan_c_prefixed_quote (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: lm_p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; char: quote; size_t: line; size_t: base_column) int
+    fn: lm_p0_parse_fields_into (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset) int
+    fn: lm_p0_trailer_role_accepts_target (LmP0TrailerRole: role; const: @(LmP0Node target)) int
+    fn: lm_p0_validate_dash_fence_line (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column) int
+    fn: lm_p0_document_register_lazy_text (@: LmP0Document document; const: @(char source); size_t: length; const: @@(char patch_slot); size_t: line; size_t: column) int
+    fn: lm_p0_dash_fence_status_after_comment_trim (const: @(char text); size_t: length; @: size_t out_dash_count) LmP0DashFenceStatus
+end: prototype

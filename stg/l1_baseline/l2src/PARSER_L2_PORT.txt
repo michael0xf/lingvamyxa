@@ -1,0 +1,672 @@
+Parser-in-L2 port (branch sonnet/parser-l2)
+============================================
+
+Scope
+-----
+A clean-L2 equivalent of l1src/parser.lm1 (the oracle), built function by
+function into l2src/parser.lm2, proven against the existing 620-golden
+parity gate (tests/p0_tree_contract). l1src/parser.lm1 itself is never
+edited. The 25 existing parser_*.lm2 fragments predate this ticket (built
+for a different purpose -- l2trans's own self-hosted scanner, lm_p0_*
+named) and are a starting point for logic reuse, not something this port
+calls into or modifies. Ported operations are named p0_*, never lm_p0_*
+(the translator's reserved adapter family), and never call lm_p0_* either.
+Authority: lingvamyxa-e2 assigns and accepts each stage; lingvamyxa-d6 owns
+any core l2trans/l1trans fix a stage's own gap needs.
+
+Each stage's own units are written straight from l1src/parser.lm1's body
+-- the oracle is the source, not the fragments. A fragment covering the
+same functions is read as a cross-check on the logic (and sometimes on
+Stage A prototype/predef shape), never copied over the oracle's own
+current text; a fragment can predate a change already landed in
+parser.lm1 and silently disagree with it. Do not "restore" a unit's body
+from its matching fragment on the theory that the fragment is the
+original -- re-derive from l1src/parser.lm1 as it currently reads.
+
+Mechanism
+---------
+Per-stage, l2src/run_port_parser.ps1 builds two p0_meta_dump executables
+against the same tests/p0_tree_contract driver and goldens:
+  Ref  -- the pristine, tracked lm1/build/parser.lm1.c, untouched.
+  Port -- a disposable copy of that same generated C with the stage's
+          ported functions' own definitions renamed aside (name ->
+          name__l1, left as dead code) and every remaining reference --
+          including internal cross-calls between oracle functions, e.g.
+          is_field_space calling is_horizontal_space -- redirected via
+          -Dname=p0_suffix to the L2 unit's real implementation.
+
+The redirect target's C prototype is captured mechanically from the
+renamed function's own original definition line (never hand-typed), so a
+signature drift cannot hide behind a stale hand-written declaration;
+-Werror=incompatible-pointer-types and -Werror=implicit-function-
+declaration are the cross-check.
+
+This replaces an earlier plan (objcopy --redefine-sym / --weaken-symbol
+on the compiled oracle object). That does not override on this PE/COFF
+toolchain: both the weakened and the strong definition survive as
+separate symbols at separate addresses in the linked binary, and internal
+call sites keep resolving to the local (un-overridden) one. Confirmed via
+a positive falsifier (linking a probe with a printf side effect: the
+override fired at the oracle's own internal call sites when source-level
+redirect was used, and never fired under the objcopy plan) and a negative
+control (the unwired pristine build gives an identical result with zero
+override calls). Reported to and accepted by lingvamyxa-e2, 2026-09-14.
+
+Stages landed
+-------------
+a) parser_text.lm1 primitives -- l2src/parser_text_port.lm2 (commit
+   4715eac3). All 15 functions: p0_text_equals, p0_identifier_payload,
+   p0_is_horizontal_space, p0_is_line_break, p0_line_break_width_at,
+   p0_is_field_space, p0_is_field_separator, p0_is_short_form_separator,
+   p0_is_quoted_token_boundary, p0_starts_python_string,
+   p0_is_decimal_digit, p0_copy_bytes, p0_text_view_new_cstr,
+   p0_text_view_delete, p0_text_from_cstr. 36/36 goldens identical
+   (Ref vs Port), including exit codes. p0_text_equals and
+   p0_identifier_payload (both take a const array-of-one struct formal)
+   were blocked by l2trans's "formal type 4" gap until d6's f29800c4;
+   both are ported.
+   Falsifier checked before landing: is_horizontal_space temporarily
+   forced to always return false produced 34/36 mismatches against the
+   same goldens; reverting restored 36/36 with a clean diff against the
+   original source.
+
+b) l1src/parser.lm1's own scanning primitives -- l2src/parser_scan_port.lm2
+   (commit 7abac716). 11 functions: p0_indent_tab_column,
+   p0_scan_indent_column, p0_visual_column_between, p0_count_line_breaks,
+   p0_position_in_slice, p0_advance_layout_line, p0_index_is_line_start,
+   p0_line_rest_is_horizontal_space, p0_find_physical_line_end,
+   p0_scan_layout_prefix, p0_layout_prefix_is_deeper. Ported straight from
+   the oracle's own body (not the pre-existing parser_position.lm2/
+   parser_visual_column.lm2/parser_line_start.lm2/parser_physical_line.lm2/
+   parser_scan_indent.lm2/parser_scan_layout_prefix.lm2 fragments, which
+   carry closely related logic under lm_p0_ names for a different
+   purpose), using decimal character codes rather than the oracle's
+   '\t'/'\r'/'\n'/'.' literal spelling -- a spelling choice only.
+   Depends on Stage a's p0_is_horizontal_space/p0_is_line_break/
+   p0_line_break_width_at via a predef'd prototype: header
+   (parser_scan_port_l2.h.lm1) -- the first cross-stage dependency; see
+   "Cumulative stages" below. 36/36 goldens identical.
+   The oracle's own `---` while-loop tail cutter (CODING_RULES §7: a
+   dedent of two or more levels needs one; 120 occurrences in
+   parser.lm1 alone) is kept wherever the oracle uses one; hit it as
+   l2trans parse error 13 on the first translate attempt ("source
+   level decrease must be one step unless a tail cutter is used") for
+   p0_scan_layout_prefix's nested while. Expect it in every later
+   stage's own state machines (e2, 2026-09-14).
+   Falsifier: p0_position_in_slice temporarily forced to always report
+   line=0 produced 34/36 mismatches; reverting restored 36/36.
+
+c) node/structure/frame allocation -- l2src/parser_alloc_port.lm2. All
+   5 of parser.lm1's allocation functions: p0_node_kind_class_name,
+   p0_free_node, p0_new_structure, p0_new_frame, p0_new_node. No
+   fragment exists for any of this stage's functions. 36/36 goldens
+   identical, both drivers.
+   p0_free_node's formal is renamed nd, not node: "node" is a reserved
+   L2 identifier (l2_ident refuses main/fn/int/return/if/else/while/
+   for/node -- d6, 2026-09-14, same rule as the oracle-local rename in
+   history_owned), so any `@: T node` formal is refused regardless of
+   T; p0_new_node's own local (originally node in the oracle) is
+   renamed the same way, for consistency rather than necessity (the
+   restriction is formal-position-specific).
+   p0_node_kind_class_name originally took `int: kind` as a stopgap
+   for the oracle's `LmP0NodeKind: kind` (l2trans rejected any not-
+   yet-known `type: X int` alias as a formal/return); reverted to the
+   real type once d6's Stage B step 2b (642b6700, "by-value foreign
+   formals and returns as written") landed.
+   p0_new_structure, p0_new_frame and p0_new_node landed once d6's
+   Stage B step 3 (f7390ded/fb7ab80c, "LmP0Document is a foreign
+   pointer type") admitted document\tree_arena field access -- until
+   then, field access through an @: LmP0Document formal was refused
+   entirely regardless of field or formal name. All three call
+   lm_p0_set_diagnostic and lm_p0_new_text (the oracle's own still-un-
+   ported names) through the predef'd prototype: header (the Stage A
+   shape for a not-yet-ported oracle dependency, confirmed correct by
+   e2, 2026-09-14).
+   Falsifier: p0_new_structure forced to always report out-of-memory
+   (structure: 0 unconditionally, skipping the real allocation)
+   produced 72 mismatches across 36 goldens through both drivers --
+   the strongest falsifier result so far, since real parsing allocates
+   structures constantly; reverting restored 36/36 both ways.
+   (Separate, unrelated falsifier attempted earlier through
+   p0_meta_dump.c only: p0_node_kind_class_name's
+   STRUCTURE case mutated to return "frame" produced zero mismatches.
+   Traced, not a mechanism gap: nm on the linked Port executable
+   confirmed the redirect took effect correctly (one p0_node_kind_
+   class_name symbol, the oracle's own renamed to __l1, no bare
+   lm_p0_node_kind_class_name left) -- the oracle's own caller,
+   lm_p0_dump_node (part of the lm_p0_dump_run state machine), is
+   simply never exercised by p0_meta_dump.c, which has its own
+   independent `fprintf(out, "node kind=%s ...")` metadata path
+   (matches run_p0_meta.ps1's own comment, "Pretty printTree is not
+   the metadata oracle"). Raised to e2 as a real question before
+   porting the dump-printer half of this stage: see "Two acceptance
+   drivers" below for the resolution (l2src/p0_dump_driver.c). Same
+   mutation through THAT driver: 36/36 mismatches -- falsifier
+   confirmed via the mechanism that actually exercises this family.)
+
+c, continued) dump-printer, Slice 1 (leaves) -- l2src/parser_dump_port.lm2.
+   7 functions: p0_dump_append, p0_dump_append_cstr, p0_dump_reserve,
+   p0_dump_append_size, p0_dump_append_field_count_line, p0_dump_indent,
+   p0_dump_text. Ported straight from the oracle's own body; no
+   fragment exists for any of these. The oracle spells its own internal
+   calls to dump_append/dump_append_cstr with a c. prefix at the two
+   call sites that textually precede their definition later in the
+   same file (an L1 forward-reference quirk) -- irrelevant here since
+   both are defined in this same L2 unit; every internal call stays a
+   bare p0_* name.
+   Cross-unit collision found and fixed: every L2 unit's generated C
+   also carries its own copy of l2trans's shared immut-query support
+   boilerplate (l2_fnv1a64, l2_immut_query_fill, l2_hash_compare,
+   l2_hash_compare_q) -- identical, auto-generated, no per-unit
+   customization -- which collides at link time once two or more units
+   are linked together (this is the first stage with more than 2
+   units). run_port_parser.ps1 now strips it from every unit but the
+   first, same shape as the retired own-arena strip.
+   36/36 goldens identical, both drivers. Falsifier: p0_dump_indent
+   temporarily forced to emit 3 extra levels of indentation produced
+   36/36 mismatches through p0_dump_driver.c (0 through p0_meta_dump.c,
+   as expected for this family); reverting restored 36/36 both ways.
+
+c, continued) dump-printer, Slice 2 (frame/stack) -- same file. All 7
+   functions: p0_dump_frame_new, p0_dump_push_frame, p0_dump_push_node,
+   p0_dump_push_structure, p0_dump_push_trailer, p0_dump_stack_delete,
+   p0_dump_stack_new. Formals/locals named node in the oracle are
+   renamed nd (the same reserved-identifier rule as p0_free_node).
+   36/36 goldens identical, both drivers.
+   p0_dump_stack_new landed in a second pass: its body passes a bare
+   function name (lm_own_delete_plain) as a VALUE, not a call --
+   `lm_own_ptr_stack_init(stack, lm_own_delete_plain)`. l2trans refused
+   this with "unresolved name" even though the same name resolves fine
+   in call position elsewhere in this unit. Reported to d6 with a
+   fixture (l2src/tests/repro_fnptr_value.lm2) isolating it to names
+   known only via a prototype: block specifically (an L2-defined
+   callable passed the same way worked) -- fixed same-day in aec85b3b.
+   d6 also caught a second, silent defect my own "working" fixture case
+   hid: a C call boxed a function-pointer actual it couldn't type
+   through an int temporary, so the "working" L2-callable-as-value case
+   was actually passing a mistyped value the whole time, not a real
+   pass -- also fixed in the same commit.
+   Falsifiers: p0_dump_frame_new's indent field forced to 0
+   unconditionally produced 35/36 mismatches through p0_dump_driver.c;
+   p0_dump_stack_new forced to always report allocation failure
+   (returning 0 unconditionally) produced 36/36 mismatches -- complete
+   failure, matching its role as the traversal stack every dump needs.
+   Reverting each restored 36/36 both ways.
+
+c, continued) dump-printer, Slice 3 -- p0_dump_run -- same file. The
+   traversal state machine, ported straight from the oracle. Calls
+   p0_node_kind_class_name (a Stage c function in a different unit,
+   parser_alloc_port.lm2) through a new cross-unit prototype: entry in
+   this file's own header -- the same shape as Stage b's cross-stage
+   dependency on Stage a's p0_is_horizontal_space. One cast spelling
+   fixed along the way: the oracle's `(cast: size_t nd\kind)` (no
+   parens around the scalar type) was refused ("unsupported cast
+   type"); the parenthesized form, `(cast: (size_t) nd\kind)`, used
+   throughout the rest of this port, works.
+   36/36 goldens identical, both drivers. Per e2's instruction, the
+   falsifier for this one pins a state transition rather than
+   allocation, since a state machine is where a port can silently
+   drift: the LM_P0_DUMP_STRUCTURE phase's own dispatch check was
+   mutated to test for LM_P0_DUMP_TRAILER instead (hijacking every
+   trailer frame into the structure handler, and leaving real
+   structure frames to fall through to failure) -- produced 36/36
+   mismatches, complete failure. Reverting restored 36/36 both ways.
+
+c, continued) dump-printer, Slice 3 -- p0_dump_node -- same file. The
+   orchestrator: allocates the traversal stack, seeds it with the root
+   node, and hands off to p0_dump_run (or marks the dump failed if
+   either step fails). Ported straight from the oracle; no fragment
+   exists. Formal/local named node in the oracle renamed nd (same
+   reserved-identifier rule as p0_dump_push_node). This completes
+   Slice 3 and dump-printer allocation/traversal end to end.
+   36/36 goldens identical, both drivers. Falsifier: the call to
+   p0_dump_run was removed entirely (leaving the root node pushed onto
+   the stack but never traversed) -- produced 36/36 mismatches through
+   p0_dump_driver.c, complete failure, matching its role as the only
+   path from a pushed frame to any output. Reverting restored 36/36
+   both ways.
+
+c, continued) dump-printer, Slice 4 (lifecycle), p0_dump_new -- same
+   file. Allocates the LmP0Dump struct itself. Ported straight from
+   the oracle; no fragment exists.
+   Cross-cutting addition landed alongside this function, per e2's
+   instruction (2026-09-14) that Slice 4's own falsifiers need a
+   counted allocator rather than a "complete failure" mutation: a new
+   file, l2src/p0_dump_alloc_counter.c, defines p0_counted_calloc/
+   realloc/free (a global long, p0_dump_alloc_balance, incremented on
+   a fresh block, decremented on a non-null free) and is built once,
+   plain, with none of a stage's -D redirects -- if it were compiled
+   with -Dcalloc=p0_counted_calloc etc, its own calls to the real
+   calloc/realloc/free would rewrite to themselves and recurse
+   forever (see that file's own header comment). run_port_parser.ps1
+   now adds three more defines, -Dcalloc/-Drealloc/-Dfree, to both
+   p0_dump_driver executables' own build (Ref's initial build and
+   every stage's Port build) -- never to the p0_meta_dump ones -- so
+   every c.calloc/c.realloc/c.free call site inlined from
+   l1src/own.lm1 into lm1/build/parser.lm1.c (Ref's pristine copy and
+   each stage's own patched copy alike), plus p0_dump_driver.c's own
+   free(dump) of the buffer lm_p0_dump_alloc hands back, routes
+   through the counted wrappers. p0_dump_driver.c prints
+   "alloc_balance=<n>\n" as the last line of every run, always (not
+   just during a falsifier), so a normal run balances to 0 on both Ref
+   and Port and the line matches -- confirmed across all stages
+   (a_parser_text through c_parser_dump_new) with no output drift.
+   36/36 goldens identical, both drivers. Falsifier for p0_dump_new
+   itself: forced to always return 0 (simulated allocation failure) --
+   the standard "complete failure" shape (0 mismatches through
+   p0_meta_dump.c, 36/36 through p0_dump_driver.c, since dump_alloc
+   returns null for every input and the driver prints nothing but the
+   balance line). Reverting restored 36/36 both ways. The two other
+   shapes e2 asked for (a wrong-length take_data, a wrong-owner delete
+   caught by the balance line going nonzero) are Slice 4's remaining
+   falsifiers, one per function as each lands.
+
+c, continued) dump-printer, Slice 4, p0_dump_take_data -- same file.
+   Detaches the finished buffer from the Dump struct, resetting
+   length/capacity to 0 so a later p0_dump_delete won't re-free it
+   (the struct's own lm_own_delete(dump\data, 0) becomes a no-op).
+   Ported straight from the oracle; no fragment exists.
+   36/36 goldens identical, both drivers. Falsifier (wrong-length
+   shape, per e2's instruction): the returned buffer's last byte was
+   overwritten with 0 before detaching (data[dump\length - 1U]: 0),
+   truncating the trailing newline rather than failing outright -- the
+   balance line still read alloc_balance=0 on both sides (no leak; the
+   byte was overwritten in place, not lost), but every golden's dump
+   text differed by exactly that one byte (confirmed by diff: only the
+   final newline is missing, merging the balance line onto the last
+   content line). 36/36 mismatches, all OUTPUT MISMATCH not EXIT
+   MISMATCH. Reverting restored 36/36 both ways.
+
+c, continued) dump-printer, Slice 4, p0_dump_delete -- same file. Frees
+   the Dump struct's buffer (a no-op in the normal alloc flow, since
+   take_data always runs first and already zeroed dump\data -- only
+   the dump\failed early-exit path in p0_dump_alloc hits it live) and
+   then the struct itself. Ported straight from the oracle; no
+   fragment exists.
+   36/36 goldens identical, both drivers, alloc_balance=0 on both
+   sides throughout. Falsifier (wrong-owner shape, per e2's
+   instruction): the lm_own_delete(dump, 0) call freeing the struct
+   itself was removed, leaking one LmP0Dump per golden. Every golden's
+   dump TEXT stayed byte-identical between Ref and Port -- the leak is
+   invisible to a plain diff of the printed tree -- but the balance
+   line diverged on every one: alloc_balance=0 (Ref) vs
+   alloc_balance=1 (Port), confirmed via diff on one golden showing
+   only that single line differs. 36/36 mismatches, all on the balance
+   line. Reverting restored 36/36 both ways. This is the falsifier
+   shape the counted allocator (see "Slice 4 (lifecycle)" above) exists
+   for -- a bug here would have passed unnoticed as a text-only diff.
+
+c, continued) dump-printer, Slice 4, p0_dump_alloc -- same file. The
+   public entry point: allocates the Dump, appends "" and returns
+   early for a null/rootless document, otherwise walks the tree via
+   p0_dump_node, detaches the finished buffer via p0_dump_take_data,
+   deletes the Dump, and returns the buffer (or 0 on dump\failed after
+   deleting). Ported straight from the oracle; no fragment exists.
+   This closes Stage c end to end -- dump-printer allocation, buffer
+   primitives, frame/stack, traversal, and lifecycle are all ported.
+   36/36 goldens identical, both drivers, alloc_balance=0 throughout.
+   Falsifier (d6's second suggested shape, 2026-09-14 ticket -- "not
+   calling take_data before returning"): the success-path return was
+   changed from `data: p0_dump_take_data(dump); p0_dump_delete(dump);
+   return: data` to `data: dump\data; return: data`, skipping both
+   calls. Every golden's dump TEXT stayed byte-identical (the driver's
+   own free() of the returned buffer still runs, since dump\data is
+   the same pointer p0_dump_take_data would have returned) but the
+   LmP0Dump struct itself is never freed: alloc_balance=0 (Ref) vs
+   alloc_balance=1 (Port), confirmed via diff on one golden showing
+   only that line differs. 36/36 mismatches, all on the balance line.
+   Reverted (textually identical to the version that had already
+   passed 36/36 across all 10 stages before the falsifier), 36/36
+   restored.
+
+Two acceptance drivers
+------------------------
+tests/p0_tree_contract/p0_meta_dump.c never calls l1src/parser.lm1's
+own lm_p0_dump_alloc/lm_p0_dump_run/lm_p0_dump_node family (its own
+"Pretty printTree is not the metadata oracle" comment says as much) --
+so a 36/36 green through it proves compile-and-link for that family,
+not behavior. l2src/p0_dump_driver.c (e2, 2026-09-14) is this port's
+own second driver, specifically for that family: it parses each
+fixture via lm_p0_parse_file the same way p0_meta_dump.c does, then
+calls the oracle's own public entry point, lm_p0_dump_alloc, and
+prints its result verbatim. run_port_parser.ps1 builds both drivers,
+Ref and Port, for every stage and requires 36/36 identical through
+each independently (Test-GoldensBetween, called twice per stage).
+
+Which functions each driver actually exercises, so a green run means
+what it looks like it means:
+- p0_meta_dump.c: parser.lm1's own structural fields directly (node/
+  frame/structure/trailer kind, flags, span, text) -- everything
+  ported in Stage a and Stage b, and p0_free_node (called nowhere in
+  either driver's own reachable graph, but its body is a no-op --
+  covered by inspection, not exercised by either driver).
+- l2src/p0_dump_driver.c: the lm_p0_dump_* family once it's ported
+  (dump_alloc/dump_run/dump_node/dump_append*/dump_push_*/dump_new/
+  dump_take_data/dump_delete), and, incidentally, p0_node_kind_class_
+  name (called from inside lm_p0_dump_run) -- confirmed by the
+  falsifier above; p0_meta_dump.c does not reach it.
+Functions in both p0_text_port.lm2 and p0_scan_port.lm2 are exercised
+by p0_meta_dump.c only (they don't touch node/dump structures), so
+their own falsifiers were checked against that driver alone.
+
+Not observable by either driver
+---------------------------------
+A mutation tried as a falsifier that produced zero mismatches through
+BOTH drivers. This is a coverage fact about tests/p0_tree_contract's
+36 fixtures, not about the port -- the oracle and its C are untouched
+by any of this, and the mismatch check itself (Ref vs Port, byte-for-
+byte including exit codes) is otherwise sound. Not something for this
+port to fix by adding goldens; the 620 reference and tests/
+p0_tree_contract are lingvamyxa-d6's lane, and this list is what he
+extends from if he wants a fixture that closes one of these.
+- p0_index_is_line_start (Stage b): forced to always return 0.
+  Re-checked against p0_dump_driver.c once it existed: also 36/36,
+  not observable there either.
+- p0_stream_event_is_tail_cutter (Stage d, Slice d1): its predicate's
+  result flipped in a ported unit (0c, 2026-09-14) -- 36/36 on both
+  drivers, not observable. Not exercised because nothing in Slice d1
+  itself consumes the result; the event machine that does (d4/d5)
+  isn't ported yet. Re-check once d4/d5 land: if a golden then turns
+  red under the flipped predicate, record it there; if none of the 36
+  ever does, this stays a capstone item -- a ported predicate no gate
+  can turn red is not measured (e2, 2026-09-14).
+
+Cumulative stages
+------------------
+run_port_parser.ps1's $Stages table lists every unit and oracle name
+landed so far at each stage, not just what's new: a later unit's own
+calls into an earlier stage's p0_* functions need that earlier unit's
+real compiled object linked in, and the oracle-side redirect set has
+to cover every ported name so no internal oracle call reaches an
+un-redirected body. Each stage links every earlier .lm2 unit alongside
+its own.
+
+d) stack/stream event machine -- l2src/parser_stack_stream_port.lm2
+   (new unit, header l2src/parser_stack_stream_port_l2.h.lm1, no
+   `profile: runtime`, l1src/parser.lm1 is the twin, unedited).
+   5 slices, accepted by e2 2026-09-14: d1 lifecycle, d2 stack
+   geometry, d3 lineage/trailer-attach, d4 trailer-item parse +
+   delimiter resolve, d5 event application core. One commit per
+   slice. Any not-yet-ported oracle callee is called through this
+   unit's own prototype: header (Stage A pattern); removed from the
+   header in the same commit that ports the callee.
+
+   Capstone scope, carved OUT of Stage d (e2/d6, 2026-09-14): tracing
+   real callees, lm_p0_record_mix_mark (reached from the brace-mark/
+   mix-prefix scanning family lm_p0_parse_stream needs) calls
+   lm_p0_postprocess_node (Stage f), lm_p0_validate_nonempty_colon_
+   frames_in_node (Stage g), and recurses into lm_p0_parse_stream
+   itself. So lm_p0_record_mix_mark, the disabled-block-validation
+   family (lm_p0_validate_disabled_item_text, lm_p0_disabled_scan_
+   next_event, lm_p0_disabled_event_is_tail_cutter, lm_p0_disabled_
+   state_accept_event, lm_p0_validate_disabled_block), and
+   lm_p0_parse_stream itself are OUT of Stage d's scope -- they land
+   as a capstone once Stages e/f/g exist, so every Stage d slice's
+   36/36 claim is honestly reachable by both existing drivers today,
+   not contingent on later stages.
+
+   d1 (lifecycle, 17 fns) -- l2src/parser_stack_stream_port.lm2:
+   p0_stack_free, p0_stack_free_any, p0_stack_new, p0_stack_delete,
+   p0_pending_delimiter_new, p0_stream_event_new, p0_stream_event_
+   new_copy, p0_stream_event_delete, p0_stream_event_is_tail_cutter,
+   p0_pending_delimiter_clear, p0_pending_delimiter_delete,
+   p0_pending_mix_new, p0_pending_mix_free, p0_pending_mix_free_any,
+   p0_pending_mix_delete, p0_disabled_state_new, p0_disabled_state_
+   delete. Struct lifecycle for LmP0Stack/LmP0PendingDelimiter/
+   LmP0StreamEvent/LmP0PendingMix/LmP0DisabledState, plus the one
+   pure predicate (stream_event_is_tail_cutter) grouped here since it
+   has no in-unit dependents. Its own two callees, lm_p0_trailer_role
+   and lm_p0_trailer_role_is_tail_cutter, are still oracle-native --
+   called through the header's prototype: block (both resolve to
+   their real C symbols, lm_p0_trailer_role and lm_p0_trailer_role_
+   is_tail_cutter, until/unless a later stage ports them and adds
+   them to a run_port_parser stage's Funcs list).
+   36/36 goldens identical, both drivers (stage d_lifecycle). Falsifier:
+   p0_stack_new forced to return 0 unconditionally (simulated
+   allocation failure) -- measured 71 mismatches across 36 goldens x 2
+   drivers (not the full 72): diffing every pair found exactly one
+   golden×driver combination that did NOT diverge,
+   invalid_triple_unclosed's dump-driver run -- that fixture is
+   already-malformed input that fails parsing before ever reaching
+   the stack, so Ref and Port produce identical (error) output
+   regardless. Not a coverage gap in the port; a fact about that one
+   fixture. Reverting restored 36/36 both ways.
+   p0_stream_event_is_tail_cutter: ported, not exercised by the 36
+   inputs at this slice -- see "Not observable by either driver"
+   below (0c, 2026-09-14).
+
+   d2 (stack geometry, 5 fns) -- l2src/parser_stack_stream_port.lm2:
+   p0_stack_ensure, p0_stack_truncate_deeper, p0_stack_top_level,
+   p0_stack_level_is_trailer_body, p0_stack_collapse_soft_to_event.
+   Functions that operate on an existing LmP0Stack's own parents/
+   owners/hard arrays. Header gains prototype: entries for lm_own_
+   resize and lm_p0_set_diagnostic (still oracle-native).
+   36/36 goldens identical, both drivers (stage d_stack_geometry).
+   Falsifier: p0_stack_ensure forced to return 0 unconditionally
+   (simulated allocation failure) -- measured 71 mismatches across 36
+   goldens x 2 drivers, the same single exception as d1's falsifier
+   (invalid_triple_unclosed's dump-driver run, which fails parsing
+   before ever needing to grow the stack). Reverting restored 36/36
+   both ways. Commit c05e1178.
+
+   d3 (lineage/trailer-attach, 9 fns) -- l2src/parser_stack_stream_
+   port.lm2: p0_node_keeps_source_child_level, p0_node_child_
+   structure, p0_structure_last_colon_frame, p0_stack_install_node_
+   lineage, p0_stack_ensure_root_level_alias, p0_stack_open_implicit_
+   anonymous, p0_node_trailer_slot, p0_attach_trailer, p0_pending_
+   delimiter_set. Formals/locals named node in the oracle renamed nd,
+   same rule as every other renamed formal. Header gains two
+   cross-unit prototype: entries for functions already ported in a
+   different unit (p0_new_node/p0_free_node, Stage c's l2src/parser_
+   alloc_port.lm2 -- same shape as parser_dump_port_l2.h.lm1's own
+   p0_node_kind_class_name entry) and two still-oracle-native entries
+   (lm_p0_append_field, lm_p0_new_trailer).
+   36/36 goldens identical, both drivers (stage d_lineage_trailer),
+   confirmed cold (build/port_parser wiped before the run;
+   l2rt_objs\lmx_message_exec.o timestamp postdated HEAD's last
+   exec.c commit -- d6's staleness check, 2026-09-14). Falsifier
+   (mutating the ported lm2, not the oracle, per d6's instruction):
+   p0_node_keeps_source_child_level forced to return 0
+   unconditionally -- measured 39 mismatches across 36 goldens x 2
+   drivers, a smaller, more targeted count than d1/d2's near-total
+   shape, since this function only matters for goldens using
+   colon-frame lineage. Reverted, clean diff, 36/36 restored, also
+   cold. Commit dd067e06.
+
+   d4 (trailer-item parse + delimiter resolve, 2 fns) --
+   l2src/parser_stack_stream_port.lm2: p0_stream_resolve_pending_
+   delimiter, p0_parse_trailer_item. Header gains three cross-unit
+   prototype: entries for Stage a functions already ported into a
+   different unit (p0_is_horizontal_space/p0_is_field_separator/p0_
+   starts_python_string, l2src/parser_text_port.lm2) and six
+   still-oracle-native entries (lm_p0_find_colon, lm_p0_starts_c_
+   prefixed_quote, lm_p0_scan_c_prefixed_quote, lm_p0_scan_c_char,
+   lm_p0_scan_quoted, lm_p0_parse_fields_into -- Stage e, not yet
+   ported; the call retargets automatically once it is).
+   36/36 goldens identical, both drivers (stage d_trailer_resolve),
+   cold, on integration tip a40f3d52 merged into this branch.
+   Falsifier: p0_stream_resolve_pending_delimiter forced to return 1
+   immediately (skipping delimiter resolution and never clearing
+   pending state) -- measured 6 mismatches across 36 goldens x 2
+   drivers, a small, precise count: 3 goldens (E_dash_anon_pair,
+   E_dotted_anon_pair, F_trailer_word) each mismatched on both
+   drivers, all real structural divergence (confirmed by diff on one:
+   field counts and nesting order both wrong, not a crash or exit-code
+   difference). Reverted, clean diff, 36/36 restored, also cold.
+
+   d5 (event application core, 6 fns) -- l2src/parser_stack_stream_
+   port.lm2: p0_pending_mix_push, p0_stream_apply_item_event, p0_
+   stream_apply_mix_event, p0_stream_apply_event, p0_pending_mix_
+   flush, p0_stream_block_string_level -- Stage d complete. Header
+   gains four more still-oracle-native entries: lm_p0_trailer_role_
+   accepts_target, lm_p0_validate_dash_fence_line, lm_p0_document_
+   register_lazy_text, lm_p0_dash_fence_status_after_comment_trim.
+
+   OPEN, waiting on an l2trans fix (d6, 2026-09-14, taken as a
+   ticket): p0_stream_apply_item_event's own trailer_role local is
+   declared `int: trailer_role` instead of the oracle's `LmP0Trailer
+   Role: trailer_role` -- l2trans refuses a foreign int-alias type
+   (l1src/p0.h: `typedef int LmP0TrailerRole;`) as a LOCAL variable's
+   declared type ("unsupported body, frame=LmP0TrailerRole"), even
+   though the same type already works as a formal/return (d6's
+   642b6700 covered only that half). LmP0TrailerRole literally is
+   int, so this is behaviorally identical, not a logic change --
+   revert to the real type once the gap is fixed. Repro: l2src/tests/
+   repro_foreign_int_alias_local.lm2 + .h.lm1, committed alongside
+   this slice for d6 to use as the fix's own red. THIS IS A STOPGAP,
+   NOT A RULE -- it applies only to this one local, only until fixed.
+   Follow-up: a separate commit reverts `int: trailer_role` to
+   `LmP0TrailerRole: trailer_role` the same day the l2trans fix lands
+   (e2, 2026-09-14) -- named here so the stopgap cannot outlive its
+   reason; not yet landed as of this writing.
+
+   36/36 goldens identical, both drivers (stage d_event_apply), cold.
+   Falsifier: p0_stream_apply_event forced to route unconditionally
+   through p0_stream_apply_item_event, skipping the DELIM/MIX
+   dispatch entirely -- measured 6 mismatches across 36 goldens x 2
+   drivers, the same 3 goldens as d4's falsifier (E_dash_anon_pair,
+   E_dotted_anon_pair, F_trailer_word), the only fixtures among the
+   36 that reach delimiter/MIX dispatch -- this time as EXIT MISMATCH
+   (ref=0 port=1) rather than pure OUTPUT MISMATCH, since bypassing
+   dispatch breaks parsing outright for those inputs. Reverted, clean
+   diff, 36/36 restored, also cold.
+
+e) field-parsing state machine -- l2src/parser_field_parse_port.lm2
+   (new unit, header l2src/parser_field_parse_port_l2.h.lm1, no
+   `profile: runtime`, l1src/parser.lm1 is the twin, unedited).
+   6 slices, accepted by e2/6f 2026-09-14: e1 lifecycle, e2 field
+   appenders, e3 field scanning primitives, e4 compact-atom/C-surface
+   scanning, e5 the main loop, e6 thin wrappers. One commit per slice.
+   Every gate runs through both existing drivers at 36/36, no new
+   driver needed -- parsing already exercises all of this on every
+   golden.
+
+   Cross-unit rule (d6, 2026-09-14, resolving an earlier open
+   question): run_port_parser's stages link only their own cumulative
+   Units list (run_port_parser.ps1 L645 translates/compiles exactly
+   that list; L704-710 links each driver, the patched oracle, every
+   unit landed through the stage, and the runtime trio), and the
+   stage's Funcs give a blanket -Dlm_p0_x=p0_x on that one gcc
+   invocation, which rewrites the call inside a DIFFERENT unit's own
+   generated C too (not just the porting unit's). So: when e3/e4 port
+   a function Stage d already reached through a prototype: pointing
+   at the oracle name (scan_quoted, find_colon, starts_c_prefixed_
+   quote, scan_c_char, scan_c_prefixed_quote), Stage d's own header
+   (parser_stack_stream_port_l2.h.lm1) keeps pointing at the oracle
+   name -- no source edit there, ever. The retarget is entirely the
+   porting stage's Funcs entry; the runner's own invariant (the
+   redirect set covers every ported name) is the proof, not a second
+   implementation living anywhere. The MEASURED proof per slice: e3's
+   and e4's own falsifier must move a Stage d stage's own golden
+   output, not just the new Stage e stage's -- confirming the -D
+   redirect actually reached the Stage d caller's C, not merely the
+   Stage e unit's. Each e3/e4 falsifier note below names which Stage d
+   caller it reaches.
+
+   e1 (lifecycle, 5 fns) -- l2src/parser_field_parse_port.lm2:
+   p0_field_parse_loop_frame_delete_any, p0_field_parse_loop_stack_
+   new, p0_field_parse_loop_stack_delete, p0_field_parse_loop_push,
+   p0_field_parse_fail. Lifecycle for the field-parsing loop's own
+   explicit continuation stack (LmOwnPtrStack of LmP0FieldParseLoop
+   Frame frames) -- the same explicit-stack-not-recursion shape as
+   p0_dump_run and Stage d's event machine. Formals/locals named node
+   in the oracle renamed nd, same rule as every other renamed formal.
+   36/36 goldens identical, both drivers (stage e_lifecycle), cold.
+   Falsifier: p0_field_parse_loop_stack_new forced to return 0
+   unconditionally (simulated allocation failure) -- measured 71
+   mismatches across 36 goldens x 2 drivers (not the full 72). Rerun
+   with full output captured (d6, 2026-09-14 -- the first attempt's
+   per-golden detail was lost to an over-narrow `Select-Object -Last
+   20` before it could be diffed, then overwritten by the revert-
+   confirmation rebuild): every one of the 36 goldens appears at
+   least once in the mismatch list; exactly one, invalid_triple_
+   unclosed, appears only once instead of twice -- "meta EXIT
+   MISMATCH invalid_triple_unclosed: ref=1 port=0" is the sole line
+   for it, meaning its dump-driver comparison did NOT diverge. Same
+   golden and same driver as d1/d2's own exception: this
+   already-malformed fixture's dump-driver path converges to the
+   same (empty/error) output on both Ref and Port regardless of
+   whether the field-parse loop stack ever gets created, while the
+   meta driver's own exit-code check is stricter and does catch the
+   difference. Reverted, clean diff, 36/36
+   restored, also cold.
+
+   e2 (field appenders, 4 fns) -- l2src/parser_field_parse_port.lm2:
+   p0_append_atom_slice, p0_append_positional_skip, p0_append_
+   compact_atom_pieces, p0_parse_append_node_and_update. Turns a
+   scanned text slice into an atom/positional-skip node and appends
+   it to the structure being built. Header gains two cross-unit
+   entries (p0_new_node, Stage c's parser_alloc_port.lm2; p0_
+   position_in_slice, Stage b's parser_scan_port.lm2) and four more
+   still-oracle-native entries (lm_p0_append_field, lm_p0_document_
+   register_lazy_text, lm_p0_find_matching_bracket, lm_p0_scan_
+   compact_atom_piece -- e4, not yet ported -- and lm_p0_parse_
+   fields_until -- e6, not yet ported; p0_append_compact_atom_pieces
+   calls it for bracketed sub-fields).
+   36/36 goldens identical, both drivers (stage e_appenders), cold.
+   Falsifier: p0_append_atom_slice forced to return 0 unconditionally
+   -- measured 64 mismatches across 36 goldens x 2 drivers (verified
+   with full output captured, not truncated this time): exactly 4 of
+   the 36 goldens are completely unaffected (0 mismatches on either
+   driver) -- D_utf8_inline, D_utf8_vertical, invalid_eq_unclosed,
+   invalid_triple_unclosed. The two invalid_* fixtures fail parsing
+   before reaching any atom-slice appending, same shape as e1/d1/d2's
+   own exceptions. Traced (d6, 2026-09-14): D_utf8_inline/_vertical
+   are both `L1: utf8: === raw text ===` fenced block-string bodies,
+   containing no field-level atoms at all -- their sole content is a
+   single BLOCK_STRING stream event, created by p0_stream_apply_item_
+   event's own LM_P0_STREAM_EVENT_BLOCK_STRING branch (Stage d,
+   l2src/parser_stack_stream_port.lm2, already ported and falsified
+   in d5), which builds the atom node directly via p0_new_node +
+   lm_p0_document_register_lazy_text and never calls append_atom_
+   slice at all -- append_atom_slice is field-parsing-only, for atoms
+   that appear as fields inside a structure's own field list, which
+   these two fixtures never have. Not a coverage gap in e2; a fact
+   about the fixtures' shape, now measured rather than assumed.
+   Reverted, clean diff, 36/36 restored, also cold.
+
+Remaining stages (e2's plan)
+-----------------------------
+c) COMPLETE -- allocation, dump-printer Slices 1-4 (leaves, frame/
+   stack, run/node, new/take_data/delete/alloc) all landed and pushed.
+d) COMPLETE -- all 5 slices landed, see above. One open item: the
+   int:/LmP0TrailerRole stopgap in p0_stream_apply_item_event, waiting
+   on d6's l2trans fix (not a scope gap, a translator gap).
+e) field-parsing state machine
+f) postprocess
+g) registry/diagnostics/validate
+
+Build and verification
+-----------------------
+Run l2src/run_port_parser.ps1 from any directory (it locates itself and
+Set-Location's to stg/l1_baseline). It verifies the pinned l1trans hash
+against L1_PIN.txt, builds l2trans.exe fresh from l2src/l2trans.lm1 each
+run, builds the runtime-trio headers/objects (cached across runs, in
+build/port_parser/l2rt_*), then for each stage in its $Stages table:
+translates the stage's .lm2 units (their own lm_own_* calls resolve
+externally to l1src/own.lm1's real implementation via a predef'd
+prototype: header, per d6's 4abf4fba -- no fallback body to strip),
+builds the patched oracle copy, links Ref and Port, and diffs every
+tests/p0_tree_contract/*.lmx golden's output between them.
+Also builds, once and cached (build/port_parser/l2rt_objs, alongside
+the runtime trio), p0_dump_alloc_counter.o from
+l2src/p0_dump_alloc_counter.c -- the leak-balance counter both
+p0_dump_driver executables link against; see "Slice 4 (lifecycle)"
+above for why it must never be compiled with a stage's own -D
+redirects.
+Generated sources, objects, executables and per-golden output stay under
+build/port_parser (gitignored, not committed).
+
+Out of scope, reported and since fixed
+-----------------------------------------
+tests/p0_tree_contract/run_p0_meta.ps1 (the standing 620-golden script,
+independent of this port's own mechanism) threw on A_compact_f_paren:
+the pinned-old-checkout build reported source_len=11 (matching the
+tracked .lmx -- 11 bytes, LF, gitattributes eol=lf) but the golden
+.meta.txt said source_len=12 -- 17 of the A-G goldens turned out to
+have this same CRLF-checkout drift, not just this one. Raised to
+lingvamyxa-d6 via e2, 2026-09-14; he regenerated all 17 through
+run_p0_meta's own P0_META_WRITE_GOLDEN=1 path and confirmed the diff
+touched only lengths/spans. Fixed as of 58314636, run_p0_meta.ps1 is
+36/36 again. run_port_parser.ps1 never depended on the old checkout
+and was unaffected either way.

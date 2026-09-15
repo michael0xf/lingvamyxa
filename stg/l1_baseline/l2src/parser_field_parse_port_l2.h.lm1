@@ -1,0 +1,39 @@
+include: "l1src/p0.lm1.h"
+
+# Header unit for the clean L2 port of l1src/parser.lm1's field-parsing
+# state machine (parser-in-L2 port ticket, Stage e). lm_own_new_zero/
+# lm_own_delete/lm_own_ptr_stack_init are L1-implemented (l1src/
+# own.lm1, compiled into the same oracle object this L2 unit links
+# against) -- Stage A rule: an LMX name needs a prototype: declaration
+# here, never c. -- lm_p0_set_diagnostic/lm_p0_indent_stack_delete are
+# still oracle-native (not yet ported by any stage); the calls
+# retarget automatically once/if those names are ever ported and
+# added to a stage's Funcs list -- no source change needed then.
+# Removed from this header in the same commit that ports each one.
+#
+# Slice e2 adds two cross-unit entries for functions already ported
+# into other units (p0_new_node, Stage c's l2src/parser_alloc_port.lm2;
+# p0_position_in_slice, Stage b's l2src/parser_scan_port.lm2) and four
+# still-oracle-native entries: lm_p0_append_field, lm_p0_document_
+# register_lazy_text, lm_p0_find_matching_bracket, lm_p0_scan_compact_
+# atom_piece (Stage e4, not yet ported), lm_p0_parse_fields_until
+# (Stage e6, not yet ported -- p0_append_compact_atom_pieces calls it
+# for bracketed sub-fields; the call retargets once e6 lands).
+
+prototype:
+    fn: lm_own_new_zero (size_t: size) @: void
+    sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
+    sub: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item)
+    sub: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack)
+    fn: lm_own_ptr_stack_push (@: LmOwnPtrStack stack; @: void item) int
+    sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))
+    sub: lm_p0_indent_stack_delete (@: LmP0IndentStack stack)
+    fn: p0_new_node (@: LmP0Document document; LmP0NodeKind: kind) @: LmP0Node
+    sub: p0_position_in_slice (const: @(char text); size_t: length; size_t: index; size_t: base_line; size_t: base_column; @: size_t out_line; @: size_t out_column)
+    fn: p0_is_field_space (char: value) int
+    fn: lm_p0_append_field (@: LmP0Document document; @: LmP0Structure structure; @: LmP0Node nd) int
+    fn: lm_p0_document_register_lazy_text (@: LmP0Document document; const: @(char source); size_t: length; const: @@(char patch_slot); size_t: line; size_t: column) int
+    fn: lm_p0_find_matching_bracket (@: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
+    fn: lm_p0_scan_compact_atom_piece (const: @(char text); size_t: end_index; size_t: start; int: allow_signed_number) size_t
+    fn: lm_p0_parse_fields_until (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: initial_source_level; @: size_t index) int
+end: prototype

@@ -1,0 +1,14 @@
+structure fields=2
+  frame head="fn" body=structure fields=2
+    atom "square"
+    structure fields=1
+      frame head="body" body=structure fields=1
+        frame head="value" body=structure fields=1
+          atom "x"
+    Tail cutter trailer spelling="return" fields=1
+      atom "x"
+  frame head="loop" body=structure fields=1
+    frame head="body" body=structure fields=1
+      atom "tick"
+    Tail cutter trailer spelling="until" fields=1
+      atom "done"

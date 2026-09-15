@@ -1,0 +1,715 @@
+predef: "l2src/parser_stack_stream_port_l2.h.lm1"
+
+# L2 port of l1src/parser.lm1's stack/stream event machine (Stage d of
+# the parser-in-L2 port ticket). Bodies are ported straight from the
+# oracle, unedited. Named p0_*, never lm_p0_*, per the ticket.
+#
+# Slice d1: struct lifecycle for LmP0Stack, LmP0PendingDelimiter,
+# LmP0StreamEvent, LmP0PendingMix, LmP0DisabledState, plus the one
+# pure predicate (stream_event_is_tail_cutter) grouped here since it
+# has no in-unit dependents of its own. Two of its own callees
+# (lm_p0_trailer_role, lm_p0_trailer_role_is_tail_cutter) are still
+# oracle-native; see the header's own comment.
+#
+# Capstone scope note (e2/d6, 2026-09-14): lm_p0_record_mix_mark
+# (reached from the brace-mark/mix-prefix scanning family that
+# lm_p0_parse_stream needs) calls lm_p0_postprocess_node (Stage f),
+# lm_p0_validate_nonempty_colon_frames_in_node (Stage g), and
+# recurses into lm_p0_parse_stream itself. So lm_p0_record_mix_mark,
+# the disabled-block-validation family (lm_p0_validate_disabled_item_
+# text, lm_p0_disabled_scan_next_event, lm_p0_disabled_event_is_tail_
+# cutter, lm_p0_disabled_state_accept_event, lm_p0_validate_disabled_
+# block), and lm_p0_parse_stream itself are OUT of Stage d's scope --
+# they land as a capstone once Stages e/f/g exist, so each slice's
+# driver coverage stays honest (a slice claiming 36/36 must actually
+# be reachable by both drivers today, not once later stages land).
+
+sub: p0_stack_free (@: LmP0Stack stack)
+    lm_own_delete(stack\parents, 0)
+    lm_own_delete(stack\owners, 0)
+    lm_own_delete(stack\hard, 0)
+    stack\parents: 0
+    stack\owners: 0
+    stack\hard: 0
+    stack\capacity: 0U
+end: p0_stack_free
+
+sub: p0_stack_free_any (@: void object)
+    p0_stack_free((cast: (@: LmP0Stack) object))
+end: p0_stack_free_any
+
+fn: p0_stack_new () @: LmP0Stack
+    return: (cast: (@: LmP0Stack) lm_own_new_zero((1U * c.sizeof(c.LmP0Stack))))
+end: p0_stack_new
+
+sub: p0_stack_delete (@: LmP0Stack stack)
+    lm_own_delete(stack, p0_stack_free_any)
+end: p0_stack_delete
+
+fn: p0_pending_delimiter_new () @: LmP0PendingDelimiter
+    return: (cast: (@: LmP0PendingDelimiter) lm_own_new_zero((1U * c.sizeof(c.LmP0PendingDelimiter))))
+end: p0_pending_delimiter_new
+
+fn: p0_stream_event_new () @: LmP0StreamEvent
+    return: (cast: (@: LmP0StreamEvent) lm_own_new_zero((1U * c.sizeof(c.LmP0StreamEvent))))
+end: p0_stream_event_new
+
+fn: p0_stream_event_new_copy (const: @(LmP0StreamEvent event)) @: LmP0StreamEvent
+    @: LmP0StreamEvent copy
+    if: (event = 0)
+        return: 0
+    copy: (cast: (@: LmP0StreamEvent) lm_own_new_zero((1U * c.sizeof(copy[0]))))
+    if: (copy != 0)
+        copy[0]: event[0]
+    return: copy
+end: p0_stream_event_new_copy
+
+sub: p0_stream_event_delete (@: LmP0StreamEvent event)
+    lm_own_delete(event, 0)
+end: p0_stream_event_delete
+
+fn: p0_stream_event_is_tail_cutter (const: @(LmP0StreamEvent event)) int
+    return: (event\kind = c.LM_P0_STREAM_EVENT_ITEM) && (lm_p0_trailer_role_is_tail_cutter(lm_p0_trailer_role(event\text, event\text_length)) != 0)
+end: p0_stream_event_is_tail_cutter
+
+sub: p0_pending_delimiter_clear (@: LmP0PendingDelimiter pending)
+    if: (pending != 0)
+        p0_stream_event_delete(pending\event)
+        pending\event: 0
+        pending\active: 0
+    ---
+end: p0_pending_delimiter_clear
+
+sub: p0_pending_delimiter_delete (@: LmP0PendingDelimiter pending)
+    if: (pending != 0)
+        p0_pending_delimiter_clear(pending)
+        lm_own_delete(pending, 0)
+    ---
+end: p0_pending_delimiter_delete
+
+fn: p0_pending_mix_new () @: LmP0PendingMix
+    return: (cast: (@: LmP0PendingMix) lm_own_new_zero((1U * c.sizeof(c.LmP0PendingMix))))
+end: p0_pending_mix_new
+
+sub: p0_pending_mix_free (@: LmP0PendingMix pending)
+    if: (pending != 0)
+        lm_own_delete(pending\events, 0)
+        pending\events: 0
+        pending\count: 0U
+        pending\capacity: 0U
+    ---
+end: p0_pending_mix_free
+
+sub: p0_pending_mix_free_any (@: void object)
+    p0_pending_mix_free((cast: (@: LmP0PendingMix) object))
+end: p0_pending_mix_free_any
+
+sub: p0_pending_mix_delete (@: LmP0PendingMix pending)
+    lm_own_delete(pending, p0_pending_mix_free_any)
+end: p0_pending_mix_delete
+
+fn: p0_disabled_state_new (size_t: base_level) @: LmP0DisabledState
+    @: LmP0DisabledState state
+    state: (cast: (@: LmP0DisabledState) lm_own_new_zero((1U * c.sizeof(state[0]))))
+    if: (state != 0)
+        state\base_level: base_level
+        state\top_level: base_level
+        state\pending_item: 1
+        state\pending_level: base_level
+    return: state
+end: p0_disabled_state_new
+
+sub: p0_disabled_state_delete (@: LmP0DisabledState state)
+    lm_own_delete(state, 0)
+end: p0_disabled_state_delete
+
+# Slice d2: stack geometry -- functions that operate on an existing
+# LmP0Stack's parents/owners/hard arrays. Ported straight from the
+# oracle; no fragment exists.
+
+fn: p0_stack_ensure (@: LmP0Document document; @: LmP0Stack stack; size_t: level) int
+    @@: LmP0Structure parents
+    @@: LmP0Node owners
+    @: uchar hard
+    size_t: old_capacity
+    size_t: new_capacity
+    size_t: i
+    if: (level < stack\capacity)
+        return: 1
+    old_capacity: stack\capacity
+    if: (old_capacity = 0U)
+        new_capacity: 8U
+    else:
+        new_capacity: old_capacity
+    while: (new_capacity <= level)
+        new_capacity: new_capacity * 2U
+    parents: (cast: (@@: LmP0Structure) lm_own_resize(stack\parents, (new_capacity * c.sizeof(parents[0]))))
+    if: (parents = 0)
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
+        return: 0
+    owners: (cast: (@@: LmP0Node) lm_own_resize(stack\owners, (new_capacity * c.sizeof(owners[0]))))
+    if: (owners = 0)
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
+        stack\parents: parents
+        return: 0
+    hard: (cast: (@: uchar) lm_own_resize(stack\hard, (new_capacity * c.sizeof(hard[0]))))
+    if: (hard = 0)
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
+        stack\parents: parents
+        stack\owners: owners
+        return: 0
+    stack\parents: parents
+    stack\owners: owners
+    stack\hard: hard
+    stack\capacity: new_capacity
+    i: old_capacity
+    while: (i < new_capacity)
+        stack\parents[i]: 0
+        stack\owners[i]: 0
+        stack\hard[i]: 0U
+        i: i + 1U
+    return: 1
+end: p0_stack_ensure
+
+sub: p0_stack_truncate_deeper (@: LmP0Stack stack; size_t: level)
+    size_t: i
+    if: (stack\capacity <= (level + 1U))
+        return
+    i: (level + 1U)
+    while: (i < stack\capacity)
+        stack\parents[i]: 0
+        stack\owners[i]: 0
+        stack\hard[i]: 0U
+        i: i + 1U
+    ---
+end: p0_stack_truncate_deeper
+
+fn: p0_stack_top_level (const: @(LmP0Stack stack)) size_t
+    size_t: i
+    i: stack\capacity
+    while: (i > 0U)
+        i: i - 1U
+        if: (stack\parents[i] != 0)
+            return: i
+        ---
+    return: 0U
+end: p0_stack_top_level
+
+fn: p0_stack_level_is_trailer_body (const: @(LmP0Stack stack); size_t: level) int
+    @: LmP0Node owner
+    if: ((level >= stack\capacity) || (stack\parents[level] = 0))
+        return: 0
+    owner: stack\owners[level]
+    if: (owner = 0)
+        return: 0
+    if: (((owner\kind = c.LM_P0_NODE_FRAME) && (owner\as\frame\trailer != 0)) && (stack\parents[level] = owner\as\frame\trailer\body))
+        return: 1
+    if: (((owner\kind = c.LM_P0_NODE_STRUCTURE) && (owner\as\structure\trailer != 0)) && (stack\parents[level] = owner\as\structure\trailer\body))
+        return: 1
+    return: 0
+end: p0_stack_level_is_trailer_body
+
+fn: p0_stack_collapse_soft_to_event (@: LmP0Stack stack; size_t: event_level) size_t
+    size_t: top_level
+    top_level: p0_stack_top_level(stack)
+    while: (((top_level > 0U) && (event_level < top_level)) && (stack\hard[top_level] = 0U))
+        p0_stack_truncate_deeper(stack, (top_level - 1U))
+        top_level: p0_stack_top_level(stack)
+    return: top_level
+end: p0_stack_collapse_soft_to_event
+
+# Slice d3: lineage/trailer-attach. Ported straight from the oracle;
+# no fragment exists for any of these. Formals/locals named node in
+# the oracle are renamed nd -- "node" is a reserved L2 identifier
+# (same rule as every other renamed formal in this port).
+
+fn: p0_node_keeps_source_child_level (@: LmP0Node nd) int
+    if: (nd\kind = c.LM_P0_NODE_FRAME)
+        return: ((nd\as\frame\flags & c.LM_P0_FRAME_COLON) != 0U) && ((nd\as\frame\flags & c.LM_P0_FRAME_SEPARATOR_CLOSED) = 0U)
+    return: 0
+end: p0_node_keeps_source_child_level
+
+fn: p0_node_child_structure (@: LmP0Node nd) @: LmP0Structure
+    if: (nd\kind = c.LM_P0_NODE_FRAME)
+        return: nd\as\frame\body
+    if: (nd\kind = c.LM_P0_NODE_STRUCTURE)
+        return: nd\as\structure
+    return: 0
+end: p0_node_child_structure
+
+fn: p0_structure_last_colon_frame (@: LmP0Structure structure) @: LmP0Node
+    @: LmP0Node nd
+    if: ((structure\last_field = 0) || (structure\last_field\value = 0))
+        return: 0
+    nd: structure\last_field\value
+    if: (((nd\kind = c.LM_P0_NODE_FRAME) && ((nd\as\frame\flags & c.LM_P0_FRAME_COLON) != 0U)) && ((nd\as\frame\flags & c.LM_P0_FRAME_SEPARATOR_CLOSED) = 0U))
+        return: nd
+    return: 0
+end: p0_structure_last_colon_frame
+
+fn: p0_stack_install_node_lineage (@: LmP0Document document; @: LmP0Stack stack; size_t: base_level; @: LmP0Node nd) int
+    @: LmP0Node owner
+    size_t: level
+    if: (p0_node_keeps_source_child_level(nd) = 0)
+        if: (p0_stack_ensure(document, stack, (base_level + 1U)) = 0)
+            return: 0
+        stack\parents[(base_level + 1U)]: 0
+        stack\owners[(base_level + 1U)]: 0
+        stack\hard[(base_level + 1U)]: 0U
+        p0_stack_truncate_deeper(stack, (base_level + 1U))
+        return: 1
+    owner: nd
+    level: (base_level + 1U)
+    while: p0_node_keeps_source_child_level(owner)
+        @: LmP0Structure body
+        @: LmP0Node next_owner
+        if: (p0_stack_ensure(document, stack, level) = 0)
+            return: 0
+        body: p0_node_child_structure(owner)
+        stack\parents[level]: body
+        stack\owners[level]: owner
+        if: (body\field_count = 0U)
+            stack\hard[level]: 1U
+        else:
+            stack\hard[level]: 0U
+        next_owner: p0_structure_last_colon_frame(body)
+        if: (next_owner = 0)
+            break
+        owner: next_owner
+        level: level + 1U
+    p0_stack_truncate_deeper(stack, level)
+    return: 1
+end: p0_stack_install_node_lineage
+
+fn: p0_stack_ensure_root_level_alias (@: LmP0Document document; @: LmP0Stack stack; size_t: level) int
+    if: ((level != 1U) || (stack\parents[1] != 0))
+        return: 1
+    if: (p0_stack_ensure(document, stack, 1U) = 0)
+        return: 0
+    stack\parents[1]: stack\parents[0]
+    stack\owners[1]: stack\owners[0]
+    stack\hard[1]: 1U
+    return: 1
+end: p0_stack_ensure_root_level_alias
+
+fn: p0_stack_open_implicit_anonymous (@: LmP0Document document; @: LmP0Stack stack; size_t: parent_level; size_t: line; size_t: column; size_t: offset) int
+    @: LmP0Node anonymous_node
+    @: LmP0Structure parent
+    parent: stack\parents[parent_level]
+    if: (parent = 0)
+        lm_p0_set_diagnostic(document, 8, line, column, "source level has no open parent structure")
+        return: 0
+    anonymous_node: p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
+    if: (anonymous_node = 0)
+        return: 0
+    anonymous_node\span\line: line
+    anonymous_node\span\column: column
+    anonymous_node\span\offset: offset
+    anonymous_node\span\length: 0U
+    if: (lm_p0_append_field(document, parent, anonymous_node) = 0)
+        p0_free_node(anonymous_node)
+        return: 0
+    if: (p0_stack_ensure(document, stack, (parent_level + 1U)) = 0)
+        return: 0
+    stack\parents[(parent_level + 1U)]: anonymous_node\as\structure
+    stack\owners[(parent_level + 1U)]: anonymous_node
+    stack\hard[(parent_level + 1U)]: 1U
+    p0_stack_truncate_deeper(stack, (parent_level + 1U))
+    return: 1
+end: p0_stack_open_implicit_anonymous
+
+fn: p0_node_trailer_slot (@: LmP0Node nd) @@: LmP0Trailer
+    if: (nd\kind = c.LM_P0_NODE_FRAME)
+        return: @ nd\as\frame\trailer
+    if: (nd\kind = c.LM_P0_NODE_STRUCTURE)
+        return: @ nd\as\structure\trailer
+    return: 0
+end: p0_node_trailer_slot
+
+fn: p0_attach_trailer (@: LmP0Document document; @: LmP0Node nd; const: @(char spelling); size_t: spelling_length; unsigned: flags; size_t: line; size_t: column) @: LmP0Trailer
+    @@: LmP0Trailer slot
+    @: LmP0Trailer trailer
+    slot: p0_node_trailer_slot(nd)
+    if: (slot = 0)
+        lm_p0_set_diagnostic(document, 10, line, column, "this parser node cannot receive a trailer")
+        return: 0
+    if: (slot[0] != 0)
+        lm_p0_set_diagnostic(document, 11, line, column, "parser node already has a trailer")
+        return: 0
+    trailer: lm_p0_new_trailer(document, spelling, spelling_length, line, column)
+    if: (trailer = 0)
+        return: 0
+    trailer\flags: flags
+    slot[0]: trailer
+    return: trailer
+end: p0_attach_trailer
+
+fn: p0_pending_delimiter_set (@: LmP0Document document; @: LmP0PendingDelimiter pending; const: @(LmP0StreamEvent event)) int
+    if: (pending = 0)
+        return: 0
+    p0_pending_delimiter_clear(pending)
+    pending\event: p0_stream_event_new_copy(event)
+    if: (pending\event = 0)
+        size_t: p0_tmp_line
+        if: (event != 0)
+            p0_tmp_line: event\line
+        else:
+            p0_tmp_line: 0U
+        size_t: p0_tmp_column
+        if: (event != 0)
+            p0_tmp_column: event\column
+        else:
+            p0_tmp_column: 0U
+        lm_p0_set_diagnostic(document, 1, p0_tmp_line, p0_tmp_column, "out of memory while storing pending delimiter")
+        return: 0
+    pending\active: 1
+    return: 1
+end: p0_pending_delimiter_set
+
+# Slice d4: trailer-item parsing + pending-delimiter resolution.
+# Ported straight from the oracle; no fragment exists for either.
+# p0_parse_trailer_item calls lm_p0_parse_fields_into, still Stage
+# e's own unported oracle name (through the header's prototype:
+# block) -- the same forward-dependency shape used throughout this
+# port; the call retargets automatically once Stage e lands.
+
+fn: p0_stream_resolve_pending_delimiter (@: LmP0Document document; @: LmP0Stack stack; @: LmP0PendingDelimiter pending; size_t: next_level) int
+    const: @: LmP0StreamEvent event
+    size_t: top_level
+    @: LmP0Structure parent
+    if: ((pending\active = 0) || (pending\event = 0))
+        return: 1
+    event: pending\event
+    if: (p0_stack_ensure(document, stack, (event\level + 1U)) = 0)
+        return: 0
+    top_level: p0_stack_collapse_soft_to_event(stack, event\level)
+    if: ((event\level = top_level) && (stack\hard[top_level] = 0U))
+        stack\hard[top_level]: 1U
+    if: (event\level < top_level)
+        p0_stack_truncate_deeper(stack, event\level)
+        top_level: p0_stack_top_level(stack)
+    parent: stack\parents[event\level]
+    if: ((parent = 0) && (event\level = 1U))
+        parent: stack\parents[0]
+    if: (parent = 0)
+        lm_p0_set_diagnostic(document, 8, event\line, event\column, "source level has no open parent structure")
+        return: 0
+    if: (next_level = (event\level + 1U))
+        @: LmP0Node anonymous_node
+        anonymous_node: p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
+        if: (anonymous_node = 0)
+            return: 0
+        anonymous_node\span\line: event\line
+        anonymous_node\span\column: event\column
+        anonymous_node\span\offset: event\offset
+        anonymous_node\span\length: event\text_length
+        if: (lm_p0_append_field(document, parent, anonymous_node) = 0)
+            p0_free_node(anonymous_node)
+            return: 0
+        stack\parents[(event\level + 1U)]: anonymous_node\as\structure
+        stack\owners[(event\level + 1U)]: anonymous_node
+        stack\hard[(event\level + 1U)]: 1U
+        p0_stack_truncate_deeper(stack, (event\level + 1U))
+    else:
+        p0_stack_truncate_deeper(stack, event\level)
+    p0_pending_delimiter_clear(pending)
+    return: 1
+end: p0_stream_resolve_pending_delimiter
+
+fn: p0_parse_trailer_item (@: LmP0Document document; @: LmP0Node target; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; @@: LmP0Structure out_body) int
+    size_t: colon_index
+    size_t: spelling_length
+    size_t: body_start
+    @: LmP0Trailer trailer
+    out_body[0]: 0
+    int: colon_status
+    colon_status: lm_p0_find_colon(document, text, length, line, column, @ colon_index)
+    if: (colon_status < 0)
+        return: 0
+    if: (colon_status = 0)
+        colon_index: length
+    if: (colon_index < length)
+        spelling_length: colon_index
+        while: ((spelling_length > 0U) && p0_is_horizontal_space(text[(spelling_length - 1U)]))
+            spelling_length: spelling_length - 1U
+        body_start: (colon_index + 1U)
+        while: ((body_start < length) && p0_is_horizontal_space(text[body_start]))
+            body_start: body_start + 1U
+        ---
+    else:
+        body_start: 0U
+        if: ((body_start < length) && lm_p0_starts_c_prefixed_quote(text, length, body_start))
+            if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ body_start, line, column) = 0)
+                return: 0
+            spelling_length: body_start
+        else:
+            if: ((body_start < length) && (text[body_start] = '\''))
+                if: (lm_p0_scan_c_char(document, text, length, @ body_start, line, column) = 0)
+                    return: 0
+                spelling_length: body_start
+            else:
+                if: ((body_start < length) && ((p0_starts_python_string(text, length, body_start) || (text[body_start] = '"')) || (text[body_start] = '`')))
+                    if: (lm_p0_scan_quoted(document, text, length, @ body_start, text[body_start], line, column) = 0)
+                        return: 0
+                    spelling_length: body_start
+                else:
+                    while: ((((body_start < length) && (p0_is_horizontal_space(text[body_start]) = 0)) && (p0_is_field_separator(text[body_start]) = 0)) && (text[body_start] != '#'))
+                        body_start: body_start + 1U
+                    spelling_length: body_start
+                ---
+            ---
+        while: ((body_start < length) && p0_is_horizontal_space(text[body_start]))
+            body_start: body_start + 1U
+        ---
+    if: (spelling_length = 0U)
+        lm_p0_set_diagnostic(document, 12, line, column, "trailer spelling is empty")
+        return: 0
+    if: colon_index < length
+        flags: flags | c.LM_P0_TRAILER_COLON
+    trailer: p0_attach_trailer(document, target, text, spelling_length, flags, line, column)
+    if: (trailer = 0)
+        return: 0
+    if: (lm_p0_parse_fields_into(document, trailer\body, (text + body_start), (length - body_start), line, (column + body_start), (offset + body_start)) = 0)
+        return: 0
+    out_body[0]: trailer\body
+    return: 1
+end: p0_parse_trailer_item
+
+# Slice d5: event application core -- the traversal state machine's
+# top layer. Ported straight from the oracle; no fragment exists for
+# any of these. Formals/locals named node in the oracle renamed nd,
+# same rule as every other renamed formal in this port.
+
+fn: p0_pending_mix_push (@: LmP0Document document; @: LmP0PendingMix pending; const: @(LmP0StreamEvent event)) int
+    size_t: new_capacity
+    @: LmP0StreamEvent events
+    if: ((pending = 0) || (event = 0))
+        return: 0
+    if: (pending\count = pending\capacity)
+        if: (pending\capacity = 0U)
+            new_capacity: 4U
+        else:
+            new_capacity: (pending\capacity * 2U)
+        events: (cast: (@: LmP0StreamEvent) lm_own_resize(pending\events, (new_capacity * c.sizeof(events[0]))))
+        if: (events = 0)
+            lm_p0_set_diagnostic(document, 1, event\line, event\column, "out of memory while storing pending MIX marks")
+            return: 0
+        pending\events: events
+        pending\capacity: new_capacity
+    pending\events[pending\count]: event[0]
+    pending\count: pending\count + 1U
+    return: 1
+end: p0_pending_mix_push
+
+fn: p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack; const: @(LmP0StreamEvent event)) int
+    # Stopgap (l2src/tests/repro_foreign_int_alias_local.lm2, sent to
+    # d6, 2026-09-14): l2trans refuses a foreign int-alias type
+    # (l1src/p0.h: `typedef int LmP0TrailerRole`) as a LOCAL variable's
+    # own declared type -- "unsupported body, frame=LmP0TrailerRole" --
+    # even though the same type already works as a formal/return (d6's
+    # 642b6700). LmP0TrailerRole literally is int, so `int: trailer_
+    # role` is behaviorally identical, not a logic change. Revert to
+    # `LmP0TrailerRole: trailer_role` once the gap is fixed.
+    int: trailer_role
+    size_t: top_level
+    @: LmP0Structure parent
+    @: LmP0Node nd
+    int: trailer_target_available
+    int: trailer_target_accepted
+    if: (p0_stack_ensure(document, stack, (event\level + 1U)) = 0)
+        return: 0
+    if: ((event\kind = c.LM_P0_STREAM_EVENT_ITEM) && (lm_p0_validate_dash_fence_line(document, event\text, event\text_length, event\line, event\column) = 0))
+        return: 0
+    if: (event\kind = c.LM_P0_STREAM_EVENT_ITEM)
+        trailer_role: lm_p0_trailer_role(event\text, event\text_length)
+    else:
+        trailer_role: c.LM_P0_TRAILER_ROLE_NONE
+    top_level: p0_stack_top_level(stack)
+    trailer_target_available: ((lm_p0_trailer_role_is_tail_cutter(trailer_role) && ((event\level + 1U) <= top_level)) && (stack\owners[(event\level + 1U)] != 0))
+    trailer_target_accepted: (trailer_target_available && lm_p0_trailer_role_accepts_target(trailer_role, stack\owners[(event\level + 1U)]))
+    if: ((lm_p0_trailer_role_is_tail_cutter(trailer_role) = 0) || (trailer_target_accepted = 0))
+        top_level: p0_stack_collapse_soft_to_event(stack, event\level)
+        if: ((event\level = top_level) && (stack\hard[top_level] = 0U))
+            stack\hard[top_level]: 1U
+        trailer_target_available: ((lm_p0_trailer_role_is_tail_cutter(trailer_role) && ((event\level + 1U) <= top_level)) && (stack\owners[(event\level + 1U)] != 0))
+        trailer_target_accepted: (trailer_target_available && lm_p0_trailer_role_accepts_target(trailer_role, stack\owners[(event\level + 1U)]))
+    if: ((lm_p0_trailer_role_is_tail_cutter(trailer_role) && ((event\level + 1U) < top_level)) && (trailer_target_accepted = 0))
+        lm_p0_set_diagnostic(document, 13, event\line, event\column, "tail-cutter target is not valid for this receiver")
+        return: 0
+    if: (lm_p0_trailer_role_is_tail_cutter(trailer_role) && trailer_target_accepted)
+        @: LmP0Structure trailer_body
+        @: LmP0Node target
+        size_t: target_level
+        target_level: (event\level + 1U)
+        target: stack\owners[target_level]
+        p0_stack_truncate_deeper(stack, target_level)
+        if: (p0_parse_trailer_item(document, target, event\text, event\text_length, event\line, event\column, event\offset, c.LM_P0_TRAILER_TAIL_CUTTER, @ trailer_body) = 0)
+            return: 0
+        stack\parents[target_level]: trailer_body
+        stack\owners[target_level]: target
+        stack\hard[target_level]: 0U
+        if: (target_level > 0U)
+            stack\hard[(target_level - 1U)]: 0U
+        p0_stack_truncate_deeper(stack, target_level)
+        return: 1
+    if: (event\level < top_level)
+        p0_stack_truncate_deeper(stack, event\level)
+        top_level: p0_stack_top_level(stack)
+    if: ((stack\parents[event\level] = 0) && (event\level > top_level))
+        if: (event\level != (top_level + 1U))
+            lm_p0_set_diagnostic(document, 13, event\line, event\column, "source level jumps too deep")
+            return: 0
+        if: (p0_stack_open_implicit_anonymous(document, stack, top_level, event\line, event\column, event\offset) = 0)
+            return: 0
+        ---
+    if: (p0_stack_ensure_root_level_alias(document, stack, event\level) = 0)
+        return: 0
+    parent: stack\parents[event\level]
+    if: (parent = 0)
+        lm_p0_set_diagnostic(document, 8, event\line, event\column, "source level has no open parent structure")
+        return: 0
+    if: (event\kind = c.LM_P0_STREAM_EVENT_ITEM)
+        @: LmP0Field previous_last
+        @: LmP0Field field
+        previous_last: parent\last_field
+        if: (lm_p0_parse_fields_into(document, parent, event\text, event\text_length, event\line, event\column, event\offset) = 0)
+            return: 0
+        if: (previous_last != 0)
+            field: previous_last\next
+        else:
+            field: parent\first_field
+        while: (field != 0)
+            if: (field\value != 0)
+                field\value\flags: field\value\flags | event\node_flags
+            field: field\next
+        if: ((parent\last_field = previous_last) || (parent\last_field = 0))
+            return: 1
+        return: p0_stack_install_node_lineage(document, stack, event\level, parent\last_field\value)
+    if: (event\kind = c.LM_P0_STREAM_EVENT_DISABLED_BLOCK)
+        nd: p0_new_node(document, c.LM_P0_NODE_DISABLED)
+        if: (nd = 0)
+            return: 0
+        nd\as\atom\data: event\text
+        nd\as\atom\length: event\text_length
+        nd\span\line: event\line
+        nd\span\column: event\column
+        nd\span\offset: event\offset
+        nd\span\length: event\text_length
+        if: (lm_p0_document_register_lazy_text(document, nd\as\atom\data, nd\as\atom\length, @ nd\as\atom\data, nd\span\line, nd\span\column) = 0)
+            return: 0
+        ---
+    else:
+        if: (event\kind != c.LM_P0_STREAM_EVENT_BLOCK_STRING)
+            lm_p0_set_diagnostic(document, 13, event\line, event\column, "unexpected stream item event kind")
+            return: 0
+        nd: p0_new_node(document, c.LM_P0_NODE_ATOM)
+        if: (nd = 0)
+            return: 0
+        nd\as\atom\data: event\text
+        nd\as\atom\length: event\text_length
+        nd\span\line: event\line
+        nd\span\column: event\column
+        nd\span\offset: event\offset
+        nd\span\length: event\text_length
+        if: (lm_p0_document_register_lazy_text(document, nd\as\atom\data, nd\as\atom\length, @ nd\as\atom\data, nd\span\line, nd\span\column) = 0)
+            return: 0
+        ---
+    nd\flags: nd\flags | event\node_flags
+    if: (lm_p0_append_field(document, parent, nd) = 0)
+        p0_free_node(nd)
+        return: 0
+    if: (p0_stack_install_node_lineage(document, stack, event\level, nd) = 0)
+        return: 0
+    return: 1
+end: p0_stream_apply_item_event
+
+fn: p0_stream_apply_mix_event (@: LmP0Document document; @: LmP0Stack stack; const: @(LmP0StreamEvent event)) int
+    size_t: top_level
+    @: LmP0Structure parent
+    @: LmP0Field previous_last
+    @: LmP0Field field
+    if: (p0_stack_ensure(document, stack, (event\level + 1U)) = 0)
+        return: 0
+    top_level: p0_stack_collapse_soft_to_event(stack, event\level)
+    if: ((event\level = top_level) && (stack\hard[top_level] = 0U))
+        stack\hard[top_level]: 1U
+    if: (event\level < top_level)
+        p0_stack_truncate_deeper(stack, event\level)
+        top_level: p0_stack_top_level(stack)
+    if: ((stack\parents[event\level] = 0) && (event\level > top_level))
+        if: (event\level != (top_level + 1U))
+            lm_p0_set_diagnostic(document, 13, event\line, event\column, "source level jumps too deep")
+            return: 0
+        if: (p0_stack_open_implicit_anonymous(document, stack, top_level, event\line, event\column, event\offset) = 0)
+            return: 0
+        ---
+    if: (p0_stack_ensure_root_level_alias(document, stack, event\level) = 0)
+        return: 0
+    parent: stack\parents[event\level]
+    if: (parent = 0)
+        lm_p0_set_diagnostic(document, 8, event\line, event\column, "source level has no open parent structure")
+        return: 0
+    previous_last: parent\last_field
+    if: (lm_p0_parse_fields_into(document, parent, event\text, event\text_length, event\line, event\column, event\offset) = 0)
+        return: 0
+    if: (previous_last != 0)
+        field: previous_last\next
+    else:
+        field: parent\first_field
+    while: (field != 0)
+        if: (field\value != 0)
+            field\value\flags: field\value\flags | event\node_flags
+        field: field\next
+    return: 1
+end: p0_stream_apply_mix_event
+
+fn: p0_stream_apply_event (@: LmP0Document document; @: LmP0Stack stack; @: LmP0PendingDelimiter pending; const: @(LmP0StreamEvent event)) int
+    if: (event\kind = c.LM_P0_STREAM_EVENT_DELIM)
+        if: (p0_stream_resolve_pending_delimiter(document, stack, pending, event\level) = 0)
+            return: 0
+        return: p0_pending_delimiter_set(document, pending, event)
+    if: (p0_stream_resolve_pending_delimiter(document, stack, pending, event\level) = 0)
+        return: 0
+    if: (event\kind = c.LM_P0_STREAM_EVENT_MIX)
+        return: p0_stream_apply_mix_event(document, stack, event)
+    if: ((event\kind = c.LM_P0_STREAM_EVENT_ITEM) && (lm_p0_dash_fence_status_after_comment_trim(event\text, event\text_length, 0) = c.LM_P0_DASH_FENCE_VALID))
+        if: (p0_pending_delimiter_set(document, pending, event) = 0)
+            return: 0
+        pending\event\kind: c.LM_P0_STREAM_EVENT_DELIM
+        return: 1
+    return: p0_stream_apply_item_event(document, stack, event)
+end: p0_stream_apply_event
+
+fn: p0_pending_mix_flush (@: LmP0Document document; @: LmP0Stack stack; @: LmP0PendingDelimiter pending_delimiter; @: LmP0PendingMix pending_mix; size_t: level) int
+    size_t: i
+    if: ((pending_mix = 0) || (pending_mix\count = 0U))
+        return: 1
+    i: 0U
+    while: (i < pending_mix\count)
+        @: LmP0StreamEvent event
+        event: p0_stream_event_new()
+        if: (event = 0)
+            lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while flushing pending MIX event")
+            return: 0
+        event[0]: pending_mix\events[i]
+        event\level: level
+        if: (p0_stream_apply_event(document, stack, pending_delimiter, event) = 0)
+            p0_stream_event_delete(event)
+            return: 0
+        p0_stream_event_delete(event)
+        i: i + 1U
+    pending_mix\count: 0U
+    return: 1
+end: p0_pending_mix_flush
+
+fn: p0_stream_block_string_level (const: @(LmP0Stack stack); const: @(LmP0PendingDelimiter pending)) size_t
+    size_t: level
+    if: (pending\active && (pending\event != 0))
+        return: (pending\event\level + 1U)
+    level: p0_stack_top_level(stack)
+    while: (level > 0U)
+        if: ((stack\parents[level] != 0) && (p0_stack_level_is_trailer_body(stack, level) = 0))
+            return: level
+        level: level - 1U
+    return: 0U
+end: p0_stream_block_string_level

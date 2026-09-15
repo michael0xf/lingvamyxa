@@ -1,0 +1,5 @@
+structure fields=2
+  frame head="root" body=structure fields=1
+    atom "before"
+  frame head="root" body=structure fields=1
+    atom "after"

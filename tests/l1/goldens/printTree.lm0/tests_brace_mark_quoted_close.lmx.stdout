@@ -1,0 +1,7 @@
+structure fields=1
+  frame head="print" body=structure fields=3
+    atom "hello"
+    MIX structure fields=1
+      frame head="text" body=structure fields=1
+        atom ""2 } 3""
+    atom "world"

@@ -27,6 +27,9 @@
 #     the runner's generated headers dir first in -IncludeDirs;
 #   - give each optimization level its own -Out (l2units_<level>), with
 #     -<level> in -CFlags, since the objects are linked per level.
+# run_sched_record is the exception: it builds the unit it tests and links
+# that object itself, so it does not call this function (a second copy would
+# be a duplicate definition in its link).
 # Native calls go through cmd /c with a log, never through PowerShell's
 # stderr (PS 5.1 under $ErrorActionPreference Stop treats stderr as failure).
 
@@ -38,13 +41,16 @@ function Invoke-L2Native([string]$Command, [string]$Log) {
     }
 }
 
-function Build-L2RuntimeUnits([string]$L1Trans, [string]$Out, [string[]]$IncludeDirs, [string]$CFlags, [string]$Gcc = 'gcc') {
+function Build-L2RuntimeUnits([string]$L1Trans, [string]$Out, [string[]]$IncludeDirs, [string]$CFlags, [string]$Gcc = 'gcc', [string[]]$Exclude = @()) {
     # A runtime unit is an L2 unit with no L1 twin: lmx_sched_record.lm2 yes,
     # lmx_message.lm2 no (the parity mirror of lmx_message.lm1, measured by
     # run_port_message, never linked beside the L1 module it mirrors).
+    # -Exclude names stems a runner builds itself (run_sched_record's unit under
+    # test), so the link holds one copy of each unit.
     $units = @(Get-ChildItem -LiteralPath 'l2src' -File -Filter 'lmx_*.lm2' | Where-Object {
         (Get-Content -LiteralPath $_.FullName -TotalCount 1).Trim() -eq 'profile: runtime' -and
-        -not (Test-Path -LiteralPath (Join-Path 'l2src' ([IO.Path]::GetFileNameWithoutExtension($_.Name) + '.lm1')))
+        -not (Test-Path -LiteralPath (Join-Path 'l2src' ([IO.Path]::GetFileNameWithoutExtension($_.Name) + '.lm1'))) -and
+        ($Exclude -notcontains [IO.Path]::GetFileNameWithoutExtension($_.Name))
     } | Sort-Object Name)
     if ($units.Count -eq 0) { return @() }
     New-Item -ItemType Directory -Force -Path $Out | Out-Null

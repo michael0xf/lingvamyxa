@@ -18,7 +18,8 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # child is still running when R releases P4 (scenario 4, added 2026-09-14
 # after the settled chain landed, main 0bf1e35d): by SPEC 19.29.6 (iii) and
 # 19.29.8 the release returns at once, the running descendant is closed by
-# the chain and, as a successful orphan, reclaims itself at its own end-turn;
+# the chain and, as a successful orphan, is settled at its own end-turn and
+# reclaimed by the root's next maintenance (stage 5 (c));
 # the failed orphan (scenario 5, added on the orphan step e09bc3f4): never
 # completed, re-rooted by its parent's release, it keeps its handoff-safe
 # arena under the runtime's orphan-retention policy (lmx_msg_set_orphan_retain,
@@ -53,6 +54,97 @@ fn: turn_ok (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 fn: gone (@: LmxMsgRuntime rt; LmxMsgAddr: a) int
     return: lmx_msg_find(rt, a) = 0
 
+unsigned: g_step 0U
+int: g_step_st -1
+
+# Stage 5 (d1b): R0's turn that steps one of R0's children.
+fn: turn_root_step (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    g_step_st: lmx_msg_run_child_turn(rt, g_step)
+    return: 0
+
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): steps run from R0's turn. step_in_root steps an R0 child (an
+# orphan re-rooted under R0); step_from_root steps a child through R's turn, R
+# bound by main only around the step (the host acts as R's turn otherwise);
+# step_from_root2 steps a grandchild through R's and its parent's turns, the
+# parent rebound from turn_ok around the step and restored. Each returns
+# root_turn's status, else the first level's that is not OK, else the stepped
+# child's.
+[]: unsigned step_cell_top 2
+[]: unsigned step_cell_mid 2
+[]: unsigned step_cell_leaf 2
+
+fn: step_in_root (@: LmxMsgRuntime rt; unsigned: child) int
+    int: st
+    step_cell_top[0]: child
+    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
+    if: st != c.LMX_MSG_OK
+        return: st
+    return: (cast: (int) step_cell_top[1])
+
+fn: step_from_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
+    int: st
+    step_cell_top[0]: parent
+    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    step_cell_leaf[0]: child
+    step_cell_leaf[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_exec_bind(rt, parent, turn_step_child, (cast: (@: void) step_cell_leaf), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
+    lmx_msg_exec_unbind(rt, parent)
+    if: st != c.LMX_MSG_OK
+        return: st
+    if: (cast: (int) step_cell_top[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_top[1])
+    return: (cast: (int) step_cell_leaf[1])
+
+fn: step_from_root2 (@: LmxMsgRuntime rt; unsigned: top; unsigned: mid; unsigned: child) int
+    int: st
+    step_cell_top[0]: mid
+    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    step_cell_mid[0]: child
+    step_cell_mid[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_exec_unbind(rt, mid)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_exec_bind(rt, mid, turn_step_child, (cast: (@: void) step_cell_mid), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        lmx_msg_exec_bind(rt, mid, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY)
+        return: st
+    st: lmx_msg_exec_bind(rt, top, turn_step_child, (cast: (@: void) step_cell_top), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        lmx_msg_exec_unbind(rt, mid)
+        lmx_msg_exec_bind(rt, mid, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY)
+        return: st
+    step_cell_leaf[0]: top
+    step_cell_leaf[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_leaf))
+    lmx_msg_exec_unbind(rt, top)
+    lmx_msg_exec_unbind(rt, mid)
+    lmx_msg_exec_bind(rt, mid, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    if: (cast: (int) step_cell_leaf[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_leaf[1])
+    if: (cast: (int) step_cell_top[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_top[1])
+    return: (cast: (int) step_cell_mid[1])
+
 fn: main () int
     @: LmxMsgRuntime rt
     @: LmxMsg cm
@@ -70,6 +162,7 @@ fn: main () int
     uchar: ini 1
     int: st
     int: n0
+    int: adopted0
 
     rt: lmx_msg_runtime_new()
     check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
@@ -87,7 +180,7 @@ fn: main () int
     # --- (1) orderly: C1 completes, P1 disposes it; the disposed child leaves
     # its family and its slot; then P1 completes, R disposes P1; P1 is gone too.
     check(lmx_msg_complete(rt, c1) = c.LMX_MSG_OK, "C1 marks success")
-    st: lmx_msg_run_child_turn(rt, c1)
+    st: step_from_root2(rt, r, p1, c1)
     cm: lmx_msg_find(rt, c1)
     check((st = c.LMX_MSG_OK || st = 1) && cm != 0 && lmx_msg_handoff_ready(rt, c1) != 0 && lmx_msg_success_load(cm) != 0 && lmx_msg_running_load(cm) = 0, "C1 settled at its own end-turn: success, not running, handoff-ready")
     n0: rt\n
@@ -95,7 +188,7 @@ fn: main () int
     check(gone(rt, c1) != 0 && lmx_msg_child_n(rt, p1) = 0, "a disposed child leaves its family and its slot is released, not kept until runtime_delete")
     check(rt\n = n0 - 1, "the runtime holds one slot fewer: C1's slot retired, not retained")
     check(lmx_msg_complete(rt, p1) = c.LMX_MSG_OK, "P1 marks success")
-    st: lmx_msg_run_child_turn(rt, p1)
+    st: step_from_root(rt, r, p1)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_handoff_ready(rt, p1) != 0, "P1 settled at its own end-turn")
     n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p1) = c.LMX_MSG_OK, "R disposes P1")
@@ -105,10 +198,15 @@ fn: main () int
     # --- (2) forced: C2 still runs; R stops P2 and releases it; the chain
     # closes and releases C2 without R touching a grandchild.
     check(lmx_msg_emergency_cancel(rt, p2) = c.LMX_MSG_OK, "R stops P2 while C2 runs")
-    st: lmx_msg_run_child_turn(rt, p2)
+    st: step_from_root(rt, r, p2)
     cm: lmx_msg_find(rt, c2)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, p2) = c.LMX_MSG_STATE_STOPPED && cm != 0 && lmx_msg_running_load(cm) = 0, "P2 stopped at its end-turn and requested C2's close: the chain, one level")
-    st: lmx_msg_run_child_turn(rt, c2)
+    # Stage 5 (d), shape (a): C2's parent P2 is stopped and runs no turn body.
+    # C2 is an idle closer: its owning executor applies the close without a new
+    # user turn (SPEC 19.29.7.1, lines 13073-13074); the host unbinds it and
+    # drive's close runs its end-turn.
+    lmx_msg_exec_unbind(rt, c2)
+    st: lmx_msg_drive(rt, lmx_msg_now(rt), 0U)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, c2) = c.LMX_MSG_STATE_STOPPED, "C2 stopped at its own end-turn")
     n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p2) = c.LMX_MSG_OK, "R releases P2 without disposing C2 itself: release does not wait for the children")
@@ -120,30 +218,37 @@ fn: main () int
     # releases it.
     cm: lmx_msg_find(rt, c3)
     check(cm != 0 && lmx_msg_running_load(cm) != 0 && lmx_msg_complete(rt, p3) = c.LMX_MSG_OK, "P3 marks success while C3 still runs")
-    st: lmx_msg_run_child_turn(rt, p3)
+    st: step_from_root(rt, r, p3)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_handoff_ready(rt, p3) != 0 && lmx_msg_running_load(cm) = 0, "P3's end-turn closes C3: success with running children means their work is unneeded")
-    st: lmx_msg_run_child_turn(rt, c3)
+    # Stage 5 (d), shape (a): C3's parent P3 completed and runs no turn body; the
+    # host unbinds C3 and drive's close runs its end-turn (as for C2).
+    lmx_msg_exec_unbind(rt, c3)
+    st: lmx_msg_drive(rt, lmx_msg_now(rt), 0U)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, c3) = c.LMX_MSG_STATE_STOPPED, "C3 stopped at its own end-turn")
     n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p3) = c.LMX_MSG_OK, "R releases P3")
     check(gone(rt, p3) != 0 && gone(rt, c3) != 0 && lmx_msg_child_n(rt, r) = 2, "the successful parent's branch is freed by the chain: R has P4 and P5 left")
-    check(rt\n = n0 - 2 && rt\n = 5, "two slots fewer: R, P4, C4, P5 and C5 remain")
+    check(rt\n = n0 - 2 && rt\n = 7, "two slots fewer: R0, the UI lane, R, P4, C4, P5 and C5 remain")
 
     # --- (4) a running descendant at release time: R stops P4 and releases it
     # while C4 still runs; the release returns at once; C4 is closed by the
-    # chain and, having completed, reclaims itself as a successful orphan at
-    # its own end-turn; P4's slot goes with it. Nothing waits for C4 inside R's
-    # call, and nothing is kept until runtime_delete.
+    # chain and, having completed, is settled at its own end-turn as a
+    # successful orphan and reclaimed by the root's next maintenance (stage 5
+    # (c): the sweep is the one settlement path); P4's slot goes at its release. Nothing
+    # waits for C4 inside R's call, and nothing is kept until runtime_delete.
     check(lmx_msg_emergency_cancel(rt, p4) = c.LMX_MSG_OK, "R stops P4 while C4 runs")
-    st: lmx_msg_run_child_turn(rt, p4)
+    st: step_from_root(rt, r, p4)
     cm: lmx_msg_find(rt, c4)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, p4) = c.LMX_MSG_STATE_STOPPED && cm != 0 && lmx_msg_running_load(cm) = 0 && lmx_msg_state(rt, c4) != c.LMX_MSG_STATE_STOPPED, "P4 stopped and requested C4's close; C4 has not yet run its closing turn")
     n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p4) = c.LMX_MSG_OK && lmx_msg_child_n(rt, r) = 1, "R releases P4 at once, with C4 still to run its closing turn")
     check(lmx_msg_complete(rt, c4) = c.LMX_MSG_OK, "C4's own algorithm completes before its closing turn")
-    st: lmx_msg_run_child_turn(rt, c4)
+    # Stage 5 (d): C4 was re-rooted under R0 at P4's release, so R0's turn is its
+    # parent's turn.
+    st: step_in_root(rt, c4)
     check(st = c.LMX_MSG_OK || st = 1, "C4 ran its closing turn as an orphan")
-    check(gone(rt, c4) != 0 && gone(rt, p4) != 0 && rt\n = n0 - 2 && rt\n = 3, "the successful orphan reclaimed itself at its end-turn and P4's slot went with it: R, P5 and C5 remain")
+    check(lmx_msg_find(rt, c4) != 0 && lmx_msg_handoff_ready(rt, c4) != 0 && gone(rt, p4) != 0 && rt\n = n0 - 1, "C4 is settled at its end-turn and still there until the root's next maintenance; P4's slot went at its release")
+    check(lmx_msg_drive(rt, lmx_msg_now(rt), 0U) = c.LMX_MSG_OK && gone(rt, c4) != 0 && rt\n = n0 - 2 && rt\n = 5, "the root's next maintenance reclaims the successful orphan: R0, the UI lane, R, P5 and C5 remain")
 
     # --- (5) a failed orphan: C5 runs, never completes; R stops P5 and
     # releases it at once; C5 is re-rooted, runs its closing turn and, having
@@ -152,16 +257,31 @@ fn: main () int
     # the next drive reclaims it and drops its arena. Logical clock, no waits.
     check(lmx_msg_set_now(rt, 5000U) = c.LMX_MSG_OK && lmx_msg_set_orphan_retain(rt, 100U) = c.LMX_MSG_OK, "clock 5000; the orphan-retention policy set to 100")
     check(lmx_msg_emergency_cancel(rt, p5) = c.LMX_MSG_OK, "R stops P5 while C5 runs")
-    st: lmx_msg_run_child_turn(rt, p5)
+    st: step_from_root(rt, r, p5)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, p5) = c.LMX_MSG_STATE_STOPPED, "P5 stopped and requested C5's close")
     n0: rt\n
-    check(lmx_msg_dispose_child(rt, r, p5) = c.LMX_MSG_OK && lmx_msg_child_n(rt, r) = 0 && rt\n = n0 - 1, "R releases P5 at once; P5's slot goes, C5 is re-rooted at the runtime")
-    st: lmx_msg_run_child_turn(rt, c5)
+    check(lmx_msg_dispose_child(rt, r, p5) = c.LMX_MSG_OK && lmx_msg_child_n(rt, r) = 0 && rt\n = n0 - 1, "R releases P5 at once; P5's slot goes, C5 is re-rooted under R0")
+    st: step_in_root(rt, c5)
     cm: lmx_msg_find(rt, c5)
-    check((st = c.LMX_MSG_OK || st = 1) && cm != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_handoff_ready(rt, c5) != 0 && cm\parent_msg = 0, "C5 ran its closing turn as a failed orphan: handoff-safe, no parent, still held")
-    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 2, "the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop")
-    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 2, "within the retention window the orphan is still retained")
-    check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5100U, 0U) = c.LMX_MSG_OK && gone(rt, c5) != 0 && rt\n = 1, "past its deadline the drive reclaims the failed orphan: only R's slot remains")
+    check((st = c.LMX_MSG_OK || st = 1) && cm != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_handoff_ready(rt, c5) != 0 && cm\parent_msg = lmx_msg_find(rt, lmx_msg_root_addr(rt)), "C5 ran its closing turn as a failed orphan: handoff-safe, re-rooted under R0, still held")
+    # Stage 5 (d1b), spec 19.29.8: R0's turn stepping a child runs R0's settle
+    # of its settled children, which never takes an orphan: a failed orphan is
+    # retained until its deadline and nobody adopts its arena.
+    g_step: r
+    check(lmx_msg_exec_bind(rt, r, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "R bound, to be stepped from R0's turn")
+    n0: rt\n
+    # Stage 5 (e): R0's arena holds R0's policy record since the first set_now
+    # above, so "not adopted" is R0's block count unchanged by the step, not 0.
+    # lmx_msg_adopted_n counts every block of the Message's arena (its own graph
+    # included), so it reads as "adopted" only against a baseline; R0's arena
+    # holds its policy record's five blocks by design (6f).
+    adopted0: lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt))
+    check(lmx_msg_root_turn(rt, turn_root_step, 0) = c.LMX_MSG_OK && (g_step_st = c.LMX_MSG_OK || g_step_st = 1), "R0's own turn steps R")
+    check(lmx_msg_find(rt, c5) != 0 && lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt)) = adopted0 && rt\n = n0, "R0's settle after the step leaves the failed orphan C5 to the sweep: still found, not adopted, no slot gone")
+    check(lmx_msg_find(rt, r) != 0, "the stepped child R is still there after R0's settle")
+    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 4, "the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop")
+    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 4, "within the retention window the orphan is still retained")
+    check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5100U, 0U) = c.LMX_MSG_OK && gone(rt, c5) != 0 && rt\n = 3, "past its deadline the drive reclaims the failed orphan: only R0's, the UI lane's and R's slots remain")
     check(lmx_msg_find(rt, r) != 0 && lmx_msg_running_load(lmx_msg_find(rt, r)) != 0, "the root runs on")
 
     lmx_msg_runtime_delete(rt)
