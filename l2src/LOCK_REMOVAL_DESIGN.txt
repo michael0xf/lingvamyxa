@@ -718,6 +718,17 @@ D. create_id and create-retry idempotence deleted (X), with S1's dead-code kind.
       run_mixa exit 0 ("mixa backend table ok"), run_ingress_harness exit 0 ("mixa ingress fail_keep_runtime path
       ok"). b5's fix is sonnet/d2-create-id 3a37ca87: 1 file, 2+/2-, and the harness diff against d8f758e6 is 0 lines.
       Second landing attempt: land_base.sh of 3a37ca87 onto 1bdbfca0 with the union base plus lmx_cancel.
+    - LANDED 2026-09-15: merge 6fe7924e (34 M) on 1bdbfca0. On the merge:
+      - run_self_build PASS 8 of 8;
+      - gates GREEN 31 of 31 in 529 s;
+      - run_port_message plain and -LaneCheck parity PASS (97 methods, no LANE FAIL line);
+      - run_l2trans, run_port_parser, run_mixa, run_ingress_harness and run_lmx -Suite Cancel ok.
+      land_base.sh's self-build push was rejected (non-fast-forward): the script always pushed to "<branch>-landing",
+      which already held the first attempt's ed00470d. So the tag selfbuild/6fe7924e (tag object 6c421dcb) and the
+      log commit 391b5062 went by hand to sonnet/d2-create-id-landing-6fe7924e. After every runner line was checked
+      and the tip was checked, integration/main-absorbs-core went to 391b5062.
+      Rule (the coordinator, 2026-09-15): a self-build mark is its own ref, never pushed over another attempt's; the
+      landing branch is named "<branch>-landing-<merge>" (land_base2.sh).
 
 O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced by the one core (X).
     Mikhail, verbatim (2026-09-15), to its real extent: "3- да, удаляйте целиком".
