@@ -2167,3 +2167,10 @@ gitignore exceptions, a second self-build reproducing it), so that an
 intermediate binary exists after each step and the previous binary is never
 lost; no step may leave the chain unable to build itself. Given to the
 lead for O's rewrite.
+Mikhail (2026-09-15, verbatim): "сгенерированные Си мы не правили никогда"
+(we never edited the generated C). Rule: the committed generated C
+(lm1/build/*.lm1.c and the other gitignore exceptions) is changed only by
+regenerating it with the translator, never by hand; a diff of those files
+in a commit is refutable by regenerating them from the same sources with
+the same previous binary and comparing byte for byte. Relayed to the lead,
+0c and b5.
