@@ -2052,3 +2052,29 @@ falsifiers each "gates RED: stopped at lane_oracle" (mutation C naming
 run_child_turn:ready_clear(moved); a stub with the parity line and one
 FAIL line at exit 0; a stub with no parity line). No executor C, so not
 held by the exec.c question; lands through the lead on e88dab64.
+b5's UI-lane scheduler design (sonnet/ui-lane-scheduler-design 20178170 off
+e88dab64, mixa_manager/UI_LANE_SCHEDULER_DESIGN.txt, no code): measured
+first (mixa_manager has no AFFINITY_UI, UI_LANE, lmx_msg_ or
+lm_message_thread_ reference; BACKEND_SEAM.txt section 7 already names the
+architecture and leaves 7.2, how the loop idles, open; mixa_pump.lm1's
+drain is a hand-rolled stand-in for a mailbox; the win32 backend's poll is
+non-blocking for 7.2's sake; no central UI loop exists yet); the design:
+the UI lane a full L3 Thread on the UI thread launched by R0, its own FIFO
+mailbox the only cross-lane synchronization, the scheduler an L2 Structure
+in the lane's arena holding the attached-Message list, one attached
+Message's turn at a time in mailbox order, nothing pool-, mutex- or
+condition-variable-shaped; the acceptance red-first (two attached
+Messages, inputs admitted out of attachment order, turns in admission
+order, one per call to the lane's turn-taking function, no OS thread or
+wait primitive in the test). Reviewed 2026-09-15; its three questions
+answered from main, not new rulings: Q3, "attached" is Mikhail's word
+(19.28.R2.2 11481-11491: a consumer schedules the Messages it attached) and
+attachment is his core sentence (arenas attach on consumption; on receipt
+a non-L3 Message attaches to the recipient's arena), so the relation is
+the lane's arena content, neither parent/child launch nor new; Q1, a
+thread waits only for its own mailbox, so on the UI thread the lane's wait
+is the platform's own thread wait and the mailbox's wake rides that queue,
+no second handle; Q2 follows, admission wakes through the platform queue,
+no separate primitive; both implementation within his words, not spec.
+Next for b5: fold the answers, the acceptance red-first on e88dab64, then
+the L2 code in mixa_manager's gate, merging through the lead.
