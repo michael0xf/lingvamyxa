@@ -10,7 +10,11 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # as "a slot on the runtime's list" behind a Message's back, and nothing is
 # left behind: a retained failed orphan has no adopter once R0 closes and is
 # reclaimed by the chain; a pending UI request goes with the UI lane's
-# mailbox; the context worker is joined before the runtime is freed.
+# mailbox; the close settles a child only once the child is settled and
+# frees only what R0 owns, and a context thread ends its closing turn,
+# lets its Message settle, then frees what is its own and ends (Mikhail,
+# 2026-09-15: the executor frees its own memory; each L3 Thread has its
+# own scheduler and collector), so the close waits for no thread.
 # Written before the code (2026-09-15) on integration 402b2919, where
 # runtime_delete stops the executor, drops every bind without running a
 # closing turn and frees the slots in allocation order; the measured red
@@ -22,7 +26,10 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # The first cycle pays the L2 library runtime's own open (the units' first
 # call), so the property is measured on the second cycle: the live count
 # after the second runtime_delete equals the count after the first. That is
-# exact and needs no magic number. Opt-in in run_model_scenario36.ps1
+# exact and needs no magic number. Because the threads free their own
+# state after the close returns, each cycle's reading is taken once the
+# live count has been stable for 200 ms (3 s at most); a thread that never
+# frees its state still shows as that one block. Opt-in in run_model_scenario36.ps1
 # (-Tests) until (f) lands.
 #
 # Host-driven, one cycle: R0 has P1, P2 and U (each created without a
@@ -316,6 +323,7 @@ fn: cycle (@: LmxMsgRuntime rt) int
     int: st
     int: settled 0
     int: frees_before
+    int: last
     uchar: ini 1
 
     g_c_entered: 0
@@ -369,9 +377,18 @@ fn: cycle (@: LmxMsgRuntime rt) int
     lmx_msg_runtime_delete(rt)
     check(g_c_reason = 1, "C's turn ended because the chain set its closing flag, not by its own deadline")
     check(g_p1_closed != 0, "P1's closing turn ran on R0's lane before its storage went")
-    check(g_c_done != 0, "C's context worker was joined before runtime_delete returned")
+    check(g_c_done != 0, "C's closing turn had ended before runtime_delete returned: the close settles C only once C is settled, and C's thread frees its own state and ends on its own")
     check(g_u_turns = 0, "the pending UI request ran no turn: it went with the UI lane's mailbox")
     check(g_frees > frees_before, "the close freed through the wrap")
+    # The threads free their own state after the close returns, so the
+    # reading waits until the live count has been stable for 200 ms.
+    deadline: c.GetTickCount() + 3000U
+    last: g_live
+    c.Sleep(200U)
+    while: g_live != last && c.GetTickCount() < deadline
+        last: g_live
+        c.Sleep(200U)
+    ---
     return: g_live
 
 fn: main () int
