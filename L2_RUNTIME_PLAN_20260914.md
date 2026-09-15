@@ -2414,3 +2414,8 @@ find_create across stg/l1_baseline at 0. Landing order after 57's "done":
 O1 (measure, push, land) -> ad3fc6b8 (the 32 gates) -> D1 (run_port_message
 plain and -LaneCheck, lmx_message_selftest's runner, scenario36, run_gates)
 -> b5's mixa deletion; S3's oracle waits for the S3 change.
+0c's falsifier for ad3fc6b8 measured after it was sent (a correction of the
+record): with run_port_message.ps1 moved aside, run_gates exits 1 in 1 s
+with "gates RED: stopped at lane_oracle after 0s", the row "lane_oracle
+FAIL exit=-196608 0s" and 31 of 32 rows "not run"; the file restored with
+the same blob. Rule restated: a falsifier is run before it is reported.
