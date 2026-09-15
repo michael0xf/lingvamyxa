@@ -2601,3 +2601,19 @@ committed C equal to it) with a second row for the slice's equality to
 the root's fixed point. Order: 0c's inbox probe, O1 lands, ad3fc6b8, D1,
 the lead's stg probe, b5's groups, the regeneration commit, the slice
 refresh with the full gate.
+0c's strict wake probe (method corrected: the probe had credited one
+admission after every violation, so only each lane's first line carried
+true counts; first lines used): P2 with the wake-all removed (exit 0, 55 s,
+151 identical lines in the four stderr files, the cap not reached, 76
+lanes): inbox greater than admits 0 (no oracle miscount); inbox equal to
+admits with wakes greater 74, of which 72 exec_start_map_kick (exec.c 2877)
+at admits 1, wakes 2, inbox 1, owner 5 at 2/3/inbox 2, owner 1 at
+site=launch 1/2/inbox 1 with an internal envelope; admits 0: owner 6 at
+site=launch (inbox 0, ready 0) and owner 7 at the map kick (inbox 0, ready
+1). P1 with the wake-all present: the same plus owner 3 (the wake-all) and
+owner 1 re-woken by the wake-all with an already consumed admission. The
+finding is proven: exec_start_map_kick's extra wake of admitted lanes and
+its kick of empty lanes, the launch's wake of a lane with nothing
+(site=launch, hidden by the old cap), and the wake-all; all three go with
+S3 (or M where launch is); S3's green is the probe at 0 lines with the
+oracle in the defaults.
