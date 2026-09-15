@@ -4624,3 +4624,13 @@ removed, patches kept; kept wt0c_oneroot and wt0c_oneroot_gate at
 reason; fixed by a two-line "no tree <path>" refusal, committed on
 claude-0c/oneroot-runners on top of 4afe4ff5, the lead to merge the new
 hash instead.
+e9 (2026-09-15; checked by the coordinator): claude-0c/d3-scratch-91e1b4c9 on
+origin, wt0c_d3 removed; claude-0c/oneroot-runners 8479fdab (parent
+4afe4ff5), one added line refusing a missing -Tree as "install_pin
+REFUSED: no tree <path>" before any hash talk, exit 2; the refusal cases
+run (a missing tree and the mangled path print exactly that line;
+pin + 1 byte as -Source refuses with gen2/gen3 unchanged at 0B3D85B3);
+the real install exit 0, gen2 = gen3 = 0B3D85B3; the lead merges
+8479fdab instead of 4afe4ff5. Worktrees: wt0c_oneroot, wt0c_oneroot_gate
+(00b04751, pin installed) and the spare wt0c_runners on the branch,
+removed after the merge.
