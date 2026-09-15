@@ -5950,3 +5950,38 @@ of 8 in 11 s; tag selfbuild/8eeb094f pushed at 19:30:03; the log commit
 claude-0c/selfbuild-log-8eeb094f 11f581e0 (16 to 17 lines) for the lead
 to merge; pins installed in all three trees; S2's record tree removed.
 The machine is free for S6-1's builds when its edits are ready.
+Integration 11f581e0 (e9's log line merged; the S6 probe branch off
+8eeb094f unaffected). e9's archive-hang isolation plan landed on
+claude-0c/archive-hang 413b37bd (l2src/GATE_ARCHIVE_HANG.txt, plan and
+proposed diff only, nothing run; checked by the coordinator). From the
+logs: both hangs in build\fable\wti (08:31:03, a direct runner call;
+16:37:05 inside gate chain 20260915_163435, c_scanners.log left empty,
+no chain summary), 2 of the 31 scanner runs in wti that day; each
+evidence directory ends at l2trans.current.exe with no core.zip and
+nothing under source\, so the stall is inside line 49's direct git
+archive before its output exists; that call is a native PowerShell
+call under EAP Stop with no stdout/stderr files and no timeout, the
+gate unbounded (run_gates.ps1 116); the other archiving runners go
+through cmd /c stage wrappers. Around it: git 2.37.0.windows.1, 41
+worktrees on one object store, 21 packs, no fsmonitor or gc; other
+sessions' git activity near both times (08:31:48 a checkout; 16:35:13 a
+push), so concurrency is hypothesis H3, with H1 git alone, H2 the
+PowerShell native-call form, H4 the output path. The plan: A the bare
+command 200 iterations; B line 49 verbatim in a one-line EAP-Stop
+script under cmd /c powershell as run_gates launches, 200; C the runner
+alone, 30; D A under a local checkout/commit loop; git activity held
+(every ref's reflog head checked before and after each stage), in
+e9's own detached worktree; per iteration millisecond times, exit, zip
+size, out/err, GIT_TRACE2_EVENT and GIT_TRACE2_PERF; on a hang the
+process tree, two CPU samples, a gdb thread apply all bt, the zip's
+existence and the lock files, before the kill. The proposed diff bounds
+line 49 at 120 s (the gate takes 22-51 s): git as a child with its own
+stdout/stderr files, Handle cached, taskkill /T on timeout, "Archive
+timed out after 120 s", archiveMs in the evidence; falsified by a stub
+git.cmd sleeping 130 s. Rulings (coordinator): the timeout diff goes in
+first, proven by e9's stub-git falsifier locally, then folded into
+S6-1's landing allowlist as one runner file (a hang then costs 120 s,
+not hours); the isolation plan runs later, in a git-freeze window the
+coordinator announces to all sessions between S6-1's landing and
+S6-2's builds, since it needs every session's git held for about 40
+minutes.
