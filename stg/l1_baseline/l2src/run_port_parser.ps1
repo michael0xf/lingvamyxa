@@ -131,9 +131,8 @@ $rtObjs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $out 'l2unit
 #      NONE of the calloc/realloc/free redirects below -- see that file's
 #      own header comment for why. ----
 $allocCounterObj = Join-Path $rtObjDir "p0_dump_alloc_counter.o"
-if (-not (Test-Path $allocCounterObj)) {
-    Invoke-Gcc @("-std=c99", "-w", "-c", "l2src\p0_dump_alloc_counter.c", "-o", $allocCounterObj) (Join-Path $log "compile_p0_dump_alloc_counter.log")
-}
+# Compiled every run, like the runtime trio (49e5db6d): an object reused by presence can come from any tree.
+Invoke-Gcc @("-std=c99", "-w", "-c", "l2src\p0_dump_alloc_counter.c", "-o", $allocCounterObj) (Join-Path $log "compile_p0_dump_alloc_counter.log")
 # calloc/realloc/free redirect for the dump-driver executables only (not
 # p0_meta_dump): every c.calloc/c.realloc/c.free call site inlined from
 # l1src/own.lm1 into lm1/build/parser.lm1.c -- Ref's pristine copy and
