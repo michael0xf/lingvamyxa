@@ -340,7 +340,13 @@ cite this map's owner codes in their target-owner column.
       copied (19.29.7.1's copy-only slice) or transferred handoff-safe (12506-12513). Alternative: the
       sender's arena with the entry transferred at admission, which makes the recipient's inbox point
       into many arenas.
-  5.5 Stage 5 (f), reopened by the order: does R0's own scheduler step its threadless children (P1 on
+  5.5 ANSWERED by Mikhail, 2026-09-15, verbatim (in the plan's section 7): closing a parent is an
+      emergency; each child closes itself and for its children it is the same emergency; children run
+      sequentially without a thread of their own are an implementation nuance that drags the parent's
+      close out with others' work, "but why do you need such threads at all now, when you cannot even
+      build the core architecture exactly by the spec?"; the coordinator's reading (every L3 Thread on
+      its own OS thread for now; the sequential mapping removed) awaits his one-word confirmation.
+      The original question, kept for the record: does R0's own scheduler step its threadless children (P1 on
       the host lane, a retained orphan, the UI-bound child, the UI lane) to their settle before R0's
       thread frees what is R0's, or does R0 leave them ready with no scheduler? Proposed: the former,
       as R0 finishing its own work (each L3 Thread has its own scheduler), not a wait on any thread.

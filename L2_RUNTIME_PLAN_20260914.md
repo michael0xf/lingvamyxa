@@ -1711,3 +1711,25 @@ runs in no default gate" was wrong. Ruled: 0c hardens the row instead
 "LANE WRITE FAIL" in the log, count and total unchanged, the RUNNER_HAZARDS
 row for the no-turn gap in the same commit), on the integration hash with
 S0 in; 0c's 32-name default-set commit merges over it afterwards.
+Mikhail on the map's question 5.5 (2026-09-15, verbatim, to "does R0's
+scheduler step its threadless children to their settle before R0's thread
+frees what is R0's, or leave them ready with no scheduler?"): "мы же
+обсудили миллион раз. Закрытие родителя это авария. _Каждый ребенок
+закрывает себя сам и для его детей это такая же авария_. Если дети L3
+Thread но реализация такая что у них нет своего потока, а они
+последовательно выполняются, то это нюансы реализации. Разумеется в этом
+случае закрытие родителя затягивается так как планировщик должен пройтись
+и выполнить чужую работу -- но зачем вам вообще сейчас такие потоки если вы
+не можете даже ядро архитектуры запилить точно по спеке?" (we discussed
+this a million times; closing a parent is an emergency; each child closes
+itself, and for its children it is the same emergency; if the children are
+L3 Threads but the implementation gives them no thread of their own and
+runs them sequentially, that is an implementation nuance; of course the
+parent's close then drags on, since the scheduler has to go round and do
+others' work; but why do you need such threads at all now, when you cannot
+even build the core architecture exactly by the spec?). The coordinator's
+reading, put to him for a one-word confirmation before any doc carries it:
+for now every L3 Thread runs on its own OS thread, and the sequential
+mapping (children without a thread stepped by the parent's thread:
+run_child_turn, sched_step, the host lane) is removed from the runtime
+until the core is exact by the spec.
