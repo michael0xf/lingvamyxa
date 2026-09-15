@@ -5296,3 +5296,10 @@ parent's lane or the host outside any turn; lmx_msg_exec_bind, the
 child's parent's lane or the host; emergency_cancel as ruled), refusing
 otherwise, with a red-first check per guard (a call from a foreign lane
 refused).
+Ticket to b5 (the coordinator, 2026-09-15), test-only, red-first: the three
+S4 guard checks on sonnet/s4-guard-checks off d8f758e6, one per guard
+(orphan_sweep's chain, lmx_msg_exec_bind, emergency_cancel), each a call
+from a lane that is neither the child's parent's lane nor the host
+outside any turn, required refused (INVALID by the existing refusals),
+failing today; measured red once the machine is free after the lead's
+landings; they become S4's acceptance with the guards' green.
