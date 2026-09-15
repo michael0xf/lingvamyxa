@@ -635,7 +635,7 @@ runner and generated output hashes are recorded. The compiler and driver did
 not need edits. Mixed-char/P0/query/array Message evidence remains the prior
 unchanged-source checkpoint, not a newly claimed native run for every leaf.
 
-The maintained inventory runs by default (2026-09-14: 139 inputs, about 9 s on
+The maintained inventory runs by default (2026-09-14: 140 inputs, about 9 s on
 a 42 s gate). A quick edit loop may skip it:
   powershell -NoProfile -ExecutionPolicy Bypass -File stg/l1_baseline/l2src/run_l2_message_root.ps1 -SkipHistoricalCatalogAudit
 Skipped runs still check the source-list pin but not these extra
@@ -799,6 +799,15 @@ drive through main. It now reads a byte-exact copy of the pre-merge file (blob
 c19db7cf, from eb5fbd19). Restoring the old source path in the runner text
 reproduces the previous digest (5D92A883...) exactly. The port file is
 verified by run_port_msg_mail_chain.ps1.
+
+Added 2026-09-14, making 140 (3F6879665696FABDA08C28A9DB8452F431E0626DF20C2DB157638ACF57C98F18):
+Leaf (1):
+  repro_foreign_int_alias_local
+Removing only that line reproduces the 139-case digest (05E9A373...) exactly.
+It is 5e's repro from parser-l2 Stage d slice 5 (sonnet/parser-l2 0836d6a8):
+a local declared with a foreign int alias, `LmP0TrailerRole: trailer_role`,
+which failed "unsupported body, frame=LmP0TrailerRole" before l2trans gave the
+alias int's own code for an own local (formal and return code 10 unchanged).
 
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------

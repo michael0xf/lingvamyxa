@@ -55,7 +55,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 139 -or $digest -ne '05E9A37329BDB49B763F2B1E59CB8B1BC25BD68190730638CB53BA0C1A7CD51D') {
+if ($cases.Count -ne 140 -or $digest -ne '3F6879665696FABDA08C28A9DB8452F431E0626DF20C2DB157638ACF57C98F18') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
