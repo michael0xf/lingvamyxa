@@ -1,0 +1,41 @@
+predef: "l2src/tests/repro_indexed_field_assign.h.lm1"
+
+# Repro for lingvamyxa-ba (d6), 2026-09-14: `struct\field[index]: value`
+# as an assignment TARGET fails in l2trans itself with "unsupported
+# index, frame=stack\columns[idx]", even though the structurally
+# identical shape (a struct-field-derived own-array of size_t, indexed
+# by a plain local size_t, written to) already works elsewhere in
+# already-landed d2 code (e.g. stack\parents[i]: 0 / stack\hard[i]: 0U
+# in l2src/parser_stack_stream_port.lm2). Found while porting
+# p0_indent_stack_push (parser-l2 Stage e Slice 3).
+#
+# Disproved a name-collision/shadowing hypothesis: renaming a
+# shadowing local `columns` to `new_columns` did not help.
+#
+# A pre-existing fragment (l2src/parser_indent_stack.lm2, one of the
+# 25 pre-ticket fragments, read-only reference, not part of this
+# port) already hit this and worked around it with pointer arithmetic
+# plus a tiny `p[0]: v` helper function.
+#
+# A simpler two-step local-pointer workaround tested here and used as
+# THIS port's own stopgap (read the field into a local pointer first,
+# then index the local): `cell: stack\columns; cell[idx]: column;` --
+# this translates cleanly (l2trans exit 0). See probe_indent_stack_
+# store_direct below for the failing form and probe_indent_stack_
+# store_workaround for the passing one.
+
+fn: probe_indent_stack_store_direct (@: LmP0IndentStack stack; size_t: idx; size_t: value) int
+    stack\columns[idx]: value
+    return: 1
+end: probe_indent_stack_store_direct
+
+fn: probe_indent_stack_store_workaround (@: LmP0IndentStack stack; size_t: idx; size_t: value) int
+    @: size_t cell
+    cell: stack\columns
+    cell[idx]: value
+    return: 1
+end: probe_indent_stack_store_workaround
+
+fn: main () int
+    return: 0
+end: main
