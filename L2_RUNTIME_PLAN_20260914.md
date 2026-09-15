@@ -2307,3 +2307,15 @@ chain, lm2/own.lm2 and the unbuildable lm2 self-host deleted whole as dead,
 "achieve self-build" meaning the live chain brought to a full self-build
 without locks; the coordinator proposing (b). O2/O3 wait; O1, the S-stages
 and M continue.
+Mikhail (2026-09-15, verbatim): "и кстати сделайте синхронизацию в
+почтовых коллекциях в точности как это делается в Java, причем максимально
+упрощенно (ресивер synchronized в спеке описан), в старом проекте он был
+даже до какой-то степени реализован C:\Nyasha_Planet\lingvamyxa_old_worked_version"
+(and by the way, make the synchronization in the mail collections exactly
+as it is done in Java, maximally simplified; the synchronized receiver is
+described in the spec; in the old project it was even implemented to some
+degree). So the mailbox's one lock is a Java-style monitor in its simplest
+form, expressed through the language's synchronized receiver (spec 20.5.7,
+lowered to lm_synchronized_enter/leave), the old project's emission and
+runtime hooks the reference; given to the lead as the rule for the mailbox
+and its wake (S3) with the spec's lines and the old project's files.
