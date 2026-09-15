@@ -4701,3 +4701,32 @@ logs on disk, as l2src/GATE_TIME_1016.txt on claude-0c/gate-time off
 00b04751: per-gate wall times side by side, the gates accounting for the
 difference and what their log lines show; stop if the 1016 s logs are
 gone.
+M, e9's three items done in wtm (the lead, 2026-09-15, uncommitted): (a)
+entry_turn 87/88 replaced by one check, "the runtime creates R0 alone, no
+UI lane: one slot" (rt\n = 1, find(2) = 0); (b) run_turn_step_child_copies.ps1
+and its run_gates row leave in the same commit; (c) the whole sched
+record unit goes, not only the cursor (sched_step was the only creator
+of LmxMsg.sched_rec and nothing reads the policy cell): lmx_sched_record.lm2,
+.h.lm1, run_sched_record.ps1, its selftest and gate row, sched_rec, the
+header declarations, l2units_build's -Exclude; the lead's decision (no
+lock, wait or signal), recorded in the design at commit. The default
+set becomes 30 rows; ui_lane_3d is deleted and leaves scenario36's
+list. A core-only run_port_message runs; the selftest compile is
+expected to fail until converted.
+Split for the test conversions (the lead's proposal, accepted by the
+coordinator): everyone branches from d6/m-sequential after the core
+commit, disjoint files: the lead the core, the exec selftest,
+cancel_spin_host, the runners and the landing; b5 the run_msg_send_local
+and run_msg_family_handoff tests (send_local, family_handoff,
+adopt_unrooted); e9 the run_model_scenario36 set (liveness_33,
+family_close_32, family_release_17, orphan_mapped_17, scenario36,
+root_ingress_5b, root_record_5e; their rt\n pins counting the UI lane
+shift by one). Two rulings (coordinator): (1) loop shape: a test's
+observation loop is yield rounds (SwitchToThread, no Sleep, no wall
+clock, no round bound), reading the flags each round, bounded only by
+the runner's timeout, which is the one place "too long" is decided; the
+test prints the property it is reading when the loop starts, so a hang
+names itself in the log; (2) pre-existing go cells in a test M converts
+(orphan_mapped_17's g_go holding C inside its turn, and the like) go in
+the same commit, the property restated by flag reads as in
+family_release_17.
