@@ -1609,3 +1609,33 @@ that site with held_by equal to the calling thread and nothing else;
 whether the take and the turn identity become one write is the design's
 question; then runs A (unmutated green), B (the bootstrap thread's writes
 outside a turn green), C (the moved ready_clear red) before the commit.
+Mikhail on question 5.1 (2026-09-15, verbatim, to the coordinator's proposed
+owners): "1) зачем вам список корней?" (why do you need a root list?) and,
+to the phrase "a registry of all Messages for the walk at deletion":
+"откуда ты взял обход при удалении? Мы выше что обсуждали?" (where did you
+get a walk at deletion from? what did we discuss above?). The coordinator's
+answer, awaiting his confirmation: there is no root list, the root is one
+(R0) and its children are an ordinary child list in R0's arena; there is
+no walk at deletion, the close is R0's own closing end-turn as he said; the
+slot list served only today's delete loop and the address lookup and goes
+without replacement; the retire queue goes (a closed child's storage is the
+parent's settle write); a lane's own queue is that Message's mailbox.
+The lead's lock-removal design draft: d6/lock-removal 8f20d183,
+l2src/LOCK_REMOVAL_DESIGN.txt, opening with Mikhail's verbatim sentences
+only and stating it is a design, not the spec; the lock work sorted into
+L1-L8 (address resolution, the family tree's writes, the mapping's cells,
+the cross-lane control flags, the runtime-level lists, the wakes, the
+storage moves at settle, test setters); stages each red-first: S0 the lane
+tripwire as the proof tool; S1 dead code and the order's direct deletions;
+S2 capabilities instead of address lookups for C1, C2 and C5 with locking
+unchanged (red: a test-build lookup counter at 0 from those sites); S3 one
+wake per lane (red: an idle lane's empty wakes counted); S4 the family tree
+and the mapping written only on the owner's lane, then read without the
+lock (red: the tripwire; C3 and C4 decided here; waits on 5.6 and N); S5
+the runtime-level lists (waits on 5.1; reap and join go); S6 the lock
+deleted (red: exec_lock and unlock built as abort, grep 0, only m->mail
+left); A1-A3 the arena, records, bookkeeping and arrays from the Message's
+own arena, A3 waiting on 5.4 (red: the two-cycle balance with heap
+allocations counted). Reviewed and approved 2026-09-15 to start S1 and S2's
+red on a branch off c067bed9, with S0 landing first and every landing from
+S2 on running run_gates and run_port_message -LaneCheck with the tripwire.
