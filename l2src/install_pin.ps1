@@ -12,6 +12,7 @@
 param([string]$Tree, [string]$Source)
 $ErrorActionPreference = 'Continue'
 if (-not $Tree) { $Tree = Join-Path $PSScriptRoot '..' }
+if (-not (Test-Path -LiteralPath $Tree -PathType Container)) { Write-Output ('install_pin REFUSED: no tree ' + $Tree); exit 2 }
 $Tree = (Resolve-Path -LiteralPath $Tree).Path
 $pinFile = Join-Path $Tree 'l2src\L1_PIN.txt'
 if (-not (Test-Path -LiteralPath $pinFile)) { Write-Output ('install_pin REFUSED: no ' + $pinFile); exit 2 }
