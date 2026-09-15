@@ -2787,3 +2787,9 @@ identical printTree.lm0.exe in the main checkout's stg and root build/lm0
 l1src/buildCore.lm1 89 and 192 (the generated staged-test script setting
 $printTree to printTree.lm0), is an L1 source change in the root's l1src,
 the lead's regeneration lane.
+0c holds the S3 oracle's re-cut until Mikhail's empty-mailbox answer: today
+the oracle checks the three take-wake sites only and skips three
+worker-lifecycle signals (bind_wait_retire 2123, the unbind join 2236,
+stop's retire walk 3370) that wake a waiting worker so it can exit; whether
+they remain depends on what an idle owner thread does, so the oracle will
+fail on whatever primitive his answer leaves, not on a guessed list.
