@@ -3941,3 +3941,19 @@ now at S3, and BindWait leaves entirely at S5), so when S5 lands the
 runner should pin the two-cycle balance instead; for S3 the 0 pin with
 its reason is enough. Before the relaunch the lead pre-runs, on the fix,
 run_port_msg_blocks and the 12 gates that had not run.
+b5's S4_WRITES corrected at sonnet/s4-writes a5e6bb6f (checked): the wrong
+"running has no foreign-lane write site" section replaced by a site
+entry for lmx_msg_emergency_cancel (exec.c 439-455, item (3)); its 36
+calls at c063fd00 listed by the writer each stands in for: exec_selftest.c
+(22) and lmx_message_selftest.lm1 (1) from main outside any turn (the
+host), the model selftests' 7 calls named by their comments (the host
+case "R stops P while C runs", the parent case "P requests B's stop", the
+stop-failed branch). Caveat: tests/cancel_spin_host.c's 5 calls run on a
+CreateThread-spawned worker that is neither the parent's lane nor the
+host thread, a third shape that S4's guard would refuse. Ruling
+(coordinator, test-only, no lock): no "host proxy" category; the guard
+stays as ruled (the child's parent's lane, or the host's owner thread
+outside any turn); cancel_spin_host is changed at S4 so its cancellations
+are made on the host thread, or its worker delivers the cancellation as
+mail to the host (an admission into R0's mailbox) and the host issues the
+stop; listed in S4's note as a test change.
