@@ -2545,3 +2545,15 @@ now; (3) the root's lm2/ deleted whole (superseding "split", nothing left
 to split) and the dead chain's files in the root's lm1/build (trans,
 trans_library, rest_lmx_http_client/server, vcpkgFetch) with their
 gitignore exceptions removed, the live chain's generated C kept.
+Two facts from the lead for question 3: the snapshot README lists among its
+prerequisites the root's lm2 registry and predef files, lm1 includes and
+build/lm0/trans.lm0.exe, while a literal-path grep of stg/l1_baseline finds
+one root read only (run_port_parser.ps1:31, tests/p0_tree_contract); not a
+proof (joined paths and .lm1 includes not covered, no build run). Ordered
+as question 3's falsifier whichever way he answers: a cold stg/l1_baseline
+self-build (tests/l1 run_seed then run_gen, gate.ps1's buildCore.lm0.bat)
+in a scratch worktree with the root's lm2/ and the dead chain's files in
+root lm1/build moved aside, and with build/lm0/trans.lm0.exe absent; green
+means those prerequisites are stale text; a red names the dependency by
+file and line. O1 is 06ab81b0 (pushed, measure green), landing after 57's
+inbox probe, then ad3fc6b8, then D1; none touch the bootstrap.
