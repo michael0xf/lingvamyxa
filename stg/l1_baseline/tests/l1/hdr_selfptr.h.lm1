@@ -1,4 +1,0 @@
-struct: Node
-    @: Node next
-    int: value
-end: Node

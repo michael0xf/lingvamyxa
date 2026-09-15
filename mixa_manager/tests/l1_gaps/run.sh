@@ -1,6 +1,6 @@
 #!/bin/sh
 # Regenerates transcript.txt and RETURNS FAILURE if any expectation is unmet.
-# Run from the repository root. Uses the stable STG translator only.
+# Run from the repository root. Uses the pinned root translator only.
 #
 # Every status is captured DIRECTLY from the command, then its saved output is
 # formatted. An earlier version piped the compiler into sed and read $? from the
@@ -11,7 +11,7 @@
 # Optional: FORCE_FAIL=neg_slot (or bridge, neg_pointee, pos_read) inverts one
 # expectation, to demonstrate that the runner actually returns failure.
 D=mixa_manager/tests/l1_gaps
-T=stg/l1_baseline/build/l1trans/gen2/l1trans.exe
+T=build/l1trans/gen2/l1trans.exe
 O=build/l1gaps
 CC="gcc -c -std=c99 -Wall -Wextra -Wpedantic -I."
 mkdir -p $O

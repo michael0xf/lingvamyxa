@@ -1,4 +1,0 @@
-predef: "tests/l1/mod_cycle_a.lm1"
-fn: cb () int
-    return: 0
-end: cb

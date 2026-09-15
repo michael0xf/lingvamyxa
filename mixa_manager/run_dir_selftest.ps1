@@ -1,11 +1,11 @@
 # FILE_SEAM section 4 dir seam selftest runner (Windows).
-# Translator: stable stg/l1_baseline/build/l1trans/gen2/l1trans.exe (full SHA256).
+# Translator: pinned build/l1trans/gen2/l1trans.exe (full SHA256).
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
 $RepoRoot = (Get-Location).Path
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
-$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+$CompilerHash = Get-L1Pin -L1Root $RepoRoot
 
 $RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
@@ -21,7 +21,7 @@ $StatusFile = Join-Path $LogDir "status.txt"
 $HashReport = Join-Path $LogDir "source_hashes.txt"
 New-Item -ItemType File -Path $HashReport -Force | Out-Null
 
-$Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+$Compiler = Join-Path $RepoRoot "build\l1trans\gen2\l1trans.exe"
 if (-not (Test-Path -LiteralPath $Compiler)) {
     Set-Content -LiteralPath $StatusFile -Value "FAILED preflight: missing compiler $Compiler (no process launched)"
     Write-Output "MISSING COMPILER: $Compiler"

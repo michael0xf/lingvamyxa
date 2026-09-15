@@ -1,8 +1,8 @@
 # Legacy P0 syntax corpus (recursive old *.lmx + tests/l1/return_bare*.lmx).
 # Manifest pins expected_exit. Compared: the committed printTree.lm0 goldens
 # (tests\l1\goldens\printTree.lm0, generated once from the lm2 chain's printTree.lm0.exe;
-# see its README.txt), root gen2 printTree and STG gen2 printTree: exit, full stdout,
-# and full P0 code/line/column. A disagreement with the goldens is a question, never a
+# see its README.txt) and the root gen2 printTree: exit, full stdout, and full P0
+# code/line/column (ONE ROOT: the STG slice and its printTree are gone). A disagreement with the goldens is a question, never a
 # regeneration. This is PARSE agreement, not consumer/emitter proof.
 
 $ErrorActionPreference = "Stop"
@@ -12,7 +12,6 @@ $gen = "gen2"
 if ($env:L1_GEN -and $env:L1_GEN.Trim().Length -gt 0) { $gen = $env:L1_GEN.Trim() }
 
 $rootPt = "build\l1trans\$gen\printTree.exe"
-$stgPt = "stg\l1_baseline\build\l1trans\$gen\printTree.exe"
 $goldenDir = "tests\l1\goldens\printTree.lm0"
 $manifest = "tests\l1\legacy_p0_manifest.txt"
 $outDir = "build\l1trans\legacy_p0"
@@ -20,7 +19,6 @@ $log = Join-Path "build\l1trans\logs" $gen
 New-Item -ItemType Directory -Force -Path $outDir, $log | Out-Null
 
 if (-not (Test-Path -LiteralPath $rootPt)) { throw "missing $rootPt" }
-if (-not (Test-Path -LiteralPath $stgPt)) { throw "missing $stgPt" }
 if (-not (Test-Path -LiteralPath $goldenDir)) { throw "missing golden directory $goldenDir" }
 if (-not (Test-Path -LiteralPath $manifest)) { throw "missing $manifest" }
 
@@ -81,10 +79,8 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
     if ($parts.Count -ge 3) { $note = $parts[2] }
     $rootExpect = $expect
     if ($note -match "root_exit=(\d+)") { $rootExpect = [int]$Matches[1] }
-    # Root and staged printTree are the same current parser generation. A
-    # manifest override records an intentional current-parser change against
-    # the frozen lm0 oracle and therefore applies to both current binaries.
-    $stgExpect = $rootExpect
+    # A manifest override records an intentional current-parser change against
+    # the frozen lm0 oracle.
     $rootDiag = ""
     if ($note -match "root_diag=(\d+@\d+:\d+)") { $rootDiag = $Matches[1] }
     if (-not (Test-Path -LiteralPath $src)) { throw "missing fixture $src" }
@@ -92,14 +88,10 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
     $o0 = Get-GoldenPath $base ".stdout" $src
     $oR = Join-Path $outDir "$base.root.out"
     $eR = Join-Path $outDir "$base.root.err"
-    $oS = Join-Path $outDir "$base.stg.out"
-    $eS = Join-Path $outDir "$base.stg.err"
     $ec0 = [int]((Get-Content -LiteralPath (Get-GoldenPath $base ".exit" $src) -TotalCount 1).Trim())
     $ecR = Invoke-Dump $rootPt $src $oR $eR
-    $ecS = Invoke-Dump $stgPt $src $oS $eS
     if ($ec0 -ne $expect) { throw "$src golden exit $ec0 expected $expect ($note)" }
     if ($ecR -ne $rootExpect) { throw "$src root printTree exit $ecR expected $rootExpect" }
-    if ($ecS -ne $stgExpect) { throw "$src STG printTree exit $ecS expected $stgExpect" }
     if ($rootExpect -ne $expect) {
         if ($rootExpect -eq 0) { throw "$src root_exit override must be a reject" }
         $dR = Get-Diag $eR
@@ -109,29 +101,18 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
         } elseif ($locR -notmatch "^32@") {
             throw "$src root empty-colon diag expected code 32: $dR"
         }
-        $dS = Get-Diag $eS
-        $locS = Get-P0Loc $dS
-        if ($locS -ne $locR) { throw "$src STG diag $locS differs from root $locR : $dS" }
-        $hR = (Get-FileHash $oR).Hash
-        $hS = (Get-FileHash $oS).Hash
-        if ($hS -ne $hR) { throw "stdout mismatch STG vs root: $src" }
         $reject++
     } elseif ($expect -eq 0) {
         $h0 = (Get-FileHash -LiteralPath $o0).Hash
         $hR = (Get-FileHash $oR).Hash
-        $hS = (Get-FileHash $oS).Hash
         if ($hR -ne $h0) { throw "stdout mismatch root vs golden: $src ($o0)" }
-        if ($hS -ne $h0) { throw "stdout mismatch STG vs golden: $src ($o0)" }
         $accept++
     } else {
         $dR = Get-Diag $eR
-        $dS = Get-Diag $eS
         if ($dR -notmatch "P0 parse error") { throw "root missing P0 parse error: $src : $dR" }
-        if ($dS -notmatch "P0 parse error") { throw "STG missing P0 parse error: $src : $dS" }
         $loc0 = (Get-Content -LiteralPath (Get-GoldenPath $base ".p0" $src) -TotalCount 1).Trim()
         if ($loc0 -notmatch "^\d+@\d+:\d+$") { throw "golden P0 location malformed: $src : $loc0" }
         if ((Get-P0Loc $dR) -ne $loc0) { throw "root diag parity: $src golden=$loc0 root=$dR" }
-        if ((Get-P0Loc $dS) -ne $loc0) { throw "STG diag parity: $src golden=$loc0 stg=$dS" }
         $reject++
     }
     if ($src.StartsWith("tests\l1\")) { $extra++ }
@@ -143,7 +124,7 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
     $n++
 }
 
-Write-Output "legacy P0 corpus ok n=$n old119=$old added=$added extra_l1=$extra accept=$accept reject=$reject oracle=goldens/printTree.lm0 root=$gen stg=$gen"
+Write-Output "legacy P0 corpus ok n=$n old119=$old added=$added extra_l1=$extra accept=$accept reject=$reject oracle=goldens/printTree.lm0 root=$gen"
 } finally {
     Restore-HostedRegistryEnv
 }

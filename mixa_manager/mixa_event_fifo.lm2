@@ -11,7 +11,7 @@ include: "<stdlib.h>" "<string.h>"
 # copying semantics throughout -- no flattening to void*, no fixed caps,
 # no allocator or algorithm substitution. Pure library of leaf functions
 # (no main), matching the accepted L2 style already used by
-# stg/l1_baseline/l2src/tests/unit_ptr_pass.lm2.
+# l2src/tests/unit_ptr_pass.lm2.
 #
 # Expected to hit the same already-known L2 frontend barrier as
 # mixa_selection.lm2 (mixa_selection_l2_port.txt, ticket 20260913-075100):

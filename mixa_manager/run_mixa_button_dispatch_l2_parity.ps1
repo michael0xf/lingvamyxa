@@ -25,12 +25,12 @@
 #
 # mixa_button_dispatch.lm1/mixa_buttons.h/mixa_app_window.lm1/mixa_core.
 # h/mixa_draw.lm1/mixa_text_rect.lm1 are the parity oracle and are never
-# touched. Nothing under stg/l1_baseline is modified, only read.
+# touched. Nothing under l1src or l2src is modified, only read.
 param()
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root

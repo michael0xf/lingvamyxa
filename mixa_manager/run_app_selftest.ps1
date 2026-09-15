@@ -19,7 +19,7 @@ $Reason = ""
 $Compiler = ""
 $ActualCompilerHash = ""
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
-$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+$CompilerHash = Get-L1Pin -L1Root $RepoRoot
 $RunDir = ""
 $LogDir = ""
 $FixtureDir = ""
@@ -57,7 +57,7 @@ try {
     }
 
     # Now verify compiler (AFTER LogDir created)
-    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+    $Compiler = Join-Path $RepoRoot "build\l1trans\gen2\l1trans.exe"
 
     if (-not (Test-Path $Compiler)) {
         $Reason = "Compiler not found: $Compiler"

@@ -1,0 +1,5213 @@
+# Narrow L2 -> L1 -> C -> exe smoke. Build root is this file's parent.
+# Artifacts stay under build\l2trans. Does not run native finalize, gate, or run_lmx.
+param([switch]$BuildOnly, [string]$OutputDirectory, [string]$TranslatorPath, [string]$OutputTranslatorPath)
+$ErrorActionPreference = "Stop"
+Set-Location (Join-Path $PSScriptRoot "..")
+
+$gen = "gen2"
+if ($env:L1_GEN -and $env:L1_GEN.Trim().Length -gt 0) { $gen = $env:L1_GEN.Trim() }
+$l1trans = "build\l1trans\$gen\l1trans.exe"
+if ($TranslatorPath) { $l1trans = $TranslatorPath }
+if (-not (Test-Path -LiteralPath $l1trans)) {
+    throw "missing L1 translator: $l1trans (run tests\l1\run_gen.ps1 first)"
+}
+# The output translator is -OutputTranslatorPath or the translator above; a root build\l1trans\gen3 is
+# used only when named, never because the file exists (l2src/RUNNER_HAZARDS.txt (a)).
+if (-not $OutputTranslatorPath) { $OutputTranslatorPath = $l1trans }
+if (-not (Test-Path -LiteralPath $OutputTranslatorPath)) { throw "missing output L1 translator: $OutputTranslatorPath" }
+$outputL1trans = (Resolve-Path -LiteralPath $OutputTranslatorPath).ProviderPath
+
+$out = "build\l2trans"
+$log = "build\l1trans\logs\$gen"
+if ($OutputDirectory) { $out = $OutputDirectory; $log = Join-Path $out 'logs' }
+New-Item -ItemType Directory -Force -Path $out, $log | Out-Null
+# Paths below are read and written relative to the repo root; -OutputDirectory
+# may be rooted, and a rooted path is used as given.
+function Resolve-L2Path([string]$Path) {
+    if ([System.IO.Path]::IsPathRooted($Path)) { return $Path }
+    return (Join-Path (Get-Location) $Path)
+}
+# run_candidate_indent builds the STG gen2 printTree it compares against in the run.
+
+$guards = @(
+    "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
+    "-Werror=implicit-function-declaration", "-Werror=implicit-int"
+)
+$cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".") + $guards
+
+
+# Audited literal historical inputs. Dynamic/generated tests stay in the full
+# runner; changing this set requires recording the added/removed source units.
+function Get-L2HistoricalCases([string]$RunnerText) {
+    $cases = @([regex]::Matches($RunnerText, '(?m)^Invoke-(Leaf(?:Out)?|Entry) "([^"]+)" "([^"]+)"') | ForEach-Object {
+        [pscustomobject]@{kind=$_.Groups[1].Value; source=$_.Groups[2].Value.Replace('\','/'); stem=$_.Groups[3].Value}
+    })
+    $canonical = ($cases | ForEach-Object { $_.kind + '|' + $_.source + '|' + $_.stem }) -join [char]10
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
+    finally { $sha.Dispose() }
+if ($cases.Count -ne 144 -or $digest -ne 'D0F9CDAB8C533E5BF298664BF2CCC333F077B57BE219784229773552E5C46155') {
+        throw 'Historical positive input list changed; audit and document the new list before updating its pin'
+    }
+    return $cases
+}
+
+function Assert-L2NoLegacyCatalog([string]$Text, [string]$Stage, [switch]$GeneratedC) {
+    if ($GeneratedC) {
+        $legacy = '\blmx_(range_table|ranges_init|range_register|classify|chars_pool|int_pool|size_pool)\b|#include\s+"l2src/lmx_(range|pool|chars|branch|size|int)\.lm1\.h"'
+    } else {
+        $legacy = 'predef:.*"l2src/lmx_(range|pool|chars|branch|size|int)\.lm1"|\blmx_(ranges_init|range_register|classify)\('
+    }
+    if ($Text -match $legacy) { throw "$Stage retains a legacy catalog import or operation" }
+}
+
+function Assert-L2EightMethodGraph([string]$Text) {
+    Assert-L2NoLegacyCatalog $Text 'unit_eight L1'
+    if ($Text -notmatch 'fn: l2_program_entry' -or $Text -notmatch 'lmx_branch_open_owned\(unit, 9U,' -or
+        [regex]::Matches($Text, 'lmx_node_new_owned\(').Count -ne 1 -or
+        [regex]::Matches($Text, 'lmx_struct_new_owned\(').Count -ne 8 -or
+        [regex]::Matches($Text, 'lmx_method_new_owned\(').Count -ne 8) {
+        throw 'unit_eight must construct eight callable Structures plus their shared METHOD descriptors'
+    }
+    if ([regex]::Matches($Text, 'lmx_branch_store_known\(leaf, 0U, \(cast: \(@: void\) rec\)\)').Count -ne 8 -or
+        $Text -notmatch 'lmx_branch_store_known\(unit, 8U, \(cast: \(@: void\) l2_methods\)\)') {
+        throw 'unit_eight must put each METHOD in callable slot 0 and retain the descriptor array separately'
+    }
+    foreach ($index in 0..7) {
+        if ($Text -notmatch ("rec\\addr: \(cast: \(LmxEntry\) l2_m" + $index + "\)") -or
+            $Text -notmatch ([regex]::Escape("lmx_branch_store_known(unit, " + $index + "U, (cast: (@: void) leaf))"))) {
+            throw "unit_eight missing METHOD address or callable root child $index"
+        }
+    }
+}
+
+$script:l2MessageObjects = $null
+function Get-L2MessageObjects {
+    if ($null -ne $script:l2MessageObjects) { return $script:l2MessageObjects }
+    $supportDir = Join-Path $out 'message_support'
+    $supportHeaders = Join-Path $supportDir 'headers'
+    New-Item -ItemType Directory -Force -Path (Join-Path $supportHeaders 'l2src') | Out-Null
+    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_message_graph_copy')
+    $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
+    foreach ($name in $names) {
+        & $outputL1trans "l2src/$name.h.lm1" (Join-Path $supportHeaders "l2src/$name.lm1.h")
+        if ($LASTEXITCODE -ne 0) { throw "Message header translation failed: $name" }
+        $source = Join-Path $supportDir "$name.c"
+        & $outputL1trans "l2src/$name.lm1" $source
+        if ($LASTEXITCODE -ne 0) { throw "Message translation failed: $name" }
+        $sources += $source
+    }
+    $messageSource = Join-Path $supportDir 'lmx_message.c'
+    & $outputL1trans 'l2src/lmx_message.lm1' $messageSource
+    if ($LASTEXITCODE -ne 0) { throw 'Message translation failed' }
+    $sources += $messageSource
+    $objects = @()
+    foreach ($source in $sources) {
+        $obj = Join-Path $supportDir ([IO.Path]::GetFileNameWithoutExtension($source) + '.o')
+        $previousErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        & gcc @cflags -I $supportHeaders -c $source -o $obj *> "$obj.log"
+        $gccExit = $LASTEXITCODE
+        $ErrorActionPreference = $previousErrorAction
+        if ($gccExit -ne 0) { Get-Content -LiteralPath "$obj.log"; throw "Message compile failed: $source" }
+        $objects += $obj
+    }
+    # Stage 3c-2a: the production runtime includes the L2 runtime units
+    # (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+    . (Join-Path $PSScriptRoot 'l2units_build.ps1')
+    $objects += @(Build-L2RuntimeUnits -L1Trans $outputL1trans -Out (Join-Path $supportDir 'l2units') -IncludeDirs @($supportHeaders) -CFlags ($cflags -join ' '))
+    # One build per invocation and flags/source snapshot; no reuse across runs.
+    $script:l2MessageObjects = $objects
+    return $objects
+}
+
+function New-L2DriveText([string]$text, [string]$driveBody) {
+    $text = $text.Replace("`r`n", "`n")
+    $body = $driveBody.Replace("`r`n", "`n")
+    $tail = "`n    end: l2_program_body`nend: external"
+    $endPos = $text.LastIndexOf($tail)
+    $suffix = ''
+    $faultPrefix = ''
+    if ($endPos -ge 0) {
+        # Drive the graph-owning body, retaining the entry adapter, its turn and
+        # the outer Message lifecycle (stage 5 step (a)).
+        $body = [regex]::Replace($body, '(?m)^    end: main$', '    end: l2_program_body')
+        # Historical test bodies know this generated layout too. Do not ask a
+        # process-global classifier to interpret newly Message-owned cells.
+        $body = [regex]::Replace($body, '\blmx_branch_child\(', 'lmx_branch_child_known(')
+        $body = [regex]::Replace($body, '\blmx_(int|size)_(value|store)\(', 'lmx_$1_$2_known(')
+        $body = [regex]::Replace($body, '\blmx_char_value\(', 'lmx_char_value_known(')
+        $body = [regex]::Replace($body, '\blmx_char_cell\(', 'lmx_char_cell_known(process_chars, ')
+        $body = [regex]::Replace($body, '\blmx_(int|size)_take\(\)', 'lmx_$1_new_owned(@ process_message\blocks, @ process_message\ranges)')
+        if ($body -match '\blm_own_alloc_fails\b') {
+            # The L2 fixture's old fault counter now belongs only to its test
+            # wrapper. The production adapter and L1 reference stay unchanged.
+            $body = [regex]::Replace($body, '\blm_own_alloc_fails\b', 'l2_test_calloc_fails')
+            $faultPrefix = @'
+include: "<stdlib.h>"
+prototype:
+    fn: __real_calloc (size_t: count; size_t: size) @: void
+end: prototype
+int: l2_test_calloc_fails 0
+fn: __wrap_calloc (size_t: count; size_t: size) @: void
+    if: l2_test_calloc_fails != 0
+        l2_test_calloc_fails: l2_test_calloc_fails - 1
+        return: 0
+    return: c.__real_calloc(count, size)
+
+'@
+            $faultPrefix += "`n"
+        }
+        $suffix = $text.Substring($endPos + $tail.Length)
+    } else {
+        $tail = "`n    end: main`nend: external"
+        $endPos = $text.LastIndexOf($tail)
+    }
+    if ($endPos -lt 0) { throw 'Missing generated entry closer' }
+    $pos = $text.LastIndexOf("`n        return:", $endPos)
+    if ($pos -lt 0) { throw 'Missing generated entry return' }
+    return $faultPrefix + $text.Substring(0, $pos + 1) + $body + $suffix
+}
+
+$script:l2ForeignAllocObject = $null
+function Get-L2ForeignAllocObject {
+    if ($null -ne $script:l2ForeignAllocObject) { return $script:l2ForeignAllocObject }
+    $dir = Join-Path $out 'foreign_alloc'
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $csrc = Join-Path $dir 'l2_foreign_alloc.c'
+    $obj = Join-Path $dir 'l2_foreign_alloc.o'
+    & $outputL1trans 'l2src/l2_foreign_alloc.lm1' $csrc
+    if ($LASTEXITCODE -ne 0) { throw 'l2_foreign_alloc translation failed' }
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & gcc @cflags -I lm1/build -c $csrc -o $obj *> "$obj.log"
+    $gccExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorAction
+    if ($gccExit -ne 0) { Get-Content -LiteralPath "$obj.log"; throw 'l2_foreign_alloc compile failed' }
+    # One build per invocation; no reuse across runs.
+    $script:l2ForeignAllocObject = $obj
+    return $obj
+}
+
+function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog, [string[]]$ExtraFlags = @()) {
+    $flags = [System.Collections.Generic.List[string]]::new()
+    foreach ($f in $cflags) { [void]$flags.Add($f) }
+    $src = ""
+    if (Test-Path -LiteralPath $cpath) {
+        $src = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $cpath).ProviderPath)
+    }
+    $wantGen = $src.IndexOf(".lm1.h") -ge 0
+    if ($wantGen) { [void]$flags.Add("-I"); [void]$flags.Add("lm1/build") }
+    $support = @('l2src/lmx_poll_stub.c')
+    if ($src.Contains('"l2src/lmx_message.h"')) {
+        $support = @(Get-L2MessageObjects)
+        [void]$flags.Add('-I'); [void]$flags.Add((Join-Path $out 'message_support/headers'))
+    }
+    # A generated unit declares the profile-installed lm_own_* adapters; link
+    # their implementation unless this C defines them itself (an L1 reference
+    # that imports l1src/own.lm1).
+    if ($src -match '\blm_own_(new_zero|resize|copy_bytes|delete)\s*\(' -and $src -notmatch '\blm_own_new_zero\s*\([^;{)]*\)\s*\{') {
+        $support = @($support) + @(Get-L2ForeignAllocObject)
+    }
+    if ($src.Contains('int l2_test_calloc_fails = 0;')) {
+        [void]$flags.Add('-Wl,--wrap=calloc')
+    }
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & gcc @flags $cpath @support @ExtraFlags -o $exe *> $glog
+    $gccExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorAction
+    if ($gccExit -ne 0) {
+        Get-Content $glog
+        throw "gcc failed: $cpath"
+    }
+}
+
+$l2c = Join-Path $out "l2trans.c"
+$l2exe = Join-Path $out "l2trans.exe"
+& $l1trans "l2src\l2trans.lm1" $l2c
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: l2src\l2trans.lm1" }
+Invoke-Gcc $l2c $l2exe (Join-Path $log "l2trans.gcc.log")
+if ($BuildOnly) { return }
+$null = Get-L2HistoricalCases (Get-Content -LiteralPath $PSCommandPath -Raw)
+
+function Invoke-FmtBuf {
+    $obj = Join-Path $out "l2trans_nomain.o"
+    $src = "l2src\tests\fmt_buf.c"
+    $exe = Join-Path $out "fmt_buf.exe"
+    $clog = Join-Path $log "fmt_buf_l2trans.gcc.log"
+    $tlog = Join-Path $log "fmt_buf.gcc.log"
+    $flags = [System.Collections.Generic.List[string]]::new()
+    foreach ($f in $cflags) { [void]$flags.Add($f) }
+    [void]$flags.Add("-I"); [void]$flags.Add("lm1/build")
+    $flagStr = ($flags -join " ")
+    cmd /c "gcc $flagStr -Dmain=l2trans_main -c `"$l2c`" -o `"$obj`" > `"$clog`" 2>&1"
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $clog
+        throw "gcc failed: l2trans nomain object"
+    }
+    cmd /c "gcc $flagStr `"$src`" `"$obj`" -o `"$exe`" > `"$tlog`" 2>&1"
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $tlog
+        throw "gcc failed: $src"
+    }
+    & $exe
+    if ($LASTEXITCODE -ne 0) { throw "fmt_buf failed" }
+}
+Invoke-FmtBuf
+
+
+function Clear-Case([string]$stem) {
+    foreach ($ext in @(".lm1", ".c", ".exe", ".err", ".stdout")) {
+        $p = Join-Path $out ($stem + $ext)
+        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
+    }
+}
+
+function Invoke-Positive([string]$src, [string]$stem, [int]$expect, [string]$lit) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1))
+    $needle = "return: $lit"
+    if ($text.IndexOf($needle) -lt 0) {
+        throw "generated L1 missing '$needle' in $lm1"
+    }
+    & $outputL1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    $ctext = [System.IO.File]::ReadAllText((Resolve-L2Path $cpath))
+    if ($ctext.IndexOf("return $lit;") -lt 0 -and $ctext.IndexOf("return $lit ;") -lt 0) {
+        if ($ctext -notmatch ("return\s+" + [regex]::Escape($lit) + "\s*;")) {
+            throw "generated C missing return $lit in $cpath"
+        }
+    }
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+    & $exe
+    if ($LASTEXITCODE -ne $expect) {
+        throw "$stem exe exit $($LASTEXITCODE) expected $expect"
+    }
+}
+
+function Invoke-Negative([string]$src, [string]$stem, [string]$needle) {
+    # Planted .lm1/.c/.exe are text markers, not a real executable.
+    # This checks nonzero l2trans, no later stages, destination unchanged.
+    # It does not run or clear a previous real exe.
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    Clear-Case $stem
+    $marker = "OLD-OUTPUT-MUST-NOT-BECOME-SUCCESS`n"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $lm1), $marker)
+    [System.IO.File]::WriteAllText((Resolve-L2Path $cpath), $marker)
+    [System.IO.File]::WriteAllText((Resolve-L2Path $exe), $marker)
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -eq 0) {
+        throw "expected l2trans failure: $src"
+    }
+    $etext = [System.IO.File]::ReadAllText((Resolve-L2Path $err))
+    if ($etext.IndexOf($needle) -lt 0) {
+        throw "missing diagnostic '$needle' in $err : $etext"
+    }
+    $got = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1))
+    if ($got -ne $marker) {
+        throw "negative $stem mutated destination lm1"
+    }
+    if (-not (Test-Path -LiteralPath $cpath)) { throw "negative $stem lost planted c" }
+    $cgot = [System.IO.File]::ReadAllText((Resolve-L2Path $cpath))
+    if ($cgot -ne $marker) { throw "negative $stem mutated planted c" }
+    $egot = [System.IO.File]::ReadAllText((Resolve-L2Path $exe))
+    if ($egot -ne $marker) { throw "negative $stem mutated planted exe marker" }
+}
+
+function Invoke-Puts([string]$src, [string]$stem, [int]$expect, [string]$want) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    $captured = Join-Path $out ($stem + ".stdout")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1))
+    if ($text.IndexOf("c.puts:") -lt 0) {
+        throw "generated L1 missing c.puts in $lm1"
+    }
+    if ($text.IndexOf("include:") -lt 0) {
+        throw "generated L1 missing include in $lm1"
+    }
+    & $outputL1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+    cmd /c "`"$exe`" > `"$captured`" 2> `"$err`""
+    if ($LASTEXITCODE -ne $expect) {
+        throw "$stem exe exit $($LASTEXITCODE) expected $expect"
+    }
+    $got = [System.IO.File]::ReadAllText((Resolve-L2Path $captured))
+    $got = $got -replace "`r`n", "`n"
+    if ($got -ne $want) {
+        throw "$stem stdout mismatch got=[$got] want=[$want]"
+    }
+}
+
+function Invoke-AdmitEmit([string]$src, [string]$stem, [string]$lit) {
+    # Admission + emission only. Do not use OS exit status for large ints.
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1))
+    $needle = "return: $lit"
+    if ($text.IndexOf($needle) -lt 0) {
+        throw "generated L1 missing '$needle' in $lm1"
+    }
+    & $outputL1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    $ctext = [System.IO.File]::ReadAllText((Resolve-L2Path $cpath))
+    if ($ctext -notmatch ("return\s+" + [regex]::Escape($lit) + "\s*;")) {
+        throw "generated C missing return $lit in $cpath"
+    }
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+}
+
+function Invoke-LibraryEmit([string]$src, [string]$stem, [int]$callableChild) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "library l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1))
+    if ($text -notmatch 'define: l2_program_entry l2_u[0-9A-F]{16}_entry') {
+        throw "$stem missing module-unique entry symbol"
+    }
+    if ($text -notmatch 'fn: (l2_u[0-9A-F]{16}_m0)') {
+        throw "$stem missing module-unique method symbol"
+    }
+    if ($text.IndexOf("lmx_branch_struct_known(l2_library_unit, $($callableChild)U)") -lt 0) {
+        throw "$stem wrapper selected wrong callable child"
+    }
+    return $Matches[1]
+}
+
+Invoke-Positive "l2src\tests\entry_return0.lm2" "entry_return0" 0 "0"
+Invoke-Positive "l2src\tests\entry_return7.lm2" "entry_return7" 7 "7"
+Invoke-Positive "l2src\tests\entry_ret_tr.lm2" "entry_ret_tr" 0 "0"
+Invoke-Puts "l2src\tests\entry_ret_tr_puts.lm2" "entry_ret_tr_puts" 0 "MUST PRINT`n"
+Invoke-Puts "l2src\tests\entry_ret_tr_two.lm2" "entry_ret_tr_two" 0 "one`ntwo`n"
+Invoke-Negative "l2src\tests\entry_ret_tr_bad.lm2" "entry_ret_tr_bad" "unsupported"
+
+$lm0 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "entry_return0.lm1")))
+$lm7 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "entry_return7.lm1")))
+if ($lm0 -eq $lm7) { throw "return 0 and return 7 produced identical L1" }
+$c0 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "entry_return0.c")))
+$c7 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "entry_return7.c")))
+if ($c0 -eq $c7) { throw "return 0 and return 7 produced identical C" }
+
+# A by-value float local has no owned domain yet: it is refused by name, in the
+# entry body as in a method (unit_float_local_refused).
+Invoke-Negative "l2src\tests\entry_bad_body.lm2" "entry_bad_body" "by-value float local not yet implemented"
+Invoke-Negative "l2src\tests\unit_float_local_refused.lm2" "unit_float_local_refused" "by-value float local not yet implemented"
+Invoke-Negative "l2src\tests\entry_bad_sig.lm2" "entry_bad_sig" "incompatible entry signature"
+Invoke-Negative "l2src\tests\entry_two_main.lm2" "entry_two_main" "several main"
+Invoke-Negative "l2src\tests\entry_array_leading_zero.lm2" "entry_array_leading_zero" "unsupported index"
+Invoke-Negative "l2src\tests\library_extra.lm2" "library_extra" "unsupported body"
+$libSymA = Invoke-LibraryEmit "l2src\tests\library_unit_field.lm2" "library_unit_field" 1
+$libSymB = Invoke-LibraryEmit "l2src\tests\library_second.lm2" "library_second" 0
+if ($libSymA -eq $libSymB) { throw "separate L2 libraries emitted colliding private method symbols" }
+$null = Invoke-LibraryEmit "l2src\tests\library_include_typedef.lm2" "library_include_typedef" 0
+$typedefL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "library_include_typedef.lm1")))
+if ($typedefL1.IndexOf("@: L2TestByte") -lt 0) { throw "included simple typedef pointer was not preserved" }
+# The same lookup one level down: the C header is included by a predef'd
+# .h.lm1, not by the unit -- which is how every manager module reaches its
+# aggregate handle types. Both declaration shapes must survive: a forward
+# typedef of an incomplete struct, and a full body containing a function
+# pointer, whose parentheses sit inside braces.
+$null = Invoke-LibraryEmit "l2src\tests\library_include_typedef_transitive.lm2" "library_include_typedef_transitive" 0
+$transL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "library_include_typedef_transitive.lm1")))
+if ($transL1.IndexOf("@: L2TestOpaque") -lt 0) { throw "forward-declared typedef reached through a predef header was not preserved" }
+if ($transL1.IndexOf("@: L2TestRecord") -lt 0) { throw "typedef struct with a function-pointer body reached through a predef header was not preserved" }
+# Two levels down: the predef'd .h.lm1 includes a C header that declares one
+# handle and #includes a second C header declaring another, and the two C
+# headers include each other under guards. The walk must reach the inner
+# typedef and must terminate on the cycle.
+$null = Invoke-LibraryEmit "l2src\tests\library_include_typedef_nested.lm2" "library_include_typedef_nested" 0
+$nestedL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "library_include_typedef_nested.lm1")))
+if ($nestedL1.IndexOf("@: L2TestOuter") -lt 0) { throw "typedef in the header a predef header includes was not preserved" }
+if ($nestedL1.IndexOf("@: L2TestInner") -lt 0) { throw "typedef reached through a C #include inside a C header was not preserved" }
+# The same two levels for an ordinary C function declaration: the unit calls
+# one function declared in the header its predef'd .h.lm1 includes, and one
+# declared only behind that header's own #include -- how pump reaches
+# mixa_event_fifo_init. The two headers include each other under guards.
+$null = Invoke-LibraryEmit "l2src\tests\library_include_fn_nested.lm2" "library_include_fn_nested" 0
+$fnNestedL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "library_include_fn_nested.lm1")))
+if ($fnNestedL1.IndexOf("l2_test_outer_fn(") -lt 0) { throw "call to a function declared in the header a predef header includes was not emitted" }
+if ($fnNestedL1.IndexOf("l2_test_inner_fn(") -lt 0) { throw "call to a function declared behind a C #include inside a C header was not emitted" }
+# A function-pointer local assigned in its own statement, then called inside an
+# expression. The P0 COMPACT flag separates the call from the assignment.
+$null = Invoke-LibraryEmit "l2src\tests\library_fnptr_local_forms.lm2" "library_fnptr_local_forms" 0
+$fnptrL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "library_fnptr_local_forms.lm1")))
+if ($fnptrL1.IndexOf("f: l2_p0_0\alloc") -lt 0) { throw "fnptr local assignment was not emitted as an assignment" }
+if ($fnptrL1.IndexOf("f(l2_p0_0\alloc)") -ge 0) { throw "fnptr local assignment was emitted as a call through the unset pointer" }
+if ($fnptrL1.IndexOf("return: f(l2_p0_1)") -lt 0) { throw "call through a fnptr local inside an expression was not emitted" }
+# A library formal typed @@: LmxMsgCopy (type 31) reaches the public signature.
+$null = Invoke-LibraryEmit "l2src\tests\library_msgcopy_pp_formal.lm2" "library_msgcopy_pp_formal" 0
+$ppL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "library_msgcopy_pp_formal.lm1")))
+if ($ppL1.IndexOf("fn: fx_pp (@@: LmxMsgCopy head) int") -lt 0) { throw "public signature did not spell the @@: LmxMsgCopy formal" }
+# c.sizeof(@: void) is a pointer size. Its predef header includes lmx.h, whose
+# `sizeof(` text must not make it a C function, and the `void` inside is a type,
+# not a free name. The C must say sizeof(void *), never sizeof(void).
+$null = Invoke-LibraryEmit "l2src\tests\library_sizeof_ptr_forms.lm2" "library_sizeof_ptr_forms" 0
+$szL1Path = Join-Path $out "library_sizeof_ptr_forms.lm1"
+$szL1 = [System.IO.File]::ReadAllText((Resolve-L2Path $szL1Path))
+if ($szL1.IndexOf("l2_q0: l2_p0_0 * c.sizeof(@: void)") -lt 0) { throw "c.sizeof(@: void) in an assignment was not emitted" }
+if ($szL1.IndexOf("c.malloc(l2_p1_0 * c.sizeof(@: void))") -lt 0) { throw "c.sizeof(@: void) inside a call argument was not emitted" }
+$szC = Join-Path $out "library_sizeof_ptr_forms.c"
+& $outputL1trans $szL1Path $szC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $szL1Path" }
+$szCText = [System.IO.File]::ReadAllText((Resolve-L2Path $szC))
+if ([regex]::Matches($szCText, [regex]::Escape("sizeof(void *)")).Count -ne 2) { throw "c.sizeof(@: void) did not lower to sizeof(void *) twice" }
+if ($szCText.IndexOf("sizeof(void)") -ge 0) { throw "c.sizeof(@: void) lowered to sizeof(void)" }
+# A by-value local of a struct the predef'd header declares, and its address: the
+# local is ordinary C storage in the activation, not an own field.
+$null = Invoke-LibraryEmit "l2src\tests\library_struct_local_forms.lm2" "library_struct_local_forms" 0
+$stL1Path = Join-Path $out "library_struct_local_forms.lm1"
+$stL1 = [System.IO.File]::ReadAllText((Resolve-L2Path $stL1Path))
+if ($stL1.IndexOf("L2TestPair: storage") -lt 0) { throw "by-value header struct local was not declared" }
+if ($stL1.IndexOf("p: @ storage") -lt 0) { throw "address of a by-value struct local was not emitted" }
+$stHeader = "lm1\build\l2src\tests\struct_local_forms.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $stHeader) | Out-Null
+& $outputL1trans "l2src\tests\struct_local_forms.h.lm1" $stHeader
+if ($LASTEXITCODE -ne 0) { throw "struct_local_forms header translation failed" }
+$stC = Join-Path $out "library_struct_local_forms.c"
+& $outputL1trans $stL1Path $stC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $stL1Path" }
+$stCText = [System.IO.File]::ReadAllText((Resolve-L2Path $stC))
+if ($stCText.IndexOf("L2TestPair storage;") -lt 0) { throw "by-value struct local did not lower to a C local" }
+if ($stCText.IndexOf("p = & storage;") -lt 0) { throw "address of the struct local did not lower to &storage" }
+# A failed library open is reported on every call and follows the abort policy:
+# the checkpoint diagnostic route, never a silent zero. The driver makes
+# lmx_msg_runtime_new fail twice and chooses the policy by its argument.
+$null = Invoke-LibraryEmit "l2src\tests\library_open_failure.lm2" "library_open_failure" 0
+$ofL1 = Join-Path $out "library_open_failure.lm1"
+$ofC = Join-Path $out "library_open_failure.c"
+& $outputL1trans $ofL1 $ofC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $ofL1" }
+$ofDrv = Join-Path $out "library_open_failure_driver.c"
+& $outputL1trans "l2src\tests\library_open_failure_driver.lm1" $ofDrv
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: library_open_failure_driver.lm1" }
+$ofExe = Join-Path $out "library_open_failure.exe"
+Invoke-Gcc $ofC $ofExe (Join-Path $log "library_open_failure.gcc.log") @($ofDrv, "-Wl,--wrap=lmx_msg_runtime_new", "-Wl,--wrap=lmx_msg_poll_abort")
+foreach ($ofMode in 'n', 'a') {
+    $ofOut = Join-Path $out "library_open_failure.$ofMode.stdout"
+    $ofErr = Join-Path $out "library_open_failure.$ofMode.stderr"
+    cmd /c "`"$ofExe`" $ofMode > `"$ofOut`" 2> `"$ofErr`""
+    $ofCode = $LASTEXITCODE
+    $ofStdout = [System.IO.File]::ReadAllText((Resolve-L2Path $ofOut)).Replace("`r`n", "`n")
+    $ofReports = [regex]::Matches([System.IO.File]::ReadAllText((Resolve-L2Path $ofErr)), 'lmx: library open failed: l2_u[0-9A-F]{16} lof_status').Count
+    if ($ofMode -eq 'n' -and ($ofCode -ne 0 -or $ofStdout -ne "r1=0 r2=0`nr3=7`n" -or $ofReports -ne 2)) { throw "open failure without abort: exit $ofCode, stdout '$ofStdout', reports $ofReports (want 0, r1=0 r2=0 / r3=7, 2)" }
+    if ($ofMode -eq 'a' -and ($ofCode -eq 0 -or $ofStdout.IndexOf("r1=") -ge 0 -or $ofReports -ne 1)) { throw "open failure with abort: exit $ofCode, stdout '$ofStdout', reports $ofReports (want nonzero, no r1, 1)" }
+}
+
+function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    $captured = Join-Path $out ($stem + ".stdout")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1))
+    Assert-L2NoLegacyCatalog $text "$stem L1"
+    foreach ($n in $needles) {
+        if ($text.IndexOf($n) -lt 0) { throw "$stem L1 missing '$n'" }
+    }
+    & $outputL1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    Assert-L2NoLegacyCatalog (Get-Content -LiteralPath $cpath -Raw) "$stem C" -GeneratedC
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+    cmd /c "`"$exe`" > `"$captured`" 2> `"$(Join-Path $out ($stem + '.run.err'))`""
+    if ($LASTEXITCODE -ne $expect) {
+        throw "$stem exe exit $($LASTEXITCODE) expected $expect"
+    }
+    if ($null -ne $wantOut) {
+        $got = [System.IO.File]::ReadAllText((Resolve-L2Path $captured)).Replace("`r`n", "`n")
+        if ($got -ne $wantOut) { throw "$stem stdout '$got' expected '$wantOut'" }
+    }
+}
+
+Invoke-Entry "l2src\tests\entry_argc.lm2" "entry_argc" 0 @("fn: main (int: count; @@: char values) int", "return: 0") $null
+$argcGcc = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $log "entry_argc.gcc.log")))
+if ($argcGcc -match '\[-Wmain\]' -or $argcGcc -match "takes only zero or two arguments") {
+    throw "entry_argc gcc -Wmain; hosted C main must be () or (int, char **)"
+}
+$argcC = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "entry_argc.c")))
+if ($argcC.IndexOf("int main(int count, char ** values)") -lt 0 -and $argcC.IndexOf("int main(int count, char **values)") -lt 0) {
+    throw "entry_argc C missing hosted main(int count, char **values)"
+}
+Invoke-Negative "l2src\tests\entry_int_formal.lm2" "entry_int_formal" "incompatible entry signature"
+Invoke-Negative "l2src\tests\entry_nine.lm2" "entry_nine" "incompatible entry signature"
+Invoke-Negative "l2src\tests\entry_argc_dup.lm2" "entry_argc_dup" "duplicate formal"
+Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "incompatible entry signature"
+Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: count; @@: char values) int", "if:") $null
+# Own-array count written as a define: name -- one from a predef'd header, one from
+# the unit. Both extents must reach the constructor as the resolved literal, and
+# the last valid index of each must run; one past the header's extent is refused.
+$ownCountHeader = "lm1\build\l2src\tests\own_array_count_define.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ownCountHeader) | Out-Null
+& $outputL1trans "l2src\tests\own_array_count_define.h.lm1" $ownCountHeader
+if ($LASTEXITCODE -ne 0) { throw "own_array_count_define header translation failed" }
+Invoke-Entry "l2src\tests\entry_own_array_define.lm2" "entry_own_array_define" 0 @("LMX_TYPE_ARRAY_OF_CHAR, 8U", "LMX_TYPE_ARRAY_OF_CHAR, 4U") $null
+Invoke-Negative "l2src\tests\own_array_define_oob.lm2" "own_array_define_oob" "own array index requires an in-bounds primitive literal"
+Invoke-Entry "l2src\tests\entry_fputs.lm2" "entry_fputs" 0 @("c.fputs(") "hi`n"
+Invoke-Entry "l2src\tests\entry_setvbuf.lm2" "entry_setvbuf" 0 @("c.setvbuf(c.stdout, 0, c._IONBF, 0)") $null
+$svbL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "entry_setvbuf.lm1")))
+if ($svbL1 -match 'int: l2_t\d+') { throw "entry_setvbuf boxed numeric 0 as int temp" }
+Invoke-Entry "l2src\tests\entry_os.lm2" "entry_os" 0 @("os:", "fn: l2_m0 (@: Lmx node) @: char", "return: `"win32`"", "return: `"pthread`"", "l2_m0(lmx_branch_struct_known(unit, 0U))", "end: os") $null
+Invoke-Negative "l2src\tests\entry_os_params.lm2" "entry_os_params" "incompatible entry signature"
+Invoke-Negative "l2src\tests\entry_os_ret.lm2" "entry_os_ret" "incompatible entry signature"
+Invoke-Negative "l2src\tests\entry_os_body.lm2" "entry_os_body" "unsupported body"
+Invoke-Negative "l2src\tests\entry_os_ret2.lm2" "entry_os_ret2" "unsupported argument"
+Invoke-Negative "l2src\tests\entry_os_mismatch.lm2" "entry_os_mismatch" "incompatible os branches"
+Invoke-Entry "l2src\tests\entry_array.lm2" "entry_array" 0 @("c.array: []: char command 32", "command[0]: 0") $null
+Invoke-Entry "l2src\tests\entry_strcmp.lm2" "entry_strcmp" 1 @("strcmp(argv[1], `"ok`")") $null
+$cmpExe = (Resolve-Path (Join-Path $out "entry_strcmp.exe")).Path
+$okOut = Join-Path $out "entry_strcmp.ok.out"
+$okErr = Join-Path $out "entry_strcmp.ok.err"
+$noOut = Join-Path $out "entry_strcmp.no.out"
+$noErr = Join-Path $out "entry_strcmp.no.err"
+New-Item -ItemType File -Path $okOut,$okErr,$noOut,$noErr -Force | Out-Null
+$p = Start-Process -FilePath $cmpExe -ArgumentList "ok" -WorkingDirectory (Get-Location) -RedirectStandardOutput $okOut -RedirectStandardError $okErr -Wait -PassThru -NoNewWindow
+if ($p.ExitCode -ne 0) { throw "entry_strcmp ok should exit 0" }
+$p = Start-Process -FilePath $cmpExe -ArgumentList "no" -WorkingDirectory (Get-Location) -RedirectStandardOutput $noOut -RedirectStandardError $noErr -Wait -PassThru -NoNewWindow
+if ($p.ExitCode -eq 0) { throw "entry_strcmp no should exit 1" }
+Invoke-Entry "l2src\tests\entry_nul.lm2" "entry_nul" 0 @('command[0]: ''\0''') $null
+Invoke-Entry "l2src\tests\entry_immut.lm2" "entry_immut" 0 @("immutable:", "@: char usage") "usage: printTree <source>`n"
+Invoke-Entry "l2src\tests\entry_predef.lm2" "entry_predef" 0 @("predef: `"l1src/parser.lm1`"", "include: `"<stdio.h>`"") $null
+Invoke-Entry "l2src\tests\entry_local_types.lm2" "entry_local_types" 0 @("char: ch", "size_t: n", "int: i") $null
+$locL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "entry_local_types.lm1")))
+if ($locL1 -match '(?m)^\s*int: ch\b') { throw "entry_local_types mistranslated char as int" }
+if ($locL1 -match '(?m)^\s*int: n\b') { throw "entry_local_types mistranslated size_t as int" }
+Invoke-Entry "l2src\tests\entry_parse_min.lm2" "entry_parse_min" 1 @("predef: `"l1src/parser.lm1`"", "@: LmP0Document document 0", "int: status", "status: lm_p0_parse_file(values[1], @ document)", "if: document = 0") $null
+$pminExe = Join-Path $out "entry_parse_min.exe"
+$pminSrc = Join-Path $out "entry_parse_min_input.lm1"
+[System.IO.File]::WriteAllText((Resolve-L2Path $pminSrc), "fn: main () int`n    return: 0`nend: main`n")
+cmd /c "`"$pminExe`" `"$pminSrc`" > `"$(Join-Path $out 'entry_parse_min.run.out')`" 2> `"$(Join-Path $out 'entry_parse_min.run.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'entry_parse_min.run.err') -ErrorAction SilentlyContinue; throw "entry_parse_min parse success exit $LASTEXITCODE" }
+cmd /c "`"$pminExe`" `"$(Join-Path $out 'entry_parse_min_missing.lm1')`" > `"$(Join-Path $out 'entry_parse_min.neg.out')`" 2> `"$(Join-Path $out 'entry_parse_min.neg.err')`""
+if ($LASTEXITCODE -eq 0) { throw "entry_parse_min missing input should fail parse" }
+Invoke-Entry "l2src\tests\entry_index.lm2" "entry_index" 1 @("values[1]", "c.fputs(values[1], c.stdout)") $null
+$idxExe = Join-Path $out "entry_index.exe"
+$idxOut = Join-Path $out "entry_index.arg.stdout"
+cmd /c "`"$idxExe`" hello > `"$idxOut`" 2> `"$(Join-Path $out 'entry_index.arg.err')`""
+if ($LASTEXITCODE -ne 0) { throw "entry_index hello exit $LASTEXITCODE" }
+$idxGot = [System.IO.File]::ReadAllText((Resolve-L2Path $idxOut)).Replace("`r`n", "`n")
+if ($idxGot -ne "hello") { throw "entry_index hello stdout '$idxGot'" }
+Invoke-Entry "l2src\printTree.lm2" "printTree" 0 @("immutable:", "@: char usage", "c.setvbuf(c.stdout, 0, c._IONBF, 0)", "lm_p0_dump_alloc") "usage: printTree <source>`n"
+$ptL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "printTree.lm1")))
+if ($ptL1.IndexOf("diagnostic" + [char]92 + "code") -lt 0) { throw "printTree L1 missing diagnostic\code field" }
+$ptExe = Join-Path $out "printTree.exe"
+$ptSrc = Join-Path $out "printTree_input.lm1"
+$ptOut = Join-Path $out "printTree.dump.stdout"
+[System.IO.File]::WriteAllText((Resolve-L2Path $ptSrc), "fn: main () int`n    return: 0`nend: main`n")
+cmd /c "`"$ptExe`" `"$ptSrc`" > `"$ptOut`" 2> `"$(Join-Path $out 'printTree.dump.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'printTree.dump.err') -ErrorAction SilentlyContinue; throw "printTree dump exit $LASTEXITCODE" }
+$ptGot = [System.IO.File]::ReadAllText((Resolve-L2Path $ptOut))
+if ($ptGot.IndexOf("main") -lt 0) { throw "printTree dump missing main" }
+
+function Invoke-PrintTreeParity {
+    $par = Join-Path $out "pt_parity"
+    New-Item -ItemType Directory -Force -Path $par | Out-Null
+    $refC = Join-Path $par "printTree_ref.c"
+    $refExe = Join-Path $par "printTree_ref.exe"
+    $refLog = Join-Path $log "printTree_ref.gcc.log"
+    & $outputL1trans "l1src\printTree.lm1" $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: l1src\printTree.lm1 (reference, frozen compiler)" }
+    Invoke-Gcc $refC $refExe $refLog
+    $l2Exe = Join-Path $out "printTree.exe"
+    if (-not (Test-Path -LiteralPath $l2Exe)) { throw "missing L2 printTree.exe" }
+    $valid = Join-Path $par "valid.lm1"
+    $bad = Join-Path $par "bad.lm1"
+    $validLf = "fn: add (int: a; int: b) int`n    return: a + b`nend: add`nfn: main () int`n    return: add(1, 2)`nend: main`n"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $valid), $validLf)
+    [System.IO.File]::WriteAllText((Resolve-L2Path $bad), "fn: main () int`n    return:`n")
+    $missing = Join-Path $par "missing_no_such.lm1"
+    if (Test-Path -LiteralPath $missing) { Remove-Item -LiteralPath $missing -Force }
+    function Invoke-One([string]$exe, [string]$stem, [string[]]$argList) {
+        $so = Join-Path $par ($stem + ".stdout")
+        $se = Join-Path $par ($stem + ".stderr")
+        if (Test-Path -LiteralPath $so) { Remove-Item -LiteralPath $so -Force }
+        if (Test-Path -LiteralPath $se) { Remove-Item -LiteralPath $se -Force }
+        New-Item -ItemType File -Path $so -Force | Out-Null
+        New-Item -ItemType File -Path $se -Force | Out-Null
+        $absExe = (Resolve-Path -LiteralPath $exe).Path
+        if ($null -eq $argList -or $argList.Count -eq 0) {
+            $p = Start-Process -FilePath $absExe -WorkingDirectory (Get-Location) -RedirectStandardOutput $so -RedirectStandardError $se -Wait -PassThru -NoNewWindow
+        } else {
+            $p = Start-Process -FilePath $absExe -ArgumentList $argList -WorkingDirectory (Get-Location) -RedirectStandardOutput $so -RedirectStandardError $se -Wait -PassThru -NoNewWindow
+        }
+        $ex = $p.ExitCode
+        $outT = [System.IO.File]::ReadAllText((Resolve-L2Path $so))
+        $errT = [System.IO.File]::ReadAllText((Resolve-L2Path $se))
+        return @{ Exit = $ex; Out = $outT.Replace("`r`n", "`n"); Err = $errT.Replace("`r`n", "`n") }
+    }
+    function Assert-Parity([string]$name, $ref, $l2) {
+        $ev = Join-Path $par ($name + ".compare.txt")
+        $msg = "case=$name ref_exit=$($ref.Exit) l2_exit=$($l2.Exit)`n"
+        [System.IO.File]::WriteAllText((Resolve-L2Path $ev), $msg)
+        if ($ref.Exit -ne $l2.Exit) { throw "printTree parity $name exit ref=$($ref.Exit) l2=$($l2.Exit)" }
+        if ([string]::Compare($ref.Out, $l2.Out, [StringComparison]::Ordinal) -ne 0) { throw "printTree parity $name stdout mismatch" }
+        if ([string]::Compare($ref.Err, $l2.Err, [StringComparison]::Ordinal) -ne 0) { throw "printTree parity $name stderr mismatch" }
+    }
+    $naL2 = Invoke-One $l2Exe "l2_noargs" @()
+    Assert-Parity "noargs" (Invoke-One $refExe "ref_noargs" @()) $naL2
+    if ($naL2.Out.IndexOf("usage:") -lt 0) { throw "printTree noargs missing usage" }
+    $vL2 = Invoke-One $l2Exe "l2_valid" @((Resolve-L2Path $valid))
+    Assert-Parity "valid" (Invoke-One $refExe "ref_valid" @((Resolve-L2Path $valid))) $vL2
+    if ($vL2.Out.IndexOf("add") -lt 0 -or $vL2.Out.IndexOf("main") -lt 0) { throw "printTree valid dump too small" }
+    $bL2 = Invoke-One $l2Exe "l2_bad" @((Resolve-L2Path $bad))
+    Assert-Parity "malformed" (Invoke-One $refExe "ref_bad" @((Resolve-L2Path $bad))) $bL2
+    if ($bL2.Exit -eq 0) { throw "printTree malformed should fail" }
+    $mL2 = Invoke-One $l2Exe "l2_missing" @((Resolve-L2Path $missing))
+    Assert-Parity "missing" (Invoke-One $refExe "ref_missing" @((Resolve-L2Path $missing))) $mL2
+    if ($mL2.Exit -eq 0) { throw "printTree missing file should fail" }
+    $validCr = Join-Path $par "valid_crlf.lm1"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $validCr), $validLf.Replace("`n", "`r`n"))
+    $crL2 = Invoke-One $l2Exe "l2_valid_crlf" @((Resolve-L2Path $validCr))
+    Assert-Parity "valid_crlf" (Invoke-One $refExe "ref_valid_crlf" @((Resolve-L2Path $validCr))) $crL2
+    $sum = Join-Path $par "SUMMARY.txt"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $sum), "printTree parity ok: noargs valid malformed missing valid_crlf (ordinal; CRLF->LF only)`n")
+}
+Invoke-PrintTreeParity
+Invoke-Negative "l2src\tests\entry_overflow.lm2" "entry_overflow" "return literal not representable as int"
+Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
+Invoke-AdmitEmit "l2src\tests\entry_hex.lm2" "entry_hex" "0x2AU"
+
+Invoke-Puts "l2src\tests\entry_puts_hello.lm2" "entry_puts_hello" 0 "Hello`n"
+Invoke-Puts "l2src\tests\entry_puts_triple.lm2" "entry_puts_triple" 0 ('a"""b' + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_single.lm2" "entry_puts_triple_single" 0 ("a'''b" + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_runs.lm2" "entry_puts_triple_runs" 0 ('a"b""c"""d' + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_lead.lm2" "entry_puts_triple_lead" 0 ('"hello' + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_seven.lm2" "entry_puts_triple_seven" 0 ('"""x' + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_lead_sq.lm2" "entry_puts_triple_lead_sq" 0 ("'hello" + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_seven_sq.lm2" "entry_puts_triple_seven_sq" 0 ("'''x" + "`n")
+$longXs = "x" * 100
+Invoke-Puts "l2src\tests\entry_puts_triple_long.lm2" "entry_puts_triple_long" 0 ($longXs + "`n")
+$longLm1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "entry_puts_triple_long.lm1")))
+if ($longLm1.IndexOf($longXs) -lt 0) { throw "triple_long L1 truncated: missing 100 x payload" }
+Invoke-Negative "l2src\tests\entry_puts_triple_fence4.lm2" "entry_puts_triple_fence4" "unterminated python-like string"
+Invoke-Puts "l2src\tests\entry_puts_seq.lm2" "entry_puts_seq" 0 "one`ntwo`n"
+Invoke-Puts "l2src\tests\entry_puts_empty.lm2" "entry_puts_empty" 0 "`n"
+Invoke-Puts "l2src\tests\entry_puts_esc.lm2" "entry_puts_esc" 0 "a`"b\c`n"
+Invoke-Puts "l2src\tests\entry_puts_nl.lm2" "entry_puts_nl" 0 "x`ny`n"
+Invoke-Negative "l2src\tests\entry_puts_bad_arg.lm2" "entry_puts_bad_arg" "unsupported argument"
+Invoke-Negative "l2src\tests\entry_puts_extra_arg.lm2" "entry_puts_extra_arg" "extra argument"
+Invoke-Negative "l2src\tests\entry_puts_after_return.lm2" "entry_puts_after_return" "unsupported body"
+Invoke-Negative "l2src\tests\entry_puts_nested.lm2" "entry_puts_nested" "unsupported argument"
+
+function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1))
+    if ($text -notmatch 'fn: l2_m\d+') { throw "$stem L1 missing mangled method symbol" }
+    if ($text.IndexOf("@: Lmx") -lt 0) { throw "$stem L1 missing Lmx node" }
+    if ($text.IndexOf("LmxMethod") -lt 0) { throw "$stem L1 missing method record" }
+    if ($text -notmatch 'fn: l2_program_entry') { throw "$stem L1 missing Message-owned entry" }
+    if ($text -notmatch 'lmx_node_new_owned\(' -or $text -notmatch 'lmx_method_new_owned\(') { throw "$stem L1 missing owner-local typed construction" }
+    Assert-L2NoLegacyCatalog $text "$stem L1"
+    if ($text -notmatch 'fn: l2_m\d+ \(@: Lmx node' -and $text -notmatch 'l2_m\d+\((leaf|unit|node)') {
+        throw "$stem L1 missing typed entry"
+    }
+    & $outputL1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    $ctext = [System.IO.File]::ReadAllText((Resolve-L2Path $cpath))
+    if ($ctext.IndexOf("Lmx *node") -lt 0 -and $ctext.IndexOf("Lmx* node") -lt 0) {
+        if ($ctext -notmatch "Lmx\s*\*\s*node") { throw "$stem C missing node parameter" }
+    }
+    Assert-L2NoLegacyCatalog $ctext "$stem C" -GeneratedC
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+    & $exe
+    if ($LASTEXITCODE -ne $expect) {
+        throw "$stem exe exit $($LASTEXITCODE) expected $expect"
+    }
+}
+
+function Invoke-RecursiveCompile([string]$src, [string]$stem) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans rejected supported recursion: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1))
+    if ($text -notmatch 'fn: l2_m\d+') { throw "$stem L1 missing recursive method" }
+    & $outputL1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed recursive source: $lm1" }
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+}
+
+function Invoke-CompileObject([string]$src, [string]$stem) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $obj = Join-Path $out ($stem + ".o")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) { Get-Content $err; throw "l2trans failed: $src" }
+    & $outputL1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    $csrc = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $cpath).ProviderPath)
+    $flags = @() + $cflags + @("-I", "lm1/build")
+    if ($csrc.Contains('"l2src/lmx_message.h"')) {
+        $null = Get-L2MessageObjects
+        $flags += @("-I", (Join-Path $out "message_support/headers"))
+    }
+    $glog = Join-Path $log "$stem.gcc.log"
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & gcc @flags -c $cpath -o $obj *> $glog
+    $gccExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorAction
+    if ($gccExit -ne 0) { Get-Content $glog; throw "gcc failed: $cpath" }
+    return [IO.File]::ReadAllText((Resolve-L2Path $lm1))
+}
+
+function Get-L2Call([string]$text, [int]$mi, [string[]]$vals) {
+    $m = [regex]::Match($text, "fn: l2_m$mi \(@: Lmx node([^)]*)\)")
+    if (-not $m.Success) { throw "missing prototype l2_m$mi" }
+    $rest = $m.Groups[1].Value
+    $n = @($rest.Split(';') | Where-Object { $_.Trim().Length -gt 0 }).Count
+    $args = @("lmx_branch_struct_known(unit, $($mi)U)")
+    $i = 0
+    while ($i -lt $n) {
+        if ($i -lt $vals.Count) { $args += $vals[$i] } else { $args += "0" }
+        $i++
+    }
+    return "l2_m$mi(" + ($args -join ", ") + ")"
+}
+
+function Invoke-SpliceDrive([string]$stem, [string]$driveBody) {
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    $drvLm1 = Join-Path $out ($stem + "_drive.lm1")
+    $drvC = Join-Path $out ($stem + "_drive.c")
+    $drvExe = Join-Path $out ($stem + "_drive.exe")
+    $drvOut = Join-Path $out ($stem + "_drive.stdout")
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $driveBody))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed $stem drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "$stem.drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out ($stem + '_drive.err'))`""
+    if ($LASTEXITCODE -ne 0) { throw "$stem drive exe failed" }
+    return [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n", "`n")
+}
+
+Invoke-Leaf "l2src\tests\add.lm2" "add" 0 "add"
+Invoke-Leaf "l2src\tests\unit_nine_formals.lm2" "unit_nine_formals" 0 "add9"
+$nineL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_nine_formals.lm1")))
+if ($nineL1 -notmatch 'fn: l2_m0 \(@: Lmx node; int: l2_p0_0; int: l2_p0_1; int: l2_p0_2; int: l2_p0_3; int: l2_p0_4; int: l2_p0_5; int: l2_p0_6; int: l2_p0_7; int: l2_p0_8\)') {
+    throw "unit_nine_formals L1 missing 9 int formals"
+}
+if ($nineL1 -notmatch 'l2_m0\((?:(?:unit|leaf|node)|lmx_branch_struct_known\(unit, 0U\)), 1, 1, 1, 1, 1, 1, 1, 1, 1\)') {
+    throw "unit_nine_formals L1 missing source nine-actual call"
+}
+$n9 = Invoke-SpliceDrive "unit_nine_formals" @"
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 1, 1, 1, 1, 1, 1, 1, 1, 1))
+        return: 0
+    end: main
+end: external
+"@
+if ($n9 -ne "9`n") { throw "unit_nine_formals sum: $n9" }
+Invoke-Leaf "l2src\tests\unit_ptr_pass.lm2" "unit_ptr_pass" 0 "inner"
+$ptrL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_ptr_pass.lm1")))
+if ($ptrL1.IndexOf("@@: char l2_p0_0") -lt 0) { throw "unit_ptr_pass L1 missing @@: char formal" }
+if ($ptrL1.IndexOf("const: @(char l2_p1_0)") -lt 0) { throw "unit_ptr_pass L1 missing const char* formal" }
+if ($ptrL1.IndexOf("@: void l2_p2_0") -lt 0) { throw "unit_ptr_pass L1 missing @: void stream formal" }
+if ($ptrL1 -match 'int: l2_t\d+\s*\n\s*l2_t\d+: l2_p1_0') { throw "unit_ptr_pass boxed const char* formal as int temp" }
+if ($ptrL1 -match 'int: l2_t\d+\s*\n\s*l2_t\d+: l2_p2_0') { throw "unit_ptr_pass boxed void* stream formal as int temp" }
+if ($ptrL1.IndexOf('c.printf("%s\n", l2_p1_0)') -lt 0) { throw "unit_ptr_pass L1 missing typed c.printf of const char* formal" }
+if ($ptrL1.IndexOf('c.fputs("ok\n", l2_p2_0)') -lt 0) { throw "unit_ptr_pass L1 missing typed c.fputs of stream formal" }
+if ($ptrL1 -notmatch 'l2_m0\((?:(?:leaf|unit|node)|lmx_branch_struct_known\(node\\node, 0U\)), l2_p3_0\)') { throw "unit_ptr_pass L1 missing @@: char roundtrip actual" }
+$pp = Invoke-SpliceDrive "unit_ptr_pass" @"
+        l2_m1(lmx_branch_struct_known(unit, 1U), "hi")
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), c.stdout))
+        return: 0
+    end: main
+end: external
+"@
+if ($pp -ne "hi`nok`n0`n") { throw "unit_ptr_pass stream/printf: $pp" }
+Invoke-Entry "l2src\tests\unit_charpp_return.lm2" "unit_charpp_return" 0 @(") @@: char", "@@: char l2_t") $null
+Invoke-Entry "l2src\tests\unit_const_char_return.lm2" "unit_const_char_return" 0 @(") const: @(char)", "const: @(char l2_t") $null
+$foreignHeader = "lm1\build\l2src\tests\unit_foreign_type.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $foreignHeader) | Out-Null
+& $outputL1trans "l2src\tests\unit_foreign_type.h.lm1" $foreignHeader
+if ($LASTEXITCODE -ne 0) { throw "unit_foreign_type header translation failed" }
+Invoke-Entry "l2src\tests\unit_foreign_type.lm2" "unit_foreign_type" 0 @("@: L2ForeignPair", "const: @(L2ForeignPair") $null
+Invoke-Leaf "l2src\tests\entry_sum.lm2" "entry_sum" 0 "sum"
+Invoke-Leaf "l2src\tests\entry_add_ret.lm2" "entry_add_ret" 5 "add"
+Invoke-Leaf "l2src\tests\entry_plus.lm2" "entry_plus" 0 "plus"
+Invoke-Leaf "l2src\tests\entry_swap_formals.lm2" "entry_swap_formals" 0 "add"
+
+# Intern algorithm is l2_intern_prove in l2trans.lm1 (translation fails if intern lies).
+# This harness only checks that the intern table was emitted; it is not the equality proof.
+function Get-LeafContract([string]$stem) {
+    $t = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out ($stem + ".lm1"))))
+    if ($t.IndexOf("Runtime: no memcmp") -lt 0) { throw "$stem missing honest runtime no-memcmp" }
+    if ($t.IndexOf("id 1 :=") -lt 0) { throw "$stem missing intern mapping id 1 :=" }
+    if ($t.IndexOf("Closed-unit devirtualization") -lt 0 -and $t.IndexOf("Closed-singleton devirtualization") -lt 0) {
+        throw "$stem missing devirtualization proof comment"
+    }
+    $f0 = $null; $f1 = $null
+    if ($t -match 'l2_sig_f0\) "([^"]*)"') { $f0 = $Matches[1] }
+    if ($t -match 'l2_sig_f1\) "([^"]*)"') { $f1 = $Matches[1] }
+    if (-not $f0 -or -not $f1) { throw "$stem missing interned formal-name mapping" }
+    if ($t -notmatch 'l2_intern_id (\d+)U') { throw "$stem missing l2_intern_id" }
+    $id = [int]$Matches[1]
+    if ($t -notmatch 'l2_intern_again (\d+)U') { throw "$stem missing l2_intern_again" }
+    $again = [int]$Matches[1]
+    if ($again -ne $id) { throw "$stem intern again $again != id $id" }
+    if ($t -notmatch 'l2_intern_swap (\d+)U') { throw "$stem missing l2_intern_swap" }
+    $sw = [int]$Matches[1]
+    if ($t -notmatch 'l2_intern_probe (\d+)U') { throw "$stem missing l2_intern_probe" }
+    $probe = [int]$Matches[1]
+    if ($t -notmatch 'rec\\sig: (\d+)U') { throw "$stem missing rec.sig intern id" }
+    $rec = [int]$Matches[1]
+    if ($rec -ne $id) { throw "$stem rec.sig $rec != intern id $id" }
+    [pscustomobject]@{ Id = $id; Again = $again; Swap = $sw; Probe = $probe; Formals = "$f0|$f1" }
+}
+$cAdd = Get-LeafContract "add"
+$cPlus = Get-LeafContract "entry_plus"
+$cSum = Get-LeafContract "entry_sum"
+$cSwapF = Get-LeafContract "entry_swap_formals"
+if ($cAdd.Formals -ne "a|b") { throw "add formals $($cAdd.Formals)" }
+if ($cAdd.Probe -ne $cAdd.Id) { throw "add intern probe must memcmp-equal a|b" }
+if ($cAdd.Swap -eq $cAdd.Id) { throw "add intern must distinguish swapped formals" }
+if ($cPlus.Formals -ne $cAdd.Formals) { throw "renaming method changed contract" }
+if ($cPlus.Id -ne $cAdd.Id) { throw "plus intern id differed from add" }
+if ($cSum.Formals -eq $cAdd.Formals) { throw "sum x,y must differ from add a,b" }
+if ($cSum.Probe -eq $cSum.Id) { throw "sum intern must not equal probe a|b" }
+if ($cSwapF.Formals -ne "b|a") { throw "swap formals $($cSwapF.Formals)" }
+if ($cSwapF.Formals -eq $cAdd.Formals) { throw "swapped formals must differ from a,b" }
+if ($cSwapF.Probe -eq $cSwapF.Id) { throw "swap intern must not equal probe a|b" }
+
+Invoke-Leaf "l2src\tests\unit_chain.lm2" "unit_chain" 0 "wrap"
+Invoke-Leaf "l2src\tests\unit_forward.lm2" "unit_forward" 0 "wrap"
+Invoke-Leaf "l2src\tests\unit_if.lm2" "unit_if" 7 "max"
+Invoke-Leaf "l2src\tests\unit_contracts.lm2" "unit_contracts" 0 "add"
+$uc = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_contracts.lm1")))
+$sigs = [regex]::Matches($uc, 'rec\\sig: (\d+)U') | ForEach-Object { [int]$_.Groups[1].Value }
+if ($sigs.Count -lt 4) { throw "unit_contracts expected 4 rec.sig intern ids, got $($sigs.Count)" }
+if ($sigs[0] -ne $sigs[1]) { throw "add and plus same formals must share intern id" }
+if ($sigs[2] -eq $sigs[0]) { throw "sum x,y must intern differently from add a,b" }
+if ($sigs[3] -eq $sigs[0]) { throw "swap b,a must intern differently from add a,b" }
+if ($uc -notmatch 'l2_m\d+\(lmx_branch_struct_known\(unit, \d+U\)') { throw "unit_contracts missing mangled typed callable-Structure call" }
+
+Invoke-Leaf "l2src\tests\unit_intern_growth.lm2" "unit_intern_growth" 17 "m17"
+$uig = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_intern_growth.lm1")))
+$uigSigs = @([regex]::Matches($uig, 'rec\\sig: (\d+)U') | ForEach-Object { [int]$_.Groups[1].Value })
+$uigDistinct = @($uigSigs | Sort-Object -Unique)
+if ($uigSigs.Count -ne 18 -or $uigDistinct.Count -ne 18 -or ($uigDistinct | Measure-Object -Maximum).Maximum -lt 18) {
+    throw "unit_intern_growth expected 18 distinct canonical contracts beyond the old 16-entry boundary"
+}
+
+Invoke-Negative "l2src\tests\unit_dup_def.lm2" "unit_dup_def" "duplicate definition"
+Invoke-Negative "l2src\tests\unit_root_field_duplicate.lm2" "unit_root_field_duplicate" "duplicate unit field"
+Invoke-Negative "l2src\tests\unit_root_field_bad_init.lm2" "unit_root_field_bad_init" "int field initializer is out of range"
+Invoke-Negative "l2src\tests\unit_root_field_method_collision.lm2" "unit_root_field_method_collision" "method collides with a unit field"
+Invoke-Negative "l2src\tests\unit_dup_formal.lm2" "unit_dup_formal" "duplicate formal"
+Invoke-Leaf "l2src\tests\unit_loop.lm2" "unit_loop" 1 "add"
+Invoke-Negative "l2src\tests\unit_for.lm2" "unit_for" "unsupported loop"
+# 044514/045200/060900: ordinary nested for fields. Compact for(...) stays
+# a separate unproved spelling (unit_forj_compact.lmx).
+function Invoke-LeafOut([string]$src, [string]$stem, [int]$expect, [string]$name, [string]$wantOut) {
+    Invoke-Leaf $src $stem $expect $name
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1))
+    if ($text.IndexOf("for->") -ge 0) { throw "$stem must not emit C for->" }
+    if ($text.IndexOf("for.j") -ge 0) { throw "$stem must not emit for.j" }
+    $exe = Join-Path $out ($stem + ".exe")
+    $stdout = Join-Path $out ($stem + ".stdout")
+    cmd /c "`"$exe`" > `"$stdout`" 2>&1"
+    if ($LASTEXITCODE -ne $expect) { throw "$stem stdout-run exit $LASTEXITCODE expected $expect" }
+    $got = [System.IO.File]::ReadAllText((Resolve-L2Path $stdout)).Replace("`r`n", "`n")
+    if ($got -ne $wantOut) { throw "$stem stdout got '$got' want '$wantOut'" }
+}
+Invoke-LeafOut "l2src\tests\unit_forj_path.lm2" "unit_forj_path" 0 "test" "0`n"
+Invoke-Negative "l2src\tests\unit_forj_bare.lm2" "unit_forj_bare" "unresolved name"
+Invoke-LeafOut "l2src\tests\unit_forj_parent.lm2" "unit_forj_parent" 0 "test" "9`n"
+Invoke-LeafOut "l2src\tests\unit_forj_nest.lm2" "unit_forj_nest" 0 "test" "9`n9`n"
+Invoke-LeafOut "l2src\tests\unit_forj_again.lm2" "unit_forj_again" 0 "test" "0`n9`n"
+Invoke-LeafOut "l2src\tests\unit_forj_order.lm2" "unit_forj_order" 0 "test" "9 0`n"
+$ord = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_forj_order.lm1")))
+$op = $ord.LastIndexOf("c.printf")
+$ov = $ord.LastIndexOf("lmx_int_value", $op)
+$os = $ord.LastIndexOf("lmx_int_store", $op)
+if ($op -lt 0 -or $ov -lt 0 -or $os -lt 0) { throw "unit_forj_order missing printf/value/store" }
+if (-not ($ov -lt $os -and $os -lt $op)) { throw "unit_forj_order want actuals then checkpoint then call; value=$ov store=$os printf=$op" }
+Invoke-LeafOut "l2src\tests\unit_forj_stale.lm2" "unit_forj_stale" 0 "test" "9`n9 42`n"
+Invoke-Leaf "l2src\tests\unit_forj_graph.lm2" "unit_forj_graph" 0 "test"
+$gpath = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_forj_graph.lm1")))
+if ($gpath.IndexOf("for->") -ge 0) { throw "unit_forj_graph must not emit C for->" }
+if ($gpath -notmatch 'lmx_int_value') { throw "unit_forj_graph path must load graph int" }
+if ($gpath -notmatch 'lmx_int_store') { throw "unit_forj_graph must store dirty int" }
+if ($gpath -notmatch 'lmx_branch_open') { throw "unit_forj_graph must open for Structure" }
+$gprintf = $gpath.LastIndexOf("c.printf")
+if ($gprintf -lt 0) { throw "unit_forj_graph missing c.printf" }
+$gval = $gpath.LastIndexOf("lmx_int_value", $gprintf)
+$gstore = $gpath.LastIndexOf("lmx_int_store", $gprintf)
+if ($gval -lt 0) { throw "unit_forj_graph printf actual missing graph load" }
+if ($gstore -lt 0) { throw "unit_forj_graph printf missing checkpoint store" }
+if (-not ($gval -lt $gstore -and $gstore -lt $gprintf)) { throw "unit_forj_graph want actuals then checkpoint then call; value=$gval store=$gstore printf=$gprintf" }
+$gg = Invoke-SpliceDrive "unit_forj_graph" @"
+        @: void kid 0
+        l2_m0(lmx_branch_struct_known(unit, 0U), 10)
+        leaf: lmx_branch_struct_known(unit, 0U)
+        if: leaf = 0
+            return: 1
+        leaf: lmx_branch_struct_known(leaf, 1U)
+        if: leaf = 0
+            return: 1
+        kid: lmx_branch_child(leaf, 1U)
+        if: kid = 0
+            return: 1
+        c.printf("%d\n", lmx_int_value(kid))
+        if: lmx_int_store(kid, 42) != 0
+            return: 1
+        l2_m0(lmx_branch_struct_known(unit, 0U), 0)
+        c.printf("%d\n", lmx_int_value(kid))
+        return: 0
+    end: main
+end: external
+"@
+if ($gg -ne "0`n9`n42`n42`n") { throw "unit_forj_graph persist/write: $gg" }
+Invoke-Leaf "l2src\tests\unit_forj_sib.lm2" "unit_forj_sib" 0 "test"
+$sib = Invoke-SpliceDrive "unit_forj_sib" @"
+        @: void kid 0
+        l2_m0(lmx_branch_struct_known(unit, 0U))
+        leaf: lmx_branch_struct_known(unit, 0U)
+        leaf: lmx_branch_struct_known(leaf, 1U)
+        kid: lmx_branch_child(leaf, 1U)
+        c.printf("%d\n", lmx_int_value(kid))
+        leaf: lmx_branch_struct_known(unit, 0U)
+        leaf: lmx_branch_struct_known(leaf, 2U)
+        kid: lmx_branch_child(leaf, 1U)
+        c.printf("%d\n", lmx_int_value(kid))
+        return: 0
+    end: main
+end: external
+"@
+if ($sib -ne "9`n2`n") { throw "unit_forj_sib distinct j: $sib" }
+Invoke-Leaf "l2src\tests\unit_printf_char.lm2" "unit_printf_char" 0 "test"
+$pc = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_printf_char.lm1")))
+$pp = $pc.LastIndexOf("c.printf")
+if ($pp -lt 0) { throw "unit_printf_char missing c.printf" }
+if ($pc.Substring(0, $pp) -notmatch 'l2_q\d+_dirty') { throw "unit_printf_char c.printf must follow dirty checkpoint" }
+$pcg = Invoke-SpliceDrive "unit_printf_char" @"
+        @: void kid 0
+        l2_m0(lmx_branch_struct_known(unit, 0U))
+        leaf: lmx_branch_child(unit, 0U)
+        kid: lmx_branch_child(leaf, 1U)
+        c.printf("%d\n", lmx_char_value(kid))
+        return: 0
+    end: main
+end: external
+"@
+if ($pcg -ne "65`n65`n") { throw "unit_printf_char graph: $pcg" }
+Invoke-Leaf "l2src\tests\unit_printf_sz.lm2" "unit_printf_sz" 0 "test"
+$psz = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_printf_sz.lm1")))
+$psp = $psz.LastIndexOf("c.printf")
+if ($psp -lt 0) { throw "unit_printf_sz missing c.printf" }
+if ($psz.Substring(0, $psp) -notmatch 'l2_q\d+_dirty') { throw "unit_printf_sz c.printf must follow dirty checkpoint" }
+$psg = Invoke-SpliceDrive "unit_printf_sz" @"
+        @: void kid 0
+        l2_m0(lmx_branch_struct_known(unit, 0U))
+        leaf: lmx_branch_child(unit, 0U)
+        kid: lmx_branch_child(leaf, 1U)
+        c.printf("%zu\n", lmx_size_value(kid))
+        return: 0
+    end: main
+end: external
+"@
+if ($psg -ne "7`n7`n") { throw "unit_printf_sz graph: $psg" }
+Invoke-Negative "l2src\tests\unit_cont_out.lm2" "unit_cont_out" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_cont_frame.lm2" "unit_cont_frame" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_cont_colon.lm2" "unit_cont_colon" "empty colon Frame is not allowed"
+Invoke-Leaf "l2src\tests\unit_break.lm2" "unit_break" 1 "add"
+Invoke-Leaf "l2src\tests\unit_native_activation.lm2" "unit_native_activation" 0 "pick"
+$nativeActivation = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_native_activation.lm1")))
+if ($nativeActivation -notmatch 'c\.array: \[\]: char buffer 32') { throw "native activation lost method-local array extent" }
+if ($nativeActivation -notmatch '(?m)^\s+break$') { throw "native activation must preserve in-loop break" }
+if ($nativeActivation -notmatch 'l2_m1\([^\r\n]*argv\[0\]') { throw "native activation must group indexed actual as one argument" }
+Invoke-Negative "l2src\tests\unit_sz_idx.lm2" "unit_sz_idx" "unsupported index"
+Invoke-Negative "l2src\tests\unit_sz_np.lm2" "unit_sz_np" "unsupported index"
+Invoke-Leaf "l2src\tests\unit_sz_intp.lm2" "unit_sz_intp" 0 "add"
+$szintp = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_sz_intp.lm1")))
+if ($szintp -notmatch '@: int l2_p0_0') { throw "unit_sz_intp missing @: int formal" }
+Invoke-Leaf "l2src\tests\unit_addr_take.lm2" "unit_addr_take" 0 "set_one"
+$addrTake = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_addr_take.lm1")))
+if ($addrTake -notmatch 'l2_m0\([^\r\n]*\(cast: \(@: size_t\) l2_q0_from\[0\]\)\)') { throw "unit_addr_take must pass the typed graph payload address" }
+if ($addrTake -match 'l2_q0_exposed|@ l2_q0') { throw "unit_addr_take must not address or dirty the own cache merely by taking @n" }
+$callPos = $addrTake.LastIndexOf("l2_m0(")
+if ($callPos -lt 0) { throw "unit_addr_take missing set_one call" }
+$afterCall = $addrTake.Substring($callPos)
+if ($afterCall -match 'l2_q\d+\s*:\s*lmx_size_value') { throw "unit_addr_take must not reload own cache after call" }
+if ($afterCall -match 'l2_q\d+\s*:\s*\(cast:') { throw "unit_addr_take must not reload own cache after call" }
+$addrGot = Invoke-SpliceDrive "unit_addr_take" @"
+        @: Lmx method 0
+        @: void value 0
+        method: lmx_branch_struct_known(unit, 1U)
+        c.printf("%d\n", l2_m1(method))
+        value: lmx_branch_child(method, 1U)
+        c.printf("%d\n", (cast: int (lmx_size_value(value))))
+        return: 0
+    end: main
+end: external
+"@
+if ($addrGot -ne "0`n1`n") { throw "unit_addr_take expected unchanged cache 0 and directly written graph 1 got=$addrGot" }
+Invoke-Leaf "l2src\tests\unit_addr_arg.lm2" "unit_addr_arg" 0 "set_one"
+$addrArg = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_addr_arg.lm1")))
+if ($addrArg.IndexOf("&l2_q") -ge 0) { throw "unit_addr_arg must not take address of own cache" }
+if ($addrArg -notmatch '@ l2_p1_0') { throw "unit_addr_arg must take address of the C argument cell" }
+$addrArgGot = Invoke-SpliceDrive "unit_addr_arg" @"
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 0U))
+        return: 0
+    end: main
+end: external
+"@
+if ($addrArgGot -ne "1`n") { throw "unit_addr_arg go expected 1 got=$addrArgGot" }
+$addrDepthSource = "l2src\tests\unit_addr_depth.lm2"
+Invoke-Leaf $addrDepthSource "unit_addr_depth" 0 "go"
+$addrDepth = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_addr_depth.lm1")))
+if ($addrDepth -notmatch '@@: size_t l2_p0_0' -or $addrDepth -notmatch '\\\\l2_p0_0: 1U') {
+    throw "unit_addr_depth must preserve two pointer levels and two prefix loads"
+}
+Invoke-LeafOut "l2src\tests\unit_node_path.lm2" "unit_node_path" 0 "test" "0 1`n"
+$nodePath = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_node_path.lm1")))
+if ($nodePath -notmatch 'l2_m0\([^\r\n]*l2_q0_from\[0\]\)') { throw "unit_node_path must pass the graph payload address" }
+if ($nodePath -notmatch 'lmx_int_value') { throw "unit_node_path must path-load node\\n from the graph" }
+$npCall = $nodePath.LastIndexOf("l2_m0(")
+if ($npCall -lt 0) { throw "unit_node_path missing set_one call" }
+$npAfter = $nodePath.Substring($npCall)
+if ($npAfter -match 'l2_q\d+\s*:\s*lmx_int_value') { throw "unit_node_path must not reload own cache after call" }
+Invoke-Leaf "l2src\tests\unit_dash_emit.lm2" "unit_dash_emit" 0 "go"
+$dashGot = Invoke-SpliceDrive "unit_dash_emit" @"
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 3))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 0))
+        return: 0
+    end: main
+end: external
+"@
+if ($dashGot -ne "4`n0`n") { throw "unit_dash_emit go expected 4 then 0 got=$dashGot" }
+Invoke-RecursiveCompile "l2src\tests\unit_rec.lm2" "unit_rec"
+Invoke-RecursiveCompile "l2src\tests\unit_cycle.lm2" "unit_cycle"
+Invoke-Leaf "l2src\tests\unit_eight.lm2" "unit_eight" 0 "m7"
+$e8 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_eight.lm1")))
+Assert-L2EightMethodGraph $e8
+if ($e8.IndexOf("l2_p0_0") -lt 0) { throw "unit_eight missing hygienic formal l2_p0_0" }
+Invoke-Leaf "l2src\tests\unit_nine.lm2" "unit_nine" 0 "m8"
+$e9 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_nine.lm1")))
+if ($e9.IndexOf("fn: l2_m8") -lt 0) { throw "unit_nine missing 9th method" }
+Invoke-Leaf "l2src\tests\unit_slots6.lm2" "unit_slots6" 0 "six"
+$slots6 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_slots6.lm1")))
+if ([regex]::Matches($slots6, '(?m)^    @: char l2_s0_\d+ 0$').Count -ne 6) { throw 'unit_slots6 did not emit all six local address slots' }
+Invoke-Leaf "l2src\tests\unit_formal_slot_disjoint.lm2" "unit_formal_slot_disjoint" 0 "separate"
+Invoke-Leaf "l2src\tests\unit_entry_args.lm2" "unit_entry_args" 2 "plus_one"
+$entryArgsL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_entry_args.lm1")))
+if ($entryArgsL1 -notmatch 'fn: l2_program_body \(@: LmxMsg process_message; int: argc; @@: char argv\) int') { throw 'graph entry body lost argc/argv' }
+if ($entryArgsL1 -notmatch 'fn: l2_program_entry \(@: LmxMsg process_message; @: int result; int: argc; @@: char argv\) int') { throw 'graph entry adapter lost result/argc/argv' }
+if ($entryArgsL1 -notmatch 'fn: main \(int: argc; @@: char argv\) int' -or $entryArgsL1 -notmatch 'process_ctx\[1\]: \(cast: \(@: void\) @ argc\)' -or $entryArgsL1 -notmatch 'lmx_msg_run_entry_turn\(process_runtime, process_addr, l2_program_turn, \(cast: \(@: void\) process_ctx\)\)') { throw 'native main did not run the graph entry in its Message turn with argc/argv' }
+# Stage 5 step (a): the only call of the body is the adapter's, and the only call
+# of the adapter is the turn's; main reaches the entry through the bootstrap alone.
+if ([regex]::Matches($entryArgsL1, 'l2_program_body\(').Count -ne 1) { throw 'the entry body is called outside its adapter' }
+if ([regex]::Matches($entryArgsL1, 'l2_program_entry\(').Count -ne 1) { throw 'the entry adapter is called outside its turn' }
+$formalSlot = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_formal_slot_disjoint.lm1")))
+if ($formalSlot.IndexOf('l2_p0_8\data: "formal"') -lt 0) { throw 'ninth formal raw field was not kept in the formal namespace' }
+if ($formalSlot.IndexOf('l2_s0_0\data: "local"') -lt 0) { throw 'first local raw field was not kept in the slot namespace' }
+Invoke-Leaf "l2src\tests\unit_body_hosts.lm2" "unit_body_hosts" 0 "bodies"
+$bodyHosts = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_body_hosts.lm1")))
+if ($bodyHosts -notmatch 'lmx_branch_open_owned\(leaf, 6U,') { throw 'callable Structure does not retain its own flag field and its four executable body Structures' }
+if ([regex]::Matches($bodyHosts, 'l2_fkid: lmx_struct_new_owned\(leaf,').Count -ne 6) { throw 'if/else/while body Structures were not all materialized' }
+if ($bodyHosts -match '4294967295U') { throw 'a hosted own field retained the old negative child sentinel' }
+# Spec 7794-7808: the through-boundary is method nesting, not `if` nesting; an
+# assignment in a nested block that already sees the binding is this method's
+# own field, published to M. Only fields declared in a body live in its host.
+if ($bodyHosts -notmatch 'l2_q\d+_from: lmx_branch_slot_known\(node, 1U\)') { throw 'a same-name argument write inside a body does not publish to the method field' }
+if ([regex]::Matches($bodyHosts, 'l2_q\d+_from: lmx_branch_slot_known\(l2_h\d+, ').Count -ne 3) { throw 'a body host carries a field that was not declared in that body' }
+if ($bodyHosts -notmatch 'lmx_branch_store_known\(leaf, 4U, \(cast: \(@: void\) l2_fkid\)\)') { throw 'ownless executable body was not stored as a graph Structure' }
+if ($bodyHosts -notmatch 'leaf: l2_b0' -or $bodyHosts -notmatch 'l2_h1: lmx_branch_struct_known\(l2_h0, 1U\)') { throw 'nested executable body was flattened instead of linked below its containing body' }
+# The historical mail-chain case keeps its original source (recursive n, a main)
+# frozen in tests: l2src/lmx_msg_mail_chain.lm2 is now e2's clean-L2 port,
+# verified by run_port_msg_mail_chain.ps1.
+Invoke-Leaf "l2src\tests\lmx_msg_mail_chain_historical.lm2" "lmx_msg_mail_chain_l2" 0 "lmx_msg_mail_chain_empty"
+$mailChainL2 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "lmx_msg_mail_chain_l2.lm1")))
+if ($mailChainL2 -notmatch 'const: @\(LmxMsgCopy l2_p0_0\)' -or $mailChainL2 -notmatch '@@: LmxMsgCopy l2_p2_0') { throw 'LmxMsgCopy pointer forms did not survive the clean L2 module' }
+if ($mailChainL2 -notmatch 'l2_p1_0: l2_p1_0\\next' -or $mailChainL2 -notmatch 'l2_m1\(lmx_branch_struct_known\(node\\node, 1U\), l2_p1_0\)') { throw 'mail-chain traversal did not retain its next-field read and selected recursive callable' }
+$mailTake = [regex]::Match($mailChainL2, '(?ms)^sub: l2_m2 .*?^end: l2_m2$').Value
+if ($mailTake -eq '' -or $mailTake -match 'return: 0') { throw 'plain sub body-host failure emitted a value return' }
+$mailDrive = Invoke-SpliceDrive "lmx_msg_mail_chain_l2" @"
+        @: LmxMsgCopy nodes 0
+        @: LmxMsgCopy head 0
+        @: LmxMsgCopy tail 0
+        @: LmxMsgCopy out 0
+        @: LmxMsgCopy item 0
+        nodes: (cast: (@: LmxMsgCopy) c.calloc(3U, c.sizeof(c.LmxMsgCopy)))
+        if: nodes = 0
+            return: 2
+        nodes\next: nodes + 1
+        item: nodes + 1
+        item\next: nodes + 2
+        head: nodes
+        tail: nodes + 2
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 0))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), nodes))
+        l2_m2(lmx_branch_struct_known(unit, 2U), @ head, @ tail, @ out)
+        c.printf("%d %d %d %d\n", head = 0, tail = 0, out = nodes, out\next = nodes + 1)
+        c.free(nodes)
+        return: 0
+    end: main
+end: external
+"@
+if ($mailDrive -ne "1`n3`n1 1 1 1`n") { throw "clean L2 mail-chain parity got $mailDrive" }
+
+function New-MethodNSource([string]$path, [int]$n) {
+    $i = 0
+    $body = ""
+    while ($i -lt $n) {
+        $next = $i + 1
+        if ($next -eq $n) {
+            $body += "fn: m$i (int: a; int: b) int`n    return: m0(a, b)`nend: m$i`n"
+        } else {
+            $body += "fn: m$i (int: a; int: b) int`n    return: a + b`nend: m$i`n"
+        }
+        $i = $i + 1
+    }
+    $src = $body + "fn: main () int`n    return: 0`nend: main`n"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $path), $src.Replace("`r`n", "`n"))
+}
+function New-HiddenNSource([string]$path, [int]$n) {
+    $i = 0
+    $last = $n - 1
+    $body = ""
+    while ($i -lt $n) {
+        if ($i -eq 1) {
+            $body += "fn: m$i (int: a; int: b) int`n    return: a + b + quote`nend: m$i`n"
+        } elseif ($i -eq $last) {
+            $body += "fn: m$i (int: a; int: b) int`n    return: m1(a, b)`nend: m$i`n"
+        } else {
+            $body += "fn: m$i (int: a; int: b) int`n    return: a + b`nend: m$i`n"
+        }
+        $i = $i + 1
+    }
+    $body += "fn: holder () int`n    char: quote`n    quote: 3`n    return: m$last(1, 2)`nend: holder`n"
+    $body += "fn: main () int`n    return: 0`nend: main`n"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $path), $body.Replace("`r`n", "`n"))
+}
+$m17 = Join-Path $out "unit_m17.lm2"
+New-MethodNSource $m17 17
+Invoke-Leaf $m17 "unit_m17" 0 "m16"
+$t17 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_m17.lm1")))
+if ($t17 -notmatch 'fn: l2_m16') { throw "unit_m17 missing method 16" }
+$c16 = Get-L2Call $t17 16 @("1", "2")
+$d17 = Invoke-SpliceDrive "unit_m17" @"
+        c.printf("%d\n", $c16)
+        return: 0
+    end: main
+end: external
+"@
+if ($d17 -ne "3`n") { throw "unit_m17 must execute m16->m0: $d17" }
+$m33 = Join-Path $out "unit_m33.lm2"
+New-MethodNSource $m33 33
+Invoke-Leaf $m33 "unit_m33" 0 "m32"
+$t33 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_m33.lm1")))
+if ($t33 -notmatch 'fn: l2_m32') { throw "unit_m33 missing method 32" }
+$c32 = Get-L2Call $t33 32 @("1", "2")
+$d33 = Invoke-SpliceDrive "unit_m33" @"
+        c.printf("%d\n", $c32)
+        return: 0
+    end: main
+end: external
+"@
+if ($d33 -ne "3`n") { throw "unit_m33 must execute m32->m0: $d33" }
+
+$cyc = Join-Path $out "unit_cycle32.lm2"
+$cb = ""
+$ci = 0
+while ($ci -lt 33) {
+    if ($ci -eq 16) { $cb += "fn: m16 (int: a; int: b) int`n    return: m32(a, b)`nend: m16`n" }
+    elseif ($ci -eq 32) { $cb += "fn: m32 (int: a; int: b) int`n    return: m16(a, b)`nend: m32`n" }
+    else { $cb += "fn: m$ci (int: a; int: b) int`n    return: a + b`nend: m$ci`n" }
+    $ci++
+}
+[System.IO.File]::WriteAllText((Resolve-L2Path $cyc), ($cb + "fn: main () int`n    return: 0`nend: main`n").Replace("`r`n", "`n"))
+Invoke-RecursiveCompile $cyc "unit_cycle32"
+
+$h17 = Join-Path $out "unit_hidden17.lm2"
+New-HiddenNSource $h17 17
+Invoke-Leaf $h17 "unit_hidden17" 0 "holder"
+$th17 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_hidden17.lm1"))).Replace("`r`n", "`n")
+if ($th17 -notmatch 'fn: l2_m16') { throw "unit_hidden17 missing method 16" }
+$hold17 = Get-L2Call $th17 17 @()
+$dh17 = Invoke-SpliceDrive "unit_hidden17" @"
+        c.printf("%d\n", $hold17)
+        return: 0
+    end: main
+end: external
+"@
+if ($dh17 -ne "6`n") { throw "unit_hidden17 m16 must through-quote across 16: $dh17" }
+$h33 = Join-Path $out "unit_hidden33.lm2"
+New-HiddenNSource $h33 33
+Invoke-Leaf $h33 "unit_hidden33" 0 "holder"
+$th33 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_hidden33.lm1"))).Replace("`r`n", "`n")
+if ($th33 -notmatch 'fn: l2_m32') { throw "unit_hidden33 missing method 32" }
+$hold33 = Get-L2Call $th33 33 @()
+$dh33 = Invoke-SpliceDrive "unit_hidden33" @"
+        c.printf("%d\n", $hold33)
+        return: 0
+    end: main
+end: external
+"@
+if ($dh33 -ne "6`n") { throw "unit_hidden33 m32 must through-quote across 32: $dh33" }
+
+# Reverse-declared chain: l2_dyn_step scans callers in declaration order, so
+# the hidden quote fact advances only one edge per pass. This rejects the old
+# arbitrary guard<32 implementation and proves convergence at the real fixed
+# point across a longer valid graph.
+$dyn65 = Join-Path $out "unit_dyn_chain65.lm2"
+$dynBody = ""
+$di = 0
+while ($di -lt 65) {
+    $next = $di + 1
+    if ($di -eq 0) {
+        $dynBody += "fn: m0 () int`n    char: quote`n    quote: 3`n    return: m1()`nend: m0`n"
+    } elseif ($di -lt 64) {
+        $dynBody += "fn: m$di () int`n    return: m$next()`nend: m$di`n"
+    } else {
+        $dynBody += "fn: m64 () int`n    return: quote`nend: m64`n"
+    }
+    $di++
+}
+$dynBody += "fn: main () int`n    return: 0`nend: main`n"
+[System.IO.File]::WriteAllText((Resolve-L2Path $dyn65), $dynBody.Replace("`r`n", "`n"))
+Invoke-Leaf $dyn65 "unit_dyn_chain65" 0 "m64"
+$tdyn65 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_dyn_chain65.lm1"))).Replace("`r`n", "`n")
+if ($tdyn65 -notmatch 'fn: l2_m64') { throw "unit_dyn_chain65 missing method 64" }
+$callDyn65 = Get-L2Call $tdyn65 0 @()
+$driveDyn65 = Invoke-SpliceDrive "unit_dyn_chain65" @"
+        c.printf("%d\n", $callDyn65)
+        return: 0
+    end: main
+end: external
+"@
+if ($driveDyn65 -ne "3`n") { throw "unit_dyn_chain65 must propagate quote through 64 calls: $driveDyn65" }
+
+Invoke-Leaf "l2src\tests\unit_tempname.lm2" "unit_tempname" 0 "add"
+$tn = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_tempname.lm1")))
+if ($tn -match 'int: l2_t0;') { throw "unit_tempname leaked source formal l2_t0 into L1 params" }
+if ($tn.IndexOf("l2_p0_0") -lt 0) { throw "unit_tempname missing mangled formal" }
+if ($tn.IndexOf('l2_sig_f0) "l2_t0"') -lt 0) { throw "intern must keep source formal name l2_t0" }
+Invoke-Negative "l2src\tests\unit_longname.lm2" "unit_longname" "name too long"
+Invoke-Leaf "l2src\tests\unit_deepif.lm2" "unit_deepif" 3 "add"
+$deepIfL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_deepif.lm1")))
+if (([regex]::Matches($deepIfL1, '(?m)^\s*if: l2_p0_0 = l2_p0_0\s*$')).Count -ne 70) {
+    throw "unit_deepif must preserve all 70 nested conditions"
+}
+Invoke-Negative "l2src\tests\unit_node_formal.lm2" "unit_node_formal" "incompatible entry signature"
+Invoke-Negative "l2src\tests\entry_unknown_method.lm2" "entry_unknown_method" "unknown method"
+Invoke-Negative "l2src\tests\entry_bad_arity.lm2" "entry_bad_arity" "incompatible entry signature"
+Invoke-Negative "l2src\tests\entry_unresolved.lm2" "entry_unresolved" "unresolved name"
+Invoke-Negative "l2src\tests\entry_trailer.lm2" "entry_trailer" "unsupported trailer"
+Invoke-Leaf "l2src\tests\unit_ret_tr.lm2" "unit_ret_tr" 0 "add"
+Invoke-Leaf "l2src\tests\unit_end_fn.lm2" "unit_end_fn" 0 "add"
+Invoke-Leaf "l2src\tests\unit_end_dash.lm2" "unit_end_dash" 0 "add"
+Invoke-Negative "l2src\tests\unit_end_wrong.lm2" "unit_end_wrong" "end target does not match close target"
+Invoke-Leaf "l2src\tests\unit_ret_tr_own.lm2" "unit_ret_tr_own" 0 "m"
+$rto = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_ret_tr_own.lm1"))).Replace("`r`n", "`n")
+$callRto = Get-L2Call $rto 0 @()
+$drto = Invoke-SpliceDrive "unit_ret_tr_own" @"
+        c.printf("%d\n", $callRto)
+        @: void f 0
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($drto -ne "65`n65`n") { throw "return-trailer must publish own: $drto" }
+Invoke-Leaf "l2src\tests\unit_ret_tr_hid.lm2" "unit_ret_tr_hid" 0 "outer"
+$rth = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_ret_tr_hid.lm1"))).Replace("`r`n", "`n")
+$callRth = Get-L2Call $rth 1 @()
+$drth = Invoke-SpliceDrive "unit_ret_tr_hid" @"
+        c.printf("%d\n", $callRth)
+        return: 0
+    end: main
+end: external
+"@
+if ($drth -ne "65`n") { throw "return-trailer must discover hidden: $drth" }
+Invoke-Leaf "l2src\tests\unit_main_ret_tr.lm2" "unit_main_ret_tr" 0 "add"
+
+Invoke-Leaf "l2src\tests\unit_prec.lm2" "unit_prec" 1 "prec"
+$pr = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_prec.lm1")))
+if ($pr.IndexOf("||") -lt 0 -or $pr.IndexOf("&&") -lt 0) { throw "unit_prec missing &&/|| emission" }
+Invoke-Leaf "l2src\tests\unit_sc.lm2" "unit_sc" 1 "div0"
+$sc = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_sc.lm1")))
+if ($sc -notmatch 'if: l2_t\d+ = 0' -and $sc -notmatch '1 \|\| l2_m\d+\(') { throw "unit_sc must skip RHS call via guarded if or C ||" }
+
+function Invoke-PredAscii {
+    $refLm1 = Join-Path $out "pred_ref.lm1"
+    $refC = Join-Path $out "pred_ref.c"
+    $refExe = Join-Path $out "pred_ref.exe"
+    $refOut = Join-Path $out "pred_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser_text.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+        int: v 0
+        while: v < 128
+            c.printf("%d%d%d%d%d%d%d\n", lm_p0_is_horizontal_space((cast: (char) v)), lm_p0_is_line_break((cast: (char) v)), lm_p0_is_field_space((cast: (char) v)), lm_p0_is_field_separator((cast: (char) v)), lm_p0_is_short_form_separator((cast: (char) v)), lm_p0_is_quoted_token_boundary((cast: (char) v)), lm_p0_is_decimal_digit((cast: (char) v)))
+            v: v + 1
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pred_ref (parser_text excerpt)" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "pred_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pred_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pred_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_text_predicates.lm2" "parser_text_predicates" 0 "lm_p0_is_horizontal_space"
+    $lm1 = Join-Path $out "parser_text_predicates.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_is_') { throw "predicates must mangle method symbols, not emit source names as C symbols" }
+    if ($text -notmatch 'rec\\addr: \(cast: \(LmxEntry\) l2_m0\)') { throw "predicates missing rec.addr l2_m0" }
+    if ($text -notmatch 'rec\\addr: \(cast: \(LmxEntry\) l2_m6\)') { throw "predicates missing full 7-method graph" }
+    $drive = @"
+        int: v 0
+        while: v < 128
+            c.printf("%d%d%d%d%d%d%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), (cast: (char) v)), l2_m1(lmx_branch_struct_known(unit, 1U), (cast: (char) v)), l2_m2(lmx_branch_struct_known(unit, 2U), (cast: (char) v)), l2_m3(lmx_branch_struct_known(unit, 3U), (cast: (char) v)), l2_m4(lmx_branch_struct_known(unit, 4U), (cast: (char) v)), l2_m5(lmx_branch_struct_known(unit, 5U), (cast: (char) v)), l2_m6(lmx_branch_struct_known(unit, 6U), (cast: (char) v)))
+            v: v + 1
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "pred_l2_drive.lm1"
+    $drvC = Join-Path $out "pred_l2_drive.c"
+    $drvExe = Join-Path $out "pred_l2_drive.exe"
+    $drvOut = Join-Path $out "pred_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pred_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "pred_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pred_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pred_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "predicate 128-ASCII mismatch vs parser_text.lm1 reference" }
+    $lines = $a.Split("`n") | Where-Object { $_ -ne "" }
+    if ($lines.Count -ne 128) { throw "expected 128 ASCII lines, got $($lines.Count)" }
+}
+
+Invoke-PredAscii
+
+Invoke-Leaf "l2src\parser_registry_compact.lm2" "parser_registry_compact" 0 "lm_p0_scan_registry_compact_atom_piece"
+$registryCompactDrive = Invoke-SpliceDrive "parser_registry_compact" @"
+        c.printf("%zu %zu %zu %zu %zu %zu %zu %zu %zu %zu %zu %zu %zu\n",
+            l2_m0(lmx_branch_struct_known(unit, 0U), "", 0U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "a", 1U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "!=", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "<=", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), ">=", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "&&", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "||", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "++", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "--", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "[]", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "<<", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), ">>", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "xy", 2U, 0U))
+        return: 0
+    end: main
+end: external
+"@
+if ($registryCompactDrive -ne "0 1 2 2 2 2 2 2 2 2 2 2 1`n") { throw "registry compact scanner parity got $registryCompactDrive" }
+$builtinCompactDrive = Invoke-SpliceDrive "parser_registry_compact" @"
+        c.printf("%zu %zu %zu %zu %zu %zu %zu %zu %zu %zu %zu\n",
+            l2_m1(lmx_branch_struct_known(unit, 1U), "", 0U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "a", 1U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "!=", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "<=", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), ">=", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "&&", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "||", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "++", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "--", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "[]", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "<<", 2U, 0U))
+        return: 0
+    end: main
+end: external
+"@
+if ($builtinCompactDrive -ne "0 1 2 2 2 2 2 2 2 2 1`n") { throw "builtin compact scanner parity got $builtinCompactDrive" }
+
+Invoke-Leaf "l2src\parser_c_quoted.lm2" "parser_c_quoted" 0 "lm_p0_scan_c_quoted_token"
+$cQuotedDrive = Invoke-SpliceDrive "parser_c_quoted" @"
+        c.printf("%zu %zu %d %zu %zu\n",
+            l2_m2(lmx_branch_struct_known(unit, 2U), "\"abc\"", 5U, 0U),
+            l2_m2(lmx_branch_struct_known(unit, 2U), "\"abc", 4U, 0U),
+            l2_m3(lmx_branch_struct_known(unit, 3U), "L\"x\"", 4U, 0U),
+            l2_m4(lmx_branch_struct_known(unit, 4U), "'x'", 3U, 0U),
+            l2_m5(lmx_branch_struct_known(unit, 5U), "L\"x\"", 4U, 0U))
+        return: 0
+    end: main
+end: external
+"@
+if ($cQuotedDrive -ne "5 1 1 3 4`n") { throw "C quoted scanner parity got $cQuotedDrive" }
+
+Invoke-Leaf "l2src\tests\unit_malloc_name.lm2" "unit_malloc_name" 10 "malloc"
+$mn = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_malloc_name.lm1")))
+if ($mn -match 'fn: malloc \(') { throw "source name malloc must not be the C symbol" }
+if ($mn -notmatch 'fn: l2_m0 ') { throw "malloc should be l2_m0" }
+
+function Invoke-PublishFail {
+    $dest = Join-Path $out "publish_fail.lm1"
+    $bak = $dest + ".bak"
+    $marker = "KEEP-THESE-BYTES-ON-FAILED-PUBLISH`n"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $dest), $marker)
+    if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Recurse -Force }
+    New-Item -ItemType Directory -Path (Resolve-L2Path $bak) | Out-Null
+    cmd /c "`"$l2exe`" `"l2src\tests\add.lm2`" `"$dest`" 2> `"$(Join-Path $out 'publish_fail.err')`""
+    if ($LASTEXITCODE -eq 0) { throw "publish_fail expected replace failure when .bak is a directory" }
+    $got = [System.IO.File]::ReadAllText((Resolve-L2Path $dest))
+    if ($got -ne $marker) { throw "failed publication mutated dest: $got" }
+    Remove-Item -LiteralPath $bak -Recurse -Force
+
+    $dest2 = Join-Path $out "publish_bak_file.lm1"
+    $bak2 = $dest2 + ".bak"
+    $sentinel = "FOREIGN-BAK-SENTINEL`n"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $dest2), $marker)
+    [System.IO.File]::WriteAllText((Resolve-L2Path $bak2), $sentinel)
+    cmd /c "`"$l2exe`" `"l2src\tests\add.lm2`" `"$dest2`" 2> `"$(Join-Path $out 'publish_bak_file.err')`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content (Join-Path $out 'publish_bak_file.err')
+        throw "existing regular dest.bak must not block unique-backup publication"
+    }
+    $kept = [System.IO.File]::ReadAllText((Resolve-L2Path $bak2))
+    if ($kept -ne $sentinel) { throw "foreign dest.bak sentinel was mutated" }
+    $newd = [System.IO.File]::ReadAllText((Resolve-L2Path $dest2))
+    if ($newd -eq $marker) { throw "unique-backup publication left dest unchanged" }
+    if ($newd.IndexOf("fn: l2_m") -lt 0) { throw "unique-backup dest is not generated L1" }
+
+    # There is no semantic backup-candidate count. Occupy the old .bak plus
+    # more than the former 99 numbered names and require publication to find
+    # the next free name without touching any foreign sentinel.
+    $dest3 = Join-Path $out "publish_many_baks.lm1"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $dest3), $marker)
+    $occupied = @($dest3 + ".bak")
+    1..110 | ForEach-Object { $occupied += ($dest3 + ".bak." + $_) }
+    foreach ($foreign in $occupied) {
+        [System.IO.File]::WriteAllText((Resolve-L2Path $foreign), $sentinel)
+    }
+    cmd /c "`"$l2exe`" `"l2src\tests\add.lm2`" `"$dest3`" 2> `"$(Join-Path $out 'publish_many_baks.err')`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content (Join-Path $out 'publish_many_baks.err')
+        throw "more than 99 occupied backup names must not block publication"
+    }
+    foreach ($foreign in $occupied) {
+        if ([System.IO.File]::ReadAllText((Resolve-L2Path $foreign)) -ne $sentinel) {
+            throw "publication mutated foreign backup sentinel: $foreign"
+        }
+    }
+    $newd3 = [System.IO.File]::ReadAllText((Resolve-L2Path $dest3))
+    if ($newd3.IndexOf("fn: l2_m") -lt 0) { throw "many-backup dest is not generated L1" }
+    if (Test-Path -LiteralPath ($dest3 + ".bak.111")) { throw "temporary selected backup was not removed" }
+}
+
+Invoke-PublishFail
+
+function Invoke-LineBreakWidth {
+    $refLm1 = Join-Path $out "lbw_ref.lm1"
+    $refC = Join-Path $out "lbw_ref.c"
+    $refExe = Join-Path $out "lbw_ref.exe"
+    $refOut = Join-Path $out "lbw_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser_text.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+        c.printf("%zu\n", lm_p0_line_break_width_at("\n", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r\n", 2U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("x", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r\n", 2U, 2U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at(0, 0U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("ab", 2U, 2U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("a\r\nb", 4U, 1U))
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed lbw_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "lbw_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'lbw_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "lbw_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_text_line_break.lm2" "parser_text_line_break" 0 "lm_p0_line_break_width_at"
+    $lm1 = Join-Path $out "parser_text_line_break.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_line_break_width_at') { throw "line_break must mangle method symbols" }
+    if ($text.IndexOf("const: @(char l2_p0_0)") -lt 0) { throw "line_break missing const char* formal" }
+    if ($text.IndexOf("size_t: l2_p0_1") -lt 0) { throw "line_break missing size_t formal" }
+    if ($text.IndexOf(") size_t") -lt 0) { throw "line_break missing size_t result" }
+    $drive = @"
+        c.printf("%zu\n", l2_m0(lmx_branch_struct_known(unit, 0U), "\n", 1U, 0U))
+        c.printf("%zu\n", l2_m0(lmx_branch_struct_known(unit, 0U), "\r", 1U, 0U))
+        c.printf("%zu\n", l2_m0(lmx_branch_struct_known(unit, 0U), "\r\n", 2U, 0U))
+        c.printf("%zu\n", l2_m0(lmx_branch_struct_known(unit, 0U), "x", 1U, 0U))
+        c.printf("%zu\n", l2_m0(lmx_branch_struct_known(unit, 0U), "\r\n", 2U, 2U))
+        c.printf("%zu\n", l2_m0(lmx_branch_struct_known(unit, 0U), "", 0U, 0U))
+        c.printf("%zu\n", l2_m0(lmx_branch_struct_known(unit, 0U), 0, 0U, 0U))
+        c.printf("%zu\n", l2_m0(lmx_branch_struct_known(unit, 0U), "ab", 2U, 2U))
+        c.printf("%zu\n", l2_m0(lmx_branch_struct_known(unit, 0U), "a\r\nb", 4U, 1U))
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "lbw_l2_drive.lm1"
+    $drvC = Join-Path $out "lbw_l2_drive.c"
+    $drvExe = Join-Path $out "lbw_l2_drive.exe"
+    $drvOut = Join-Path $out "lbw_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed lbw_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "lbw_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'lbw_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "lbw_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "line_break_width_at mismatch vs parser_text.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-LineBreakWidth
+
+Invoke-Leaf "l2src\tests\unit_own_early.lm2" "unit_own_early" 0 "m"
+$oe = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own_early.lm1")))
+if ($oe.IndexOf("l2_q0_dirty") -lt 0) { throw "unit_own_early missing typed own cache" }
+if ($oe.IndexOf("lmx_char_cell") -lt 0) { throw "unit_own_early missing all_chars publish" }
+$d1 = Invoke-SpliceDrive "unit_own_early" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 0U)
+        l2_m0(method, 0)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        l2_m0(method, 1)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($d1 -ne "0`n65`n") { throw "own early-return/assign published $d1" }
+
+Invoke-Leaf "l2src\tests\unit_sub_ret.lm2" "unit_sub_ret" 0 "bump"
+$sr = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_sub_ret.lm1")))
+if ($sr -notmatch '(?m)^\s+return$') { throw "unit_sub_ret missing void return" }
+if ($sr.IndexOf("l2_q0_dirty") -lt 0) { throw "unit_sub_ret missing dirty checkpoint before void return" }
+$dsr = Invoke-SpliceDrive "unit_sub_ret" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 0U)
+        l2_m0(method)
+        l2_m0(method)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        method: lmx_branch_struct_known(unit, 1U)
+        l2_m1(method)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        method: lmx_branch_struct_known(unit, 2U)
+        l2_m2(method, 1)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        l2_m2(method, 0)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($dsr -ne "2`n65`n65`n66`n") { throw "sub void return publish/skip: $dsr" }
+Invoke-Negative "l2src\tests\unit_sub_retval.lm2" "unit_sub_retval" "unsupported body"
+Invoke-Negative "l2src\tests\unit_fn_noret.lm2" "unit_fn_noret" "unsupported body"
+
+Invoke-Leaf "l2src\tests\unit_own_clean.lm2" "unit_own_clean" 0 "outer"
+$d2 = Invoke-SpliceDrive "unit_own_clean" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 1U)
+        l2_m1(method, 0)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($d2 -ne "66`n") { throw "clean caller republished over explicit path write: $d2" }
+
+Invoke-Leaf "l2src\tests\unit_own_eq.lm2" "unit_own_eq" 0 "outer"
+$d3 = Invoke-SpliceDrive "unit_own_eq" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 1U)
+        l2_m1(method, 0)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($d3 -ne "0`n") { throw "equal assign must dirty and publish: $d3" }
+
+Invoke-Leaf "l2src\tests\unit_own_lazy.lm2" "unit_own_lazy" 0 "m"
+$d4 = Invoke-SpliceDrive "unit_own_lazy" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 2U)
+        l2_m2(method, 0)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($d4 -ne "0`n") { throw "lazy && evaluated RHS call: $d4" }
+$lz = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own_lazy.lm1")))
+if ($lz -match 'l2_m1\(lmx_branch_struct_known\(node\\node, 1U\), \(0 && l2_m0') { throw "unit_own_lazy still inlines nested call into C && actual" }
+
+Invoke-Leaf "l2src\tests\unit_own_skip.lm2" "unit_own_skip" 0 "m"
+$skg = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own_skip.lm1")))
+if ($skg -notmatch 'if: l2_t\d+' ) { throw "unit_own_skip must emit guarded if for lazy &&/||" }
+$d5 = Invoke-SpliceDrive "unit_own_skip" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 2U)
+        l2_m2(method, 0)
+        l2_m2(method, 1)
+        l2_m2(method, 2)
+        l2_m2(method, 3)
+        l2_m2(method, 4)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($d5 -ne "0`n") { throw "0 && wrap(boom) / 1 || wrap(boom) must skip boom: $d5" }
+
+Invoke-Leaf "l2src\tests\unit_own_dirty_rhs.lm2" "unit_own_dirty_rhs" 0 "m"
+$d6 = Invoke-SpliceDrive "unit_own_dirty_rhs" @"
+        @: Lmx method 0
+        @: void fm 0
+        @: void fo 0
+        method: lmx_branch_struct_known(unit, 1U)
+        l2_m1(method, 0)
+        fm: lmx_branch_child(method, 1U)
+        fo: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(fm))
+        c.printf("%d\n", lmx_char_value(fo))
+        return: 0
+    end: main
+end: external
+"@
+if ($d6 -ne "65`n88`n") { throw "observe must see published 65 through hidden and not write m's quote: $d6" }
+
+Invoke-Leaf "l2src\tests\unit_own_twoact.lm2" "unit_own_twoact" 0 "m"
+$d7 = Invoke-SpliceDrive "unit_own_twoact" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 3U)
+        l2_m3(method, 0)
+        method: lmx_branch_struct_known(unit, 1U)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($d7 -ne "50`n") { throw "two actuals must be LTR once (expect b's 50): $d7" }
+
+Invoke-Leaf "l2src\tests\unit_own_prec2.lm2" "unit_own_prec2" 0 "m"
+$d8 = Invoke-SpliceDrive "unit_own_prec2" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 1U)
+        l2_m1(method, 0)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        l2_m1(method, 1)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        l2_m1(method, 2)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($d8 -ne "0`n0`n90`n") { throw "mixed &&/|| precedence skip/run: $d8" }
+
+Invoke-Leaf "l2src\tests\unit_own5.lm2" "unit_own5" 0 "m"
+$o5 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own5.lm1")))
+if ($o5 -notmatch 'const: @\(char l2_own4\)') { throw "unit_own5 missing 5th OwnUsed" }
+Invoke-Leaf "l2src\tests\unit_own6.lm2" "unit_own6" 0 "m"
+$o6 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own6.lm1")))
+if ($o6 -notmatch 'const: @\(char l2_own5\)') { throw "unit_own6 missing 6th OwnUsed" }
+Invoke-Negative "l2src\tests\unit_own_clash.lm2" "unit_own_clash" "incompatible entry signature"
+
+function New-Own33Source([string]$path) {
+    $decls = @()
+    $after = @()
+    $i = 0
+    while ($i -lt 33) {
+        $n = "n" + $i.ToString("00")
+        $decls += "    char: $n"
+        $after += "    ${n}: 0"
+        $i = $i + 1
+    }
+    $src = @"
+fn: m (char: z) int
+    z: n00
+$($decls -join "`n")
+    if: z != 0
+        z: n00
+    while: z != 0
+        z: n15
+        ---
+$($after -join "`n")
+    return: 0
+end: m
+fn: main () int
+    return: 0
+end: main
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $path), $src.Replace("`r`n", "`n"))
+}
+
+$own33 = Join-Path $out "unit_own33.lm2"
+New-Own33Source $own33
+Invoke-Leaf $own33 "unit_own33" 0 "m"
+$o33 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own33.lm1")))
+if ($o33 -notmatch 'const: @\(char l2_own32\)') { throw "unit_own33 missing 33rd OwnUsed" }
+if ($o33 -notmatch 'l2_q32') { throw "unit_own33 missing 33rd own cache" }
+
+Invoke-Leaf "l2src\tests\unit_own32_pub.lm2" "unit_own32_pub" 0 "m"
+$p32 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own32_pub.lm1"))).Replace("`r`n", "`n")
+$callM = Get-L2Call $p32 0 @("0")
+$callB = Get-L2Call $p32 1 @("9")
+$callS = Get-L2Call $p32 2 @("0")
+$d32 = Invoke-SpliceDrive "unit_own32_pub" @"
+        c.printf("%d\n", $callM)
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 0U)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        f: lmx_branch_child(method, 33U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", $callB)
+        f: lmx_branch_child(method, 33U)
+        c.printf("%d\n", lmx_char_value(f))
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", $callS)
+        f: lmx_branch_child(method, 33U)
+        c.printf("%d\n", lmx_char_value(f))
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($d32 -ne "0`n1`n77`n3`n77`n1`n65`n77`n1`n") { throw "n32 before/after decl and n00 unaliased: $d32" }
+
+Invoke-Leaf "l2src\tests\unit_own_grow_alias.lm2" "unit_own_grow_alias" 0 "m"
+$ga = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own_grow_alias.lm1"))).Replace("`r`n", "`n")
+$callG = Get-L2Call $ga 0 @("1")
+$callL = Get-L2Call $ga 1 @("2")
+$dga = Invoke-SpliceDrive "unit_own_grow_alias" @"
+        c.printf("%d\n", $callG)
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 0U)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", $callL)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($dga -ne "65`n65`n66`n65`n") { throw "grow must keep n00 alias on under-construction row: $dga" }
+
+Invoke-Leaf "l2src\tests\unit_own_same_name.lm2" "unit_own_same_name" 0 "left"
+$ownSame = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own_same_name.lm1")))
+# Typed own decls are per-method occurrences; spelling does not share a cell.
+if ($ownSame.IndexOf("l2_q0: 1U") -lt 0) { throw "unit_own_same_name left missing i=1" }
+if ($ownSame.IndexOf("l2_q1: 2U") -lt 0) { throw "unit_own_same_name right must not reuse left's l2_q0" }
+Invoke-Leaf "l2src\tests\unit_own_meth.lm2" "unit_own_meth" 0 "m0"
+$om = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own_meth.lm1"))).Replace("`r`n", "`n")
+if ($om -notmatch 'fn: l2_m4') { throw "unit_own_meth missing 5th method" }
+$callOm = Get-L2Call $om 0 @()
+$dom = Invoke-SpliceDrive "unit_own_meth" @"
+        c.printf("%d\n", $callOm)
+        @: void f 0
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($dom -ne "0`n1`n") { throw "method growth must keep first-method OwnUsed: $dom" }
+
+Invoke-Leaf "l2src\tests\unit_bind.lm2" "unit_bind" 0 "bind"
+$bg = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_bind.lm1"))).Replace("`r`n", "`n")
+$bindFn = [regex]::Match($bg, 'fn: l2_m2[\s\S]*?end: l2_m2').Value
+if ($bindFn.Length -lt 20) { throw "unit_bind missing mangled bind l2_m2" }
+if ($bindFn -match 'char: l2_q') { throw "aliased own must not emit a separate l2_q value" }
+if ($bindFn.IndexOf("lmx_char_value") -ge 0) { throw "aliased own must not load graph over the incoming argument" }
+if ($bindFn.IndexOf("l2_p2_0") -lt 0) { throw "aliased own must use the parameter l2_p2_0" }
+if ($bindFn.IndexOf("l2_q0_dirty: 1") -lt 0) { throw "aliased own assign after bind must dirty" }
+if ($bindFn -notmatch 'l2_p2_0: 1') { throw "assign before own-decl must write the parameter" }
+$passFn = [regex]::Match($bg, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
+if ($passFn -notmatch 'l2_q\d+_dirty') { throw "pass assignment-bind is this method's field, not the unit-shared quote" }
+if ($passFn.IndexOf("l2_p1_0: 65") -lt 0) { throw "parameter assignment-as-declaration must still write the parameter" }
+$dBind = Invoke-SpliceDrive "unit_bind" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 1U)
+        l2_m1(method, 90)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        method: lmx_branch_struct_known(unit, 6U)
+        l2_m6(method, 90, 0)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        l2_m6(method, 90, 1)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        method: lmx_branch_struct_known(unit, 2U)
+        l2_m2(method, 90)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        method: lmx_branch_struct_known(unit, 3U)
+        l2_m3(method, 77)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        method: lmx_branch_struct_known(unit, 4U)
+        l2_m4(method, 1)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        method: lmx_branch_struct_known(unit, 5U)
+        l2_m5(method, 1)
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($dBind -ne "65`n0`n65`n66`n77`n66`n65`n") { throw "per-callable same-name bind graph got $dBind" }
+
+Invoke-Leaf "l2src\tests\unit_bind_sz.lm2" "unit_bind_sz" 0 "m"
+$szg = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_bind_sz.lm1")))
+if ($szg.IndexOf("size_t: l2_q0") -ge 0) { throw "aliased size_t must not emit a separate l2_q value" }
+if ($szg.IndexOf("lmx_size_value") -ge 0) { throw "aliased size_t must not load graph over the incoming argument" }
+$dSz = Invoke-SpliceDrive "unit_bind_sz" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 0U)
+        c.printf("%zu\n", l2_m0(method, 9U))
+        f: lmx_branch_child(method, 1U)
+        c.printf("%zu\n", lmx_size_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($dSz -ne "3`n3`n") { throw "size_t same-name bind got $dSz" }
+
+Invoke-Leaf "l2src\tests\unit_bind_ifdecl.lm2" "unit_bind_ifdecl" 0 "m"
+$bid = Invoke-SpliceDrive "unit_bind_ifdecl" @"
+        @: Lmx method 0
+        @: Lmx body 0
+        @: void field 0
+        method: lmx_branch_struct_known(unit, 0U)
+        l2_m0(method, 0, 1)
+        body: lmx_branch_struct_known(method, 1U)
+        field: lmx_branch_child(body, 0U)
+        c.printf("%d\n", lmx_char_value(field))
+        return: 0
+    end: main
+end: external
+"@
+if ($bid -ne "65`n") { throw "if-body own field did not publish through its body host: $bid" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_bind.lm2" "unit_asgn_bind" 0 "inc"
+$ag = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_asgn_bind.lm1"))).Replace("`r`n", "`n")
+$incFn = [regex]::Match($ag, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
+if ($incFn.IndexOf("l2_q0_dirty: 1") -lt 0) { throw "inc x: x+1 must dirty after assignment-as-declaration" }
+if ($incFn -notmatch 'l2_p0_0:') { throw "inc must write the known-type parameter, not a renamed local" }
+if ($incFn.IndexOf("&l2_q") -ge 0) { throw "inc must not take address of own cache" }
+$passA = [regex]::Match($ag, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
+if ($passA -notmatch 'l2_q1_dirty') { throw "pass x: 65 must bind/dirty its own field, not inc's" }
+$dAsgn = Invoke-SpliceDrive "unit_asgn_bind" @"
+        @: void fs 0
+        @: void fi 0
+        @: void fp 0
+        @: void fh 0
+        @@: void fh_slot 0
+        fs: lmx_char_cell(10)
+        fi: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        fp: lmx_branch_child(lmx_branch_struct_known(unit, 1U), 1U)
+        fh_slot: lmx_branch_slot_known(lmx_branch_struct_known(unit, 2U), 1U)
+        if: fh_slot != 0
+            fh: fh_slot[0]
+        if: fs = 0 || fi = 0 || fp = 0 || fh = 0
+            return: 1
+        l2_m0(lmx_branch_struct_known(unit, 0U), 10)
+        fi: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(fi))
+        c.printf("%d\n", lmx_char_value(fs))
+        l2_m1(lmx_branch_struct_known(unit, 1U), 65)
+        fp: lmx_branch_child(lmx_branch_struct_known(unit, 1U), 1U)
+        c.printf("%d\n", lmx_char_value(fp))
+        c.printf("%d\n", lmx_char_value(fs))
+        l2_m3(lmx_branch_struct_known(unit, 3U), 10)
+        fh: fh_slot[0]
+        c.printf("%d\n", lmx_char_value(fh))
+        c.printf("%d\n", lmx_char_value(fs))
+        fh_slot[0]: lmx_char_rebind_known(fh_slot[0], 20)
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), (cast: (char) lmx_char_value(fh_slot[0]))))
+        fh: fh_slot[0]
+        c.printf("%d\n", lmx_char_value(fh))
+        c.printf("%d\n", lmx_char_value(fs))
+        return: 0
+    end: main
+end: external
+"@
+# inc/pass/wrap publish receiving graph only; src stays 10. fallback hid reads recv 20 then publishes 21.
+if ($dAsgn -ne "11`n10`n65`n10`n11`n10`n0`n21`n10`n") { throw "asgn-bind caller vs fallback graphs got $dAsgn" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_bind_sz.lm2" "unit_asgn_bind_sz" 0 "inc"
+$dAsz = Invoke-SpliceDrive "unit_asgn_bind_sz" @"
+        @: void fs 0
+        @: void fr 0
+        fs: lmx_size_new_owned(@ process_message\blocks, @ process_message\ranges)
+        fr: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        if: fs = 0 || fr = 0
+            return: 1
+        if: lmx_size_store(fs, 9U) != 0
+            return: 1
+        l2_m0(lmx_branch_struct_known(unit, 0U), 9U)
+        c.printf("%zu\n", lmx_size_value(fr))
+        c.printf("%zu\n", lmx_size_value(fs))
+        return: 0
+    end: main
+end: external
+"@
+if ($dAsz -ne "10`n9`n") { throw "size_t asgn-bind graphs got $dAsz" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_branch.lm2" "unit_asgn_branch" 0 "after_if"
+$br = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_asgn_branch.lm1"))).Replace("`r`n", "`n")
+$afterIf = [regex]::Match($br, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
+if ($afterIf -notmatch 'if: l2_q0_from = 0') { throw "branched bind must acquire backing at runtime, not only at first linear assignment" }
+$dBr = Invoke-SpliceDrive "unit_asgn_branch" @"
+        @: Lmx method 0
+        @@: void drive_slot 0
+        @: void value 0
+        method: lmx_branch_struct_known(unit, 0U)
+        drive_slot: lmx_branch_slot_known(method, 1U)
+        drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
+        l2_m0(method, 0, 0)
+        value: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(value))
+        drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
+        l2_m0(method, 0, 1)
+        value: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(value))
+        method: lmx_branch_struct_known(unit, 1U)
+        drive_slot: lmx_branch_slot_known(method, 1U)
+        drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
+        l2_m1(method, 0, 0)
+        value: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(value))
+        drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
+        l2_m1(method, 0, 1)
+        value: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(value))
+        method: lmx_branch_struct_known(unit, 2U)
+        drive_slot: lmx_branch_slot_known(method, 1U)
+        drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
+        l2_m2(method, 0, 0)
+        value: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(value))
+        drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
+        l2_m2(method, 0, 1)
+        value: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(value))
+        return: 0
+    end: main
+end: external
+"@
+# flag0 after-if publishes 66; flag1 publishes 66 (not leftover 65); skipped only_if stays 0;
+# taken only_if publishes 65; zero-iter while then assign publishes 66; taken while then assign 66.
+if ($dBr -ne "66`n66`n0`n65`n66`n66`n") { throw "asgn-branch skipped/taken bind got $dBr" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_l2path.lm2" "unit_asgn_l2path" 0 "inc"
+$lp = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_asgn_l2path.lm1"))).Replace("`r`n", "`n")
+if ($lp -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_p1_0\)') { throw "fwd must select inc and pass its x, not an L1 literal" }
+if ($lp -notmatch 'l2_m1\(lmx_branch_struct_known\(node\\node, 1U\), l2_q0\)') { throw "supply must select fwd and pass own s" }
+$dLp = Invoke-SpliceDrive "unit_asgn_l2path" @"
+        @: void fs 0
+        @: void fx 0
+        l2_m2(lmx_branch_struct_known(unit, 2U))
+        fs: lmx_branch_child(lmx_branch_struct_known(unit, 2U), 1U)
+        fx: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(fs))
+        c.printf("%d\n", lmx_char_value(fx))
+        return: 0
+    end: main
+end: external
+"@
+# different spellings: supply s stays 10; inc x publishes 11 on a distinct child
+if ($dLp -ne "10`n11`n") { throw "l2path distinct backing got $dLp" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_samename.lm2" "unit_asgn_samename" 0 "inc"
+$sn = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_asgn_samename.lm1"))).Replace("`r`n", "`n")
+$incSn = [regex]::Match($sn, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
+$supSn = [regex]::Match($sn, 'fn: l2_m3[\s\S]*?end: l2_m3').Value
+if ($incSn -notmatch 'l2_q1_from' -and $incSn -notmatch 'l2_q1_dirty') { throw "inc own x must not reuse supply's child 0" }
+if ($supSn.IndexOf("l2_q0_dirty") -lt 0) { throw "supply own x stays child 0" }
+if ($sn -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_p2_0\)') { throw "fwd must select inc and pass hidden x" }
+$dSn = Invoke-SpliceDrive "unit_asgn_samename" @"
+        @: Lmx method 0
+        @@: void drive_slot 0
+        @: void value 0
+        l2_m3(lmx_branch_struct_known(unit, 3U))
+        value: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        c.printf("%d\n", lmx_char_value(value))
+        method: lmx_branch_struct_known(unit, 0U)
+        drive_slot: lmx_branch_slot_known(method, 1U)
+        value: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(value))
+        drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 20)
+        l2_m0(method, (cast: (char) lmx_char_value(drive_slot[0])))
+        value: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        c.printf("%d\n", lmx_char_value(value))
+        value: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(value))
+        method: lmx_branch_struct_known(unit, 4U)
+        drive_slot: lmx_branch_slot_known(method, 1U)
+        drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
+        l2_m4(method, 10, 0)
+        value: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(value))
+        drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
+        l2_m4(method, 10, 1)
+        value: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(value))
+        return: 0
+    end: main
+end: external
+"@
+# supply x=10 stays 10; inc receiving 11. no-src fallback 20 -> 21, supply still 10.
+# nest same-method: flag0 x: x+1 from 10 -> 11; flag1 x:30 then +1 -> 31 (one binding).
+if ($dSn -ne "10`n11`n10`n21`n11`n31`n") { throw "same-name source vs receiving got $dSn" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_typed_src.lm2" "unit_asgn_typed_src" 0 "inc_asgn"
+$ts = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_asgn_typed_src.lm1"))).Replace("`r`n", "`n")
+$typedFn = [regex]::Match($ts, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
+$asgnFn = [regex]::Match($ts, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
+$supFn = [regex]::Match($ts, 'fn: l2_m3[\s\S]*?end: l2_m3').Value
+if ($typedFn -notmatch 'l2_q0_dirty') { throw "inc_typed own x must be this method's slot" }
+if ($asgnFn -notmatch 'l2_q3_dirty' -and $asgnFn -notmatch 'l2_q3_from') { throw "inc_asgn bind must not reuse inc_typed's q0" }
+if ($supFn -notmatch 'l2_q2_dirty') { throw "supply own x must be a distinct source slot" }
+$dTs = Invoke-SpliceDrive "unit_asgn_typed_src" @"
+        @: void fs 0
+        @: void ft 0
+        @: void fp 0
+        @: void fa 0
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U)))
+        fs: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        fa: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        ft: lmx_branch_child(lmx_branch_struct_known(unit, 1U), 1U)
+        fp: lmx_branch_child(lmx_branch_struct_known(unit, 2U), 1U)
+        c.printf("%d\n", lmx_char_value(fs))
+        c.printf("%d\n", lmx_char_value(fa))
+        c.printf("%d\n", lmx_char_value(ft))
+        c.printf("%d\n", lmx_char_value(fp))
+        return: 0
+    end: main
+end: external
+"@
+# supply source 10; asgn/typed/pre receiving 11 each. node\x first occurrence is inc_typed [0]=11, not source [2].
+if ($dTs -ne "0`n10`n11`n11`n11`n") { throw "typed vs asgn vs hidden-pre source isolation got $dTs" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_fallback.lm2" "unit_asgn_fallback" 0 "inc"
+$fb = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_asgn_fallback.lm1"))).Replace("`r`n", "`n")
+if ($fb -notmatch 'l2_m0\(lmx_branch_struct_known\(unit, 0U\)\)') { throw "generated entry must call first_x with its callable Structure" }
+if ($fb -notmatch 'l2_m1\(lmx_branch_struct_known\(unit, 1U\), l2_t\d+\)') { throw "generated entry must call inc with generated fallback" }
+if ($fb -notmatch 'lmx_branch_slot_known\(lmx_branch_struct_known\(unit, 0U\), 1U\)') { throw "21.3 fallback must load first_x own x, not inc's private destination" }
+$dFb = Invoke-SpliceDrive "unit_asgn_fallback" @"
+        @: void f0 0
+        @: void f1 0
+        @@: void drive_slot 0
+        f0: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        drive_slot: lmx_branch_slot_known(lmx_branch_struct_known(unit, 1U), 1U)
+        f1: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(f0))
+        c.printf("%d\n", lmx_char_value(f1))
+        drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 30)
+        l2_m2(lmx_branch_struct_known(unit, 2U), 10)
+        f0: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        f1: drive_slot[0]
+        c.printf("%d\n", lmx_char_value(f0))
+        c.printf("%d\n", lmx_char_value(f1))
+        return: 0
+    end: main
+end: external
+"@
+# generated first_x(); inc(): [0]x stays 20, private dest 21. caller 10 overrides: [0] stays 20, dest 11.
+if ($dFb -ne "20`n21`n20`n11`n") { throw "21.3 node[0]x fallback vs private dest got $dFb" }
+
+# C99 &&/|| yield int 0/1. Oracle is C, not this emitter.
+Invoke-Leaf "l2src\tests\unit_bool_and.lm2" "unit_bool_and" 1 "f"
+$ba = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_bool_and.lm1")))
+if ($ba -notmatch '!= 0') { throw "unit_bool_and must normalize && to 0/1" }
+Invoke-Leaf "l2src\tests\unit_bool_or.lm2" "unit_bool_or" 1 "f"
+
+Invoke-Leaf "l2src\tests\unit_bool_skip.lm2" "unit_bool_skip" 0 "m"
+$d9 = Invoke-SpliceDrive "unit_bool_skip" @"
+        @: Lmx method 0
+        @: void f 0
+        method: lmx_branch_struct_known(unit, 1U)
+        c.printf("%d\n", l2_m1(method, 0))
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m1(method, 1))
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m1(method, 2))
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($d9 -ne "1`n0`n1`n0`n0`n0`n") { throw "7||boom / -1||boom / 0&&boom return/sideeffect: $d9" }
+
+Invoke-Leaf "l2src\tests\unit_bool_mix.lm2" "unit_bool_mix" 0 "m"
+$d10 = Invoke-SpliceDrive "unit_bool_mix" @"
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 0))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 1))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 2))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 3))
+        return: 0
+    end: main
+end: external
+"@
+# C: 1||0&&7 -> 1; 0||1&&7 -> 1; 1&&7 -> 1; 0&&7 -> 0
+if ($d10 -ne "1`n1`n1`n0`n") { throw "nested mixed &&/|| C 0/1 results: $d10" }
+
+Invoke-Leaf "l2src\tests\unit_sz_id.lm2" "unit_sz_id" 0 "id"
+Invoke-Leaf "l2src\tests\unit_own_array_size_index.lm2" "unit_own_array_size_index" 19 "m"
+# A by-value ulong local and an own Array of ulong are Message-owned typed cells
+# (LMX_TYPE_ULONG / LMX_TYPE_ARRAY_OF_ULONG); the values exceed the int range.
+Invoke-Leaf "l2src\tests\unit_ulong_local.lm2" "unit_ulong_local" 0 "ulong_local"
+$ulongL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_ulong_local.lm1")))
+if ($ulongL1.IndexOf("lmx_ulong_new_owned") -lt 0 -or $ulongL1.IndexOf("c.LMX_TYPE_ARRAY_OF_ULONG") -lt 0 -or $ulongL1.IndexOf("lmx_ulong_store_known") -lt 0) { throw "unit_ulong_local did not lower to the ulong owned domain" }
+# A ulong formal and return keep the value domain in the signature; the
+# written formal is an own field checkpointed through the ulong store.
+Invoke-Leaf "l2src\tests\unit_ulong_signature.lm2" "unit_ulong_signature" 0 "ulong_sig"
+$ulongSigL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_ulong_signature.lm1")))
+if ($ulongSigL1 -notmatch '; ulong: l2_p[0-9]+_0; ulong: l2_p[0-9]+_1\) ulong' -or $ulongSigL1 -notmatch 'ulong: l2_t[0-9]+' -or $ulongSigL1 -notmatch 'lmx_ulong_store_known\(l2_q[0-9]+_from\[0\], l2_p[0-9]+_0\)') { throw "unit_ulong_signature did not spell ulong in the signature" }
+$null = Invoke-LibraryEmit "l2src\tests\library_ulong.lm2" "library_ulong" 0
+$ulongLib = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "library_ulong.lm1")))
+if ($ulongLib.IndexOf("ulong_value (ulong: value) ulong") -lt 0) { throw "library_ulong public signature did not spell ulong" }
+# The public signature spells every formal the method signature spells; a
+# const LmP0Text formal was refused as "cannot spell formal type 4".
+$null = Invoke-LibraryEmit "l2src\tests\library_p0_text.lm2" "library_p0_text" 0
+$p0Lib = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "library_p0_text.lm1")))
+if ($p0Lib.IndexOf("p0_probe (const: @(LmP0Text text)) int") -lt 0) { throw "library_p0_text public signature did not spell const LmP0Text" }
+# Three stops from e2's lmx_value_owned / lmx_array_owned ports: a cast to
+# @: int, a @: ulong local, and c.sizeof of an L2 variable.
+Invoke-Leaf "l2src\tests\unit_cast_ptr_int.lm2" "unit_cast_ptr_int" 0 "cast_ptr_int"
+$castIntL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_cast_ptr_int.lm1")))
+if ($castIntL1.IndexOf("(cast: (@: int) ") -lt 0) { throw "unit_cast_ptr_int did not keep the @: int cast" }
+Invoke-Leaf "l2src\tests\unit_ulong_ptr_local.lm2" "unit_ulong_ptr_local" 0 "ulong_ptr"
+$ulongPtrL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_ulong_ptr_local.lm1")))
+if ($ulongPtrL1.IndexOf("(cast: (@: ulong) ") -lt 0 -or $ulongPtrL1 -notmatch '@: ulong ') { throw "unit_ulong_ptr_local did not spell @: ulong" }
+Invoke-Leaf "l2src\tests\unit_sizeof_own_local.lm2" "unit_sizeof_own_local" 0 "sizeof_own"
+$sizeofL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_sizeof_own_local.lm1")))
+if ($sizeofL1 -match 'c\.sizeof\((zero|probe|w)\)' -or $sizeofL1 -notmatch 'c\.sizeof\(l2_t[0-9]+\)' -or $sizeofL1 -notmatch 'c\.sizeof\(l2_p[0-9]+_0\)') { throw "unit_sizeof_own_local emitted a source name inside c.sizeof" }
+Invoke-Leaf "l2src\tests\unit_sizeof_expr.lm2" "unit_sizeof_expr" 0 "sizeof_expr"
+$sizeofExprL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_sizeof_expr.lm1")))
+if ($sizeofExprL1 -notmatch 'c\.sizeof\(l2_p[0-9]+_0\\data\[0\]\)' -or $sizeofExprL1 -match 'c\.sizeof\(t\\') { throw "unit_sizeof_expr did not emit the operand as an L2 expression" }
+# A foreign C call with no arguments, as a value, a condition and a statement.
+Invoke-Leaf "l2src\tests\unit_c_empty_call.lm2" "unit_c_empty_call" 0 "empty_calls"
+$emptyCallL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_c_empty_call.lm1")))
+if ([regex]::Matches($emptyCallL1, 'c\.rand\(\)').Count -lt 2 -or $emptyCallL1.IndexOf("c.abort()") -lt 0) { throw "unit_c_empty_call did not emit the empty C calls as written" }
+# c.sizeof as a C call argument is a frame: its single operand is a type spelled
+# as written (c.wchar_t) or a formal/own field lowered to its C spelling.
+Invoke-Leaf "l2src\tests\unit_sizeof_arg.lm2" "unit_sizeof_arg" 0 "size_args"
+$sizeofArgL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_sizeof_arg.lm1")))
+if ($sizeofArgL1.IndexOf("c.sizeof(c.wchar_t)") -lt 0 -or $sizeofArgL1 -match 'c\.sizeof\((zero|w)\)' -or $sizeofArgL1 -notmatch 'c\.sizeof\(l2_t\d+\)' -or $sizeofArgL1 -notmatch 'c\.sizeof\(l2_p\d+_0\)') { throw "unit_sizeof_arg did not lower the c.sizeof argument operands" }
+# A by-value formal or return of a foreign type is spelled as written, `c.T` without
+# its prefix (Stage B step 2b).
+Invoke-Leaf "l2src\tests\unit_byvalue_foreign.lm2" "unit_byvalue_foreign" 0 "byvalue"
+$byvalueL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_byvalue_foreign.lm1")))
+if ($byvalueL1 -notmatch '; LmP0NodeKind: l2_p\d+_0\) LmP0NodeKind' -or $byvalueL1 -notmatch '; LmP0FrameFlags: l2_p\d+_0\) LmP0FrameFlags' -or $byvalueL1 -match 'c\.LmP0FrameFlags' -or $byvalueL1 -notmatch 'LmP0NodeKind: l2_t\d+' -or $byvalueL1 -notmatch 'LmP0FrameFlags: l2_t\d+') { throw "unit_byvalue_foreign did not spell the by-value foreign types as written" }
+# A foreign int alias as a local's declared type (5e's repro, parser-l2 Stage d
+# slice 5): `LmP0TrailerRole: trailer_role` translates as an int own local.
+$aliasLocalHeader = "lm1\build\l2src\tests\repro_foreign_int_alias_local.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $aliasLocalHeader) | Out-Null
+& $outputL1trans "l2src\tests\repro_foreign_int_alias_local.h.lm1" $aliasLocalHeader
+if ($LASTEXITCODE -ne 0) { throw "repro_foreign_int_alias_local header translation failed" }
+Invoke-Leaf "l2src\tests\repro_foreign_int_alias_local.lm2" "repro_foreign_int_alias_local" 0 "probe_foreign_int_alias_local"
+# A nested index is one actual (5e's repro 7acecbbd, parser-l2 Stage e slice 3):
+# text[index[0]] at a call's head and after a binary operator; exit 4 counts both.
+Invoke-Leaf "l2src\tests\unit_call_nested_index.lm2" "unit_call_nested_index" 4 "count_hash"
+# LmP0IndentStack is a foreign pointer type (INDENT_STACK_FOREIGN_DESIGN, 5e's repro
+# 23e2dbb7): stack\columns[idx] written and read back, a local allocated by cast; exit 5.
+Invoke-Leaf "l2src\tests\unit_indent_stack_field_index.lm2" "unit_indent_stack_field_index" 5 "probe"
+# c.sizeof of an element names the renamed formal or slot (5e's e3 pre-validation,
+# parser-l2 Stage e slice 3): c.sizeof(p[0]) and c.sizeof(cells[0]); exit 5.
+Invoke-Leaf "l2src\tests\unit_sizeof_element.lm2" "unit_sizeof_element" 5 "formal_width"
+# lm_own_* actuals are whole expressions: an unparenthesized length kept only its
+# first field (8U * c.sizeof(c.int) became 8U, n + 1U became n); exit 10 reads the
+# copied tail, and the spelling check pins both lengths as written.
+Invoke-Leaf "l2src\tests\unit_lm_own_actual_span.lm2" "unit_lm_own_actual_span" 10 "copy_tail"
+$ownSpanL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_lm_own_actual_span.lm1")))
+if ($ownSpanL1.IndexOf('lm_own_resize(cells, 8U * c.sizeof(c.int))') -lt 0 -or $ownSpanL1 -notmatch 'lm_own_copy_bytes\(l2_p\d+_0, l2_p\d+_1 \+ 1U\)') { throw "unit_lm_own_actual_span dropped a field of an lm_own actual" }
+# LmP0Document is a foreign pointer type like LmP0Frame (Stage B step 3): its
+# fields resolve as a formal and as a local.
+Invoke-Leaf "l2src\tests\unit_p0_document_field.lm2" "unit_p0_document_field" 0 "doc_field"
+$docFieldL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_p0_document_field.lm1")))
+if ($docFieldL1 -notmatch 'return: l2_p\d+_0\\source_length' -or $docFieldL1.IndexOf("source_length: 7U") -lt 0 -or $docFieldL1 -notmatch '; @: LmP0Document l2_p\d+_0\) size_t') { throw "unit_p0_document_field did not resolve the LmP0Document fields" }
+# Three stops from 5e's module runs: an index that is itself an indexed load,
+# a two-word cast type, and a unit-level prototype: block.
+Invoke-Leaf "l2src\tests\unit_nested_index_cast.lm2" "unit_nested_index_cast" 0 "nested_index"
+$nestedIndexL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_nested_index_cast.lm1")))
+if ($nestedIndexL1 -notmatch 'l2_p\d+_0\[l2_p\d+_2\[0\]\]: l2_p\d+_3' -or $nestedIndexL1.IndexOf("(cast: (unsigned long) ") -lt 0) { throw "unit_nested_index_cast did not emit the nested index or the two-word cast" }
+Invoke-Leaf "l2src\tests\unit_unit_prototype.lm2" "unit_unit_prototype" 0 "prototype_first"
+# A const-qualified pointer return of any foreign type keeps its qualifier on the
+# return and the call-result temporary (Stage B).
+Invoke-Leaf "l2src\tests\unit_const_foreign_return.lm2" "unit_const_foreign_return" 0 "const_return"
+$constRetL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_const_foreign_return.lm1")))
+if ($constRetL1 -notmatch '\) const: @\(LmP0Text\)' -or $constRetL1 -notmatch 'const: @\(LmP0Text l2_t\d+\)') { throw "unit_const_foreign_return did not keep the const qualifier" }
+# `profile: runtime` emits no escape poll and keeps the checkpoint abort paths
+# (decision 12).
+Invoke-Leaf "l2src\tests\unit_profile_runtime.lm2" "unit_profile_runtime" 0 "count_to"
+$profileL1 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_profile_runtime.lm1")))
+if ($profileL1.IndexOf("lmx_msg_poll_escape") -ge 0 -or $profileL1.IndexOf("lmx_msg_poll_abort") -lt 0) { throw "unit_profile_runtime must have no escape poll and keep its checkpoint aborts" }
+# Two miscompiles from e2's lmx_message port (fixtures by e2, 038aae34).
+# A C call on the right of && boxes the own int `i`; the box temporary took
+# the condition temporary's name through the shared l2_tok buffer.
+$andCallL1 = Invoke-CompileObject "l2src\tests\l2_and_foreign_call_own_local.lm2" "l2_and_foreign_call_own_local"
+foreach ($mt in [regex]::Matches($andCallL1, '(?m)^\s*(l2_t\d+): .*lmx_msg_exec_tab_addr_locked\(([^)]*)\)')) { if ($mt.Groups[2].Value -match ('\b' + $mt.Groups[1].Value + '\b')) { throw "l2_and_foreign_call_own_local passes the condition temporary to its own call" } }
+# The actual is `i`, own field 0: the call gets a temporary assigned from its working local.
+$andCallArg = [regex]::Match($andCallL1, 'lmx_msg_exec_tab_addr_locked\(l2_p\d+_0, (l2_t\d+)\)')
+if (-not $andCallArg.Success -or $andCallL1 -notmatch ('(?m)^\s*' + $andCallArg.Groups[1].Value + ': l2_q0\s*$')) { throw "l2_and_foreign_call_own_local does not pass the actual i" }
+# An indexed store whose index formal is written later: the formal is bound
+# to an own field with no working local, so the index is the formal.
+$indexStoreL1 = Invoke-CompileObject "l2src\tests\l2_index_store_reassigned_formal.lm2" "l2_index_store_reassigned_formal"
+if ($indexStoreL1.IndexOf("[l2_q0]") -ge 0 -or $indexStoreL1 -notmatch 'l2_p\d+_1\[l2_p\d+_3\]: l2_p\d+_0\\addr') { throw "l2_index_store_reassigned_formal did not index with the formal" }
+# Two miscompiles from 5e's mixa_manager port (repros on sonnet/parser-l2
+# 62863393). A C call in value position goes through the generic C call
+# emitter: every actual is a whole expression (the fixed-arity memcmp/strlen/
+# memcpy/memset and storage-list special cases took one field per actual and
+# dropped the rest), and a C call nested in an actual keeps the outer call's
+# value destination.
+$ccallHeader = "lm1\build\l2src\tests\unit_ccall_value_expr.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ccallHeader) | Out-Null
+& $outputL1trans "l2src\tests\unit_ccall_value_expr.h.lm1" $ccallHeader
+if ($LASTEXITCODE -ne 0) { throw "unit_ccall_value_expr header translation failed" }
+$ccallValueL1 = Invoke-CompileObject "l2src\tests\unit_ccall_value_expr.lm2" "unit_ccall_value_expr"
+if ($ccallValueL1 -notmatch 'return: \(cast: \(int\) c\.memcmp\(l2_p\d+_0 \+ p\\offset, l2_p\d+_3, l2_p\d+_4\) = 0\)') { throw "unit_ccall_value_expr split the expression actual of memcmp" }
+if ($ccallValueL1 -notmatch 'return: c\.memcmp\(l2_p\d+_2, l2_p\d+_0 \+ l2_p\d+_1, l2_p\d+_3\)') { throw "unit_ccall_value_expr dropped a trailing expression actual" }
+if ($ccallValueL1 -notmatch ': \(cast: \(@: char\) c\.malloc\(c\.strlen\(l2_p\d+_0\) \+ 3U\)\)') { throw "unit_ccall_value_expr lost the outer call of a nested C call" }
+if ($ccallValueL1 -notmatch 'return: c\.strlen\(l2_p\d+_0\) \+ c\.strlen\(l2_p\d+_1\) \+ 1U') { throw "unit_ccall_value_expr did not keep two C calls in one expression" }
+# An own Array element inside a native index is loaded through its descriptor
+# before the store; the own name alone has no C storage.
+$indexOwnL1 = Invoke-CompileObject "l2src\tests\unit_index_own_array.lm2" "unit_index_own_array"
+if ($indexOwnL1 -match 'l2_q\d+\[') { throw "unit_index_own_array indexes an own Array by a working-local name" }
+$indexLoad = [regex]::Match($indexOwnL1, '(?m)^\s*(l2_t\d+): l2_a\d+_data\[0U\]\r?\n\s*l2_p\d+_0\[(l2_t\d+)\]: ')
+if (-not $indexLoad.Success -or $indexLoad.Groups[1].Value -ne $indexLoad.Groups[2].Value) { throw "unit_index_own_array does not store through the loaded element" }
+if ($indexOwnL1 -notmatch '(?m)^\s*(l2_t\d+): l2_a\d+_data\[0U\]\r?\n\s*l2_p\d+_0\[\1 \+ 1U\]: 0') { throw "unit_index_own_array does not load the element inside a compound index" }
+# A field of a runtime struct (LmxMsg, LmxMsgCopy) is spelled as written and
+# checked by gcc against lmx_message.h (e2). ui_pending was never in the
+# deleted per-type field list; owned and n were.
+$runtimeFieldL1 = Invoke-CompileObject "l2src\tests\unit_runtime_struct_field.lm2" "unit_runtime_struct_field"
+if ($runtimeFieldL1 -notmatch 'if: l2_p\d+_0\\ui_pending != 0') { throw "unit_runtime_struct_field did not spell LmxMsg.ui_pending as written" }
+if ($runtimeFieldL1 -notmatch 'l2_p\d+_0\\owned != 0' -or $runtimeFieldL1 -notmatch 'l2_p\d+_0\\n != 0U') { throw "unit_runtime_struct_field did not spell the LmxMsgCopy fields as written" }
+# Spec 3.4.1: numeric literals are ANSI C / C99, so a leading 0 is an octal
+# constant and 0x a hexadecimal one. An extent and an index count as C
+# counts them (0c: run_l2_message_root's `[]: int buf 003`).
+$octalL1 = Invoke-CompileObject "l2src\tests\unit_octal_literals.lm2" "unit_octal_literals"
+if ($octalL1 -notmatch 'LMX_TYPE_ARRAY_OF_INT, 8U,') { throw "unit_octal_literals: extent 010 does not count 8" }
+if ($octalL1 -notmatch 'l2_a\d+_data\[7U\]: 0x2A') { throw "unit_octal_literals: index 07 is not element 7" }
+if ($octalL1 -notmatch 'LMX_TYPE_ARRAY_OF_CHAR, 3U,') { throw "unit_octal_literals: extent 0x3 does not count 3" }
+# A function passed as a value is itself (5e, parser dump printer): one
+# declared in a predef'd prototype: block resolves as it does in call
+# position, and neither it nor a same-unit L2 callable is boxed into an int
+# temporary.
+$fnptrHeader = "lm1\build\l2src\tests\unit_fnptr_prototype_value.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $fnptrHeader) | Out-Null
+& $outputL1trans "l2src\tests\unit_fnptr_prototype_value.h.lm1" $fnptrHeader
+if ($LASTEXITCODE -ne 0) { throw "unit_fnptr_prototype_value header translation failed" }
+$fnptrL1 = Invoke-CompileObject "l2src\tests\unit_fnptr_prototype_value.lm2" "unit_fnptr_prototype_value"
+if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, lm_own_delete_plain\)') { throw "unit_fnptr_prototype_value did not pass the prototype function as itself" }
+if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, p0_probe_delete_item\)') { throw "unit_fnptr_prototype_value did not pass the L2 callable as itself" }
+if ($fnptrL1 -match '(?m)^\s*l2_t\d+: (lm_own_delete_plain|p0_probe_delete_item)\s*$') { throw "unit_fnptr_prototype_value boxed a function into a temporary" }
+# Spec 11.3.1 / 12.2: `@` never names an own Array element's storage; that
+# pointer needs an explicit adapter. 485f15cc's flat-field `@` let
+# `return: @ buf[0]` emit the address of a temporary copy (0c).
+Invoke-Negative "l2src\tests\address_array_element.lm2" "address_array_element" "address of an Array element needs an explicit adapter"
+Invoke-Negative "l2src\tests\address_array_element_sum.lm2" "address_array_element_sum" "address of an Array element needs an explicit adapter"
+# Spec 12.2: an own Array decays to its backing pointer only as a call actual
+# or a cast operand (the positional adapter); elsewhere it is refused. `@` on
+# a whole Array field names its descriptor (11.3.1), which is not lowered, so
+# it is refused too. Before: `return: buf` emitted the backing pointer and
+# `return: @ buf` the address of a C local (0c: array_invalid.scalar_read and
+# .address).
+Invoke-Negative "l2src\tests\array_field_value.lm2" "array_field_value" "own array use not yet supported"
+Invoke-Negative "l2src\tests\address_array_field.lm2" "address_array_field" "address of an Array field is not lowered to its descriptor yet"
+$sz = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_sz_id.lm1")))
+if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
+$wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
+if ($wrapFn -match 'int: l2_t') { throw "parenthesized size_t wrap must not copy into int temp:`n$wrapFn" }
+$d11 = Invoke-SpliceDrive "unit_sz_id" @"
+        c.printf("%zu\n", l2_m0(lmx_branch_struct_known(unit, 0U), 2147483648U))
+        c.printf("%zu\n", l2_m1(lmx_branch_struct_known(unit, 1U), 2147483648U))
+        return: 0
+    end: main
+end: external
+"@
+if ($d11 -ne "2147483648`n2147483648`n") { throw "size_t id/wrap lost high bits: $d11" }
+
+function Invoke-StartsPython {
+    $refLm1 = Join-Path $out "spy_ref.lm1"
+    $refC = Join-Path $out "spy_ref.c"
+    $refExe = Join-Path $out "spy_ref.exe"
+    $refOut = Join-Path $out "spy_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser_text.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+        c.printf("%d\n", lm_p0_starts_python_string("'''", 3U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("\x22\x22\x22", 3U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("'", 1U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("''x", 3U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("x'''", 4U, 1U))
+        c.printf("%d\n", lm_p0_starts_python_string("'''", 3U, 1U))
+        c.printf("%d\n", lm_p0_starts_python_string("'''", 3U, 3U))
+        c.printf("%d\n", lm_p0_starts_python_string("", 0U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("'\x22\x22", 3U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("abc", 3U, 0U))
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed spy_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "spy_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'spy_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "spy_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_text_starts_python.lm2" "parser_text_starts_python" 0 "lm_p0_starts_python_string"
+    $lm1 = Join-Path $out "parser_text_starts_python.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_starts_python_string') { throw "starts_python must mangle method symbols" }
+    if ($text.IndexOf("l2_q0") -lt 0) { throw "starts_python missing own char cache" }
+    if ($text.IndexOf('l2_own0) "quote"') -lt 0) { throw "starts_python OwnUsed must keep source name quote" }
+    $drive = @"
+        @: Lmx method lmx_branch_struct_known(unit, 0U)
+        c.printf("%d\n", l2_m0(method, "'''", 3U, 0U))
+        c.printf("%d\n", l2_m0(method, "\x22\x22\x22", 3U, 0U))
+        c.printf("%d\n", l2_m0(method, "'", 1U, 0U))
+        c.printf("%d\n", l2_m0(method, "''x", 3U, 0U))
+        c.printf("%d\n", l2_m0(method, "x'''", 4U, 1U))
+        c.printf("%d\n", l2_m0(method, "'''", 3U, 1U))
+        c.printf("%d\n", l2_m0(method, "'''", 3U, 3U))
+        c.printf("%d\n", l2_m0(method, "", 0U, 0U))
+        c.printf("%d\n", l2_m0(method, "'\x22\x22", 3U, 0U))
+        c.printf("%d\n", l2_m0(method, "abc", 3U, 0U))
+        @: void f 0
+        f: lmx_branch_child(method, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "spy_l2_drive.lm1"
+    $drvC = Join-Path $out "spy_l2_drive.c"
+    $drvExe = Join-Path $out "spy_l2_drive.exe"
+    $drvOut = Join-Path $out "spy_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed spy_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "spy_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'spy_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "spy_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    $alines = $a.Split("`n") | Where-Object { $_ -ne "" }
+    $blines = $b.Split("`n") | Where-Object { $_ -ne "" }
+    if ($alines.Count -ne 10) { throw "spy_ref expected 10 lines, got $($alines.Count)" }
+    if ($blines.Count -ne 11) { throw "spy_l2 expected 10 cases + published field, got $($blines.Count)" }
+    for ($i = 0; $i -lt 10; $i++) {
+        if ($alines[$i] -ne $blines[$i]) { throw "starts_python_string mismatch vs parser_text.lm1 at case $i ref=$($alines[$i]) l2=$($blines[$i])" }
+    }
+    if ($blines[10] -ne "97") { throw "published callable own field must be last assigned quote (abc -> 97), got $($blines[10])" }
+}
+
+Invoke-StartsPython
+
+# c.name is emitted as written; an undeclared one is the C compiler's error, not
+# l2trans's (the translator reads no header text to admit a foreign name).
+$ucLm1 = Join-Path $out "unit_unknown_c.lm1"
+$ucC = Join-Path $out "unit_unknown_c.c"
+cmd /c "`"$l2exe`" `"l2src\tests\unit_unknown_c.lm2`" `"$ucLm1`" 2> `"$(Join-Path $out 'unit_unknown_c.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'unit_unknown_c.err'); throw "unit_unknown_c: l2trans refused a c.name it must emit as written" }
+& $outputL1trans $ucLm1 $ucC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $ucLm1" }
+$null = Get-L2MessageObjects
+$ucLog = Join-Path $log "unit_unknown_c.gcc.log"
+cmd /c "gcc $($cflags -join ' ') -I lm1/build -I `"$(Join-Path $out 'message_support/headers')`" -c `"$ucC`" -o `"$(Join-Path $out 'unit_unknown_c.o')`" > `"$ucLog`" 2>&1"
+if ($LASTEXITCODE -eq 0) { throw "unit_unknown_c: gcc accepted an undeclared c.no_such_function" }
+if (-not (Select-String -LiteralPath $ucLog -SimpleMatch "implicit declaration of function 'no_such_function'" -Quiet)) { Get-Content $ucLog; throw "unit_unknown_c: gcc failed for a reason other than the undeclared function" }
+Invoke-Negative "l2src\tests\unit_unknown_field.lm2" "unit_unknown_field" "unknown foreign field"
+# A foreign type is spelled as written (Stage B, 2026-09-14): no header is read
+# to admit it, and the C compiler checks the spelling. This was a negative for
+# the deleted "unknown foreign type" admission.
+cmd /c "`"$l2exe`" `"l2src\tests\unit_unknown_type.lm2`" `"$(Join-Path $out 'unit_unknown_type.lm1')`" 2> `"$(Join-Path $out 'unit_unknown_type.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'unit_unknown_type.err'); throw "unit_unknown_type: a foreign type must translate as written" }
+if ([IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out 'unit_unknown_type.lm1'))) -notmatch 'const: @\(Foo l2_p\d+_0\)') { throw "unit_unknown_type did not spell Foo as written" }
+Invoke-Negative "l2src\tests\unit_const_write.lm2" "unit_const_write" "const write"
+
+function Invoke-Views {
+    $refLm1 = Join-Path $out "views_ref.lm1"
+    $refC = Join-Path $out "views_ref.c"
+    $refExe = Join-Path $out "views_ref.exe"
+    $refOut = Join-Path $out "views_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser_text.lm1"
+include: "<stdio.h>" "<stdlib.h>"
+external:
+    fn: main () int
+        @: LmP0Text t 0
+        @: LmP0Text atom 0
+        @: LmP0Text pay 0
+        t: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        atom: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        pay: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        if: t = 0 || atom = 0 || pay = 0
+            return: 1
+        t\data: "hello"
+        t\length: 5U
+        c.printf("%d\n", lm_p0_text_equals(t, "hello"))
+        c.printf("%d\n", lm_p0_text_equals(t, "Hello"))
+        c.printf("%d\n", lm_p0_text_equals(t, "hell"))
+        c.printf("%d\n", lm_p0_text_equals(0, "hello"))
+        c.printf("%d\n", lm_p0_text_equals(t, 0))
+        t\data: ""
+        t\length: 0U
+        c.printf("%d\n", lm_p0_text_equals(t, ""))
+        t\data: "x"
+        t\length: 0U
+        c.printf("%d\n", lm_p0_text_equals(t, ""))
+        c.array: [4]: char nbuf
+        nbuf[0]: 97
+        nbuf[1]: 98
+        nbuf[2]: 0
+        nbuf[3]: 99
+        t\data: nbuf
+        t\length: 4U
+        c.printf("%d\n", lm_p0_text_equals(t, "ab"))
+        atom\data: "abc"
+        atom\length: 3U
+        c.printf("%d\n", lm_p0_identifier_payload(atom, pay))
+        c.printf("%d\n", pay\data = atom\data)
+        c.printf("%zu\n", pay\length)
+        atom\data: "`xy`"
+        atom\length: 4U
+        c.printf("%d\n", lm_p0_identifier_payload(atom, pay))
+        c.printf("%d\n", pay\data = atom\data + 1U)
+        c.printf("%zu\n", pay\length)
+        atom\data: "`x"
+        atom\length: 2U
+        c.printf("%d\n", lm_p0_identifier_payload(atom, pay))
+        c.printf("%zu\n", pay\length)
+        c.printf("%d\n", lm_p0_identifier_payload(0, pay))
+        c.printf("%d\n", lm_p0_identifier_payload(atom, 0))
+        atom\data: 0
+        atom\length: 1U
+        c.printf("%d\n", lm_p0_identifier_payload(atom, pay))
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed views_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "views_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'views_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "views_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_text_views.lm2" "parser_text_views" 0 "lm_p0_text_equals"
+    $lm1 = Join-Path $out "parser_text_views.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_text_equals') { throw "views must mangle method symbols" }
+    if ($text.IndexOf("const: @(LmP0Text") -lt 0) { throw "views missing const LmP0Text* formal" }
+    if ($text.IndexOf("@: LmP0Text") -lt 0) { throw "views missing mutable LmP0Text* formal" }
+    if ($text.IndexOf("size_t: l2_q0") -lt 0) { throw "views missing own size_t cache" }
+    if ($text.IndexOf("lmx_size_new_owned") -lt 0) { throw "views missing Message-owned size_t construction" }
+    if ($text.IndexOf("l2_hash_eq_forced") -ge 0) { throw "views must not ship l2_hash_eq_forced in production helper" }
+    if ($text.IndexOf("l2_immut_query_fill") -lt 0) { throw "views missing L2 make helper fill" }
+    if ($text.IndexOf("l2_hash_compare_q") -lt 0) { throw "views missing production compare seam" }
+    if ($text.IndexOf("const: @(L2ImmutQuery") -lt 0) { throw "views missing const L2ImmutQuery* formal" }
+    if ($text.IndexOf("@: L2ImmutQuery") -lt 0) { throw "views missing mutable L2ImmutQuery* formal" }
+    if ($text.IndexOf("l2src/l2_immut_query.h") -lt 0) { throw "views missing L2ImmutQuery header include" }
+    if ($text.IndexOf("l2_hash_bind") -ge 0) { throw "views must not auto-bind a mutable payload" }
+    if ($text.IndexOf("l1src/p0.lm1.h") -lt 0) { throw "views missing p0.lm1.h adapter include" }
+    if ($text.IndexOf("l1src/p0.h`"") -ge 0 -or $text.IndexOf("l1src/p0.h>") -ge 0) { throw "views must not include leftover p0.h" }
+    if ($text.IndexOf("const-pointee") -lt 0) { throw "views intern comment must distinguish const pointee" }
+    $m2 = [regex]::Match($text, 'fn: l2_m2[\s\S]*?end: l2_m2').Value
+    $m3 = [regex]::Match($text, 'fn: l2_m3[\s\S]*?end: l2_m3').Value
+    if ($m2.IndexOf("l2_immut_query_fill") -lt 0) { throw "make method must call l2_immut_query_fill" }
+    if ($m3.IndexOf("l2_hash_compare_q") -lt 0) { throw "equals_query must call production l2_hash_compare_q" }
+    $drive = @"
+        @: LmP0Text t 0
+        @: LmP0Text atom 0
+        @: LmP0Text pay 0
+        @: L2ImmutQuery q 0
+        @: void f 0
+        c.array: [4]: char nbuf
+        c.array: [6]: char mut
+        t: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        atom: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        pay: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        q: (cast: (@: L2ImmutQuery) c.malloc(c.sizeof(c.L2ImmutQuery)))
+        if: t = 0 || atom = 0 || pay = 0 || q = 0
+            return: 1
+        t\data: "hello"
+        t\length: 5U
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), t, "hello"))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), t, "Hello"))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), t, "hell"))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 0, "hello"))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), t, 0))
+        t\data: ""
+        t\length: 0U
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), t, ""))
+        t\data: "x"
+        t\length: 0U
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), t, ""))
+        nbuf[0]: 97
+        nbuf[1]: 98
+        nbuf[2]: 0
+        nbuf[3]: 99
+        t\data: nbuf
+        t\length: 4U
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), t, "ab"))
+        atom\data: "abc"
+        atom\length: 3U
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), atom, pay))
+        c.printf("%d\n", pay\data = atom\data)
+        c.printf("%zu\n", pay\length)
+        atom\data: "`xy`"
+        atom\length: 4U
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), atom, pay))
+        c.printf("%d\n", pay\data = atom\data + 1U)
+        c.printf("%zu\n", pay\length)
+        atom\data: "`x"
+        atom\length: 2U
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), atom, pay))
+        c.printf("%zu\n", pay\length)
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 0, pay))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), atom, 0))
+        atom\data: 0
+        atom\length: 1U
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), atom, pay))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%zu\n", lmx_size_value(f))
+        t\data: "ab"
+        t\length: 2U
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), t, "ab"))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%zu\n", lmx_size_value(f))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 0, "zzzz"))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%zu\n", lmx_size_value(f))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), t, 0))
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), 0, q))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), t, q))
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), "fn", q))
+        t\data: "fn"
+        t\length: 2U
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), t, q))
+        t\data: "table"
+        t\length: 5U
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), t, q))
+        t\data: "fn"
+        t\length: 2U
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), t, q))
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), "bbb", q))
+        mut[0]: 97
+        mut[1]: 97
+        mut[2]: 97
+        mut[3]: 0
+        atom\data: mut
+        atom\length: 3U
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), atom, pay))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), pay, q))
+        mut[0]: 98
+        mut[1]: 98
+        mut[2]: 98
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), pay, q))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), pay, "bbb"))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), pay, "aaa"))
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), "aaa", q))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), pay, q))
+        q\hash: l2_fnv1a64("bbb", 3U)
+        t\data: "bbb"
+        t\length: 3U
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), t, q))
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "views_l2_drive.lm1"
+    $drvC = Join-Path $out "views_l2_drive.c"
+    $drvExe = Join-Path $out "views_l2_drive.exe"
+    $drvOut = Join-Path $out "views_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed views_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "views_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'views_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "views_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    $alines = $a.Split("`n") | Where-Object { $_ -ne "" }
+    $blines = $b.Split("`n") | Where-Object { $_ -ne "" }
+    if ($alines.Count -ne 19) { throw "views_ref expected 19 lines, got $($alines.Count) : $a" }
+    if ($blines.Count -lt 19) { throw "views_l2 shorter than L1 ref, got $($blines.Count) : $b" }
+    for ($i = 0; $i -lt 19; $i++) {
+        if ($alines[$i] -ne $blines[$i]) { throw "views mismatch vs parser_text.lm1 at $i ref=$($alines[$i]) l2=$($blines[$i])" }
+    }
+    $got = ($blines[19..($blines.Count - 1)] -join ",")
+    $want = "2,1,2,0,2,0,0,0,1,1,0,1,1,1,0,1,1,0,1,0,0"
+    if ($got -ne $want) { throw "views extra own/query/mutation got=$got want=$want full=$b" }
+    $drvText = [System.IO.File]::ReadAllText((Resolve-L2Path $drvLm1))
+    $fnMake = [regex]::Matches($drvText, 'l2_m2\(lmx_branch_struct_known\(unit, 2U\), "fn"')
+    $qCalls = [regex]::Matches($drvText, 'l2_m3\(lmx_branch_struct_known\(unit, 3U\),')
+    if ($fnMake.Count -ne 1) { throw "prepared query 'fn' must be made once, got $($fnMake.Count)" }
+    if ($qCalls.Count -lt 3) { throw "equals_query must be reused on the prepared query, got $($qCalls.Count)" }
+}
+
+Invoke-Views
+
+Invoke-Negative "l2src\tests\unit_void_value.lm2" "unit_void_value" "incompatible entry signature"
+# c.sizeof of a foreign type is spelled as written (Stage B step 2a): no list or
+# header admits the type, and the C compiler checks it. This was a negative for
+# the deleted closed type list.
+cmd /c "`"$l2exe`" `"l2src\tests\unit_bad_sizeof.lm2`" `"$(Join-Path $out 'unit_bad_sizeof.lm1')`" 2> `"$(Join-Path $out 'unit_bad_sizeof.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'unit_bad_sizeof.err'); throw "unit_bad_sizeof: a c.sizeof type operand must translate as written" }
+if ([IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out 'unit_bad_sizeof.lm1'))).IndexOf("c.sizeof(c.Foo)") -lt 0) { throw "unit_bad_sizeof did not spell c.sizeof(c.Foo) as written" }
+
+function Invoke-Heap {
+    $refLm1 = Join-Path $out "heap_ref.lm1"
+    $refC = Join-Path $out "heap_ref.c"
+    $refExe = Join-Path $out "heap_ref.exe"
+    $refOut = Join-Path $out "heap_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser_text.lm1"
+include: "<stdio.h>" "<string.h>"
+external:
+    fn: main () int
+        @: LmP0Text a 0
+        @: LmP0Text b 0
+        @: char p 0
+        @: char q 0
+        a: lm_p0_text_view_new_cstr("hello")
+        c.printf("%d\n", a != 0)
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", c.strcmp(a\data, "hello") = 0)
+        c.printf("%d\n", a\data = "hello")
+        b: lm_p0_text_from_cstr("hello")
+        c.printf("%d\n", b != 0)
+        c.printf("%d\n", b = a)
+        c.printf("%zu\n", b\length)
+        lm_p0_text_view_delete(a)
+        lm_p0_text_view_delete(b)
+        c.printf("%d\n", c.strcmp("hello", "hello") = 0)
+        a: lm_p0_text_view_new_cstr("")
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", a\data[0] = 0)
+        lm_p0_text_view_delete(a)
+        a: lm_p0_text_view_new_cstr(0)
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", a\data[0] = 0)
+        lm_p0_text_view_delete(a)
+        p: lm_p0_copy_bytes("ab", 2U)
+        c.printf("%d\n", p != 0)
+        c.printf("%d\n", p[0] = 97)
+        c.printf("%d\n", p[1] = 98)
+        c.printf("%d\n", p[2] = 0)
+        q: lm_p0_copy_bytes("ab", 2U)
+        c.printf("%d\n", q = p)
+        lm_own_delete(p, 0)
+        lm_own_delete(q, 0)
+        p: lm_p0_copy_bytes(0, 0U)
+        c.printf("%d\n", p != 0)
+        c.printf("%d\n", p[0] = 0)
+        lm_own_delete(p, 0)
+        c.array: [4]: char nbuf
+        nbuf[0]: 97
+        nbuf[1]: 0
+        nbuf[2]: 99
+        nbuf[3]: 0
+        p: lm_p0_copy_bytes(nbuf, 3U)
+        c.printf("%d\n", p[0] = 97)
+        c.printf("%d\n", p[1] = 0)
+        c.printf("%d\n", p[2] = 99)
+        c.printf("%d\n", p[3] = 0)
+        lm_own_delete(p, 0)
+        p: lm_p0_copy_bytes("x", (cast: (size_t) -1))
+        c.printf("%d\n", p = 0)
+        lm_own_alloc_fails: 1
+        a: lm_p0_text_view_new_cstr("z")
+        c.printf("%d\n", a = 0)
+        lm_own_alloc_fails: 0
+        lm_p0_text_view_delete(0)
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed heap_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "heap_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'heap_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "heap_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_text_heap.lm2" "parser_text_heap" 0 "lm_p0_copy_bytes"
+    $lm1 = Join-Path $out "parser_text_heap.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "heap must mangle method symbols" }
+    if ($text.IndexOf("@: LmP0Text l2_s") -lt 0) { throw "heap missing address slot, not own cache" }
+    if ($text.IndexOf("lmx_own_load") -ge 0) { throw "heap must not use lmx_own cache API" }
+    if ($text.IndexOf("sub: l2_m2") -lt 0) { throw "heap delete must be sub l2_m2" }
+    if ($text.IndexOf("c.sizeof(c.LmP0Text)") -lt 0) { throw "heap missing sizeof imported ABI" }
+    if ($text.IndexOf("return: @") -ge 0) { throw "heap must return pointer value, not @slot" }
+    if ($text.IndexOf("l2_foreign_alloc.lm1") -ge 0 -or $text.IndexOf("    fn: lm_own_new_zero (size_t: size) @: void") -lt 0 -or $text.IndexOf("    sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)") -lt 0) { throw "heap must declare the lm_own_* adapters, not import a copy" }
+    $drive = @"
+        @: LmP0Text a 0
+        @: LmP0Text b 0
+        @: char p 0
+        @: char q 0
+        a: l2_m1(lmx_branch_struct_known(unit, 1U), "hello")
+        c.printf("%d\n", a != 0)
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", c.strcmp(a\data, "hello") = 0)
+        c.printf("%d\n", a\data = "hello")
+        b: l2_m3(lmx_branch_struct_known(unit, 3U), "hello")
+        c.printf("%d\n", b != 0)
+        c.printf("%d\n", b = a)
+        c.printf("%zu\n", b\length)
+        l2_m2(lmx_branch_struct_known(unit, 2U), a)
+        l2_m2(lmx_branch_struct_known(unit, 2U), b)
+        c.printf("%d\n", c.strcmp("hello", "hello") = 0)
+        a: l2_m1(lmx_branch_struct_known(unit, 1U), "")
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", a\data[0] = 0)
+        l2_m2(lmx_branch_struct_known(unit, 2U), a)
+        a: l2_m1(lmx_branch_struct_known(unit, 1U), 0)
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", a\data[0] = 0)
+        l2_m2(lmx_branch_struct_known(unit, 2U), a)
+        p: l2_m0(lmx_branch_struct_known(unit, 0U), "ab", 2U)
+        c.printf("%d\n", p != 0)
+        c.printf("%d\n", p[0] = 97)
+        c.printf("%d\n", p[1] = 98)
+        c.printf("%d\n", p[2] = 0)
+        q: l2_m0(lmx_branch_struct_known(unit, 0U), "ab", 2U)
+        c.printf("%d\n", q = p)
+        lm_own_delete(p, 0)
+        lm_own_delete(q, 0)
+        p: l2_m0(lmx_branch_struct_known(unit, 0U), 0, 0U)
+        c.printf("%d\n", p != 0)
+        c.printf("%d\n", p[0] = 0)
+        lm_own_delete(p, 0)
+        c.array: [4]: char nbuf
+        nbuf[0]: 97
+        nbuf[1]: 0
+        nbuf[2]: 99
+        nbuf[3]: 0
+        p: l2_m0(lmx_branch_struct_known(unit, 0U), nbuf, 3U)
+        c.printf("%d\n", p[0] = 97)
+        c.printf("%d\n", p[1] = 0)
+        c.printf("%d\n", p[2] = 99)
+        c.printf("%d\n", p[3] = 0)
+        lm_own_delete(p, 0)
+        p: l2_m0(lmx_branch_struct_known(unit, 0U), "x", (cast: (size_t) -1))
+        c.printf("%d\n", p = 0)
+        lm_own_alloc_fails: 1
+        a: l2_m1(lmx_branch_struct_known(unit, 1U), "z")
+        c.printf("%d\n", a = 0)
+        lm_own_alloc_fails: 0
+        l2_m2(lmx_branch_struct_known(unit, 2U), 0)
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "heap_l2_drive.lm1"
+    $drvC = Join-Path $out "heap_l2_drive.c"
+    $drvExe = Join-Path $out "heap_l2_drive.exe"
+    $drvOut = Join-Path $out "heap_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed heap_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "heap_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'heap_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "heap_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "heap mismatch vs parser_text.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-Heap
+
+# Unit 12: hidden char/size_t through-args, closed direct calls.
+# Types come from own/formal/call-site supplier, not from literal 65/3U.
+# L2-to-L2 calls select the callee callable Structure from node\node. Distinct
+# graph instances use distinct callable Structures; METHOD descriptors remain shared.
+
+Invoke-Leaf "l2src\tests\unit_own_only.lm2" "unit_own_only" 0 "m"
+$oo = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_own_only.lm1")))
+if ($oo -notmatch 'fn: l2_m0 \(@: Lmx node; int: l2_p0_0\) int') { throw "own-only must keep declared arity, no hidden param" }
+if ($oo -match 'char: l2_p0_1') { throw "own-only must not grow a hidden char parameter" }
+if ($oo.IndexOf("l2_q0") -lt 0) { throw "own-only missing entry graph load" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_leaf.lm2" "unit_dyn_leaf" 0 "leaf"
+$dl = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_dyn_leaf.lm1")))
+if ($dl -notmatch 'fn: l2_m0 \(@: Lmx node; char: l2_p0_0\) int') { throw "leaf free-use must intern hidden char after declared arity 0" }
+if ($dl -notmatch 'fn: l2_m1 \(@: Lmx node; int: l2_p1_0\) int') { throw "outer own-only must not grow hidden" }
+if ($dl -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_q0\)') { throw "outer must pass own cache, not re-read graph at the call" }
+$dleaf = Invoke-SpliceDrive "unit_dyn_leaf" @"
+        @@: void f 0
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 1U), 1U)
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 65))
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 0))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 1U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+# leaf native 65 -> 1, no source writeback (still 0); outer own publishes 65 then leaf reads it
+if ($dleaf -ne "1`n0`n1`n65`n") { throw "dyn leaf hidden read/writeback: $dleaf" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_mid.lm2" "unit_dyn_mid" 0 "leaf"
+$dm = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_dyn_mid.lm1")))
+if ($dm -notmatch 'fn: l2_m1 \(@: Lmx node; char: l2_p1_0\) int') { throw "mid must forward hidden char without source mention" }
+if ($dm -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_p1_0\)') { throw "mid must pass hidden cache to leaf" }
+if ($dm -notmatch 'l2_m1\(lmx_branch_struct_known\(node\\node, 1U\), l2_q0\)') { throw "outer must supply own cache through mid" }
+$dmid = Invoke-SpliceDrive "unit_dyn_mid" @"
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), 0))
+        return: 0
+    end: main
+end: external
+"@
+if ($dmid -ne "1`n") { throw "dyn mid chain: $dmid" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_predecl.lm2" "unit_dyn_predecl" 0 "leaf"
+$dp = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_dyn_predecl.lm1")))
+$leafFn = [regex]::Match($dp, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
+if ($leafFn -match 'char: l2_p0_0') { throw "predecl quote: 1 is not a hidden-param use; typed char: quote is own-only" }
+if ($leafFn -notmatch 'l2_q0: 1') { throw "predecl quote: 1 must write own cache" }
+if ($leafFn -notmatch 'l2_q0: 66') { throw "predecl quote: 66 must write the same own cache" }
+$dpre = Invoke-SpliceDrive "unit_dyn_predecl" @"
+        @: Lmx unit2 0
+        @@: void f 0
+        @: Lmx g 0
+        @@: void gcell 0
+        unit2: lmx_node_new_owned(@ process_message\blocks, @ process_message\ranges)
+        if: unit2 = 0
+            return: 1
+        if: lmx_branch_open_owned(unit2, 1U, @ process_message\blocks, @ process_message\ranges) != 0
+            return: 1
+        g: lmx_struct_new_owned(unit2, @ process_message\blocks, @ process_message\ranges)
+        if: g = 0
+            return: 1
+        if: lmx_branch_open_owned(g, 2U, @ process_message\blocks, @ process_message\ranges) != 0
+            return: 1
+        if: lmx_branch_store_known(unit2, 0U, (cast: (@: void) g)) != 0
+            return: 1
+        if: lmx_branch_store_known(g, 0U, lmx_branch_child(lmx_branch_struct_known(unit, 0U), 0U)) != 0
+            return: 1
+        if: lmx_branch_store_known(g, 1U, lmx_char_cell(0)) != 0
+            return: 1
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        l2_m0(lmx_branch_struct_known(unit2, 0U))
+        gcell: lmx_branch_child(g, 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", lmx_char_value(gcell))
+        return: 0
+    end: main
+end: external
+"@
+# distinct 21.8 nodes: unit stays 0; unit2 publishes 66 from own bind, not source writeback
+if ($dpre -ne "0`n66`n") { throw "predecl distinct-instance publish: $dpre" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_fallback.lm2" "unit_dyn_fallback" 0 "leaf"
+$dfb = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_dyn_fallback.lm1")))
+if ($dfb -notmatch 'fn: l2_m0 \(@: Lmx node; char: l2_p0_0\) int') { throw "fallback leaf must free-use hidden char" }
+if ($dfb -notmatch 'fn: l2_m1 \(@: Lmx node\) int') { throw "holder is own-only container, no hidden" }
+if ($dfb -notmatch 'fn: l2_m2 \(@: Lmx node; char: l2_p2_0\) int') { throw "typed formal is the char supplier, not holder name-guess" }
+if ($dfb -notmatch 'fn: l2_m3 \(@: Lmx node; char: l2_p3_0\) int') { throw "caller without source quote still has hidden ABI" }
+if ($dfb -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_p3_0\)') { throw "caller must pass hidden cache, not reload graph" }
+$dfall = Invoke-SpliceDrive "unit_dyn_fallback" @"
+        @@: void f 0
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 1U), 1U)
+        if: lmx_branch_store_known(lmx_branch_struct_known(unit, 1U), 1U, lmx_char_cell(65)) != 0
+            return: 1
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 1U), 1U)
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), (cast: (char) lmx_char_value(f))))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 65))
+        return: 0
+    end: main
+end: external
+"@
+# adapter loads callee-node child, then native C actual; not silent zero
+if ($dfall -ne "1`n1`n") { throw "dyn fallback adapter+native: $dfall" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_early.lm2" "unit_dyn_early" 0 "leaf"
+$dearly = Invoke-SpliceDrive "unit_dyn_early" @"
+        @@: void f 0
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 0))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 1))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($dearly -ne "0`n0`n0`n66`n") { throw "dyn early-return before bind: $dearly" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_sz.lm2" "unit_dyn_sz" 0 "leaf"
+$dsz = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_dyn_sz.lm1")))
+if ($dsz -notmatch 'fn: l2_m0 \(@: Lmx node; size_t: l2_p0_0\) int') { throw "size_t hidden must come from outer own, not from 3U as a language rule" }
+$dszv = Invoke-SpliceDrive "unit_dyn_sz" @"
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 0))
+        return: 0
+    end: main
+end: external
+"@
+if ($dszv -ne "1`n") { throw "dyn size_t chain: $dszv" }
+
+Invoke-Negative "l2src\tests\unit_dyn_miss.lm2" "unit_dyn_miss" "unresolved name"
+Invoke-Leaf "l2src\tests\unit_dyn_type.lm2" "unit_dyn_type" 0 "leaf"
+$dty = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_dyn_type.lm1")))
+if ($dty -notmatch 'char: l2_q0') { throw "unit_dyn_type leaf quote is this method's char slot" }
+if ($dty -notmatch 'size_t: l2_q1') { throw "unit_dyn_type mid quote must not share leaf's char slot" }
+Invoke-Leaf "l2src\tests\unit_dyn_cap.lm2" "unit_dyn_cap" 0 "outer"
+$dcap = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_dyn_cap.lm1")))
+if ($dcap -notmatch 'fn: l2_m0 \(@: Lmx node; char: l2_p0_0; char: l2_p0_1; char: l2_p0_2; char: l2_p0_3; char: l2_p0_4\) int') {
+    throw "unit_dyn_cap leaf must intern five hidden char params"
+}
+$dcapv = Invoke-SpliceDrive "unit_dyn_cap" @"
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 1))
+        return: 0
+    end: main
+end: external
+"@
+if ($dcapv -ne "5`n") { throw "five hidden through-args: $dcapv" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_bool.lm2" "unit_dyn_bool" 0 "m"
+Invoke-Leaf "l2src\tests\unit_root_fields.lm2" "unit_root_fields" 0 "counter"
+Invoke-Leaf "l2src\tests\unit_own_pointer_fields.lm2" "unit_own_pointer_fields" 0 "pointer_fields_ok"
+$dbool = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_dyn_bool.lm1")))
+if ($dbool -match '&& l2_m' -or $dbool -match '\|\| l2_m') { throw "hidden &&/|| must not inline a method call into C &&/||" }
+if ($dbool -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_q0\)' -and $dbool -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_p') { throw "executed hidden &&/|| call must pass full ABI" }
+if ($dbool -notmatch 'if: l2_t') { throw "hidden &&/|| must use guarded if so skipped RHS does not prep" }
+$dbv = Invoke-SpliceDrive "unit_dyn_bool" @"
+        @@: void f 0
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), 0))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), 1))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), 2))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), 3))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), 4))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), 5))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), 6))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), 7))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 3U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+# skip, skip, run, run, mid run, mid skip, wrap(leaf) run, wrap skip
+if ($dbv -ne "0`n65`n1`n65`n1`n90`n1`n90`n1`n90`n0`n65`n1`n90`n0`n65`n") { throw "dyn bool hidden &&/||: $dbv" }
+
+Invoke-Leaf "l2src\tests\unit_while.lm2" "unit_while" 0 "zero"
+$wh = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_while.lm1")))
+if ($wh -notmatch 'while: l2_t') { throw "unit_while must emit L1 while of a re-evaluated cond temp" }
+$dwh = Invoke-SpliceDrive "unit_while" @"
+        @@: void f 0
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 0))
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), 0))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), 3U))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U), 0U))
+        c.printf("%d\n", l2_m5(lmx_branch_struct_known(unit, 5U), 1))
+        c.printf("%d\n", l2_m5(lmx_branch_struct_known(unit, 5U), 0))
+        return: 0
+    end: main
+end: external
+"@
+if ($dwh -ne "0`n1`n1`n1`n3`n0`n") { throw "unit_while zero/once/many/early: $dwh" }
+$dhit = Invoke-SpliceDrive "unit_while" @"
+        @@: void f 0
+        l2_m6(lmx_branch_struct_known(unit, 6U))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($dhit -ne "4`n") { throw "unit_while last-false still calls bump: $dhit" }
+$dgd = Invoke-SpliceDrive "unit_while" @"
+        @@: void f 0
+        l2_m4(lmx_branch_struct_known(unit, 4U), "abc", 3U)
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        l2_m4(lmx_branch_struct_known(unit, 4U), "ab", 2U)
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+# first guarded 3 calls; second adds 2 more on the same unit
+if ($dgd -ne "3`n5`n") { throw "unit_while shortcircuit bump vs length: $dgd" }
+
+Invoke-Leaf "l2src\tests\unit_continue.lm2" "unit_continue" 0 "skip_tail"
+$ct = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_continue.lm1")))
+if ($ct -notmatch '(?m)^\s+continue$') { throw "unit_continue L1 must emit continue" }
+$dct = Invoke-SpliceDrive "unit_continue" @"
+        @@: void f 0
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 1, 3))
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), 1, 3))
+        c.printf("%d\n", l2_m3(lmx_branch_struct_known(unit, 3U)))
+        l2_m4(lmx_branch_struct_known(unit, 4U))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        c.printf("%d\n", l2_m5(lmx_branch_struct_known(unit, 5U), 1))
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 5U), 2U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+# skip_tail 3, nested_if 3, nested_while 4 (inner continue, outer still bumps), until hits 4, early 3 and hits 65
+if ($dct -ne "3`n3`n4`n4`n3`n65`n") { throw "unit_continue skip/nested/until/early: $dct" }
+
+function Invoke-PhysicalLine {
+    $pred = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_text_predicates.lm2")).Replace("`r`n", "`n")
+    $phys = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_physical_line.lm2")).Replace("`r`n", "`n")
+    $h = ($pred -split "fn: lm_p0_is_horizontal_space")[1]
+    $h = "fn: lm_p0_is_horizontal_space" + ($h -split "fn: lm_p0_is_line_break")[0]
+    $b = ($pred -split "fn: lm_p0_is_line_break")[1]
+    $b = "fn: lm_p0_is_line_break" + ($b -split "fn: lm_p0_is_field_space")[0]
+    $ph = ($phys -split "fn: lm_p0_is_horizontal_space")[1]
+    $ph = "fn: lm_p0_is_horizontal_space" + ($ph -split "fn: lm_p0_is_line_break")[0]
+    $pb = ($phys -split "fn: lm_p0_is_line_break")[1]
+    $pb = "fn: lm_p0_is_line_break" + ($pb -split "fn: lm_p0_index_is_line_start")[0]
+    if ($h.Trim() -ne $ph.Trim()) { throw "physical_line is_horizontal_space must match parser_text_predicates.lm2" }
+    if ($b.Trim() -ne $pb.Trim()) { throw "physical_line is_line_break must match parser_text_predicates.lm2" }
+    $wref = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_text_line_break.lm2")).Replace("`r`n", "`n")
+    $wref = ($wref -split "fn: lm_p0_line_break_width_at")[1]
+    $wref = "fn: lm_p0_line_break_width_at" + ($wref -split "fn: main")[0]
+    $wgot = ($phys -split "fn: lm_p0_line_break_width_at")[1]
+    $wgot = "fn: lm_p0_line_break_width_at" + ($wgot -split "fn: lm_p0_count_line_breaks")[0]
+    if ($wref.Trim() -ne $wgot.Trim()) { throw "physical_line line_break_width_at must match parser_text_line_break.lm2" }
+
+    $refLm1 = Join-Path $out "pline_ref.lm1"
+    $refC = Join-Path $out "pline_ref.c"
+    $refExe = Join-Path $out "pline_ref.exe"
+    $refOut = Join-Path $out "pline_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+        c.printf("%d\n", lm_p0_index_is_line_start("x", 0U))
+        c.printf("%d\n", lm_p0_index_is_line_start("x\ny", 0U))
+        c.printf("%d\n", lm_p0_index_is_line_start("x\ny", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("x\ny", 2U))
+        c.printf("%d\n", lm_p0_index_is_line_start("x\ry", 2U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("abc", 3U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("abc", 3U, 3U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("abc", 3U, 4U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("ab\ncd", 5U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("ab\ncd", 5U, 3U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("ab\rcd", 5U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("ab\r\ncd", 6U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("a\0b\n", 4U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("ab\ncd", 5U, 2U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("", 0U, 0U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("   ", 0U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space(" \t ", 0U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space(" a", 0U, 2U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("x  ", 1U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("x", 1U, 1U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("abc", 0U, 3U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("abc", 3U, 3U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("abc", 4U, 3U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("a\nb", 0U, 3U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("a\rb", 0U, 3U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("a\r\nb", 0U, 4U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("a\n\nb", 0U, 4U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("a\0b\n", 0U, 4U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("ab\ncd\n", 2U, 6U))
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pline_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "pline_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pline_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pline_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_physical_line.lm2" "parser_physical_line" 0 "lm_p0_index_is_line_start"
+    $lm1 = Join-Path $out "parser_physical_line.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "physical_line must mangle method symbols" }
+    if ($text -notmatch 'while: l2_t') { throw "physical_line must re-evaluate while cond each check" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "count_line_breaks must emit continue" }
+    $drive = @"
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), "x", 0U))
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), "x\ny", 0U))
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), "x\ny", 1U))
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), "x\ny", 2U))
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U), "x\ry", 2U))
+        c.printf("%zu\n", l2_m3(lmx_branch_struct_known(unit, 3U), "", 0U, 0U))
+        c.printf("%zu\n", l2_m3(lmx_branch_struct_known(unit, 3U), "abc", 3U, 0U))
+        c.printf("%zu\n", l2_m3(lmx_branch_struct_known(unit, 3U), "abc", 3U, 3U))
+        c.printf("%zu\n", l2_m3(lmx_branch_struct_known(unit, 3U), "abc", 3U, 4U))
+        c.printf("%zu\n", l2_m3(lmx_branch_struct_known(unit, 3U), "ab\ncd", 5U, 0U))
+        c.printf("%zu\n", l2_m3(lmx_branch_struct_known(unit, 3U), "ab\ncd", 5U, 3U))
+        c.printf("%zu\n", l2_m3(lmx_branch_struct_known(unit, 3U), "ab\rcd", 5U, 0U))
+        c.printf("%zu\n", l2_m3(lmx_branch_struct_known(unit, 3U), "ab\r\ncd", 6U, 0U))
+        c.printf("%zu\n", l2_m3(lmx_branch_struct_known(unit, 3U), "a\0b\n", 4U, 0U))
+        c.printf("%zu\n", l2_m3(lmx_branch_struct_known(unit, 3U), "ab\ncd", 5U, 2U))
+        c.printf("%d\n", l2_m4(lmx_branch_struct_known(unit, 4U), "", 0U, 0U))
+        c.printf("%d\n", l2_m4(lmx_branch_struct_known(unit, 4U), "   ", 0U, 3U))
+        c.printf("%d\n", l2_m4(lmx_branch_struct_known(unit, 4U), " \t ", 0U, 3U))
+        c.printf("%d\n", l2_m4(lmx_branch_struct_known(unit, 4U), " a", 0U, 2U))
+        c.printf("%d\n", l2_m4(lmx_branch_struct_known(unit, 4U), "x  ", 1U, 3U))
+        c.printf("%d\n", l2_m4(lmx_branch_struct_known(unit, 4U), "x", 1U, 1U))
+        c.printf("%zu\n", l2_m6(lmx_branch_struct_known(unit, 6U), "", 0U, 0U))
+        c.printf("%zu\n", l2_m6(lmx_branch_struct_known(unit, 6U), "abc", 0U, 3U))
+        c.printf("%zu\n", l2_m6(lmx_branch_struct_known(unit, 6U), "abc", 3U, 3U))
+        c.printf("%zu\n", l2_m6(lmx_branch_struct_known(unit, 6U), "abc", 4U, 3U))
+        c.printf("%zu\n", l2_m6(lmx_branch_struct_known(unit, 6U), "a\nb", 0U, 3U))
+        c.printf("%zu\n", l2_m6(lmx_branch_struct_known(unit, 6U), "a\rb", 0U, 3U))
+        c.printf("%zu\n", l2_m6(lmx_branch_struct_known(unit, 6U), "a\r\nb", 0U, 4U))
+        c.printf("%zu\n", l2_m6(lmx_branch_struct_known(unit, 6U), "a\n\nb", 0U, 4U))
+        c.printf("%zu\n", l2_m6(lmx_branch_struct_known(unit, 6U), "a\0b\n", 0U, 4U))
+        c.printf("%zu\n", l2_m6(lmx_branch_struct_known(unit, 6U), "ab\ncd\n", 2U, 6U))
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "pline_l2_drive.lm1"
+    $drvC = Join-Path $out "pline_l2_drive.c"
+    $drvExe = Join-Path $out "pline_l2_drive.exe"
+    $drvOut = Join-Path $out "pline_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pline_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "pline_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pline_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pline_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "physical_line mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-PhysicalLine
+
+function Invoke-PythonString {
+    $startsRef = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_text_starts_python.lm2")).Replace("`r`n", "`n")
+    $py = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_python_string.lm2")).Replace("`r`n", "`n")
+    $sr = ($startsRef -split "fn: lm_p0_starts_python_string")[1]
+    $sr = "fn: lm_p0_starts_python_string" + ($sr -split "fn: main")[0]
+    $sg = ($py -split "fn: lm_p0_starts_python_string")[1]
+    $sg = "fn: lm_p0_starts_python_string" + ($sg -split "fn: lm_p0_find_python_string_end")[0]
+    if ($sr.Trim() -ne $sg.Trim()) { throw "python_string starts_python_string must match parser_text_starts_python.lm2" }
+
+    $cases = @'
+        size_t: cell
+        int: r
+        cell: 99U
+        r: lm_p0_find_python_string_end("", 0U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("x", 1U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("''", 2U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"abc\"", 5U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"abc\"\"\"", 9U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("'''abc'''", 9U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"abc", 6U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"a\"b\"\"\"", 9U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"a\"\"b\"\"\"", 10U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"a\"\"\"\"", 8U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"", 3U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"\"\"\"", 6U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"\"\"\"\"", 7U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("xx\"\"\"abc\"\"\"", 11U, 2U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"a\0b\"\"\"", 9U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+'@
+
+    $refLm1 = Join-Path $out "pystr_ref.lm1"
+    $refC = Join-Path $out "pystr_ref.c"
+    $refExe = Join-Path $out "pystr_ref.exe"
+    $refOut = Join-Path $out "pystr_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pystr_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "pystr_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pystr_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pystr_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_python_string.lm2" "parser_python_string" 0 "lm_p0_find_python_string_end"
+    $lm1 = Join-Path $out "parser_python_string.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "python_string must mangle method symbols" }
+    if ($text -notmatch 'l2_p\d+_\d+\[0\]:') { throw "find must store through size_t* [0]" }
+    if ($text -notmatch '@: size_t l2_p') { throw "find must emit @: size_t formal" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "find must emit continue" }
+    $cpath = Join-Path $out "parser_python_string.c"
+    $ctext = [System.IO.File]::ReadAllText((Resolve-L2Path $cpath)).Replace("`r`n", "`n")
+    if ($ctext -notmatch '&&') { throw "inner while cond must keep C && short-circuit" }
+    if ($ctext -match 'text\[i \+ run_length\]' -and $ctext -notmatch '&&') {
+        throw "indexed inner load without &&"
+    }
+
+    $l2cases = $cases.Replace("lm_p0_find_python_string_end(", "l2_m1(lmx_branch_struct_known(unit, 1U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "pystr_l2_drive.lm1"
+    $drvC = Join-Path $out "pystr_l2_drive.c"
+    $drvExe = Join-Path $out "pystr_l2_drive.exe"
+    $drvOut = Join-Path $out "pystr_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pystr_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "pystr_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pystr_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pystr_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "python_string find mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    $skipDrive = @"
+        c.printf("%zu\n", l2_m2(lmx_branch_struct_known(unit, 2U), "x", 1U, 0U))
+        c.printf("%zu\n", l2_m2(lmx_branch_struct_known(unit, 2U), "\"\"\"abc\"\"\"", 9U, 0U))
+        c.printf("%zu\n", l2_m2(lmx_branch_struct_known(unit, 2U), "\"\"\"abc", 6U, 0U))
+        return: 0
+    end: main
+end: external
+"@
+    $skipResult = Invoke-SpliceDrive "parser_python_string" $skipDrive
+    if ($skipResult -ne "1`n9`n6`n") { throw "python_string skip parity got $skipResult" }
+
+    $fwdcases = $cases.Replace("lm_p0_find_python_string_end(", "l2_m3(lmx_branch_struct_known(unit, 3U), ")
+    $fwdDrive = @"
+$fwdcases
+        return: 0
+    end: main
+end: external
+"@
+    $fwdLm1 = Join-Path $out "pystr_fwd_drive.lm1"
+    $fwdC = Join-Path $out "pystr_fwd_drive.c"
+    $fwdExe = Join-Path $out "pystr_fwd_drive.exe"
+    $fwdOut = Join-Path $out "pystr_fwd_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $fwdLm1), (New-L2DriveText $text $fwdDrive))
+    & $outputL1trans $fwdLm1 $fwdC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pystr_fwd_drive" }
+    Invoke-Gcc $fwdC $fwdExe (Join-Path $log "pystr_fwd_drive.gcc.log")
+    cmd /c "`"$fwdExe`" > `"$fwdOut`" 2> `"$(Join-Path $out 'pystr_fwd_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pystr_fwd_drive exe failed" }
+    $c = [System.IO.File]::ReadAllText((Resolve-L2Path $fwdOut)).Replace("`r`n","`n")
+    if ($b -ne $c) { throw "python_string fwd must match find`nFIND:`n$b`nFWD:`n$c" }
+
+    $drvCtext = [System.IO.File]::ReadAllText((Resolve-L2Path $drvC)).Replace("`r`n", "`n")
+    if ($drvCtext -notmatch '&&') { throw "pystr_l2_drive.c missing && short-circuit" }
+}
+
+Invoke-PythonString
+
+Invoke-Leaf "l2src\tests\unit_paren_prec.lm2" "unit_paren_prec" 0 "grouped"
+$dpp = Invoke-SpliceDrive "unit_paren_prec" @"
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 2, 3, 4))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 2, 3, 4))
+        return: 0
+    end: main
+end: external
+"@
+if ($dpp -ne "20`n14`n") { throw "paren prec grouped vs raw: $dpp" }
+
+Invoke-Leaf "l2src\tests\unit_paren_sub.lm2" "unit_paren_sub" 0 "left"
+$dps = Invoke-SpliceDrive "unit_paren_sub" @"
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 10, 3, 2))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 10, 3, 2))
+        return: 0
+    end: main
+end: external
+"@
+if ($dps -ne "5`n9`n") { throw "paren sub left vs right: $dps" }
+
+Invoke-Leaf "l2src\tests\unit_paren_sib.lm2" "unit_paren_sib" 0 "sib"
+$dsi = Invoke-SpliceDrive "unit_paren_sib" @"
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 2, 3))
+        return: 0
+    end: main
+end: external
+"@
+if ($dsi -ne "12`n") { throw "paren siblings: $dsi" }
+
+Invoke-Leaf "l2src\tests\unit_paren_nest.lm2" "unit_paren_nest" 0 "nest"
+$dn = Invoke-SpliceDrive "unit_paren_nest" @"
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 4))
+        return: 0
+    end: main
+end: external
+"@
+if ($dn -ne "13`n") { throw "paren nested: $dn" }
+
+Invoke-Leaf "l2src\tests\unit_paren_rel.lm2" "unit_paren_rel" 0 "rel"
+$dr = Invoke-SpliceDrive "unit_paren_rel" @"
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 2, 4))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 3, 4))
+        return: 0
+    end: main
+end: external
+"@
+if ($dr -ne "1`n0`n") { throw "paren relational: $dr" }
+
+Invoke-Leaf "l2src\tests\unit_paren_and.lm2" "unit_paren_and" 0 "gated"
+$da0 = Invoke-SpliceDrive "unit_paren_and" @"
+        @@: void f 0
+        l2_m1(lmx_branch_struct_known(unit, 1U), 5, 3)
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        l2_m1(lmx_branch_struct_known(unit, 1U), 0, 3)
+        f: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        c.printf("%d\n", lmx_char_value(f))
+        return: 0
+    end: main
+end: external
+"@
+if ($da0 -ne "0`n2`n") { throw "paren shortcircuit bump: $da0" }
+
+Invoke-Leaf "l2src\tests\unit_paren_call.lm2" "unit_paren_call" 0 "order"
+$dc = Invoke-SpliceDrive "unit_paren_call" @"
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U)))
+        return: 0
+    end: main
+end: external
+"@
+if ($dc -ne "12`n") { throw "paren call actual order: $dc" }
+$oct = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_paren_call.lm1")))
+if ($oct -notmatch 'l2_q\d+_dirty') { throw "paren call missing dirty checkpoint" }
+
+Invoke-Negative "l2src\tests\unit_paren_long.lm2" "unit_paren_long" "expression too long"
+
+Invoke-Leaf "l2src\tests\unit_arity5.lm2" "unit_arity5" 0 "sum5"
+$da5 = Invoke-SpliceDrive "unit_arity5" @"
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 1, 2, 3, 4, 5))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 5, 4, 3, 2, 1))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 1, 2, 3, 4, 5))
+        return: 0
+    end: main
+end: external
+"@
+if ($da5 -ne "15`n15`n15`n") { throw "arity5 sum: $da5" }
+$c5 = Get-LeafContract "unit_arity5"
+if ($c5.Formals -ne "a|b") { throw "arity5 intern f0/f1 $($c5.Formals)" }
+$t5 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_arity5.lm1")))
+if ($t5 -notmatch 'l2_p0_4') { throw "arity5 missing fifth formal" }
+if ($t5 -notmatch 'l2_p1_4') { throw "arity5b missing fifth formal x" }
+if ($t5.IndexOf("l2_p0_4") -lt 0) { throw "arity5 intern/emit fifth name" }
+$sigs5 = [regex]::Matches($t5, 'rec\\sig: (\d+)U') | ForEach-Object { [int]$_.Groups[1].Value }
+if ($sigs5.Count -lt 2) { throw "arity5 expected 2 rec.sig intern ids, got $($sigs5.Count)" }
+if ($sigs5[0] -eq $sigs5[1]) { throw "arity5 late name e vs x must intern differently" }
+
+Invoke-Leaf "l2src\tests\unit_arity8.lm2" "unit_arity8" 0 "order8"
+$da8 = Invoke-SpliceDrive "unit_arity8" @"
+        c.printf("%d\n", l2_m2(lmx_branch_struct_known(unit, 2U)))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 1, 2, 3, 4, 5, 6, 7, 8))
+        return: 0
+    end: main
+end: external
+"@
+if ($da8 -ne "1793`n1793`n") { throw "arity8 LTR pack: $da8" }
+$t8 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_arity8.lm1")))
+if ($t8 -notmatch 'l2_p1_7') { throw "arity8 missing eighth formal" }
+
+Invoke-Leaf "l2src\tests\unit_arity9.lm2" "unit_arity9" 0 "nine"
+$da9 = Invoke-SpliceDrive "unit_arity9" @"
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 1, 2, 3, 4, 5, 6, 7, 8, 9))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), 1, 2, 3, 4, 5, 6, 7, 8, 9))
+        return: 0
+    end: main
+end: external
+"@
+if ($da9 -ne "45`n10`n") { throw "arity9 sum/late-name: $da9" }
+$t9 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_arity9.lm1")))
+if ($t9 -notmatch 'l2_p0_8') { throw "arity9 missing ninth formal" }
+if ($t9 -notmatch 'l2_p1_8') { throw "arity9b missing ninth formal z" }
+$sigs9 = [regex]::Matches($t9, 'rec\\sig: (\d+)U') | ForEach-Object { [int]$_.Groups[1].Value }
+if ($sigs9.Count -lt 2) { throw "arity9 expected 2 rec.sig intern ids, got $($sigs9.Count)" }
+if ($sigs9[0] -eq $sigs9[1]) { throw "arity9 late name i vs z must intern differently" }
+
+Invoke-Leaf "l2src\tests\unit_arity5p.lm2" "unit_arity5p" 0 "write5"
+$dp = Invoke-SpliceDrive "unit_arity5p" @"
+        size_t: cell
+        int: r
+        cell: 99U
+        r: l2_m0(lmx_branch_struct_known(unit, 0U), 1, 2, 3, 4, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: l2_m1(lmx_branch_struct_known(unit, 1U), 1, 2, 3, 4, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        l2_m2(lmx_branch_struct_known(unit, 2U), 2, 3, 4, 5, @ cell)
+        c.printf("%zu\n", cell)
+        return: 0
+    end: main
+end: external
+"@
+if ($dp -ne "1 10`n1 10`n14`n") { throw "arity5 pointer/sub: $dp" }
+
+Invoke-Leaf "l2src\tests\unit_arity5h.lm2" "unit_arity5h" 0 "outer"
+$dh = Invoke-SpliceDrive "unit_arity5h" @"
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U)))
+        return: 0
+    end: main
+end: external
+"@
+if ($dh -ne "9`n") { throw "arity5 plus hidden: $dh" }
+
+function New-Arity127Source([string]$path) {
+    $names = 0..126 | ForEach-Object { "int: p$_" }
+    $plist = [string]::Join("; ", $names)
+    $acts = New-Object string[] 127
+    for ($i = 0; $i -lt 127; $i++) { $acts[$i] = "0" }
+    $acts[0] = "1"
+    $acts[63] = "2"
+    $acts[126] = "4"
+    $call = "sum127(" + [string]::Join(", ", $acts) + ")"
+    $src = "fn: sum127 ($plist) int`n    return: p0 + p63 + p126`nend: sum127`nfn: call127 () int`n    return: $call`nend: call127`nfn: main () int`n    return: 0`nend: main`n"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $path), $src.Replace("`r`n", "`n"))
+}
+
+$ar127 = Join-Path $out "unit_arity127.lm2"
+New-Arity127Source $ar127
+Invoke-Leaf $ar127 "unit_arity127" 0 "call127"
+$t127 = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "unit_arity127.lm1")))
+if ($t127 -notmatch 'l2_p0_126') { throw "arity127 missing 127th formal" }
+if ($t127 -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), 1') { throw "arity127 missing L2-source call with 127 actuals" }
+$d127 = Invoke-SpliceDrive "unit_arity127" @"
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U)))
+        return: 0
+    end: main
+end: external
+"@
+if ($d127 -ne "7`n") { throw "arity127 L2 call p0+p63+p126: $d127" }
+
+function Invoke-FailMallocSrc([string]$src, [string]$tag, [int]$maxN) {
+    $dir = Join-Path $out "fail_malloc"
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $kinds = @{}
+    $n = 1
+    while ($n -le $maxN) {
+        $case = Join-Path $dir ($tag + "_" + $n)
+        $lm1 = $case + ".lm1"
+        $cpath = $case + ".c"
+        $exe = $case + ".exe"
+        $err = $case + ".err"
+        $alog = $case + ".alloc"
+        $marker = "OLD-OUTPUT-MUST-NOT-BECOME-SUCCESS`n"
+        [System.IO.File]::WriteAllText((Resolve-L2Path $lm1), $marker)
+        [System.IO.File]::WriteAllText((Resolve-L2Path $cpath), $marker)
+        [System.IO.File]::WriteAllText((Resolve-L2Path $exe), $marker)
+        $env:L2_FAIL_MALLOC = [string]$n
+        $env:L2_ALLOC_LOG = [string]$alog
+        cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+        $code = $LASTEXITCODE
+        Remove-Item Env:L2_FAIL_MALLOC
+        Remove-Item Env:L2_ALLOC_LOG
+        if ($code -eq 0) {
+            $n = $n + 1
+            continue
+        }
+        $etext = [System.IO.File]::ReadAllText((Resolve-L2Path $err))
+        if ($etext.IndexOf("out of memory") -lt 0 -and $etext.IndexOf("size overflow") -lt 0) {
+            throw "fail-malloc $tag $n missing oom/overflow in $err : $etext"
+        }
+        $got = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1))
+        if ($got -ne $marker) { throw "fail-malloc $tag $n mutated dest lm1" }
+        if (-not (Test-Path -LiteralPath $alog)) { throw "fail-malloc $tag $n missing alloc log" }
+        $astat = [System.IO.File]::ReadAllText((Resolve-L2Path $alog)).Trim()
+        if ($astat -notmatch 'live=(\d+).*fail_kind=(\d+)') { throw "fail-malloc $tag $n bad alloc log: $astat" }
+        $live = [int]$Matches[1]
+        $kind = [int]$Matches[2]
+        if ($live -ne 0) { throw "fail-malloc $tag $n live=$live (partial row not freed) log=$astat" }
+        if ($kind -lt 1) { throw "fail-malloc $tag $n fail_kind unset: $astat" }
+        $kinds[$kind] = $n
+        $n = $n + 1
+    }
+    return $kinds
+}
+
+$kDyn = Invoke-FailMallocSrc "l2src\tests\unit_dyn_cap.lm2" "dyn_cap" 80
+$k127 = Invoke-FailMallocSrc (Join-Path $out "unit_arity127.lm2") "arity127" 80
+$kOwn = Invoke-FailMallocSrc "l2src\tests\unit_own6.lm2" "own6" 80
+$kMeth = Invoke-FailMallocSrc "l2src\tests\unit_nine.lm2" "nine" 80
+$kOwnMeth = Invoke-FailMallocSrc "l2src\tests\unit_own_meth.lm2" "own_meth" 80
+$kInternGrowth = Invoke-FailMallocSrc "l2src\tests\unit_intern_growth.lm2" "intern_growth" 180
+$kDeep = Invoke-FailMallocSrc "l2src\tests\unit_deepif.lm2" "deep_indent" 125
+if (-not $kDyn.ContainsKey(1)) { throw "fail-malloc dyn_cap never hit formals (kind 1); got $($kDyn.Keys -join ',')" }
+if (-not $kDyn.ContainsKey(2)) { throw "fail-malloc dyn_cap never hit hidden growth (kind 2); got $($kDyn.Keys -join ',')" }
+if (-not $kDyn.ContainsKey(3)) { throw "fail-malloc dyn_cap never hit intern rows (kind 3); got $($kDyn.Keys -join ',')" }
+if (-not $kDyn.ContainsKey(4) -and -not $k127.ContainsKey(4)) { throw "fail-malloc never hit call-actual vectors (kind 4)" }
+if (-not $kOwn.ContainsKey(5)) { throw "fail-malloc own6 never hit OwnUsed growth (kind 5); got $($kOwn.Keys -join ',')" }
+if (-not $kMeth.ContainsKey(6)) { throw "fail-malloc nine never hit method growth (kind 6); got $($kMeth.Keys -join ',')" }
+if (-not $kOwnMeth.ContainsKey(6)) { throw "fail-malloc own_meth never hit method growth (kind 6) with own rows; got $($kOwnMeth.Keys -join ',')" }
+if (-not $kInternGrowth.ContainsKey(7)) { throw "fail-malloc intern_growth never hit atomic intern-table growth (kind 7); got $($kInternGrowth.Keys -join ',')" }
+if (-not $kDeep.ContainsKey(8)) { throw "fail-malloc deep_indent never hit dynamic indentation growth (kind 8); got $($kDeep.Keys -join ',')" }
+if (-not $kDyn.ContainsKey(9) -and -not $k127.ContainsKey(9) -and -not $kOwn.ContainsKey(9) -and -not $kMeth.ContainsKey(9) -and -not $kOwnMeth.ContainsKey(9) -and -not $kInternGrowth.ContainsKey(9) -and -not $kDeep.ContainsKey(9)) {
+    throw "fail-malloc never hit dynamic publication-path allocation (kind 9)"
+}
+$ev = Join-Path $out "fail_malloc\summary.txt"
+$lines = @("dyn_cap kinds: " + (($kDyn.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " "))
+$lines += "arity127 kinds: " + (($k127.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+$lines += "own6 kinds: " + (($kOwn.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+$lines += "nine kinds: " + (($kMeth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+$lines += "own_meth kinds: " + (($kOwnMeth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+$lines += "intern_growth kinds: " + (($kInternGrowth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+$lines += "deep_indent kinds: " + (($kDeep.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+[System.IO.File]::WriteAllLines((Resolve-L2Path $ev), $lines)
+
+function Invoke-VisualColumn {
+    $cases = @'
+        c.printf("%zu\n", lm_p0_indent_tab_column(0U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(1U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(7U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(8U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(9U))
+        c.printf("%zu\n", lm_p0_visual_column_between("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_visual_column_between("abc", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("abc", 3U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("abc", 4U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\nb", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\rb", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\r\nb", 0U, 4U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\r", 0U, 2U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\r\n", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("\t", 0U, 1U))
+        c.printf("%zu\n", lm_p0_visual_column_between("x\t", 0U, 2U))
+        c.printf("%zu\n", lm_p0_visual_column_between("xxxxxxx\t", 0U, 8U))
+        c.printf("%zu\n", lm_p0_visual_column_between("xxxxxxxx\t", 0U, 9U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\tb\nc", 0U, 5U))
+        c.printf("%zu\n", lm_p0_visual_column_between("ab\tcd", 2U, 5U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\0b", 0U, 3U))
+'@
+
+    $refLm1 = Join-Path $out "vcol_ref.lm1"
+    $refC = Join-Path $out "vcol_ref.c"
+    $refExe = Join-Path $out "vcol_ref.exe"
+    $refOut = Join-Path $out "vcol_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed vcol_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "vcol_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'vcol_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "vcol_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_visual_column.lm2" "parser_visual_column" 0 "lm_p0_visual_column_between"
+    $lm1 = Join-Path $out "parser_visual_column.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "visual_column must mangle method symbols" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "visual_column must emit continue" }
+    if ($text -notmatch 'l2_m0\(') { throw "visual_column must call tab helper" }
+    if ($text -notmatch 'l2_q\d+_dirty: 1') { throw "column own must dirty after assign" }
+    if ($text -notmatch 'lmx_size_store') { throw "column own must checkpoint before tab helper call" }
+
+    $l2cases = $cases.Replace("lm_p0_indent_tab_column(", "l2_m0(lmx_branch_struct_known(unit, 0U), ").Replace("lm_p0_visual_column_between(", "l2_m1(lmx_branch_struct_known(unit, 1U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "vcol_l2_drive.lm1"
+    $drvC = Join-Path $out "vcol_l2_drive.c"
+    $drvExe = Join-Path $out "vcol_l2_drive.exe"
+    $drvOut = Join-Path $out "vcol_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed vcol_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "vcol_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'vcol_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "vcol_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "visual_column mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    $ctext = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "parser_visual_column.c"))).Replace("`r`n", "`n")
+    if ($ctext -notmatch '&&') { throw "CRLF p+1 bound guard must stay C &&" }
+
+    Invoke-Leaf "l2src\parser_physical_line.lm2" "parser_physical_line" 0 "lm_p0_index_is_line_start"
+    $mtext = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "parser_physical_line.lm1"))).Replace("`r`n", "`n")
+    if ($mtext -notmatch 'fn: l2_m8') { throw "merged physical_line missing tab helper" }
+    if ($mtext -notmatch 'fn: l2_m9') { throw "merged physical_line missing visual_column" }
+    $ml2 = $cases.Replace("lm_p0_indent_tab_column(", "l2_m8(lmx_branch_struct_known(unit, 8U), ").Replace("lm_p0_visual_column_between(", "l2_m9(lmx_branch_struct_known(unit, 9U), ")
+    $mdrv = Join-Path $out "vcol_merged_drive.lm1"
+    $mdrvC = Join-Path $out "vcol_merged_drive.c"
+    $mdrvExe = Join-Path $out "vcol_merged_drive.exe"
+    $mdrvOut = Join-Path $out "vcol_merged_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $mdrv), (New-L2DriveText $mtext ($ml2 + "`n        return: 0`n    end: main`nend: external")))
+    & $outputL1trans $mdrv $mdrvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed vcol_merged_drive" }
+    Invoke-Gcc $mdrvC $mdrvExe (Join-Path $log "vcol_merged_drive.gcc.log")
+    cmd /c "`"$mdrvExe`" > `"$mdrvOut`" 2> `"$(Join-Path $out 'vcol_merged_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "vcol_merged_drive exe failed" }
+    $mc = [System.IO.File]::ReadAllText((Resolve-L2Path $mdrvOut)).Replace("`r`n","`n")
+    if ($a -ne $mc) { throw "merged physical_line visual_column mismatch vs parser.lm1`nREF:`n$a`nL2:`n$mc" }
+}
+
+Invoke-VisualColumn
+
+function Invoke-ScanIndent {
+    $cases = @'
+        size_t: off
+        size_t: col
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("", 0U, 0U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("abc", 0U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("abc", 3U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("abc", 4U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("  x", 0U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("\tx", 0U, 2U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column(" \tx", 0U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("       \ty", 0U, 9U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("        \ty", 0U, 10U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("   ", 0U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("x  y", 1U, 4U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("\n  x", 0U, 4U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("\r  x", 0U, 4U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column(" \0 x", 0U, 4U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column(0, 0U, 0U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("\t\t", 0U, 2U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+'@
+
+    $refLm1 = Join-Path $out "sind_ref.lm1"
+    $refC = Join-Path $out "sind_ref.c"
+    $refExe = Join-Path $out "sind_ref.exe"
+    $refOut = Join-Path $out "sind_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed sind_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "sind_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'sind_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "sind_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_scan_indent.lm2" "parser_scan_indent" 0 "lm_p0_scan_indent_column"
+    $lm1 = Join-Path $out "parser_scan_indent.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "scan_indent must mangle method symbols" }
+    if ($text -notmatch 'sub: l2_m2') { throw "scan_indent missing mangled sub" }
+    if ($text -notmatch '@: size_t l2_p2_3') { throw "scan_indent missing size_t* out_offset" }
+    if ($text -notmatch '@: size_t l2_p2_4') { throw "scan_indent missing size_t* out_column" }
+    if ($text -notmatch 'l2_p2_3\[0\]:') { throw "scan_indent missing out_offset[0] store" }
+    if ($text -notmatch 'l2_p2_4\[0\]:') { throw "scan_indent missing out_column[0] store" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "scan_indent must emit continue" }
+    if ($text -notmatch 'l2_m1\(') { throw "scan_indent must call tab helper" }
+
+    $l2cases = $cases.Replace("lm_p0_scan_indent_column(", "l2_m2(lmx_branch_struct_known(unit, 2U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "sind_l2_drive.lm1"
+    $drvC = Join-Path $out "sind_l2_drive.c"
+    $drvExe = Join-Path $out "sind_l2_drive.exe"
+    $drvOut = Join-Path $out "sind_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed sind_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "sind_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'sind_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "sind_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "scan_indent mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    Invoke-Leaf "l2src\parser_physical_line.lm2" "parser_physical_line" 0 "lm_p0_index_is_line_start"
+    $mtext = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "parser_physical_line.lm1"))).Replace("`r`n", "`n")
+    if ($mtext -notmatch 'sub: l2_m10') { throw "merged physical_line missing scan_indent" }
+    $ml2 = $cases.Replace("lm_p0_scan_indent_column(", "l2_m10(lmx_branch_struct_known(unit, 10U), ")
+    $mtail = "        return: 0`n    end: main`nend: external"
+    $mdrv = Join-Path $out "sind_merged_drive.lm1"
+    $mdrvC = Join-Path $out "sind_merged_drive.c"
+    $mdrvExe = Join-Path $out "sind_merged_drive.exe"
+    $mdrvOut = Join-Path $out "sind_merged_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $mdrv), (New-L2DriveText $mtext ($ml2 + "`n        return: 0`n    end: main`nend: external")))
+    & $outputL1trans $mdrv $mdrvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed sind_merged_drive" }
+    Invoke-Gcc $mdrvC $mdrvExe (Join-Path $log "sind_merged_drive.gcc.log")
+    cmd /c "`"$mdrvExe`" > `"$mdrvOut`" 2> `"$(Join-Path $out 'sind_merged_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "sind_merged_drive exe failed" }
+    $mc = [System.IO.File]::ReadAllText((Resolve-L2Path $mdrvOut)).Replace("`r`n","`n")
+    if ($a -ne $mc) { throw "merged physical_line scan_indent mismatch vs parser.lm1`nREF:`n$a`nL2:`n$mc" }
+}
+
+Invoke-ScanIndent
+
+function Invoke-ScanLayoutPrefix {
+    $sind = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_scan_indent.lm2")).Replace("`r`n", "`n")
+    $pref = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_scan_layout_prefix.lm2")).Replace("`r`n", "`n")
+    $h = ($sind -split "fn: lm_p0_is_horizontal_space")[1]
+    $h = "fn: lm_p0_is_horizontal_space" + ($h -split "fn: main")[0]
+    $ph = ($pref -split "fn: lm_p0_is_horizontal_space")[1]
+    $ph = "fn: lm_p0_is_horizontal_space" + ($ph -split "sub: lm_p0_scan_layout_prefix")[0]
+    if ($h.Trim() -ne $ph.Trim()) { throw "scan_layout_prefix helpers must match parser_scan_indent.lm2" }
+
+    $cases = @'
+        size_t: off
+        size_t: col
+        size_t: dots
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("", 0U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("abc", 3U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("  x", 3U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("\tx", 2U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix(".x", 2U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("  .x", 4U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("  . .x", 6U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("..\tx", 4U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("ab  .c", 6U, 2U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("   ", 3U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix(".", 1U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+'@
+
+    $refLm1 = Join-Path $out "slp_ref.lm1"
+    $refC = Join-Path $out "slp_ref.c"
+    $refExe = Join-Path $out "slp_ref.exe"
+    $refOut = Join-Path $out "slp_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed slp_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "slp_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'slp_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "slp_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_scan_layout_prefix.lm2" "parser_scan_layout_prefix" 0 "lm_p0_scan_layout_prefix"
+    $lm1 = Join-Path $out "parser_scan_layout_prefix.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "scan_layout_prefix must mangle method symbols" }
+    if ($text -notmatch 'sub: l2_m3') { throw "scan_layout_prefix missing mangled sub" }
+    if ($text -notmatch '@: size_t l2_p3_3') { throw "scan_layout_prefix missing size_t* out_offset" }
+    if ($text -notmatch '@: size_t l2_p3_4') { throw "scan_layout_prefix missing size_t* out_indent" }
+    if ($text -notmatch '@: size_t l2_p3_5') { throw "scan_layout_prefix missing size_t* out_dot" }
+    if ($text -notmatch 'l2_m2\(') { throw "scan_layout_prefix must call scan_indent_column" }
+
+    $l2cases = $cases.Replace("lm_p0_scan_layout_prefix(", "l2_m3(lmx_branch_struct_known(unit, 3U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "slp_l2_drive.lm1"
+    $drvC = Join-Path $out "slp_l2_drive.c"
+    $drvExe = Join-Path $out "slp_l2_drive.exe"
+    $drvOut = Join-Path $out "slp_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed slp_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "slp_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'slp_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "slp_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "scan_layout_prefix mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-ScanLayoutPrefix
+
+function Invoke-AdvanceLayout {
+    $cases = @'
+        size_t: off
+        size_t: ln
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("abc", 3U, 0U, 3U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("ab\ncd", 5U, 0U, 2U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("ab\r\ncd", 6U, 0U, 2U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("ab\rcd", 5U, 0U, 2U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 5U
+        lm_p0_advance_layout_line("a\nb\nc", 5U, 0U, 5U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 3U
+        lm_p0_advance_layout_line("abc", 3U, 1U, 1U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("", 0U, 0U, 0U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("a\0b\n", 4U, 0U, 3U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 2U
+        lm_p0_advance_layout_line("ab\ncd\n", 6U, 3U, 5U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 0U
+        ln: 1U
+        lm_p0_advance_layout_line("a\nb\n", 4U, 0U, 1U, @ off, @ ln)
+        lm_p0_advance_layout_line("a\nb\n", 4U, 2U, 3U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("\r\n", 2U, 0U, 0U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("\r\n", 1U, 0U, 0U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+'@
+
+    $refLm1 = Join-Path $out "adv_ref.lm1"
+    $refC = Join-Path $out "adv_ref.c"
+    $refExe = Join-Path $out "adv_ref.exe"
+    $refOut = Join-Path $out "adv_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed adv_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "adv_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'adv_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "adv_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_physical_line.lm2" "parser_physical_line" 0 "lm_p0_index_is_line_start"
+    $lm1 = Join-Path $out "parser_physical_line.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "advance_layout must mangle method symbols" }
+    if ($text -notmatch 'sub: l2_m11') { throw "advance_layout missing mangled sub" }
+    if ($text -notmatch '@: size_t l2_p11_4') { throw "advance_layout missing size_t* offset" }
+    if ($text -notmatch '@: size_t l2_p11_5') { throw "advance_layout missing size_t* line" }
+    if ($text -notmatch 'l2_p11_4\[0\]:') { throw "advance_layout missing offset[0] store" }
+    if ($text -notmatch 'l2_p11_5\[0\]:') { throw "advance_layout missing line[0] store" }
+    if ($text -notmatch 'l2_m6\(') { throw "advance_layout must call count_line_breaks" }
+    if ($text -notmatch 'l2_m5\(') { throw "advance_layout must call line_break_width_at" }
+
+    $l2cases = $cases.Replace("lm_p0_advance_layout_line(", "l2_m11(lmx_branch_struct_known(unit, 11U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "adv_l2_drive.lm1"
+    $drvC = Join-Path $out "adv_l2_drive.c"
+    $drvExe = Join-Path $out "adv_l2_drive.exe"
+    $drvOut = Join-Path $out "adv_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed adv_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "adv_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'adv_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "adv_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "advance_layout mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    Invoke-Leaf "l2src\parser_physical_line.lm2" "parser_physical_line" 0 "lm_p0_index_is_line_start"
+    $mtext = [System.IO.File]::ReadAllText((Resolve-L2Path (Join-Path $out "parser_physical_line.lm1"))).Replace("`r`n", "`n")
+    if ($mtext -notmatch 'sub: l2_m11') { throw "merged physical_line missing advance_layout" }
+    $ml2 = $cases.Replace("lm_p0_advance_layout_line(", "l2_m11(lmx_branch_struct_known(unit, 11U), ")
+    $mtail = "        return: 0`n    end: main`nend: external"
+    $mdrv = Join-Path $out "adv_merged_drive.lm1"
+    $mdrvC = Join-Path $out "adv_merged_drive.c"
+    $mdrvExe = Join-Path $out "adv_merged_drive.exe"
+    $mdrvOut = Join-Path $out "adv_merged_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $mdrv), (New-L2DriveText $mtext ($ml2 + "`n        return: 0`n    end: main`nend: external")))
+    & $outputL1trans $mdrv $mdrvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed adv_merged_drive" }
+    Invoke-Gcc $mdrvC $mdrvExe (Join-Path $log "adv_merged_drive.gcc.log")
+    cmd /c "`"$mdrvExe`" > `"$mdrvOut`" 2> `"$(Join-Path $out 'adv_merged_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "adv_merged_drive exe failed" }
+    $mc = [System.IO.File]::ReadAllText((Resolve-L2Path $mdrvOut)).Replace("`r`n","`n")
+    if ($a -ne $mc) { throw "merged physical_line advance_layout mismatch vs parser.lm1`nREF:`n$a`nL2:`n$mc" }
+}
+
+Invoke-AdvanceLayout
+
+
+function Invoke-LineStart {
+    $cases = @'
+        c.printf("%d\n", lm_p0_index_is_line_start(0, 0U))
+        c.printf("%d\n", lm_p0_index_is_line_start("", 0U))
+        c.printf("%d\n", lm_p0_index_is_line_start("a", 0U))
+        c.printf("%d\n", lm_p0_index_is_line_start("a", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("\na", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("\ra", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("\r\na", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("\r\na", 2U))
+        c.printf("%d\n", lm_p0_index_is_line_start("a\nb", 2U))
+        c.printf("%d\n", lm_p0_index_is_line_start("ab", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("a\0b", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("\n", 1U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space(0, 0U, 0U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("", 0U, 0U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("abc", 3U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("abc", 4U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("   ", 0U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("\t\t", 0U, 2U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("  x", 0U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("  x", 0U, 2U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("x  ", 1U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("x y", 1U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space(" \0 ", 0U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("\n  ", 0U, 3U))
+'@
+
+    $refLm1 = Join-Path $out "lstart_ref.lm1"
+    $refC = Join-Path $out "lstart_ref.c"
+    $refExe = Join-Path $out "lstart_ref.exe"
+    $refOut = Join-Path $out "lstart_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed lstart_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "lstart_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'lstart_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "lstart_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_line_start.lm2" "parser_line_start" 0 "lm_p0_index_is_line_start"
+    $lm1 = Join-Path $out "parser_line_start.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "line_start must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m1') { throw "line_start missing index_is_line_start" }
+    if ($text -notmatch 'fn: l2_m2') { throw "line_start missing line_rest_is_horizontal_space" }
+    if ($text -notmatch 'if: l2_p1_1 = 0U') { throw "index_is_line_start must return before any index-1 read" }
+
+    $l2cases = $cases.Replace("lm_p0_index_is_line_start(", "l2_m1(lmx_branch_struct_known(unit, 1U), ").Replace("lm_p0_line_rest_is_horizontal_space(", "l2_m2(lmx_branch_struct_known(unit, 2U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "lstart_l2_drive.lm1"
+    $drvC = Join-Path $out "lstart_l2_drive.c"
+    $drvExe = Join-Path $out "lstart_l2_drive.exe"
+    $drvOut = Join-Path $out "lstart_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed lstart_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "lstart_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'lstart_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "lstart_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "line_start mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-LineStart
+
+function Invoke-Position {
+    $cases = @'
+        size_t: line
+        size_t: col
+        c.printf("%zu\n", lm_p0_line_break_width_at(0, 0U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("x", 1U, 1U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\n", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r\n", 2U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r\n", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r\n", 2U, 1U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("a\r\nb", 4U, 1U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\t", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\0", 1U, 0U))
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice(0, 0U, 0U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("", 0U, 0U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("ab", 2U, 5U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 0U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 1U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 2U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 3U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 4U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\nb", 3U, 2U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\rb", 3U, 2U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r", 2U, 2U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 3U, 10U, 20U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("\t", 1U, 1U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\0b", 3U, 2U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("\r\n", 1U, 1U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+'@
+
+    $refLm1 = Join-Path $out "pos_ref.lm1"
+    $refC = Join-Path $out "pos_ref.c"
+    $refExe = Join-Path $out "pos_ref.exe"
+    $refOut = Join-Path $out "pos_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pos_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "pos_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pos_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pos_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_position.lm2" "parser_position" 0 "lm_p0_position_in_slice"
+    $lm1 = Join-Path $out "parser_position.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "position must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m0') { throw "position missing line_break_width_at" }
+    if ($text -notmatch 'sub: l2_m1') { throw "position missing mangled sub" }
+    if ($text -notmatch '@: size_t l2_p1_5') { throw "position missing out_line" }
+    if ($text -notmatch '@: size_t l2_p1_6') { throw "position missing out_column" }
+    if ($text -notmatch 'l2_p1_5\[0\]:') { throw "position missing out_line[0] store" }
+    if ($text -notmatch 'l2_p1_6\[0\]:') { throw "position missing out_column[0] store" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "position must emit continue" }
+    if ($text -notmatch 'l2_p1_2: l2_p1_1') { throw "position must clamp index to length" }
+    if ($text -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_p1_0, l2_p1_2') { throw "position must pass clamped index as helper length, not full text length" }
+    if ($text -match 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_p1_0, l2_p1_1') { throw "position must not pass full text length to helper" }
+
+    $l2cases = $cases.Replace("lm_p0_line_break_width_at(", "l2_m0(lmx_branch_struct_known(unit, 0U), ").Replace("lm_p0_position_in_slice(", "l2_m1(lmx_branch_struct_known(unit, 1U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "pos_l2_drive.lm1"
+    $drvC = Join-Path $out "pos_l2_drive.c"
+    $drvExe = Join-Path $out "pos_l2_drive.exe"
+    $drvOut = Join-Path $out "pos_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pos_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "pos_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pos_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pos_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "position mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    Invoke-Leaf "l2src\parser_physical_line.lm2" "parser_physical_line" 0 "lm_p0_index_is_line_start"
+    $mlm1 = Join-Path $out "parser_physical_line.lm1"
+    $mtext = [System.IO.File]::ReadAllText((Resolve-L2Path $mlm1)).Replace("`r`n", "`n")
+    if ($mtext -notmatch 'sub: l2_m7') { throw "merged physical_line missing position_in_slice" }
+    if ($mtext -notmatch 'l2_p7_2: l2_p7_1') { throw "merged position must clamp index to length" }
+    if ($mtext -notmatch 'l2_m5\(lmx_branch_struct_known\(node\\node, 5U\), l2_p7_0, l2_p7_2') { throw "merged position must pass clamped index as helper length" }
+    if ($mtext -match 'l2_m5\(lmx_branch_struct_known\(node\\node, 5U\), l2_p7_0, l2_p7_1') { throw "merged position must not pass full text length to helper" }
+    if ($mtext -notmatch 'const: @\(char l2_own5\)') { throw "merged physical_line missing 6th OwnUsed" }
+    $ml2cases = $cases.Replace("lm_p0_line_break_width_at(", "l2_m5(lmx_branch_struct_known(unit, 5U), ").Replace("lm_p0_position_in_slice(", "l2_m7(lmx_branch_struct_known(unit, 7U), ")
+    $mdrvLm1 = Join-Path $out "pos_merged_drive.lm1"
+    $mdrvC = Join-Path $out "pos_merged_drive.c"
+    $mdrvExe = Join-Path $out "pos_merged_drive.exe"
+    $mdrvOut = Join-Path $out "pos_merged_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $mdrvLm1), (New-L2DriveText $mtext ($ml2cases + "`n        return: 0`n    end: main`nend: external")))
+    & $outputL1trans $mdrvLm1 $mdrvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pos_merged_drive" }
+    Invoke-Gcc $mdrvC $mdrvExe (Join-Path $log "pos_merged_drive.gcc.log")
+    cmd /c "`"$mdrvExe`" > `"$mdrvOut`" 2> `"$(Join-Path $out 'pos_merged_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pos_merged_drive exe failed" }
+    $c = [System.IO.File]::ReadAllText((Resolve-L2Path $mdrvOut)).Replace("`r`n","`n")
+    if ($a -ne $c) { throw "merged physical_line position mismatch vs parser.lm1`nREF:`n$a`nL2:`n$c" }
+}
+
+Invoke-Position
+
+function Invoke-TrailerRole {
+    $pred = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_text_predicates.lm2")).Replace("`r`n", "`n")
+    $tr = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_trailer_role.lm2")).Replace("`r`n", "`n")
+    $h = ($pred -split "fn: lm_p0_is_horizontal_space")[1]
+    $h = "fn: lm_p0_is_horizontal_space" + ($h -split "fn: lm_p0_is_line_break")[0]
+    $th = ($tr -split "fn: lm_p0_is_horizontal_space")[1]
+    $th = "fn: lm_p0_is_horizontal_space" + ($th -split "fn: lm_p0_text_has_prefix_name")[0]
+    if ($h.Trim() -ne $th.Trim()) { throw "trailer_role is_horizontal_space must match parser_text_predicates.lm2" }
+
+    $dash81 = "-" * 81
+    $cases = @"
+        c.printf("%d\n", lm_p0_text_has_prefix_name("end:", 4U, "end", 0))
+        c.printf("%d\n", lm_p0_text_has_prefix_name("end", 3U, "end", 0))
+        c.printf("%d\n", lm_p0_text_has_prefix_name("endif", 5U, "end", 0))
+        c.printf("%d\n", lm_p0_text_has_prefix_name("return", 6U, "return", 1))
+        c.printf("%d\n", lm_p0_text_has_prefix_name("return x", 8U, "return", 1))
+        c.printf("%d\n", lm_p0_legacy_trailer_role("end:", 4U))
+        c.printf("%d\n", lm_p0_legacy_trailer_role("end", 3U))
+        c.printf("%d\n", lm_p0_legacy_trailer_role("return", 6U))
+        c.printf("%d\n", lm_p0_legacy_trailer_role("until:", 6U))
+        c.printf("%d\n", lm_p0_legacy_trailer_role("---", 3U))
+        c.printf("%d\n", lm_p0_trailer_role("end:", 4U))
+        c.printf("%d\n", lm_p0_trailer_role("end", 3U))
+        c.printf("%d\n", lm_p0_trailer_role("return", 6U))
+        c.printf("%d\n", lm_p0_trailer_role("return:", 7U))
+        c.printf("%d\n", lm_p0_trailer_role("until:", 6U))
+        c.printf("%d\n", lm_p0_trailer_role("---", 3U))
+        c.printf("%d\n", lm_p0_trailer_role("----", 4U))
+        c.printf("%d\n", lm_p0_trailer_role("--- ", 4U))
+        c.printf("%d\n", lm_p0_trailer_role("--- #c", 6U))
+        c.printf("%d\n", lm_p0_trailer_role("--", 2U))
+        c.printf("%d\n", lm_p0_trailer_role("foo", 3U))
+        c.printf("%d\n", lm_p0_trailer_role("", 0U))
+        c.printf("%d\n", lm_p0_trailer_role("$dash81", 81U))
+        c.printf("%d\n", lm_p0_trailer_role_from_payload("trailer.end"))
+        c.printf("%d\n", lm_p0_trailer_role_from_payload("LM_P0_TRAILER_ROLE_RETURN"))
+        c.printf("%d\n", lm_p0_trailer_role_from_payload("trailer.dash-cutter"))
+        c.printf("%d\n", lm_p0_trailer_role_from_payload(0))
+        c.printf("%d\n", lm_p0_trailer_role_is_tail_cutter(0))
+        c.printf("%d\n", lm_p0_trailer_role_is_tail_cutter(2))
+        c.printf("%s\n", lm_p0_trailer_role_payload(2))
+        c.printf("%s\n", lm_p0_trailer_role_payload(1))
+        c.printf("%d\n", lm_p0_trailer_role_payload(0) = 0)
+"@
+
+    $refLm1 = Join-Path $out "tr_ref.lm1"
+    $refC = Join-Path $out "tr_ref.c"
+    $refExe = Join-Path $out "tr_ref.exe"
+    $refOut = Join-Path $out "tr_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed tr_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "tr_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'tr_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "tr_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_trailer_role.lm2" "parser_trailer_role" 0 "lm_p0_is_horizontal_space"
+    $lm1 = Join-Path $out "parser_trailer_role.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "trailer_role must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m6') { throw "trailer_role missing mangled lm_p0_trailer_role" }
+    if ($text -notmatch 'LmP0TrailerRole') { throw "trailer_role L1 missing LmP0TrailerRole" }
+    if ($text -notmatch 'predef: "l1src/p0.lm1.h"' -and $text -notmatch 'l1src/p0.lm1.h') { throw "trailer_role must predef p0.lm1.h" }
+
+    $l2cases = $cases.
+        Replace("lm_p0_text_has_prefix_name(", "l2_m1(lmx_branch_struct_known(unit, 1U), ").
+        Replace("lm_p0_legacy_trailer_role(", "l2_m2(lmx_branch_struct_known(unit, 2U), ").
+        Replace("lm_p0_trailer_role_from_payload(", "l2_m3(lmx_branch_struct_known(unit, 3U), ").
+        Replace("lm_p0_trailer_role_payload(", "l2_m4(lmx_branch_struct_known(unit, 4U), ").
+        Replace("lm_p0_trailer_role_is_tail_cutter(", "l2_m5(lmx_branch_struct_known(unit, 5U), ").
+        Replace("lm_p0_trailer_role(", "l2_m6(lmx_branch_struct_known(unit, 6U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "tr_l2_drive.lm1"
+    $drvC = Join-Path $out "tr_l2_drive.c"
+    $drvExe = Join-Path $out "tr_l2_drive.exe"
+    $drvOut = Join-Path $out "tr_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed tr_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "tr_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'tr_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "tr_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "trailer_role mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-TrailerRole
+
+function Invoke-FenceLine {
+    $pred = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_text_predicates.lm2")).Replace("`r`n", "`n")
+    $ls = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_line_start.lm2")).Replace("`r`n", "`n")
+    $fl = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_fence_line.lm2")).Replace("`r`n", "`n")
+    $h = ($pred -split "fn: lm_p0_is_horizontal_space")[1]
+    $h = "fn: lm_p0_is_horizontal_space" + ($h -split "fn: lm_p0_is_line_break")[0]
+    $fh = ($fl -split "fn: lm_p0_is_horizontal_space")[1]
+    $fh = "fn: lm_p0_is_horizontal_space" + ($fh -split "fn: lm_p0_line_rest_is_horizontal_space")[0]
+    if ($h.Trim() -ne $fh.Trim()) { throw "fence_line is_horizontal_space must match parser_text_predicates.lm2" }
+    $lr = ($ls -split "fn: lm_p0_line_rest_is_horizontal_space")[1]
+    $lr = "fn: lm_p0_line_rest_is_horizontal_space" + ($lr -split "fn: main")[0]
+    $flr = ($fl -split "fn: lm_p0_line_rest_is_horizontal_space")[1]
+    $flr = "fn: lm_p0_line_rest_is_horizontal_space" + ($flr -split "fn: lm_p0_match_block_string_fence_line")[0]
+    if ($lr.Trim() -ne $flr.Trim()) { throw "fence_line line_rest must match parser_line_start.lm2" }
+
+    $eq80 = "=" * 80
+    $eq81 = "=" * 81
+    $st80 = "*" * 80
+    $st81 = "*" * 81
+    $cases = @"
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("===", 0U, 3U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("===  ", 0U, 5U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("===\t", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("===x", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("====", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("==", 0U, 2U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("===", 0U, 3U, 2U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line(" ===", 1U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("", 0U, 0U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("***", 0U, 3U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("$eq80", 0U, 80U, 80U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("$eq81", 0U, 81U, 81U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("$eq80", 0U, 80U, 79U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("***", 0U, 3U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("***  ", 0U, 5U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("***\t", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("***x", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("****", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("**", 0U, 2U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("***", 0U, 3U, 2U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line(" ***", 1U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("", 0U, 0U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("===", 0U, 3U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("$st80", 0U, 80U, 80U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("$st81", 0U, 81U, 81U))
+"@
+
+    $refLm1 = Join-Path $out "fence_ref.lm1"
+    $refC = Join-Path $out "fence_ref.c"
+    $refExe = Join-Path $out "fence_ref.exe"
+    $refOut = Join-Path $out "fence_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed fence_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "fence_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'fence_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "fence_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_fence_line.lm2" "parser_fence_line" 0 "lm_p0_is_horizontal_space"
+    $lm1 = Join-Path $out "parser_fence_line.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "fence_line must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m2') { throw "fence_line missing match_block_string_fence_line" }
+    if ($text -notmatch 'fn: l2_m3') { throw "fence_line missing match_raw_comment_fence_line" }
+
+    $l2cases = $cases.
+        Replace("lm_p0_match_block_string_fence_line(", "l2_m2(lmx_branch_struct_known(unit, 2U), ").
+        Replace("lm_p0_match_raw_comment_fence_line(", "l2_m3(lmx_branch_struct_known(unit, 3U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "fence_l2_drive.lm1"
+    $drvC = Join-Path $out "fence_l2_drive.c"
+    $drvExe = Join-Path $out "fence_l2_drive.exe"
+    $drvOut = Join-Path $out "fence_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed fence_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "fence_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'fence_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "fence_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "fence_line mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-FenceLine
+
+function Invoke-LayoutDeeper {
+    $cases = @'
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 0U, 0U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(1U, 0U, 0U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 0U, 1U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(4U, 0U, 4U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(8U, 0U, 4U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(4U, 0U, 8U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 1U, 0U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 0U, 0U, 1U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 2U, 0U, 1U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 1U, 0U, 2U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(8U, 1U, 0U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 0U, 8U, 1U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(8U, 1U, 4U, 1U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(4U, 2U, 8U, 1U))
+'@
+    $refLm1 = Join-Path $out "layout_ref.lm1"
+    $refC = Join-Path $out "layout_ref.c"
+    $refExe = Join-Path $out "layout_ref.exe"
+    $refOut = Join-Path $out "layout_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed layout_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "layout_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'layout_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "layout_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_layout_deeper.lm2" "parser_layout_deeper" 0 "lm_p0_layout_prefix_is_deeper"
+    $lm1 = Join-Path $out "parser_layout_deeper.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "layout_deeper must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m0') { throw "layout_deeper missing mangled method" }
+    $l2cases = $cases.Replace("lm_p0_layout_prefix_is_deeper(", "l2_m0(lmx_branch_struct_known(unit, 0U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "layout_l2_drive.lm1"
+    $drvC = Join-Path $out "layout_l2_drive.c"
+    $drvExe = Join-Path $out "layout_l2_drive.exe"
+    $drvOut = Join-Path $out "layout_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed layout_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "layout_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'layout_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "layout_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "layout_deeper mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-LayoutDeeper
+
+function Invoke-DashFence {
+    $pred = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_text_predicates.lm2")).Replace("`r`n", "`n")
+    $df = [System.IO.File]::ReadAllText((Resolve-L2Path "l2src\parser_dash_fence.lm2")).Replace("`r`n", "`n")
+    $h = ($pred -split "fn: lm_p0_is_horizontal_space")[1]
+    $h = "fn: lm_p0_is_horizontal_space" + ($h -split "fn: lm_p0_is_line_break")[0]
+    $dh = ($df -split "fn: lm_p0_is_horizontal_space")[1]
+    $dh = "fn: lm_p0_is_horizontal_space" + ($dh -split "fn: lm_p0_is_line_break")[0]
+    if ($h.Trim() -ne $dh.Trim()) { throw "dash_fence is_horizontal_space must match parser_text_predicates.lm2" }
+    $lb = ($pred -split "fn: lm_p0_is_line_break")[1]
+    $lb = "fn: lm_p0_is_line_break" + ($lb -split "fn: lm_p0_is_field_space")[0]
+    $dlb = ($df -split "fn: lm_p0_is_line_break")[1]
+    $dlb = "fn: lm_p0_is_line_break" + ($dlb -split "fn: lm_p0_scan_brace_mark_unchecked")[0]
+    if ($lb.Trim() -ne $dlb.Trim()) { throw "dash_fence is_line_break must match parser_text_predicates.lm2" }
+
+    $d80 = "-" * 80
+    $d81 = "-" * 81
+    # Status first, then print. Count is 0..81 so cast to int is the safe conversion.
+    $cases = @"
+        size_t: n
+        int: st
+        n: 0U
+        st: lm_p0_dash_fence_status("---", 3U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("----", 4U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--", 2U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("-", 1U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("", 0U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("$d80", 80U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("$d81", 81U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("---   ", 6U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("---`t", 4U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("---#", 4U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- # x", 7U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("---x", 4U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- x", 5U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {x}", 7U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {x} y", 9U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {x", 6U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {}", 6U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {a {b}}", 11U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {"{"}""", 9U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {"}"}""", 9U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status('''--- {"""{"""}''', 13U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {'''{'''}", 13U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {'}'}", 9U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {#}`n}""", 8U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {
+===
+}
+===
+}""", 16U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {
+***
+}
+***
+}""", 16U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {`r`n}""", 8U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+"@
+    # NONE=0 VALID=1 TOO_LONG=2 TRAILING=3 ; count is dash run length
+    # Trailing 9 lines: quoted/triple/char/comment/fence/newline vs parser.lm1 REF.
+    $want = "1 3`n1 4`n0 2`n0 1`n0 0`n1 80`n2 81`n1 3`n1 3`n1 3`n1 3`n3 3`n3 3`n1 3`n3 3`n3 3`n1 3`n1 3`n1 3`n1 3`n1 3`n1 3`n1 3`n3 3`n3 3`n3 3`n3 3`n"
+
+    $refLm1 = Join-Path $out "dash_ref.lm1"
+    $refC = Join-Path $out "dash_ref.c"
+    $refExe = Join-Path $out "dash_ref.exe"
+    $refOut = Join-Path $out "dash_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed dash_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "dash_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'dash_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "dash_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_dash_fence.lm2" "parser_dash_fence" 0 "lm_p0_is_horizontal_space"
+    $lm1 = Join-Path $out "parser_dash_fence.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "dash_fence must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m3') { throw "dash_fence missing mangled dash_fence_status" }
+
+    $l2cases = $cases.Replace("lm_p0_dash_fence_status(", "l2_m3(lmx_branch_struct_known(unit, 3U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "dash_l2_drive.lm1"
+    $drvC = Join-Path $out "dash_l2_drive.c"
+    $drvExe = Join-Path $out "dash_l2_drive.exe"
+    $drvOut = Join-Path $out "dash_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed dash_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "dash_l2_drive.gcc.log")
+    $drvErr = Join-Path $out "dash_l2_drive.err"
+    $drvEcFile = Join-Path $out "dash_l2_drive.exitcode"
+    $drvFull = Resolve-L2Path $drvExe
+    $drvOutFull = Resolve-L2Path $drvOut
+    $drvErrFull = Resolve-L2Path $drvErr
+    $drvEcFull = Resolve-L2Path $drvEcFile
+    Remove-Item -LiteralPath $drvEcFile -Force -ErrorAction SilentlyContinue
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $drvFull
+    $psi.WorkingDirectory = (Get-Location).Path
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $drvProc = New-Object System.Diagnostics.Process
+    $drvProc.StartInfo = $psi
+    [void]$drvProc.Start()
+    $outTask = $drvProc.StandardOutput.ReadToEndAsync()
+    $errTask = $drvProc.StandardError.ReadToEndAsync()
+    if (-not $drvProc.WaitForExit(20000)) {
+        try { $drvProc.Kill() } catch { }
+        [void]$drvProc.WaitForExit(5000)
+        throw "dash_l2_drive timed out after 20s pid=$($drvProc.Id). preserved hang_042800/"
+    }
+    $drvProc.WaitForExit()
+    $drvEc = $drvProc.ExitCode
+    Set-Content -LiteralPath $drvEcFile -Value "$drvEc" -Encoding ascii
+    [System.IO.File]::WriteAllText($drvOutFull, $outTask.Result.Replace("`r`n", "`n"))
+    [System.IO.File]::WriteAllText($drvErrFull, $errTask.Result)
+    if ($null -eq $drvEc) { throw "dash_l2_drive finished but ExitCode was not available pid=$($drvProc.Id)" }
+    if ($drvEc -ne 0) { throw "dash_l2_drive exe failed exit=$drvEc" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $want) { throw "dash_fence REF unexpected`nREF:`n$a`nWANT:`n$want" }
+    if ($b -ne $want) { throw "dash_fence L2 unexpected`nL2:`n$b`nWANT:`n$want" }
+    if ($a -ne $b) { throw "dash_fence mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    if ($text -notmatch '@: int l2_p2_') { throw "scan_brace must emit @: int closed formal" }
+    if ($text -notmatch 'l2_p2_\d+\[0\]:') { throw "scan_brace must store through closed[0]" }
+    if ($text -notmatch 'lmx_int_value') { throw "dash_fence must path-load node\\closed after scan" }
+
+    $bcases = @"
+        int: closed
+        size_t: e
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{}", 2U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{x}", 3U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{", 1U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("", 0U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("x", 1U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("}", 1U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{a {b}}", 7U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{x", 2U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{{}", 3U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{}x", 3U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("xx{y}", 5U, 2U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("""--- {"{"}""", 9U, 4U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("""--- {"}"}""", 9U, 4U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("--- {'}'}", 9U, 4U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("""--- {#}`n}""", 8U, 4U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("""--- {
+===
+}
+===
+}""", 16U, 4U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+"@
+
+    $brefLm1 = Join-Path $out "brace_ref.lm1"
+    $brefC = Join-Path $out "brace_ref.c"
+    $brefExe = Join-Path $out "brace_ref.exe"
+    $brefOut = Join-Path $out "brace_ref.stdout"
+    $brefSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$bcases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $brefLm1), $brefSrc.Replace("`r`n","`n"))
+    & $outputL1trans $brefLm1 $brefC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed brace_ref" }
+    Invoke-Gcc $brefC $brefExe (Join-Path $log "brace_ref.gcc.log")
+    cmd /c "`"$brefExe`" > `"$brefOut`" 2> `"$(Join-Path $out 'brace_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "brace_ref exe failed" }
+
+    $l2bcases = $bcases.Replace("lm_p0_scan_brace_mark_unchecked(", "l2_m2(lmx_branch_struct_known(unit, 2U), ")
+    $bdrive = @"
+$l2bcases
+        return: 0
+    end: main
+end: external
+"@
+    $bdrvLm1 = Join-Path $out "brace_l2_drive.lm1"
+    $bdrvC = Join-Path $out "brace_l2_drive.c"
+    $bdrvExe = Join-Path $out "brace_l2_drive.exe"
+    $bdrvOut = Join-Path $out "brace_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $bdrvLm1), (New-L2DriveText $text $bdrive))
+    & $outputL1trans $bdrvLm1 $bdrvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed brace_l2_drive" }
+    Invoke-Gcc $bdrvC $bdrvExe (Join-Path $log "brace_l2_drive.gcc.log")
+    $bdrvErr = Join-Path $out "brace_l2_drive.err"
+    $bpsi = New-Object System.Diagnostics.ProcessStartInfo
+    $bpsi.FileName = (Resolve-L2Path $bdrvExe)
+    $bpsi.WorkingDirectory = (Get-Location).Path
+    $bpsi.UseShellExecute = $false
+    $bpsi.RedirectStandardOutput = $true
+    $bpsi.RedirectStandardError = $true
+    $bdrvProc = New-Object System.Diagnostics.Process
+    $bdrvProc.StartInfo = $bpsi
+    [void]$bdrvProc.Start()
+    $boutTask = $bdrvProc.StandardOutput.ReadToEndAsync()
+    $berrTask = $bdrvProc.StandardError.ReadToEndAsync()
+    if (-not $bdrvProc.WaitForExit(20000)) {
+        try { $bdrvProc.Kill() } catch { }
+        [void]$bdrvProc.WaitForExit(5000)
+        throw "brace_l2_drive timed out after 20s pid=$($bdrvProc.Id)"
+    }
+    $bdrvProc.WaitForExit()
+    if ($bdrvProc.ExitCode -ne 0) { throw "brace_l2_drive exe failed exit=$($bdrvProc.ExitCode)" }
+    [System.IO.File]::WriteAllText((Resolve-L2Path $bdrvOut), $boutTask.Result.Replace("`r`n", "`n"))
+    [System.IO.File]::WriteAllText((Resolve-L2Path $bdrvErr), $berrTask.Result)
+    $ba = [System.IO.File]::ReadAllText((Resolve-L2Path $brefOut)).Replace("`r`n","`n")
+    $bb = [System.IO.File]::ReadAllText((Resolve-L2Path $bdrvOut)).Replace("`r`n","`n")
+    if ($ba -ne $bb) { throw "brace_mark mismatch vs parser.lm1`nREF:`n$ba`nL2:`n$bb" }
+}
+
+Invoke-DashFence
+
+function Invoke-IndentStack {
+    Invoke-Leaf "l2src\parser_indent_stack.lm2" "parser_indent_stack" 0 "lm_p0_indent_stack_push"
+    $lm1 = Join-Path $out "parser_indent_stack.lm1"
+    $text = [System.IO.File]::ReadAllText((Resolve-L2Path $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_indent_stack_push') { throw "indent_stack must mangle method symbols" }
+    if ($text -notmatch '@: LmP0Document l2_p') { throw "indent_stack missing @: LmP0Document formal" }
+    if ($text -notmatch '@: LmP0IndentStack l2_p') { throw "indent_stack missing @: LmP0IndentStack formal" }
+    if ($text -notmatch '\\columns') { throw "indent_stack missing columns field" }
+    if ($text -notmatch 'lm_own_resize') { throw "indent_stack missing lm_own_resize" }
+    if ($text -notmatch 'fn: l2_m10 ') { throw "indent_stack missing mangled indent_level_from_column" }
+
+    $cases = @"
+        @: LmP0Document d
+        @: LmP0Diagnostic diag
+        @: LmP0IndentStack st
+        size_t: level
+        int: ok
+        d: (cast: (@: LmP0Document) lm_own_new_zero(c.sizeof(c.LmP0Document)))
+        diag: (cast: (@: LmP0Diagnostic) lm_own_new_zero(c.sizeof(c.LmP0Diagnostic)))
+        if: d = 0 || diag = 0
+            return: 1
+        d\diagnostic: diag
+        st: lm_p0_indent_stack_new(d)
+        if: st = 0
+            return: 1
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 0U, 1U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 4U, 2U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 4U, 3U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 0U, 4U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 2U, 5U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        lm_p0_indent_stack_delete(st)
+        st: lm_p0_indent_stack_new(d)
+        if: st = 0
+            return: 1
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 0U, 1U, 1U, @ level)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 4U, 2U, 1U, @ level)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 2U, 3U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        lm_p0_indent_stack_delete(st)
+        int: i
+        size_t: col
+        @: LmP0IndentStack cl
+        st: lm_p0_indent_stack_new(d)
+        if: st = 0
+            return: 1
+        i: 1
+        while: i <= 40
+            col: (cast: (size_t) (i * 2))
+            ok: lm_p0_indent_level_from_column(d, st, col, 1U, 1U, @ level)
+            if: ok = 0
+                return: 1
+            ---
+            i: i + 1
+        c.printf("grow %zu %zu %zu\n", st\count, st\capacity, level)
+        cl: lm_p0_indent_stack_clone(d, st, 1U, 1U)
+        if: cl = 0
+            return: 1
+        c.printf("clone %zu %zu\n", cl\count, cl\capacity)
+        ok: lm_p0_indent_level_from_column(d, st, 200U, 1U, 1U, @ level)
+        c.printf("mut %zu %zu\n", st\count, cl\count)
+        ok: lm_p0_indent_level_from_column(d, st, 0U, 1U, 1U, @ level)
+        c.printf("pop %zu %zu\n", st\count, level)
+        lm_p0_indent_stack_delete(cl)
+        lm_p0_indent_stack_delete(st)
+"@
+    $refLm1 = Join-Path $out "indent_ref.lm1"
+    $refC = Join-Path $out "indent_ref.c"
+    $refExe = Join-Path $out "indent_ref.exe"
+    $refOut = Join-Path $out "indent_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Resolve-L2Path $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $outputL1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed indent_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "indent_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'indent_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "indent_ref exe failed" }
+
+    $l2cases = $cases.Replace("lm_p0_indent_stack_new(", "l2_m6(lmx_branch_struct_known(unit, 6U), ").Replace("lm_p0_indent_level_from_column(", "l2_m10(lmx_branch_struct_known(unit, 10U), ").Replace("lm_p0_indent_stack_delete(", "l2_m7(lmx_branch_struct_known(unit, 7U), ").Replace("lm_p0_indent_stack_clone(", "l2_m9(lmx_branch_struct_known(unit, 9U), ")
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "indent_l2_drive.lm1"
+    $drvC = Join-Path $out "indent_l2_drive.c"
+    $drvExe = Join-Path $out "indent_l2_drive.exe"
+    $drvOut = Join-Path $out "indent_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Resolve-L2Path $drvLm1), (New-L2DriveText $text $drive))
+    & $outputL1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed indent_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "indent_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'indent_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "indent_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Resolve-L2Path $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Resolve-L2Path $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "indent_stack mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-IndentStack
+& (Join-Path $PSScriptRoot "run_candidate_indent.ps1") -l1trans $outputL1trans -out $out -log $log -messageObjects (Get-L2MessageObjects)
+
+"l2trans $gen ok"
+$suiteLog = Join-Path $log "l2trans_suite.log"
+$toolPath = Resolve-L2Path $outputL1trans
+$toolHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $toolPath).Hash
+@(
+    "cmd=l2src\run_l2trans.ps1"
+    "L1_GEN=$gen"
+    "seed_l1trans=$l1trans"
+    "l1trans=$outputL1trans"
+    "l1trans_sha256=$toolHash"
+    "banner=l2trans $gen ok"
+    "exit=0"
+) | Set-Content -LiteralPath $suiteLog -Encoding utf8

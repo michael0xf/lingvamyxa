@@ -16,7 +16,7 @@ include: "<stdlib.h>"
 # module's entire shape -- there is no function in mixa_selection.lm1
 # that does not take or return one of its own struct pointers.
 #
-# The current L2 frontend (stg/l1_baseline/l2src/l2trans.lm1, read
+# The current L2 frontend (l2src/l2trans.lm1, read
 # directly rather than assumed) type-checks every `@:`/`const: @(...)`
 # formal and return type against a CLOSED, HARDCODED allowlist -- not a
 # general "any predef'd struct works" mechanism. For a bare `@:` pointer

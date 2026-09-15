@@ -36,13 +36,13 @@
 # h.lm1/.lm1, mixa_app.h.lm1, mixa_app_win32.h.lm1/.lm1, mixa_buttons.
 # h/.lm1, mixa_draw.h/.lm1, mixa_tiles.h/.lm1, mixa_text_rect.h/.lm1)
 # are the parity oracle (or real, unmodified dependencies) and are never
-# touched. Nothing under stg/l1_baseline is modified, only read. Every
+# touched. Nothing under l1src or l2src is modified, only read. Every
 # input is built fresh in a unique run directory -- no stale objects.
 param()
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root
@@ -270,7 +270,7 @@ $apSrc = "mixa_manager\mixa_app_panel.lm2"
 $apOut = Join-Path $RunDir "mixa_app_panel_l2.lm1"
 $apStdout = Join-Path $RunDir "ap_stdout.log"
 $apStderr = Join-Path $RunDir "ap_stderr.log"
-$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+$env:L2_RUNTIME_ROOT = "l2src/"
 $ApExit = Invoke-Cmd "`"$l2exe`"" "`"$apSrc`" `"$apOut`"" $apStdout $apStderr
 Pop-Location
 
@@ -308,7 +308,7 @@ if ($ApExit -ne 0 -and $KnownBarrier) {
         $l2ApO = Join-Path $RunDir "mixa_app_panel_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2ap_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2ap_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2ApC`" -o `"$l2ApO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$L1Root`" -c `"$l2ApC`" -o `"$l2ApO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"

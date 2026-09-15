@@ -1,4 +1,0 @@
-import: "helper.lm1"
-fn: va () int
-    return: ha()
-end: va

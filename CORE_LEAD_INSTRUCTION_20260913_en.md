@@ -113,7 +113,7 @@ size — engineering work.
 | `CORE_TEAM_PLAN_20260912.md` | Codex's log: checkpoints, ownership boundaries, "the model each stage must preserve" | Last entry 03:15 on 13.09 — ~10 hours of work since are not in it; "Model each stage must preserve" and "Non-overlapping stages" still hold as rules |
 | `work_chat/CORE_CONTINUATION_20260911.md` | Codex's live continuation | Last entry 05:00 on 13.09; stale |
 | `FABLE_5_1_CORE_HANDOFF_20260912.md` | Fable's role/constraints; "Settled constraints to keep together" | Constraints hold; statuses stale |
-| `stg/l1_baseline/l2src/FABLE_GRAPH_ABI.txt` | My design notes per frontend/graph-ABI slice, including the five runtime-module ports and what library emission changed | Current to `868d85db` on `fable/merge-on-callable` |
+| `l2src/FABLE_GRAPH_ABI.txt` | My design notes per frontend/graph-ABI slice, including the five runtime-module ports and what library emission changed | Current to `868d85db` on `fable/merge-on-callable` |
 | `work_chat/TICKET_RULES_EN.md` | WORKING/BLOCKED/DONE/STAGE DONE; what acceptance is; proportional verification | In force for everyone |
 | `work_chat/claude/PROTOCOL.txt`, `ASSIGNMENT.txt`, `INBOX_WATCHERS.md`, `WAKING_CLAUDE.txt`, `OPENCODE_HANDOFF_20260911.md` | Claude's channel protocol, his assignment, his watcher, how to wake him, his application backlog | In force; they name Codex as the monitor — that is now this chat |
 | `mixa_manager/PORT_OF_CLEARSHELL.txt`, `FIRST_VERSION.txt`, `CODING_RULES.txt`, `STATUS.txt`, `*_l2_port.txt` | The application's framing, first version, rules for L1 code in the app, Claude's note per port | STATUS stale (10.09); `*_l2_port.txt` fresh and exact |
@@ -155,7 +155,7 @@ does.
 - The rest: `stg/l1_baseline/**` (74 new + 61 modified files — the whole core,
   codex only), `tests/l1/*`, `mixa_manager/tests/*`, `mixa_manager/vendor/*`.
 
-### 4.3 The L2 compiler (`stg/l1_baseline/l2src/l2trans.lm1`)
+### 4.3 The L2 compiler (`l2src/l2trans.lm1`)
 
 - On **main** — old. So every Claude port on main hits the same barrier:
   `l2trans error: … unknown foreign type` on the first formal of the module's
@@ -182,11 +182,11 @@ does.
 
 ### 4.4 The L1 translator and the "stable compiler"
 
-- The pin: `stg/l1_baseline/build/l1trans/gen2/l1trans.exe`, SHA256
+- The pin: `build/l1trans/gen2/l1trans.exe`, SHA256
   `0B3D85B36E72A5935CA43D76B71B8CBBB060AF041CBB6FAE805796595810B2A2`,
   promoted 2026-09-15 from `722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466` — slice refresh, source tie in L1_PIN_SOURCE.txt
   by §6.2 (gen2 C == gen3 C fixed point; INTEGRATION_GATE_STATUS §11, §17,
-  §18). Runners read the hash from `stg/l1_baseline/l2src/L1_PIN.txt`, the one
+  §18). Runners read the hash from `l2src/L1_PIN.txt`, the one
   place it is written. It is **read-only** and gitignored (it lives only on
   this machine; a clean clone must rebuild it through `gate.ps1` / `buildCore`).
 - On the codex branch Codex **changed L1 itself** (root `l1src/l1trans.lm1`,
@@ -198,7 +198,7 @@ does.
   `3aa793b7` (P0 MIX anchors / string bytes), `24a3e4c7` (C surface
   assignment targets). In his worktree gen0 (13:42) and gen1 (14:11) were
   rebuilt; **gen2 (the pin) was not changed**. A full L1 gate
-  (`stg/l1_baseline/gate.ps1`: buildCore → gen0 seed → gen1..gen3 fixed
+  (`gate.ps1`: buildCore → gen0 seed → gen1..gen3 fixed
   point → every suite on gen0/gen2 → the L2 suite) after those edits is
   **not visible** in the logs.
 - The **main** checkout holds an **uncommitted** diff to `l1src/README.md`,
@@ -222,7 +222,7 @@ does.
 Preserved in `codex/wip-selfhost-20260913` = `631abc18` (worktree
 `build/codex/core-integration`, files dated 16:29–16:32):
 
-- `stg/l1_baseline/l2src/make_l2trans_lm2.ps1` — a **mechanical** generator
+- `l2src/make_l2trans_lm2.ps1` — a **mechanical** generator
   of the translator's L2 source from `l2trans.lm1`: renames the reserved
   formal `node` → `p0_node` and `fn` → `p0_fn` (24 and 3 functions), turns
   `c.array: [N]: char x` into `[]: char x N` and `const: @: T x` into
@@ -231,7 +231,7 @@ Preserved in `codex/wip-selfhost-20260913` = `631abc18` (worktree
   `main` wrapper, wraps everything in `L2:` … `end: L2`. The counts are
   pinned by asserts — the generator is meant to be **re-run after every edit
   of `l2trans.lm1`**, not to have its `.lm2` hand-maintained.
-- `stg/l1_baseline/l2src/l2trans.lm2` — its output, 14,119 lines. The first
+- `l2src/l2trans.lm2` — its output, 14,119 lines. The first
   L2 source of the L2 translator.
 - `l2trans.lm1` (+653/−209), `lmx.h`, `lmx_value_owned.*`,
   `lmx_graph_copy_owned.lm1` — compiler support for that output: each predef
@@ -309,7 +309,7 @@ not executed — they are now the core queue (decision 4 in §10):
   fail). `tests/p0_tree_contract/README.txt` describes the `{}` / fence /
   trailer cases.
 - On the codex branch Codex started **porting the parser to L2**: 25 files
-  `stg/l1_baseline/l2src/parser_*.lm2` (compact scanner, positions, indent,
+  `l2src/parser_*.lm2` (compact scanner, positions, indent,
   trailer roles, text views, python strings, …) with differential runners
   (`run_candidate_indent.ps1`, `run_candidate_c_scanners.ps1`, `*_abi.c`
   probes). Fragments, not a whole `parser.lm2`.
@@ -446,13 +446,13 @@ Done when main contains the core and all ports, and every runner in §8 is
 green on one hash.
 
 ### 6.2 Accept Codex's L1 changes and promote the pin — decided
-- In **your own** worktree (not the `stg/l1_baseline` of the main checkout,
-  where the pin lives) run `stg/l1_baseline/gate.ps1` on the merged branch:
+- In **your own** worktree (not the main checkout, where the distributed pin
+  lives in `build/pin_<hash>/`) run `gate.ps1` on the merged branch:
   buildCore → seed → gen1..gen3 → fixed point → every suite. Separately
   `tests/p0_tree_contract/run_p0_meta.ps1` (parser parity with 620) and the
   `tests/l1/run_*.ps1` Codex added.
 - If all green and gen2 == gen3 — that is the candidate for the new stable
-  L1. Promotion: copy gen2 into `stg/l1_baseline/build/l1trans/gen2/`, take
+  L1. Promotion: copy gen2 into `build/l1trans/gen2/`, take
   the SHA256, replace `65D5…` in every document (`grep -rl 65D5A5ED`), tell
   Claude (he verifies the hash before every run).
 - If not green — that is an L1 defect (or one in the regenerated
@@ -471,7 +471,7 @@ green on one hash.
    input (time before/after on truncated prefixes of `l2trans.lm2`: 1k, 3k,
    7k, 14k lines).
 3. Run the generator:
-   `powershell -File stg/l1_baseline/l2src/make_l2trans_lm2.ps1` (its count
+   `powershell -File l2src/make_l2trans_lm2.ps1` (its count
    asserts must hold; when `l2trans.lm1` changes, change the generator's
    expectations deliberately, in the same commit).
 4. The chain: `l2trans.exe l2trans.lm2 → l2trans_self.lm1` → the L1 pin → C →
@@ -480,7 +480,7 @@ green on one hash.
    `l2trans_self2.lm1` (the L2-level fixed point); then the full
    `run_l2trans.ps1` and `run_graph_abi.ps1` with `-TranslatorPath` pointing
    at the self-build.
-5. Shape this as a runner `stg/l1_baseline/l2src/run_l2trans_selfhost.ps1`
+5. Shape this as a runner `l2src/run_l2trans_selfhost.ps1`
    (three stages, hashes, evidence.json) on the model of my `run_port_*.ps1`
    (see `run_port_owned_ranges.ps1`: PENDING/PASS with a pinned "pending"
    rejection, so the runner fails in both directions).
@@ -613,7 +613,7 @@ not "simplify by analogy", all new application logic is L1/L2, not C.
    and criteria; Claude warns about overlaps himself.
 
 ### 7.4 Boundaries Claude does not cross
-He does not edit `stg/l1_baseline/l2src/l2trans.lm1`, `lmx*.lm1/.h`,
+He does not edit `l2src/l2trans.lm1`, `lmx*.lm1/.h`,
 `l1src/*`, the main documents; does not rebase or force-push; creates no
 branches without an explicit request; does not write C instead of L1/L2
 (`CODING_RULES.txt` §0); does not touch the compiler pin; sends nothing to
@@ -634,11 +634,11 @@ run to be repeated without reason.
 
 | Command (from `C:\Nyasha_Planet\lingvamyxa` or the named worktree) | What it proves | When | Time |
 | --- | --- | --- | --- |
-| `stg/l1_baseline/l2src/run_graph_abi.ps1` | My graph ABI/frontend gate: selftests 63/70/261, 134 fixtures, 41 negatives, per-fixture assertions | After any edit of `l2trans.lm1`, `lmx*` | ~2 min |
-| `stg/l1_baseline/l2src/run_l2trans.ps1` | The historical L2 suite (`l2trans gen2 ok`), splice drives | At an integration boundary, after frontend edits | ~5 min |
-| `stg/l1_baseline/l2src/run_lmx.ps1` | Message runtime, Exec (`l2 lmx gen2 ok`) | After edits of `lmx_message*`, the runtime | ~5–10 min |
-| `stg/l1_baseline/l2src/run_port_{msg_storage,msg_slots,msg_path_storage,owned_ranges,msg_blocks}.ps1` | Parity of an L2 module with its L1 oracle, twice | After edits of the module or the compiler | ~1 min each |
-| `stg/l1_baseline/gate.ps1` | **The full L1 self-build** (buildCore → gen0..gen3 → suites) — overwrites the shared tool | Only when **L1 itself** changes (§6.2); never "just in case" | ~4+ min |
+| `l2src/run_graph_abi.ps1` | My graph ABI/frontend gate: selftests 63/70/261, 134 fixtures, 41 negatives, per-fixture assertions | After any edit of `l2trans.lm1`, `lmx*` | ~2 min |
+| `l2src/run_l2trans.ps1` | The historical L2 suite (`l2trans gen2 ok`), splice drives | At an integration boundary, after frontend edits | ~5 min |
+| `l2src/run_lmx.ps1` | Message runtime, Exec (`l2 lmx gen2 ok`) | After edits of `lmx_message*`, the runtime | ~5–10 min |
+| `l2src/run_port_{msg_storage,msg_slots,msg_path_storage,owned_ranges,msg_blocks}.ps1` | Parity of an L2 module with its L1 oracle, twice | After edits of the module or the compiler | ~1 min each |
+| `gate.ps1` | **The full L1 self-build** (buildCore → gen0..gen3 → suites) — overwrites the shared tool | Only when **L1 itself** changes (§6.2); never "just in case" | ~4+ min |
 | `tests/p0_tree_contract/run_p0_meta.ps1` | Parser parity with the 620 reference | After edits of `parser.lm1` | ~1 min |
 | `mixa_manager/run_mixa.ps1` | Full application regression (Claude) | Claude, after every port | minutes |
 | `mixa_manager/run_mixa_<module>_l2_parity.ps1` | L1↔L2 parity of one application module | Claude; after §6.1 — all 25 | ~1 min each |

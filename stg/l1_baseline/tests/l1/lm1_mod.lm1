@@ -1,3 +1,0 @@
-fn: lm1_mod_value () int
-    return: 9
-end: lm1_mod_value
