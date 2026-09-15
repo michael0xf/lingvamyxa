@@ -2142,3 +2142,26 @@ Measured on d6/stage5d3 in a private worktree (wtp).
 
 Gates:
 f096e4fc (the merge of d6/stage5d3 83f751b3 over 864cd580): run_gates "gates GREEN: 11 of 11 in 333s" with lmx_model_family_close_32_selftest 24/0 lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 24 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+
+------------------------------------------------------------------------------
+STAGE 5 STEP (e) ACCEPTANCE, written red first (2026-09-14)
+------------------------------------------------------------------------------
+l2src/tests/lmx_model_root_record_5e_selftest.lm1, host-driven: R0 with P
+(created without a parent, host-run, stepped from R0's turn through
+turn_step_child) and D (created without a parent, mapped onto its own
+context by R0's turn). What it pins (19.28.R2.2 one lane one writer, 19.29.6
+stage-5 clarification (i)): the runtime-level policy setters, set_now and
+set_orphan_retain, write R0's own cells, so they succeed from main (the host
+outside any turn while the bootstrap is the host) and from R0's own turn,
+and refuse with INVALID from a child's turn on the host thread and from a
+turn on a context worker, the clock reading back unchanged after a refusal.
+The cells' location in R0's arena (owned ranges, rooted) is checked through
+the record's accessors once (e)'s header exists; the lead adds those lines.
+  Measured on integration 4a92659b: "root record 5e: 15 checks, 5
+    failures", both runs, red on "set_now from a child's turn on the host
+    thread refuses" (host_is_owner alone passes a turn on the host thread),
+    "set_orphan_retain from a child's turn refuses" and "... from a worker's
+    turn refuses" (no check at all today), and twice "the clock is unchanged"
+    (the child's write moved it to 9999); green on the main-thread and R0-turn
+    successes and on set_now from a worker (host_is_owner false there).
+    Opt-in via run_model_scenario36.ps1 -Tests until (e) lands.

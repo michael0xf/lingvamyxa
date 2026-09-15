@@ -285,7 +285,8 @@ foreach ($i in 1, 2) {
     # the generated method it would have run before the unit existed.
     if ($early -ne 0) { throw "$early calls arrived before publication" }
     # The runtime grows one placement path per Message it creates before the test: the process Message,
-    # R0 (stage 5 d1, f8dd6015) and the UI lane, R0's child (stage 5 d2, 0c0a34e8).
+    # R0 (stage 5 d1, f8dd6015) and the UI lane, R0's child (stage 5 d2, 0c0a34e8). (e)'s policy record is
+    # created at the first policy set on R0's lane, not by runtime_new, so it adds nothing here.
     if ($pre -ne 3) { throw "the runtime made $pre wrapped allocations before the test, expected 3" }
 }
 if ($runs[0].stdout -ne $runs[1].stdout -or $runs[0].stderr -ne $runs[1].stderr) { throw 'the two parity runs disagree' }

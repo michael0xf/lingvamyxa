@@ -1,0 +1,123 @@
+profile: runtime
+predef: "l2src/lmx_root_record.h.lm1"
+predef: "l2src/lmx_branch_owned.h.lm1"
+predef: "l2src/lmx_value_owned.h.lm1"
+predef: "l2src/lmx_owned_ranges.h.lm1"
+predef: "l2src/lmx_msg_blocks.h.lm1"
+include: "l2src/lmx.h" "l2src/lmx_message.h"
+
+# Stage 5 step (e) (accepted by 6f, 2026-09-14): the runtime's policy cells are
+# R0's own management state (19.28.R2.2: "ordinary Structure data, to be
+# implemented in L2"; one arena, one lane, one writer). The record is Structure
+# data in R0's arena, retained by R0 as a root, created lazily on R0's lane at
+# the first successful set_now or set_orphan_retain, never on runtime_new's path
+# (a runtime unit's open creates a runtime of its own), and written only on
+# R0's lane (R0's turn, or until (f) the host outside any turn):
+# lmx_msg_set_now and lmx_msg_set_orphan_retain check that lane before they
+# create or store. Layout, three slots:
+#   R.child[0]  clock: an unsigned cell, the logical time lmx_msg_now reports
+#               while clock_test is set
+#   R.child[1]  clock_test: an int cell, nonzero once the clock was set
+#               (a clock of 0 is a legal logical time, not "real clock")
+#   R.child[2]  orphan_retain: an unsigned cell, how long a failed orphan is
+#               retained (decision 17, spec 19.29.8), LMX_MSG_ORPHAN_RETAIN at
+#               creation
+#
+# Library unit, REAL symbols: nothing on a unit's open path allocates through
+# the root record.
+
+fn: lmx_root_record_new (@: LmxMsg owner) @: Lmx
+    @: Lmx rec
+    @: void cell_clock
+    @: void cell_test
+    @: void cell_retain
+    if: owner = 0
+        return: 0
+    rec: lmx_node_new_owned(@ owner\blocks, @ owner\ranges)
+    if: rec = 0
+        return: 0
+    cell_clock: lmx_unsigned_new_owned(@ owner\blocks, @ owner\ranges)
+    cell_test: lmx_int_new_owned(@ owner\blocks, @ owner\ranges)
+    cell_retain: lmx_unsigned_new_owned(@ owner\blocks, @ owner\ranges)
+    if: cell_clock = 0 || cell_test = 0 || cell_retain = 0
+        return: 0
+    if: lmx_branch_open_owned(rec, 3U, @ owner\blocks, @ owner\ranges) != 0
+        return: 0
+    if: lmx_branch_store_known(rec, 0U, cell_clock) != 0
+        return: 0
+    if: lmx_branch_store_known(rec, 1U, cell_test) != 0
+        return: 0
+    if: lmx_branch_store_known(rec, 2U, cell_retain) != 0
+        return: 0
+    if: lmx_unsigned_store_known(cell_retain, c.LMX_MSG_ORPHAN_RETAIN) != 0
+        return: 0
+    if: c.lmx_msg_root_attach(owner, (cast: (@: void) rec)) != c.LMX_MSG_OK
+        return: 0
+    return: rec
+end: lmx_root_record_new
+
+fn: lmx_root_record_clock (@: Lmx rec) unsigned
+    @: void cell
+    if: rec = 0
+        return: 0U
+    cell: lmx_branch_child_known(rec, 0U)
+    if: cell = 0
+        return: 0U
+    return: lmx_unsigned_value_known(cell)
+end: lmx_root_record_clock
+
+fn: lmx_root_record_set_clock (@: Lmx rec; unsigned: now) int
+    @: void cell
+    if: rec = 0
+        return: c.LMX_MSG_INVALID
+    cell: lmx_branch_child_known(rec, 0U)
+    if: cell = 0
+        return: c.LMX_MSG_INVALID
+    if: lmx_unsigned_store_known(cell, now) != 0
+        return: c.LMX_MSG_INVALID
+    return: c.LMX_MSG_OK
+end: lmx_root_record_set_clock
+
+fn: lmx_root_record_clock_test (@: Lmx rec) int
+    @: void cell
+    if: rec = 0
+        return: 0
+    cell: lmx_branch_child_known(rec, 1U)
+    if: cell = 0
+        return: 0
+    return: lmx_int_value_known(cell)
+end: lmx_root_record_clock_test
+
+fn: lmx_root_record_set_clock_test (@: Lmx rec; int: on) int
+    @: void cell
+    if: rec = 0
+        return: c.LMX_MSG_INVALID
+    cell: lmx_branch_child_known(rec, 1U)
+    if: cell = 0
+        return: c.LMX_MSG_INVALID
+    if: lmx_int_store_known(cell, on) != 0
+        return: c.LMX_MSG_INVALID
+    return: c.LMX_MSG_OK
+end: lmx_root_record_set_clock_test
+
+fn: lmx_root_record_orphan_retain (@: Lmx rec) unsigned
+    @: void cell
+    if: rec = 0
+        return: c.LMX_MSG_ORPHAN_RETAIN
+    cell: lmx_branch_child_known(rec, 2U)
+    if: cell = 0
+        return: c.LMX_MSG_ORPHAN_RETAIN
+    return: lmx_unsigned_value_known(cell)
+end: lmx_root_record_orphan_retain
+
+fn: lmx_root_record_set_orphan_retain (@: Lmx rec; unsigned: retain) int
+    @: void cell
+    if: rec = 0
+        return: c.LMX_MSG_INVALID
+    cell: lmx_branch_child_known(rec, 2U)
+    if: cell = 0
+        return: c.LMX_MSG_INVALID
+    if: lmx_unsigned_store_known(cell, retain) != 0
+        return: c.LMX_MSG_INVALID
+    return: c.LMX_MSG_OK
+end: lmx_root_record_set_orphan_retain
