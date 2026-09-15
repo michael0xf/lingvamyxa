@@ -3868,3 +3868,20 @@ hashes; the current instructions get the new paths in the same landing
 runner hazards file); the spec's verbatim sentences and citations stay as
 they are and the spec gains no path edits; the coordinator's memory notes
 are updated after the landing.
+ONE ROOT section on d6/lock-removal eb2816c4 (the lead, 2026-09-15; checked by
+the coordinator: the section is present, names the 1229 red count, and
+the coordinator's own count of tracked files under stg/l1_baseline at
+c063fd00 agrees): facts F1-F5 at c063fd00 (copies equal the root; the
+cwd-relative predef probe; l2src naming both trees; 36 l2src runners +
+stg gate.ps1/buildCore + 74 mixa .ps1 + run.sh + root
+run_legacy_p0/run_import_capacity; no root collisions); changes O1 R
+(the l2src tree incl. run_gates, L1_PIN*.txt, RUNNER_HAZARDS, the
+design; gate.ps1 to the root), O2 D only under stg/l1_baseline, O3 M
+runners (only explicit stg/l1_baseline strings and ..\.. climbs, counted
+before code), O4 the pin at root build/l1trans/gen2 with re-install after
+regenerating runs, O5 the docs ruling; allowlist by status; red 1229
+tracked under stg/l1_baseline, green 0 tracked plus (c)'s set on the new
+paths, the 33 gates, l2trans, port_parser, port_message -LaneCheck,
+run_mixa; falsifier: run_msg_send_local's archive set left unedited turns
+send_local red. No code before S3 lands (2 of 5 cold -LaneCheck runs
+green so far, no CRASH).
