@@ -1464,8 +1464,11 @@ S6. The lock deleted (L4, L7, L8 and what remains).
     S6 in the (a) format, draft (d6, 2026-09-15; read at integration 8eeb094f after S3, M, D2, S2, S4 and S5
     landed; acceptance to be agreed with the coordinator before any code):
     - Census: b5's re-base sonnet/s6-rebase 0783c86b at 3e6fc02a, 82 sites (S3 3, M 11, S4 49, S5 13, Y 1, S6 5).
-      Its 13 S5-pending rows are what S5 deleted (b5's S5 review sonnet/s5-review dcf8a9c7), and S5 added no hold,
-      so S6's census is 69 sites. b5's per-hold pre-read at 8eeb094f (the statements each hold protects, one writer
+      Its 13 S5-pending rows are what S5 deleted (b5's S5 review sonnet/s5-review dcf8a9c7). Corrected on b5's
+      second re-base, sonnet/s6-rebase-2 dd90673b at 8eeb094f: the total is still 82, every S3/M/S4/S5 row is
+      marked done, and it counts two rows S5 added. lmx_msg_drive_walk_roots now takes and releases the exec lock
+      in its own body (S5's one-root rewrite), and lmx_msg_addr_take is a new atomic site. The draft's "69" was
+      wrong. b5's per-hold pre-read at 8eeb094f (the statements each hold protects, one writer
       lane or not, the LmxMsgExec fields read) is folded in when it lands.
     - Measured at 8eeb094f, call lines:
       - lmx_msg_exec_lock( in lmx_message.lm1 61, lmx_message.lm2 61, lmx_message_exec.c 56 (definition included);
