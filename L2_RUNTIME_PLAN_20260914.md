@@ -5476,3 +5476,28 @@ lmx_msg_turn_self, the driver's mode 3 wrap and run_l2_message_root's
 wrap list on it; the lead checks whether committed generated units
 carry the old emitted text, then run_l2trans, run_l2_message_root, the
 self-build and the counter again; the falsifier after C2=0.
+S2 acceptance green measured by the coordinator (2026-09-15) in exec-3a
+(pin 0B3D85B3): the S2 tip d6/lock-s2 05c50f8b merged locally with the
+counter c8f9cb50 (merge parents checked: 05c50f8b and c8f9cb50; never
+pushed): run_port_message plain parity PASS in 48 s, 102 methods
+redirected (97 plus five record forms); reference.exe twice with
+LMX_LOOKUP_COUNT=1: "lookup walks: C1=0 C2=0 turn_other=17" (host
+2890528 and 2807356); 0 report lines without the variable. The lead's
+own green agrees (scratch merge 121f4b87, C1=0 C2=0 turn_other=17),
+and his falsifier holds (end_turn's is_runnable put back by address
+gives C1=48 twice, the site's 48 walks from the red, parity PASS).
+turn_other=17 attributed: 14 sends resolving a sibling destination
+(lmx_msg_dest_from_src from send/send_owned; C3, for S4), 2
+exec_bind's fallback for an address outside the caller's own record
+and child list (decided by mapping_authority_locked), 1
+turn_map_sibling's refused unbind; no C1/C2 site remains. On 05c50f8b:
+run_port_message plain PASS, run_l2trans ok in 277 s,
+run_l2_message_root exit 0 in 46 s (144 inputs, modes 0-48 with the
+retargeted mode 3); the diff against 391b5062 touches 7 files
+(lmx_message.lm1, .lm2, lmx_message_exec.c, .h, l2trans.lm1,
+tests/l2_message_root_driver.lm1, run_l2_message_root.ps1), no
+signature changes; recorded in the design at d6/lock-removal e4957d6d.
+S2's acceptance record: red c8f9cb50 (C1 112, C2 1), green 05c50f8b (C1
+0, C2 0), falsifier is_runnable by address (C1 48). Landing next:
+land_base2.sh, the union base plus lmx_cancel, the counter never folded
+in.
