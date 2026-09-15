@@ -4471,3 +4471,12 @@ with no FIELDS row: LmxMsgExec.reap_head (found by the S5 and S3 files;
 exec.c 2119-2131), to get a row beside retire_head/retire_tail, DEL,
 done with S3 at b4e1296d. The pre-landing S3 file's rows now marked
 done(S3, b4e1296d) in FIELDS are not a disagreement.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only during the landing
+window: the S2 inventory, LOCK_REMOVAL_S2_LOOKUPS.txt on sonnet/s2-lookups,
+at b4e1296d, grouped by function: every function in l2src resolving a
+Message by address (msg_at_addr, rec_at_addr_locked, lmx_msg_self_or_find,
+slot lookups, walks of rt->slots by LmxMsgAddr), file:line, lookups per
+function, and the capability replacing them (the turn's own Message, the
+parent's child capability, the mailbox's admitted Message, R0's record);
+a function no capability covers flagged as a contradiction to stop on;
+counts at the top reconciled with the design's C1 grep.
