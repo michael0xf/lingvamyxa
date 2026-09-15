@@ -1,0 +1,396 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# Stage 5 step (f) acceptance, part 1 (L2_RUNTIME_PLAN_20260914.md item 5,
+# step f; decision 17 with spec 19.29.6's stage-5 clarifications and
+# 19.29.8): runtime_delete is R0's close by the chain. R0 closes like any
+# parent: its direct children get their closing flags, each closing turn
+# runs on its own lane (a host-run child stepped by R0's maintenance, a
+# mapped child on its context worker), a settled child is reclaimed by the
+# chain, and only then R0's own slot and the runtime go. Nothing is freed
+# as "a slot on the runtime's list" behind a Message's back, and nothing is
+# left behind: a retained failed orphan has no adopter once R0 closes and is
+# reclaimed by the chain; a pending UI request goes with the UI lane's
+# mailbox; the context worker is joined before the runtime is freed.
+# Written before the code (2026-09-15) on integration 402b2919, where
+# runtime_delete stops the executor, drops every bind without running a
+# closing turn and frees the slots in allocation order; the measured red
+# lines are listed in the (f) commit's note.
+#
+# The balance: ld --wrap on malloc, calloc, realloc and free counts the live
+# allocations of every linked object (the runtime, its L2 units, this
+# test); the runner adds -Wl,--wrap=NAME for each __wrap_NAME a test defines.
+# The first cycle pays the L2 library runtime's own open (the units' first
+# call), so the property is measured on the second cycle: the live count
+# after the second runtime_delete equals the count after the first. That is
+# exact and needs no magic number. Opt-in in run_model_scenario36.ps1
+# (-Tests) until (f) lands.
+#
+# Host-driven, one cycle: R0 has P1, P2 and U (each created without a
+# parent). P1 has C, mapped onto its own context by P1's turn and inside
+# its turn until it sees its closing flag. P2 has Q, mapped the same way; R0
+# stops P2 and releases it from its own turn, so Q is re-rooted under R0 as
+# an orphan and ends failed: a failed orphan retained under the retention
+# policy (clock 5000, retain 100, deadline 5100, the clock never reaches
+# it). U is mapped to the UI lane and has an input: one UI request pending,
+# never stepped. Then runtime_delete, with no exec_stop before it: the close
+# is the runtime's own.
+
+prototype:
+    fn: __real_malloc (size_t: n) @: void
+    fn: __real_calloc (size_t: count; size_t: size) @: void
+    fn: __real_realloc (@: void p; size_t: n) @: void
+    fn: __real_free (@: void p) void
+end: prototype
+
+int: g_live 0
+int: g_frees 0
+
+fn: __wrap_malloc (size_t: n) @: void
+    @: void p
+    p: c.__real_malloc(n)
+    if: p != 0
+        c.__sync_fetch_and_add(@ g_live, 1)
+    ---
+    return: p
+
+fn: __wrap_calloc (size_t: count; size_t: size) @: void
+    @: void p
+    p: c.__real_calloc(count, size)
+    if: p != 0
+        c.__sync_fetch_and_add(@ g_live, 1)
+    ---
+    return: p
+
+fn: __wrap_realloc (@: void p; size_t: n) @: void
+    @: void q
+    q: c.__real_realloc(p, n)
+    if: p = 0 && q != 0
+        c.__sync_fetch_and_add(@ g_live, 1)
+    ---
+    if: p != 0 && n = 0U
+        c.__sync_fetch_and_add(@ g_live, -1)
+    ---
+    return: q
+
+sub: __wrap_free (@: void p)
+    if: p != 0
+        c.__sync_fetch_and_add(@ g_live, -1)
+        c.__sync_fetch_and_add(@ g_frees, 1)
+    ---
+    c.__real_free(p)
+end: __wrap_free
+
+int: checks 0
+int: failures 0
+int: g_c_entered 0
+int: g_c_reason 0
+int: g_c_done 0
+int: g_q_entered 0
+int: g_q_go 0
+int: g_p1_closed 0
+int: g_u_turns 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+# One input posted by the host thread.
+fn: post (@: LmxMsgRuntime rt; LmxMsgAddr: to; unsigned: id) int
+    @: LmxMsgEnv env
+    int: ok
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: 0
+    env\id: id
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: (cast: (int) id)
+    ok: lmx_msg_host_post(rt, to, env) = c.LMX_MSG_STAGED
+    c.free((cast: (@: void) env))
+    return: ok
+
+# The Message's own closing flag, read under the executor's lock.
+fn: closing_of (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg me
+    int: closing 0
+    lmx_msg_exec_lock(rt)
+    me: lmx_msg_find(rt, who)
+    if: me != 0 && me\closing != 0
+        closing: 1
+    ---
+    lmx_msg_exec_unlock(rt)
+    return: closing
+
+# C's turn on its own context: take the input, report entered, then stay
+# inside the turn until the chain sets its closing flag (reason 1) or three
+# seconds pass (reason 2), end successfully, and only 50 ms later report
+# done: a runtime_delete that returns before that did not join this worker.
+fn: turn_c_run (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    unsigned: deadline
+    int: closing 0
+    int: st
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 2
+    if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
+        lmx_msg_env_release(got)
+    ---
+    c.free((cast: (@: void) got))
+    c.__sync_fetch_and_add(@ g_c_entered, 1)
+    deadline: c.GetTickCount() + 3000U
+    while: closing = 0 && c.GetTickCount() < deadline
+        closing: closing_of(rt, who)
+        if: closing = 0
+            c.Sleep(2U)
+        ---
+    ---
+    g_c_reason: 2 - closing
+    st: lmx_msg_end_turn(rt, who, 1)
+    c.Sleep(50U)
+    c.__sync_fetch_and_add(@ g_c_done, 1)
+    return: st
+
+# Q's turn on its own context: take the input, report entered, wait for go,
+# then end without completing: a failed orphan by then (P2 released).
+fn: turn_q_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    unsigned: deadline
+    int: go 0
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 2
+    if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
+        lmx_msg_env_release(got)
+    ---
+    c.free((cast: (@: void) got))
+    lmx_msg_exec_lock(rt)
+    g_q_entered: g_q_entered + 1
+    lmx_msg_exec_unlock(rt)
+    deadline: c.GetTickCount() + 5000U
+    while: go = 0 && c.GetTickCount() < deadline
+        lmx_msg_exec_lock(rt)
+        go: g_q_go
+        lmx_msg_exec_unlock(rt)
+        if: go = 0
+            c.Sleep(2U)
+        ---
+    ---
+    return: lmx_msg_end_turn(rt, who, 0)
+
+# P1's turn once C is mapped: it records whether it runs as a closing turn.
+fn: turn_p1_observe (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    g_p1_closed: g_p1_closed + closing_of(rt, who)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# P2's turn: its closing turn after R0's stop ends failed at once.
+fn: turn_p2_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    return: lmx_msg_end_turn(rt, who, 0)
+
+# U's turn on the UI lane: never stepped in this test.
+fn: turn_u (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 2
+    if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
+        lmx_msg_env_release(got)
+    ---
+    c.free((cast: (@: void) got))
+    g_u_turns: g_u_turns + 1
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# A parent's own turn maps its child; ctx is the test's cell, [0] the child
+# to map, [1] map_child's status.
+fn: turn_map_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_map_child(rt, who, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# R0's own turn releases its child; ctx is the test's cell, [0] the child,
+# [1] dispose_child's status. The strict form of the lifecycle authority:
+# the parent's own turn, R0's here.
+fn: turn_root_dispose (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_dispose_child(rt, who, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+[]: unsigned step_cell 2
+[]: unsigned map_cell 2
+[]: unsigned dispose_cell 2
+
+# R0's turn steps one of its children.
+fn: step_in_root (@: LmxMsgRuntime rt; unsigned: child) int
+    int: st
+    step_cell[0]: child
+    step_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell))
+    if: st != c.LMX_MSG_OK
+        return: st
+    return: (cast: (int) step_cell[1])
+
+# R0's turn steps parent, whose turn maps child; the parent is bound to
+# turn_map_child only around the step and left unbound (the caller rebinds).
+fn: map_child_in_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
+    int: st
+    map_cell[0]: child
+    map_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    lmx_msg_exec_unbind(rt, parent)
+    st: lmx_msg_exec_bind(rt, parent, turn_map_child, (cast: (@: void) map_cell), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: step_in_root(rt, parent)
+    lmx_msg_exec_unbind(rt, parent)
+    if: st != c.LMX_MSG_OK
+        return: st
+    return: (cast: (int) map_cell[1])
+
+# R0's turn releases its child.
+fn: dispose_in_root (@: LmxMsgRuntime rt; unsigned: child) int
+    int: st
+    dispose_cell[0]: child
+    dispose_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_root_dispose, (cast: (@: void) dispose_cell))
+    if: st != c.LMX_MSG_OK
+        return: st
+    return: (cast: (int) dispose_cell[1])
+
+# Waits until both mapped children report entered, up to five seconds.
+fn: wait_entered (@: LmxMsgRuntime rt) int
+    unsigned: deadline
+    int: both 0
+    deadline: c.GetTickCount() + 5000U
+    while: both = 0 && c.GetTickCount() < deadline
+        lmx_msg_exec_lock(rt)
+        if: g_c_entered != 0 && g_q_entered != 0
+            both: 1
+        ---
+        lmx_msg_exec_unlock(rt)
+        if: both = 0
+            c.Sleep(2U)
+        ---
+    ---
+    return: both
+
+# One cycle: build the tree, delete the runtime, check the close, return
+# the live allocation count after the delete.
+fn: cycle (@: LmxMsgRuntime rt) int
+    @: LmxMsg qm
+    unsigned: p1 0U
+    unsigned: cc 0U
+    unsigned: p2 0U
+    unsigned: q 0U
+    unsigned: u 0U
+    unsigned: deadline
+    int: st
+    int: settled 0
+    int: frees_before
+    uchar: ini 1
+
+    g_c_entered: 0
+    g_c_reason: 0
+    g_c_done: 0
+    g_q_entered: 0
+    g_q_go: 0
+    g_p1_closed: 0
+    g_u_turns: 0
+
+    # --- the tree
+    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p1) = c.LMX_MSG_OK && lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ p2) = c.LMX_MSG_OK && lmx_msg_create(rt, 0U, 3U, @ ini, 1U, @ u) = c.LMX_MSG_OK, "P1, P2 and U created as R0's children")
+    check(lmx_msg_create(rt, p1, 4U, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p1, 1) = c.LMX_MSG_OK, "C created by P1 and published")
+    check(lmx_msg_create(rt, p2, 5U, @ ini, 1U, @ q) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p2, 1) = c.LMX_MSG_OK, "Q created by P2 and published")
+    check(lmx_msg_exec_bind(rt, cc, turn_c_run, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, q, turn_q_fail, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, u, turn_u, 0, c.LMX_MSG_AFFINITY_UI) = c.LMX_MSG_OK, "C and Q bound; U mapped to the UI lane")
+    check(post(rt, cc, 10U) != 0 && post(rt, q, 11U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "inputs for C and Q admitted")
+    check(map_child_in_root(rt, p1, cc) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, p1, turn_p1_observe, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "P1's turn mapped C onto its own context; P1 bound to observe its closing turn")
+    check(map_child_in_root(rt, p2, q) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, p2, turn_p2_fail, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "P2's turn mapped Q onto its own context; P2 bound")
+    check(wait_entered(rt) != 0, "C and Q are inside their turns on their own context workers")
+
+    # --- the failed orphan, retained
+    check(lmx_msg_set_now(rt, 5000U) = c.LMX_MSG_OK && lmx_msg_set_orphan_retain(rt, 100U) = c.LMX_MSG_OK, "clock 5000; the orphan-retention policy set to 100")
+    check(lmx_msg_emergency_cancel(rt, p2) = c.LMX_MSG_OK, "R0 stops P2 while Q runs")
+    st: step_in_root(rt, p2)
+    check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, p2) = c.LMX_MSG_STATE_STOPPED, "P2 ran its closing turn from R0's turn: stopped, Q's close requested")
+    check(dispose_in_root(rt, p2) = c.LMX_MSG_OK && lmx_msg_find(rt, p2) = 0 && lmx_msg_find(rt, q) != 0, "R0's own turn releases P2 at once: P2's slot goes, Q is re-rooted under R0")
+    lmx_msg_exec_lock(rt)
+    g_q_go: 1
+    lmx_msg_exec_unlock(rt)
+    qm: lmx_msg_find(rt, q)
+    deadline: c.GetTickCount() + 5000U
+    while: settled = 0 && c.GetTickCount() < deadline
+        lmx_msg_exec_lock(rt)
+        if: qm != 0 && qm\orphan != 0 && qm\parent_msg = lmx_msg_find(rt, lmx_msg_root_addr(rt)) && qm\handoff_ready != 0 && lmx_msg_running_load(qm) = 0
+            settled: 1
+        ---
+        lmx_msg_exec_unlock(rt)
+        if: settled = 0
+            c.Sleep(2U)
+        ---
+    ---
+    check(settled != 0 && lmx_msg_success_load(qm) = 0, "Q's turn ended failed on its context: a settled failed orphan under R0")
+    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, q) != 0 && qm\orphan_until = 5100U, "the sweep gives Q its deadline, 5100, and retains it")
+
+    # --- the pending UI request
+    check(post(rt, u, 30U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, 2U) = 1, "U's input admitted: one UI request pending in the UI lane's mailbox (R0's child at address 2)")
+
+    # --- the close
+    check(g_c_entered = 1 && g_c_reason = 0 && lmx_msg_exec_workers(rt) >= 1 && lmx_msg_find(rt, cc) != 0, "before the close: C is still inside its turn on its worker")
+    frees_before: g_frees
+    lmx_msg_runtime_delete(rt)
+    check(g_c_reason = 1, "C's turn ended because the chain set its closing flag, not by its own deadline")
+    check(g_p1_closed != 0, "P1's closing turn ran on R0's lane before its storage went")
+    check(g_c_done != 0, "C's context worker was joined before runtime_delete returned")
+    check(g_u_turns = 0, "the pending UI request ran no turn: it went with the UI lane's mailbox")
+    check(g_frees > frees_before, "the close freed through the wrap")
+    return: g_live
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    int: a
+    int: b
+
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_root_addr(rt) != 0U, "the first runtime and its R0 exist")
+    if: rt = 0
+        return: 2
+    a: cycle(rt)
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_root_addr(rt) != 0U, "the second runtime and its R0 exist")
+    if: rt = 0
+        return: 2
+    b: cycle(rt)
+    check(b = a, "the second runtime's every allocation was freed by its close: the live count after its delete equals the count after the first (no residue)")
+    c.printf("runtime close 5f: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0

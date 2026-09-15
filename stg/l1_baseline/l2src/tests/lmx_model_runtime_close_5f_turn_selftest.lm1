@@ -1,0 +1,137 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# Stage 5 step (f) acceptance, part 2 (L2_RUNTIME_PLAN_20260914.md item 5,
+# step f): runtime_delete is R0's close, and a close is the lifecycle work
+# of the closing Message's own lane from outside any turn: called from
+# inside any turn, R0's own on the host thread or a child's on a context
+# worker, it refuses with INVALID and the runtime lives on; called from the
+# host outside any turn it closes R0 and returns OK. Written before the code
+# (2026-09-15) on integration 402b2919, where lmx_msg_runtime_delete is a
+# sub with no status and checks host_is_owner alone (a call from R0's turn
+# on the host thread would free the runtime under the running turn): this
+# file translates there (l1trans does not check that a sub is used as a
+# value) and does not compile, gcc "void value not ignored as it ought to
+# be" at the three call sites; its red is the signature, and the (f) commit
+# makes runtime_delete return a status. Opt-in in run_model_scenario36.ps1
+# (-Tests) until (f) lands.
+#
+# Host-driven: R0 has P (host-run, never stepped) and D, mapped onto its
+# own context by R0's turn; D's turn tries the delete from its worker.
+
+int: checks 0
+int: failures 0
+int: g_root_st -1
+int: g_worker_st -1
+int: g_worker_done 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+# One input posted by the host thread.
+fn: post (@: LmxMsgRuntime rt; LmxMsgAddr: to; unsigned: id) int
+    @: LmxMsgEnv env
+    int: ok
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: 0
+    env\id: id
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: (cast: (int) id)
+    ok: lmx_msg_host_post(rt, to, env) = c.LMX_MSG_STAGED
+    c.free((cast: (@: void) env))
+    return: ok
+
+# R0's own turn on the host thread tries the delete.
+fn: turn_root_delete (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    g_root_st: lmx_msg_runtime_delete(rt)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# D's turn on its own context worker tries the delete.
+fn: turn_worker_delete (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    int: st
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 2
+    if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
+        lmx_msg_env_release(got)
+    ---
+    c.free((cast: (@: void) got))
+    st: lmx_msg_runtime_delete(rt)
+    lmx_msg_exec_lock(rt)
+    g_worker_st: st
+    g_worker_done: 1
+    lmx_msg_exec_unlock(rt)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# R0's own turn maps its child D; ctx is the test's cell, [0] the child to
+# map, [1] map_child's status.
+fn: turn_map_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_map_child(rt, who, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+[]: unsigned map_cell 2
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    unsigned: p 0U
+    unsigned: d 0U
+    unsigned: deadline
+    int: done 0
+    int: st
+    uchar: ini 1
+
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_root_addr(rt) != 0U, "the runtime and its R0 exist")
+    if: rt = 0
+        return: 2
+    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK && lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ d) = c.LMX_MSG_OK, "P and D created as R0's children")
+
+    # --- (1) from inside R0's own turn on the host thread: refused, alive.
+    st: lmx_msg_root_turn(rt, turn_root_delete, 0)
+    check(st = c.LMX_MSG_OK && g_root_st = c.LMX_MSG_INVALID, "runtime_delete from inside R0's turn refuses with INVALID")
+    check(lmx_msg_find(rt, p) != 0 && lmx_msg_find(rt, d) != 0, "and the runtime lives on: P and D are still there")
+
+    # --- (2) from inside a child's turn on a context worker: refused, alive.
+    check(lmx_msg_exec_bind(rt, d, turn_worker_delete, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && post(rt, d, 7U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "D bound and given an input")
+    map_cell[0]: d
+    map_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_map_child, (cast: (@: void) map_cell))
+    check(st = c.LMX_MSG_OK && (cast: (int) map_cell[1]) = c.LMX_MSG_OK, "R0's turn mapped D onto its own context")
+    deadline: c.GetTickCount() + 5000U
+    while: done = 0 && c.GetTickCount() < deadline
+        lmx_msg_exec_lock(rt)
+        done: g_worker_done
+        lmx_msg_exec_unlock(rt)
+        if: done = 0
+            c.Sleep(2U)
+        ---
+    ---
+    check(done != 0 && g_worker_st = c.LMX_MSG_INVALID, "runtime_delete from a worker's turn refuses with INVALID")
+    check(lmx_msg_find(rt, p) != 0, "and the runtime lives on: P is still there")
+    deadline: c.GetTickCount() + 5000U
+    while: lmx_msg_exec_workers(rt) != 0 && c.GetTickCount() < deadline
+        lmx_msg_drive(rt, 0U, 0U)
+        c.Sleep(2U)
+    ---
+    check(lmx_msg_exec_workers(rt) = 0, "D's turn ended and its worker was joined by R0's maintenance")
+
+    # --- (3) from the host outside any turn: R0's close, OK.
+    check(lmx_msg_runtime_delete(rt) = c.LMX_MSG_OK, "runtime_delete from the host outside any turn closes R0 and returns OK")
+    c.printf("runtime close 5f turn: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0

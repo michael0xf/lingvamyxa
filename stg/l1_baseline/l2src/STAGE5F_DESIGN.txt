@@ -1,0 +1,228 @@
+Stage 5 step (f): runtime_delete is R0's close by the chain (d6, draft, 2026-09-15, on fable/stage5f-acceptance ffeb1094)
+
+SCOPE (6f's (1)-(5), 2026-09-14/15)
+(1) runtime_delete becomes R0's close: decision 17's chain from R0 down (a closing flag on each child, each closing turn
+    on its own lane, settled children reclaimed by the chain, including the sweep's failed orphans), then R0's own slot,
+    then the runtime. Nothing is freed as "a slot on the runtime's list" behind a Message's back.
+(2) The host forms retire: host_is_owner as an authority, the host lock and host_wait, runtime_shutdown's flag, where
+    R0's close covers them.
+(3) The lifecycle authority takes its strict form: the parent's own turn only.
+(4) runtime_new and runtime_delete are the only calls made on no Message's lane.
+(5) 6f writes the acceptance first: done, ffeb1094.
+6f's answers carried by the acceptance: Q1 (a) runtime_delete returns int: OK from the host outside any turn, INVALID
+from inside any turn with nothing touched. Q2 (a) a retained failed orphan is reclaimed by the chain at R0's close.
+Q3 (a) runtime_delete is R0's maintenance with the drain's authority, stepping its children until the tree settles.
+Q4 the mapped child's closing flag ends its turn on its worker; the worker is joined before the runtime is freed.
+
+SPEC (quoted from Lingvamyxa_spec.txt on origin/main bf647d94)
+- 19.29.6, consequence (iii) (12593-12604): "a descendant still running at release time is closed by the chain (its
+  closing flag set, as by any stop) and becomes an orphan: a successful orphan is settled at its end-turn and
+  reclaimed, arena and slot, by the settling lane at the root's next maintenance point ... a failed orphan keeps its
+  handoff-safe arena under the separate parent-loss/orphan-retention timeout of 19.29.8 and self-reclaims when it
+  expires (an orphan is settled only by that policy, never by its supervising root's ordinary settle step ...)".
+- 19.29.6, the children of a stopped Message (12609-12617): "its stop requests their close; a child whose inbox is
+  empty is closed by the maintenance without a turn, and a child on its own context runs its closing turn there; a
+  child with pending input under a host-mapped stopped parent waits until the parent is disposed, when the chain
+  re-roots it under the root Message, whose step runs its closing turn like any child's".
+- 19.29.6 (12617-12621): "An unbound closing Message has no handler and no lane, so its close is end-turn bookkeeping
+  written by the maintaining lane (the host's drive today, the root's maintenance later), not a step, and it leaves the
+  Message stopped and handoff-safe so that its parent's dispose or adopt can settle it".
+- 19.29.8 (13246-13248): "Each closing Message settles only its direct children: successful own histories can be
+  reclaimed; failed arenas are adopted before its own failed arena moves upward."
+- 19.29.8 (13254-13259): "If that parent endpoint is unavailable, retain the handoff-safe failed arena under a
+  separate parent-loss/orphan-retention timeout before self-reclamation. ... Timeout never grants permission to free
+  memory still used by native code. Settling is lifecycle work, not a busy wait or a promise of bounded cleanup for an
+  uninterruptible foreign call. Such an unresolved branch stays unreclaimed."
+- "Decision 17" as a phrase does not occur in the spec text; it is LEAD_REVIEW's numbering, and the rules quoted here
+  are its spec form.
+- The stage 5 (f) clarification, origin/main 995ff339 (19.29.6 stage-5 block, 12628-12651): "(clarified 2026-09-15,
+  review chat, stage 5 (f); Mikhail may overrule): the root's direct children get their closing flags, each closing
+  turn runs on its own lane (a host-run child stepped by the root's maintenance, a child on its own context on that
+  context, a child with no handler closed by the maintenance's bookkeeping), settled children are reclaimed by the
+  chain, and only then the root's own storage and the runtime go; nothing is freed as a slot of the runtime behind a
+  Message's back. Once the root closes no adopter remains, so a failed orphan retained under the orphan-retention
+  timeout is reclaimed by the root's close without waiting for that timeout; storage still used by native code holds
+  the close instead, with no timeout (19.29.8). A child served by the UI lane whose request is still pending is closed
+  without a handler and the request goes with the lane's mailbox, until the root's own loop carries the UI child's turn
+  adapter. The close first makes the root's mailbox refuse new admissions, the mailbox's own state under its own lock,
+  since outside code reaches the runtime only through that mailbox (iii); a post after the deletion returns is the
+  embedder's use of a freed handle. Deletion is refused from inside any turn, the root's own included, and from any
+  thread that is not the root's lane; the root's lane outside any turn is the bootstrap thread, so no second OS thread
+  runs the root's maintenance concurrently. With this the host forms of the lifecycle calls retire: a child is disposed
+  or adopted only from its parent's own turn, and creating the runtime and deleting it are the only two calls made on
+  no Message's lane." Q7 is answered by this text (39f53e1a adds the 19.29.8 cross-reference).
+
+MEASURED (integration 402b2919 unless stated)
+- The acceptance, run by 6f on 402b2919: lmx_model_runtime_close_5f_selftest "45 checks, 4 failures", red twice each
+  at "C's turn ended because the chain set its closing flag, not by its own deadline" and "P1's closing turn ran on
+  R0's lane before its storage went"; join, UI and balance lines green. lmx_model_runtime_close_5f_turn_selftest:
+  gcc "void value not ignored as it ought to be" at its three runtime_delete sites.
+- runtime_delete today (lmx_message.lm1 999-1046): a sub; refuses only when not host_is_owner (no in-turn check); then
+  host_shutdown, exec_stop (sets stop_ev: context workers abort their turns, bind_reap_join_all joins them),
+  exec_drop_binds, frees every slot's mailboxes, the transport list, and every slot in allocation order
+  (lmx_msg_slot_free), exec_detach, host_detach, free(rt). No closing turn runs.
+- The chain that exists: lmx_msg_request_children_close (1706) sets closing and readies each live child;
+  lmx_msg_settle_child (1567) settles bottom-up, re-roots a still-running grandchild under R0 as an orphan
+  (orphan_children), adopts a failed child's storage or disposes it, then release_slot (unbind, unlink, mailboxes,
+  init, path, RELEASED); lmx_msg_parent_settle (exec.c 3952) adopts/disposes every non-orphan child;
+  lmx_msg_orphan_sweep (1667) reclaims a settled orphan only if successful or now >= orphan_until.
+- R0's maintenance today: lmx_msg_drive (2290) = set_now, poll, orphan_sweep, drive_walk_roots (drive_one: a closing
+  child with an empty inbox is readied if bound, closed by exec_unbound_close if unbound), pump.
+- Turns: lmx_msg_root_turn = run_entry_turn(R0) (host_is_owner, no turn held, R0 unbound); run_child_turn =
+  child_turn_core(child) with no authority of its own (the caller's turn is the authority, stage 5 (d)).
+- UI lane: R0's child created by runtime_new with LMX_MSG_UI_LANE_ID (lm1 880-883); exec_detach's comment says the slot
+  loop freed it. A child bound with LMX_MSG_AFFINITY_UI is stepped only by the UI lane's drain.
+- exec_detach (exec.c 1197) calls exec_stop when the executor is not stopped, destroys the reap list, frees the exec.
+- Host forms (git grep on integration, l2src sources and tests): lmx_msg_runtime_shutdown 2 test callers
+  (lmx_message_host_selftest.c:244, lmx_message_selftest.lm1:671); lmx_msg_host_wait 4 test uses (host selftest 133,
+  238; message selftest 659, 663); host_shutdown only from runtime_shutdown and runtime_delete (lm1 and lm2);
+  host_lock/unlock/wake/is_shutdown only in host_post's admission (ordering a post against shutdown);
+  host_is_owner 30 lines (the (f) inventory lists each by API: handoff_supervision, require_owner and its callers,
+  require_turn, runtime_delete, dispose_child, adopt_failed, set_now, live_check, complete; exec.c mapping_authority,
+  exec_bind_mode, start_contexts, unbound_close, exec_stop, run_entry_turn, lifecycle_authority, set_orphan_retain).
+- Lifecycle calls from main outside any turn today (the host form (3) retires): release_17 6, family_handoff 4,
+  orphan_mapped_17 1, scenario36 1, and 36 sites in the executor selftest (listed in the (f) inventory).
+
+DESIGN
+1. Status and authority. `fn: lmx_msg_runtime_delete (@: LmxMsgRuntime rt) int`. INVALID, nothing touched, from inside
+   any turn (holding_any != 0: R0's own on the host thread, a child's on a worker) or from any thread that is not R0's
+   lane (Q5). OK after the close. Every caller today is a statement, so only the tests that read the status change.
+2. The close, as R0's maintenance with the drain's authority:
+   a. lmx_msg_request_children_close(R0): every live direct child gets its closing flag.
+   b. Loop until R0 has no child:
+      - one internal turn of R0 (the root_turn path, R0 bound around it) whose handler steps each closing child:
+        a host-run bound child (AFFINITY_ANY, not mapped) runs its closing turn by run_child_turn on R0's lane (P1);
+        an unbound child is closed by exec_unbound_close (no handler runs); a UI-bound child is handled per Q1;
+        a mapped child is not stepped: its worker sees closing and ends its own turn (C).
+      - after the turn, on R0's lane: join the reaped workers; settle every settled non-orphan child (parent_settle's
+        adopt/dispose, from R0's turn); reclaim every settled orphan regardless of orphan_until (6f's Q2: no adopter
+        remains once R0 closes; a sweep variant at close, not a second chain).
+      - no progress this round and a mapped child still running: wait (Q2 below), then loop.
+      The UI lane is one of R0's children and settles in this loop like any other; its mailbox (MAP requests, a
+      pending UI request) goes with its release_slot.
+   c. End order (6f's open point): R0 has no child, so: the transport list; R0's own slot (unlinked from rt->root,
+      lmx_msg_slot_free frees R0's arena and with it the root record); exec_detach (no worker remains, so its stop
+      joins nothing); free(rt). No host_detach (host forms retired, 3).
+3. Host forms retire: runtime_shutdown and host_wait go with their test callers migrated or deleted; host_shutdown and
+   the shutdown flag go; host_post's ordering against the close is Q3; host_is_owner stops being an authority and at
+   most names R0's lane (Q5).
+4. Lifecycle strict form: dispose_child, adopt_failed, handoff_supervision, live_check and complete drop their
+   "host outside any turn" branch: holding_turn(parent) only (own turn for complete). The tests that call them from
+   main move into the parent's turn, as stage 5 (d)'s steps did (release_17, family_handoff, orphan_mapped_17,
+   scenario36, and the executor selftest's 36 sites).
+5. Callable from main after (f) (6f's open point): every call the acceptance makes from main is R0's lane outside a
+   turn and stays callable there: create with parent 0, host_post, host_drain, set_now, set_orphan_retain, exec_bind,
+   drive, emergency_cancel, root_turn; runtime_new and runtime_delete are the two calls on no Message's lane. What moves
+   into a turn: the lifecycle calls of 4. Q6.
+
+ACCEPTANCE AND REDS
+- ffeb1094 as written: the close selftest green (45/0 over two cycles, the balance equal), the turn selftest green.
+- 6f's falsifiers on the (f) tree: delete the join before the runtime's free -> "C's context worker was joined before
+  runtime_delete returned" red; drop one free on the close path (a slot's path array) -> the balance line red by one.
+- Grep: runtime_shutdown, host_wait, host_shutdown, host_is_shutdown and the lifecycle host branches at 0 (fields on any
+  receiver, tripwired), and every runner in the tree that builds those tests run, not only the defaults.
+- run_gates N of N; run_port_message (exec.c's selftest); run_model_scenario36 with the acceptance in its defaults.
+
+RULINGS (6f on 18f9ba54, 2026-09-15): design 1-5 approved as written; every question takes the recommendation.
+- Q1 (a): the UI-bound child is unbound and closed by exec_unbound_close, no handler runs, the pending request goes with
+  the lane's mailbox; the UI child's turn adapter is the R0 loop step's business, after (f).
+- Q2 (a): block on the bind waits, no timeout (19.29.8: a timeout never grants permission to free memory still used by
+  native code; such a branch stays unreclaimed).
+- Q3 (a): R0's mailbox refuses admissions with STOPPED under its own mail lock before request_children_close; a post
+  after runtime_delete returns is the embedder's use of a freed handle, said in runtime_delete's header, guarded by
+  nothing.
+- Q4 (a): runtime_shutdown deleted (decision 12), its two checks migrated.
+- Q5 (a): lmx_msg_r0_lane (holding_turn(R0) || bootstrap thread && holding_any == 0), named once and used by every call
+  of design 5.
+- Q6: confirmed; the lifecycle calls of design 4 are the only movers.
+Added before final (6f): the close request must wake an idle mapped child, or Q2's wait never ends. Read on 402b2919:
+lmx_msg_recv never blocks (lmx_message.lm1 1943-1953: an empty inbox returns LMX_MSG_EMPTY at once), so the idle case
+is a mapped child whose turn has ended, waiting on its context worker for readiness; request_children_close's
+exec_ready must wake that worker so the closing turn runs (or the child is closed). Probe on 402b2919 (proposed to 6f
+in place of the recv-shaped one): C mapped, its turn ends with an empty inbox, its worker idles; runtime_delete must
+wake it and return, under a watchdog. If the wake is missing, the fix is in request_children_close's ready and the
+probe is its red, named in MEASURED.
+Measured 2026-09-15 on d6/stage5f-design (402b2919 + ffeb1094), scratch test lmx_model_close_wake_probe_selftest
+(not committed): C created under R0, bound, given one input, mapped by R0's turn; C's first turn runs on its worker and
+ends (turns=1, closed=0, exec_live=0, checked before the request); then lmx_msg_request_children_close(rt, R0) from
+main outside any turn, so no end_turn's ready loop (lmx_message.lm1 1787/1834, 1798-1804) can wake C and
+request_children_close's own exec_ready (1718) is the only wake; the probe waits up to 3 s for C's closing turn.
+- Green, run_model_scenario36 -Tests: "core tests PASS: lmx_model_close_wake_probe_selftest 6/0, two runs each agree,
+  production runtime" (the check "the close request woke C's idle worker and C ran its closing turn" passing).
+- Falsifier, -MessageSource a copy of lmx_message.lm1 with request_children_close's exec_ready removed (13 exec_ready
+  calls -> 12): both runs "close wake probe: before the request turns=1 closed=0 exec_live=0", then "close wake probe:
+  held" and FAIL on that check.
+So the close request wakes an idle mapped child through request_children_close's ready; no fix is needed there.
+Probe corrections on the way: its first idle predicate used running_load, which end_turn clears only after a
+completion (success flag), so the precondition could not hold; and the falsifier copy must sit in l2src/ for its
+imports to resolve.
+Conditions: lm1 and lm2 mirrored in one commit for every lmx_message change; each of the 48 migrated lifecycle sites
+keeps its check label and measured count (the executor selftest's 36 included), and every migrated test's runner runs
+on the landing; both acceptance tests join run_model_scenario36's defaults in the (f) commit; the tripwired grep at 0
+for runtime_shutdown, host_wait, host_shutdown, host_is_shutdown and the lifecycle host branches on any receiver.
+Q2 falsifiers for the (f) commit's note (not the acceptance): a mapped child whose turn never reads its closing flag
+holds runtime_delete (a 3 s watchdog reports "held"); the same probe reading the flag returns.
+Landing: after the chain (slots) and the response-file branch, on its own integration merge with run_gates,
+run_port_message and scenario36 cold.
+Open, not ruled: Q7 below.
+
+Q7. 19.29.6 (iii) says a failed orphan "self-reclaims when it expires (an orphan is settled only by that policy, never
+    by its supervising root's ordinary settle step ...)"; 6f's acceptance Q2 (a) reclaims it at R0's close regardless of
+    its deadline. R0's close is not an ordinary settle step and no parent endpoint can return once the runtime closes,
+    but the spec does not say so. (a) Record a clarification in 19.29.6 (iii) and 19.29.8: at the runtime's close the
+    root's close reclaims its retained failed orphans that have no native users. (b) Leave the spec silent.
+    Recommend (a).
+
+QUESTIONS (each to be measured before it is claimed)
+Q1. A UI-bound child at R0's close (U, with a request pending in the UI lane's mailbox; nothing drains the UI lane
+    while the host is inside runtime_delete).
+    (a) Unbind it and close it by exec_unbound_close: no handler runs, the pending request goes with the lane's mailbox
+        (the acceptance's "the pending UI request ran no turn").
+    (b) Drain the UI lane from the close: U's closing turn would take the request and run a handler, which the
+        acceptance forbids. Recommend (a).
+Q2. The wait when only mapped children are still running.
+    (a) Block on their bind waits (the executor's existing wait objects), waking on each end_turn, no timeout: a turn
+        that never looks at its closing flag holds the close, as it holds its parent's close today.
+    (b) Poll with a sleep. Recommend (a); a timeout would be a second close policy.
+Q3. host_post against the close once the host lock and the shutdown flag retire (any OS thread may post, 19.29.6).
+    (a) The close first makes R0's mailbox refuse new admissions (host_post returns STOPPED), under R0's mail lock,
+        before request_children_close; a post that already holds the mail lock completes first.
+    (b) No ordering: the embedder must stop posting before runtime_delete (a use-after-free if it does not).
+    Recommend (a): it is R0's own mailbox state, not a host flag.
+Q4. runtime_shutdown's callers (two host selftests): (a) delete runtime_shutdown and migrate those checks to
+    runtime_delete's refusal and Q3's STOPPED; (b) keep it as R0's mailbox close without the delete. Recommend (a).
+Q5. R0's lane predicate. host_is_owner is a thread identity (the bootstrap thread). (a) Keep that identity as the
+    definition of R0's lane outside any turn, renamed for what it is (lmx_msg_r0_lane: holding_turn(R0) ||
+    (bootstrap thread && holding_any == 0)), used by the calls of 5; (b) any thread outside any turn is R0's lane.
+    Recommend (a): (b) would let a second OS thread run R0's maintenance concurrently with the bootstrap.
+Q6. Main-callable set as in 5: confirm, or name a call that must move into R0's turn (and the acceptance moves with it).
+
+IMPLEMENTATION NOTES (d6, 2026-09-15, read on 402b2919 before writing the code; nothing here is measured yet)
+I0. No new close path (Mikhail, 2026-09-15: "running=0 is set, and at the end of its turn the closing Message does the
+    same to its children; that is all"). R0's close marks its children exactly as end_turn's closing branch does
+    (lm1 1781-1790, 1828-1837): running=0 and ready on each child, then request_children_close. Each child's worker
+    sees it at its turn boundary, ends its turn, and does the same to its own children. I1 is only the host thread's
+    join before free(rt), not a design point.
+I1. Q2's wait is the worker's thread handle. The context worker loop (exec.c 3002-3063 Win32, 3095-3129 pthread) checks
+    stopping, then retired, then take_this. take_this refuses a STOPPED, DEAD or RELEASED Message (2958), so once a
+    mapped child's closing turn has ended, its worker idles on its wait forever with nothing left to take. Retiring the
+    wait early instead (join_bind_worker, 2159) races the closing turn: a worker that sees retired before take_this
+    exits without running it, against 995ff339's "a child on its own context [runs its closing turn] on that context".
+    So the worker exits on its own when take_this refuses because its Message is STOPPED, DEAD or RELEASED, and the
+    close blocks on the join (bind_wait_join: WaitForSingleObject INFINITE / pthread_join). That needs no new wait
+    object, no poll and no timeout, and a turn that never reads its flag holds the close (Q2's falsifier). A STOPPED
+    Message never takes another turn, so no idle worker is lost. Falsifier for the note: without the exit, the
+    acceptance's C (inside its turn, reads closing) holds runtime_delete after its closing turn ends.
+I2. The wake probe is committed with (f) as tests/lmx_model_close_wake_5f_selftest (6f's ruling): its header names the
+    exec_live predicate and the falsifier's "held" line, and it joins run_model_scenario36's defaults with the two
+    acceptances. Before (f) lands, a default run (no -Tests) must print its name among the core tests.
+I3. host_is_owner's remaining sites become lmx_msg_r0_lane (Q5): exec.c mapping_authority_locked 2209, exec_bind_mode
+    2232, start_contexts 3151, unbound_close 3249, exec_stop 3337, run_entry_turn 3518, set_orphan_retain 4028;
+    lm1/lm2 require_owner, require_turn (852), set_now (2208). lifecycle_authority (3646) and the five lifecycle
+    calls drop the host branch (design 4). exec_unbound_close and exec_stop are called from R0's internal close turn
+    on the host thread, so the r0_lane predicate's holding_turn(R0) arm admits them.
+I4. Migration sites (grep on 402b2919): executor selftest lifecycle calls 177, 751, 859, 901, 3674-3697, 3757, 3817,
+    4176, 4394-4755, 5747-6341, 8581-8925 (40 lines, the design's 36 sites plus multi-call lines); message selftest
+    lm1 12; release_17 10; liveness_33 3; family_handoff 5; orphan_mapped_17, scenario36, runtime_close_5f 1 each.
+    runtime_delete's 598 statement calls in the executor selftest keep their form (status ignored). host_wait's four
+    test uses and runtime_shutdown's two migrate per Q4 (a): the refusal and host_post's STOPPED at the close.
