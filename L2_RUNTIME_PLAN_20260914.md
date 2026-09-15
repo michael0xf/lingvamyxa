@@ -3812,3 +3812,28 @@ lock and the host lock included), file:line, function, the data the hold
 protects (FIELDS rows or a runtime list), and the stage that removes the
 need for it (S3 landed, M, S4, S5, Y, S6), counts per stage at the top; a
 site no stage covers is a contradiction to stop on.
+ONE ROOT, the shape corrected (the lead's finding, 2026-09-15, verified by
+the coordinator with the pinned translator: a file with predef
+"l1src/parser.lm1" translates from the repo root and from stg/l1_baseline,
+exit 0, and fails from an empty directory, exit 1, "cannot read import";
+l1trans.lm1 1207 and l2trans.lm1 3885/4059 open import paths relative to
+the process cwd with no search path; 9 l2src sources name l1src/ and many
+name l2src/ by cwd-relative prefix). So "l2src and the gates stay in
+stg/l1_baseline" cannot work: translating l2trans.lm1 needs l1src/ and
+l2src/ under one cwd. Ruling (coordinator; no lock involved, ours to
+decide, and it is what "один корень" says): option (a), everything to the
+root: git mv stg/l1_baseline/l2src to l2src, every runner's baseline and
+mixa's L1Root become the repo root, the gates move with l2src, both quoted
+prefixes resolve from the root with zero source edits; stg/l1_baseline
+disappears whole (its l1src, tests/l1, lm1/build, buildCore.lm0.bat,
+tests/*.lmx, both READMEs, .gitignore and run_slice_equal.ps1 all D, the
+slice's subject being gone); the pin path becomes the root's
+build/l1trans/gen2 (root run_gen writes there: the re-install rule after
+any regenerating run stays), and L1_PIN.txt / L1_PIN_SOURCE.txt move with
+l2src. Rejected: (b) run-time junctions (a copy in disguise, off-Windows
+semantics), (c) rewriting about 200 quoted source lines (product edits
+outside runners, every generated include path shifts). The (a) section
+names the allowlist by status: R (renames) for the l2src tree and the
+gates, D only under stg/l1_baseline, M only in runners, gate.ps1,
+mixa's lib path and the two pin files; landing set as (c) plus the 33
+gates and run_l2trans/run_port_parser on the new paths.
