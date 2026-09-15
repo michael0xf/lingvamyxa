@@ -3730,3 +3730,14 @@ turn guard on possibly live Messages; FLAG-3: lmx_msg_exec_ui_nrequests
 walks the UI lane's inbox under EXEC where every other UI-lane site uses
 MAIL; both are today's coverage facts: under Y3 every read is under the
 monitor, and the UI lane's go with M.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only: the S4 census for
+"one arena, one lane, one writer" (19.28.R2.2, the 2026-09-14 clarification
+and ownership items (1)-(3)): at c063fd00, LOCK_REMOVAL_S4_WRITES.txt on
+sonnet/s4-writes, every write into a Message's fields (the LmxMsg rows of
+the FIELDS table) by a thread other than that Message's own lane,
+file:line, the writer (parent's lane, sender at admission, host drive,
+worker, UI thread), the row and category, and the ownership item that
+permits it (item (2) supervision cells, item (3) control flags, admission)
+or none, a write with none being a contradiction to stop on, and any site
+that would need a lock, wait or signal to keep flagged; the mailbox rows
+(the Y file) and the S3-owned fields excluded.
