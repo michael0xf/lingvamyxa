@@ -201,18 +201,20 @@ IMPLEMENTATION NOTES (d6, 2026-09-15, read on 402b2919 before writing the code; 
 I0. No new close path (Mikhail, 2026-09-15: "running=0 is set, and at the end of its turn the closing Message does the
     same to its children; that is all"). R0's close marks its children exactly as end_turn's closing branch does
     (lm1 1781-1790, 1828-1837): running=0 and ready on each child, then request_children_close. Each child's worker
-    sees it at its turn boundary, ends its turn, and does the same to its own children. I1 is only the host thread's
-    join before free(rt), not a design point.
-I1. Q2's wait is the worker's thread handle. The context worker loop (exec.c 3002-3063 Win32, 3095-3129 pthread) checks
-    stopping, then retired, then take_this. take_this refuses a STOPPED, DEAD or RELEASED Message (2958), so once a
-    mapped child's closing turn has ended, its worker idles on its wait forever with nothing left to take. Retiring the
-    wait early instead (join_bind_worker, 2159) races the closing turn: a worker that sees retired before take_this
-    exits without running it, against 995ff339's "a child on its own context [runs its closing turn] on that context".
-    So the worker exits on its own when take_this refuses because its Message is STOPPED, DEAD or RELEASED, and the
-    close blocks on the join (bind_wait_join: WaitForSingleObject INFINITE / pthread_join). That needs no new wait
-    object, no poll and no timeout, and a turn that never reads its flag holds the close (Q2's falsifier). A STOPPED
-    Message never takes another turn, so no idle worker is lost. Falsifier for the note: without the exit, the
-    acceptance's C (inside its turn, reads closing) holds runtime_delete after its closing turn ends.
+    sees it at its turn boundary, ends its turn, and does the same to its own children. Spec: origin/main 58de0167
+    (19.29.6 (f) paragraph, Mikhail's sentence quoted).
+I1. No join (Mikhail, 2026-09-15: "the executor frees its own memory"; "each of our L3 Threads has its own scheduler and
+    garbage collector"). The close does not wait for a thread and does not free a thread's state. A context thread's
+    closing turn ends, its Message settles, and the thread frees what is its own and ends. R0's close proceeds as the
+    chain allows: it settles a child only when the child is settled, and frees only what R0 owns.
+    The one constraint in today's C executor: its lock and TLS live in the shared LmxMsgExec behind rt, so a thread's
+    last touch of that state must be the write that settles its Message, with nothing of rt read after it. Today it is
+    not: run_one sets handoff_ready in native_leave_addr (exec.c 2442-2453), then requeue_if_runnable re-takes the lock
+    (2455-2465, called at 2518 and 2592), and the worker loop takes it again at its top (3004 Win32, 3096 pthread). Once
+    a child's closing turn has ended, the settle is its last lock hold; the thread then exits without re-locking and
+    frees its own wait state. take_this already refuses a STOPPED, DEAD or RELEASED Message (2958), so such a thread has
+    nothing left to take. Falsifier for the note: re-take the lock after the settle in a mapped child's exit path and
+    the balance/UAF run under the close acceptance is red.
 I2. The wake probe is committed with (f) as tests/lmx_model_close_wake_5f_selftest (6f's ruling): its header names the
     exec_live predicate and the falsifier's "held" line, and it joins run_model_scenario36's defaults with the two
     acceptances. Before (f) lands, a default run (no -Tests) must print its name among the core tests.
