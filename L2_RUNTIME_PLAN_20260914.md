@@ -2043,3 +2043,12 @@ on run_one's wake-all and green after S3; the counters and the selftest's
 Interlocked cells go, uncommitted. The hook is executor code and is held
 with the exec.c contradiction before Mikhail.
 Mikhail on stage O (2026-09-15, verbatim, choosing option (b)): "да, все имиации из кода немедленно убираем. Это не L2 код если он так себя ведет. Переводите его в L1 и помечайте в комментариях что механизм MEssage временно не используется. На самом деле пользовательский L2 может синхронизировать что хочет _но мы пишем в своей филососфии Message чтобы потом переводить на L3_" (yes, all the imitations are removed from the code at once; it is not L2 code if it behaves like that; translate it into L1 and mark in comments that the Message mechanism is temporarily not used; in fact user L2 may synchronize whatever it wants, but we write in our Message philosophy in order to translate to L3 later). So stage O is: the lm2 translator's code generator stops emitting the message-thread boilerplate (lm_message_thread_new/_begin_turn/_end_turn, lm_own_arena_new_zero(thread, ...)) now, its programs build without an arena context until the core is there; own.lm2's lock-based message-thread runtime, being no L2 code, is moved to L1 with the comment that the Message mechanism is temporarily unused, its locks gone with it; the REST providers and parser.lm2's registry component go with it; the 13 native C tests and 33 fixtures follow the emission. Stage O is unblocked and is the lead's to design in the (a) format (owner of the lm2 chain named in it); the exec.c question is still before him.
+0c's lane_oracle: claude-0c/lane-oracle 38a91c86 on e88dab64; run_gates.ps1's
+row renamed lane_oracle with a verdict red on exit 0 without the parity
+line or with any LANE WRITE FAIL in the raw log, and RUNNER_HAZARDS.txt
+landing (c6b5ef27's survey plus row (k), the no-turn gap closed by the
+tripwire); cold 11 of 11 in 214 s, lane_oracle 55 s, 0 LANE WRITE FAIL;
+falsifiers each "gates RED: stopped at lane_oracle" (mutation C naming
+run_child_turn:ready_clear(moved); a stub with the parity line and one
+FAIL line at exit 0; a stub with no parity line). No executor C, so not
+held by the exec.c question; lands through the lead on e88dab64.
