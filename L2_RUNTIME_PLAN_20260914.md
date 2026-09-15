@@ -2012,3 +2012,23 @@ recipient's turn; no waits on primitives, no pools with condition
 variables, no semaphore-shaped design; the runtime's design and code are
 L2 and L1, the C is the translator's emission and never the design
 surface.
+Second contradiction under the stop rule (the lead, 2026-09-15), put to
+Mikhail by the coordinator: side 1, his "вы пишите не на Си, на Си пишет
+транслятор" and "мыслить в категориях event-driven ... без семафоров";
+side 2, the executor the lock-removal stages change is hand-written C,
+stg/l1_baseline/l2src/lmx_message_exec.c, about 4,100 lines with the exec
+lock, the context workers, wait events and conditions, launch_ctx_thread
+and run_one; only lmx_message.lm1 (with its lm2 mirror) is translated; the
+stages as designed edit that C directly (S1's deletion, S2's counter, S3's
+hook, S4-S6's, M's and D's rewrites of the workers and records);
+RUNTIME_L2_PORTS.txt ports parts of the runtime to L2 but not the executor
+core. Options put to him: (a) the stages keep changing exec.c as the interim
+implementation and the executor's port to L2/L1 is a later stage; (b) the
+executor is first rewritten in L2/L1 as a translated unit (a thread, a
+mailbox with its own wake, launch and close of children, one arena per
+Message), event-driven without semaphores, and the lock removal is the
+replacement of exec.c by that unit; (c) deletions in exec.c (S1, D, the M
+and O removals) proceed while anything that adds or reshapes executor code
+is written in L2/L1; the coordinator proposing (b) with (c)'s deletions.
+Held until his word: S2's measure, S1's landing, 57's S3 red commit; stage
+M's test reading and the design text continue.
