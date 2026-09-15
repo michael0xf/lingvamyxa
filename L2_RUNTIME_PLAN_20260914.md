@@ -2419,3 +2419,20 @@ record): with run_port_message.ps1 moved aside, run_gates exits 1 in 1 s
 with "gates RED: stopped at lane_oracle after 0s", the row "lane_oracle
 FAIL exit=-196608 0s" and 31 of 32 rows "not run"; the file restored with
 the same blob. Rule restated: a falsifier is run before it is reported.
+0c's re-probe of the S3 wake oracle (ee5b2cb0, the four evidence stderr
+files identical, each violating (site, owner) once, callers tagged): with
+run_one's wake-all present, one violation is the wake-all itself
+(ctx_visit_wake, owner 3, admits 0, wakes 1, input 0); every other line
+originates in exec_start_map_kick (exec.c 2877): 61 lanes plus owner 5
+woken a second time after their admission's wake with the input still
+waiting (admits 1, wakes 2; owner 5 at 2/3), and owner 7 kicked with no
+admission (admits 0, wakes 1, input 0, ready 1); with the wake-all removed
+the same three exec_start_map_kick groups remain. A finding, not a
+miscount: the start map kick wakes lanes regardless of admission, which
+the model forbids (a lane's wake comes only from an admission into its
+mailbox; a launched lane's first wake is its first Message); the kick's
+removal folds into S3 or M. The probe caps at 64 pairs and hit the cap, so
+sites beyond may exist; the landing note replaces ee5b2cb0's false "0
+sites" line. Falsifier at ee5b2cb0 with the wake-all removed:
+run_port_message -LaneCheck exits non-zero with "LANE WAKE FAIL
+site=wake_addr_locked owner=4 admits=1 wakes=2" (19 s).
