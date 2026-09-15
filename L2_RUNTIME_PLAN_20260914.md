@@ -4927,3 +4927,25 @@ change, the two variable-id callers read and resolved; measure
 run_port_message plain, run_lmx -Suite Message, run_msg_send_local,
 run_msg_family_handoff, run_l2_message_root, and grep -c create_id at 0
 over l2src, tests and mixa_manager outside vendor/.
+M status (the lead, 2026-09-15): d6/m-sequential 2006d9d1 (checked on
+origin): 219b2672 the exec selftest conversion; e8ea6ef8 cancel_spin_host
+converted (run_lmx -Suite Cancel exit 0); c66bbfcd and c161e218 merging
+b5's 76ad060d and sonnet/exec-gates d4887106; 2006d9d1 turn counters
+starting from zero for every runtime. M_TESTS cites 30e1bff4 as the
+current debt list (d6/lock-removal d77e0da2). The first run_port_message
+pair on c161e218 was red before parity on reference-vs-itself stderr:
+the lead's own_turn helper reset its counters only when the runtime's
+address changed, and the allocator reused a deleted runtime's address,
+so a block inherited the previous block's counts (nondeterministic,
+able to end a wait early); seen_new now resets right after each
+runtime_new feeding own_turn or entry_map; two fast runs then equal
+apart from the masked %p fields. In progress on 2006d9d1: plain, then
+-LaneCheck; still to do: e9's branch, the one-site falsifier, the 30
+gates; land_m.sh drafted. Separately: unbind never clears LmxMsg.mapped
+(e9's finding), so a remap after unbind returns OK with no worker; the
+lead will test clearing it in unbind_slot_locked (no lock, wait or
+signal). Ruling (coordinator): a defect fix, its own commit with a
+red-first check (a remap after unbind gets a worker; fails before,
+passes after), inside M's landing or right after at the lead's choice,
+consistent with ownership item (2)'s rebind authority; mapped's own
+row (DEL) stands for the later stage.
