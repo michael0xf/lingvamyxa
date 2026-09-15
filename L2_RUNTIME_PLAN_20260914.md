@@ -4060,3 +4060,18 @@ file:line, what it holds, who appends and who reads (lanes), the FIELDS
 row, and its fate (DEL with a named stage, or data of a named Message's
 arena: the parent, R0, the L3 Thread itself); any list read by a lane
 other than its owner's after S4 flagged as a contradiction to stop on.
+S3 LANDED (the lead, 2026-09-15): integration c063fd00..b4e1296d, the merge
+of d6/s3-no-wake 51219ff9 (R1-R8 c026c5a6, b5's R9 d41e5941, the
+acceptance oracle 74146146, the test race fix a3e907d0, the
+run_port_msg_blocks pin 51219ff9); on the merge with the pin 0B3D85B3:
+run_port_message -LaneCheck exit 0 (0 LANE WAKE FAIL), plain parity PASS,
+run_lmx -Suite Message ok, run_model_scenario36 PASS, run_gates
+-L2MessageRoot GREEN 33 of 33 in 545 s, tracked tree clean, pushed with
+origin unmoved. Landings #1-#3 were red and unpushed (the test race, the
+stale free pin, the git archive hang; #4 passed c_scanners). Coordinator's
+check on b4e1296d in exec-3a: the integration tip is b4e1296d; the oracle
+function is still defined in exec.c and its call sites are 0 in exec.c
+and host.c; the pin is in place. The eleven wake sites are gone: the
+executor and the host wake, wait and join nothing. e9 has the machine
+slot now; ONE ROOT code starts on a fresh branch off b4e1296d, its heavy
+runs waiting for e9's "done".
