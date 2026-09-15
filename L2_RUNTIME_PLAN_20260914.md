@@ -2287,3 +2287,23 @@ ahead of O1's red test, which is the hook's first user on integration and
 proves it by linking; O1's allowlist gains that runner file; the list
 checks (adopted_base in its own Message's blocks only, adopted_n rising by
 one per allocation, 0 outside a turn) stay beside the balance.
+O0 measured (b5, sonnet/stage-o 5ac167af, LOCK_REMOVAL_O0_MEASUREMENT.txt,
+nothing changed): trans.lm0 does not compile from the committed
+lm1/build/trans.lm1.c: cmake --build --target trans.lm0 twice, exit 2 both
+times, 2011 errors, byte-identical logs, about 38 s each; 443 distinct
+symbols "redeclared as different kind of symbol" (trans.lm1.c declares each
+once as a plain extern function and again as a closure typedef of the same
+name, 21 of own.lm1's 24 fn/sub names among them, a pre-existing chain
+bug), 504 "expected expression" in the main scaffold (68890-68987) where
+today's own.lm1 has no lm_message_thread_*, the rest cascades; no link, so
+no regeneration and no fixed point. So the lm2 chain's committed generated
+C is not consistent with today's L1 sources and the chain has no previous
+binary in this repository, while the live self-build (l1trans from its
+committed C, l2trans in l2src, the l2src core) builds and is gated. Put to
+Mikhail by the coordinator: which chain is the project's self-build: (a)
+the lm2 chain, its previous binary restored from
+lingvamyxa_old_worked_version and O2/O3 continued on it; (b) the live
+chain, lm2/own.lm2 and the unbuildable lm2 self-host deleted whole as dead,
+"achieve self-build" meaning the live chain brought to a full self-build
+without locks; the coordinator proposing (b). O2/O3 wait; O1, the S-stages
+and M continue.
