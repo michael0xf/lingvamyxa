@@ -1800,6 +1800,28 @@ sub: msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
     ---
 end: msg_request_children_close
 
+# S6-1, SPEC 12766-12771: an unbound closing Message has no handler and no lane,
+# so its close is end-turn bookkeeping written by the maintaining lane (the host's
+# drive today, R0's maintenance later), not a step, and it leaves the Message
+# stopped and handoff-safe so its parent's dispose or adopt can settle it. R0's
+# maintenance writes that bookkeeping as its own act: end_turn admits it here, so
+# no turn identity is borrowed and no held-address flag is needed.
+fn: msg_maintenance_close_ok (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    if: c.lmx_msg_host_is_owner(rt) = 0
+        return: 0
+    if: c.lmx_msg_exec_is_bound(rt, who) != 0
+        return: 0
+    m: msg_find(rt, who)
+    if: m = 0
+        return: 0
+    if: m\closing = 0
+        return: 0
+    if: m\exec_live != 0
+        return: 0
+    return: 1
+end: msg_maintenance_close_ok
+
 fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     @: LmxMsg m
     @: LmxMsg ch
@@ -1807,7 +1829,7 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     @: LmxMsgCopy n
     @: LmxMsgCopy outb 0
     int: pinned 0
-    if: msg_require_turn(rt, who) != c.LMX_MSG_OK
+    if: msg_require_turn(rt, who) != c.LMX_MSG_OK && msg_maintenance_close_ok(rt, who) = 0
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
     m: msg_self_or_find(rt, who)

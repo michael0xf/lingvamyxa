@@ -91,13 +91,15 @@ typedef struct LmxMsgExec {
     pthread_mutex_t lock;
     pthread_key_t tls;
 #endif
+    /* S6-1: the address R0's maintenance is closing right now. One writer, that
+     * lane; read by exec_bind_mode. An atomic cell on both platforms, not a lock. */
+    LmxMsgAddr unbound_held;
     int nworkers;
     int stopping;
     int stopped;
     int no_retire;
     int contexts_live;
     LmxMsgRuntime *rt;
-    LmxMsgAddr unbound_held;
 #if defined(LMX_MSG_EXEC_TEST)
     int test_fail_ctx;
     int test_fail_adopt_block;
@@ -1698,12 +1700,19 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    if (e->unbound_held == addr) {
+    m = caller_msg_locked(rt, addr);
+    if (m == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    m = caller_msg_locked(rt, addr);
-    if (m == 0) {
+    /* S6-1: refusing every closing Message here is wrong -- measured: the executor
+     * selftest's close-path case binds a closing Message on purpose, and the spec
+     * (12762-12765) has a child on its own context run its closing turn there. The
+     * narrow window is the real one: while R0's maintenance is writing this exact
+     * address's close, a bind would give it a worker behind the maintaining lane's
+     * back. unbound_held names that address; it is an atomic cell with one writer,
+     * R0's maintenance, and no lock. */
+    if (__atomic_load_n(&e->unbound_held, __ATOMIC_RELAXED) == addr) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -2277,9 +2286,6 @@ int lmx_msg_exec_is_bound(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
     int st;
-    LmxMsgAddr old;
-    LmxMsg *old_msg;
-    uint_fast8_t *old_running;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
     }
@@ -2292,25 +2298,19 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         lmx_msg_exec_ready(rt, addr);
         return LMX_MSG_OK;
     }
-    if (e->unbound_held != 0) {
-        lmx_msg_exec_unlock(rt);
-        return LMX_MSG_INVALID;
-    }
-    e->unbound_held = addr;
-    old = get_tls(e);
-    old_msg = lmx_turn_msg;
-    old_running = lmx_turn_running;
-    set_tls(e, addr);
+    __atomic_store_n(&e->unbound_held, addr, __ATOMIC_RELAXED);
     lmx_msg_exec_unlock(rt);
+    /* S6-1, spec 12766-12771: the close of a Message with no handler and no lane is
+     * end-turn bookkeeping written by the maintaining lane, R0's maintenance, as its
+     * own act: lmx_msg_maintenance_close_ok admits it inside end_turn, so no turn
+     * identity is borrowed. unbound_held stays only as the one-writer atomic cell
+     * naming the address being closed, so a bind cannot slip a worker under it. */
     st = lmx_msg_end_turn(rt, addr, 1);
     lmx_msg_exec_lock(rt);
-    e->unbound_held = 0;
-    restore_turn(e, old, old_msg, old_running);
-    /* Stage 5 (d1d), decision 17 rule 1: the end-turn above is the bookkeeping of
-     * a Message with no lane, written by the maintaining lane (drive); the borrowed
-     * TLS identity is that bookkeeping's spelling, not a turn, and no handler runs.
-     * It ends at run_one's boundary, so the closed Message is handoff-ready and its
-     * parent's dispose or adopt settles it. */
+    __atomic_store_n(&e->unbound_held, 0U, __ATOMIC_RELAXED);
+    /* Stage 5 (d1d), decision 17 rule 1: the end-turn above runs no handler and ends
+     * at run_one's boundary, so the closed Message is handoff-ready and its parent's
+     * dispose or adopt settles it. */
     {
         LmxMsg *m = msg_at_addr(rt, addr);
         if (m != 0) {
@@ -2385,7 +2385,7 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     old_running = lmx_turn_running;
     restore_turn(e, 0, old_msg, old_running);
     (void)rec_walk_locked(e, ctx_visit_stop_reset, 0);
-    e->unbound_held = 0;
+    __atomic_store_n(&e->unbound_held, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&e->stopped, 1, __ATOMIC_RELAXED);
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
