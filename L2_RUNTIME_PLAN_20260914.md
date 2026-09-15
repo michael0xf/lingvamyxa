@@ -6185,3 +6185,10 @@ or unlaunched children settled with their parent), the property "C did
 not reach its grandchild H" holding in the launched world by
 construction. Lesson (coordinator): the gap was not in the spec; I
 ruled before re-reading the liveness poll section.
+Mikhail (2026-09-15, verbatim): "я тебя уверяю -- если тебе кажется что
+что-то нелогично, просто поищи в доках. Там все должно работать, я не с
+луны свалился :)" Standing rule for every session: the documents are
+complete by design; an apparent gap or illogic is a search not yet
+done (by the behaviour's words: poll, close, settle, admission,
+handoff, refuse), never a ruling of ours and never a question to him
+until the search is shown empty.
