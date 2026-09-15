@@ -1377,6 +1377,21 @@ S5. The runtime-level lists (L5). Waits on 5.1.
         __atomic_ call.
       Fix: the typedef checks sizeof(unsigned), the field's declared type, without naming the field. The probe is
       unchanged. The rerun checks the probe on the tree before the full green.
+    - GREEN by d6 (2026-09-15): d6/lock-s5 ddab10a0; measure tree 116123d1 = ddab10a0 + 85953500 (scratch merge,
+      never pushed).
+      - The probe on the working tree first, then on the measure tree: exit 0, "retire_queue=0 root_seq=0
+        next_addr_nonatomic=0 root_list_loops=0".
+      - The exec.c syntax check was clean.
+      - run_port_message: exit 0 in 49 s, parity PASS.
+      - UAF kit over the executor selftest (quarantine allocator, repo crash report main, alternating plain and
+        slow-stderr shapes): "165 of 165 clean in 401 s".
+      - Tracked tree clean after the runs.
+    - Falsifier by d6 (scratch worktree ws5fals at 116123d1, never committed): release_slot's head unlink put back
+      in lmx_message.lm1 by a literal PowerShell replace ("rt\root: 0" -> "rt\root: m\next_sibling", the only
+      diff). The probe exits 1 with "retire_queue=0 root_seq=0 next_addr_nonatomic=0 root_list_loops=1".
+    - Acceptance record by d6: red 85953500 (28/7/4/14), green ddab10a0 (0/0/0/0, parity PASS, UAF 165 of 165),
+      falsifier root_list_loops=1. Handed to the coordinator for the green re-measure; landing is land_s5.sh
+      (land_base2.sh, the union base plus lmx_cancel; the probe is never folded in).
     - UAF kit for S5's green, rebuilt in scratch (never committed):
       - q_alloc.c: a poisoning quarantine allocator (0xDD, 8192 blocks, 256 MB, free-site frames, eviction and
         atexit checks, double free);
