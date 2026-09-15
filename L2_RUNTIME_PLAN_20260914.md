@@ -2875,3 +2875,10 @@ without a slot from the lead. D1 on its merge 2c880103 so far: the
 create_id grep at 0, run_port_message plain and -LaneCheck PASS (101
 methods redirected, one fewer with find_create deleted); MessageApi,
 scenario36 and the 32 gates running.
+Corrected by the lead from the source: l1src/buildCore.lm1's staged-test
+script (89/192) runs the printTree.lm0 that lm_build_compile_generated_tools
+(576) builds into build/lm0/next from the committed lm1/build/
+printTree.lm1.c, before the staged tests (841, 852), and checks its exit
+code only; not a reader of the old chain's oracle, so (b) needs no L1
+change there, and no golden comparison is added to it (decision 12); the
+goldens guard run_parser and run_legacy_p0.
