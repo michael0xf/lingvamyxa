@@ -1140,11 +1140,29 @@ prototype, largest first.
    marks its children exactly as end_turn's closing branch does (lm1
    1781-1790, 1828-1837: running=0 and ready on each child, then
    request_children_close), each child doing the same to its own children
-   at its turn's end; I1, Q2's wait is the worker's thread handle: take_this
-   refuses a STOPPED, DEAD or RELEASED Message (exec.c 2958), retiring the
-   wait early races the closing turn, so the worker exits on its own when
-   take_this refuses for that reason and the close blocks on the join
-   (INFINITE / pthread_join), no new object, no poll, no timeout; I2, the
+   at its turn's end; I1 as overruled by Mikhail the same day ("the
+   executor frees its own memory"; "each of our L3 Threads has its own
+   scheduler and garbage collector"): the close waits for no thread and
+   frees no thread's state; a context thread ends its closing turn, its
+   Message settles, then the thread frees what is its own and ends; R0's
+   close settles a child only once the child is settled and frees only
+   what R0 owns; in today's C executor the lock and TLS live in the shared
+   LmxMsgExec behind rt, so a thread's last touch of that state is the
+   write that settles its Message (native_leave_addr, exec.c 2442-2453)
+   with nothing read after it, which is false today (requeue_if_runnable
+   re-locks, the worker loop re-locks at its top), so in (f) a thread whose
+   Message is STOPPED, DEAD or RELEASED after its turn exits right after
+   the settle without re-locking and frees its own wait state (take_this
+   already refuses such a Message, 2958); Q2's "block on the bind waits" is
+   superseded: the close waits on the child's settle signalled on R0's
+   lane, never a thread handle, the falsifier unchanged; the acceptance's
+   join line is relabelled "C's closing turn had ended before
+   runtime_delete returned" over the same check, and its balance reading
+   waits until the live count is stable for 200 ms (3 s cap), since the
+   threads free their own state after the close returns; falsifiers: a
+   re-lock after the settle in the exit path turns the acceptance red
+   (balance or use after free), and a thread that never frees its wait
+   state shows as one block in the balance; I2, the
    wake probe committed as tests/lmx_model_close_wake_5f_selftest in the
    defaults; I3, host_is_owner's remaining sites become lmx_msg_r0_lane
    (mapping_authority_locked, exec_bind_mode, start_contexts,

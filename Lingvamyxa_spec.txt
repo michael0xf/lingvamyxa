@@ -12636,7 +12636,12 @@ no path of its own: it marks its children exactly as any closing end-turn
 does, running cleared and each child made ready, then the close request, and
 each child does the same to its own children at the end of its turn (Mikhail,
 2026-09-15: "running=0 is set, and at the end of its turn the closing Message
-does the same to its children; that is all"). Once the root
+does the same to its children; that is all"). The close waits for no thread
+and frees no thread's state: a Message on its own context ends its closing
+turn, settles, and its thread then frees what is its own and ends; the root's
+close settles a child only once the child is settled and frees only what the
+root owns (Mikhail, 2026-09-15: "the executor frees its own memory"; "each of
+our L3 Threads has its own scheduler and garbage collector"). Once the root
 closes no adopter remains, so a failed orphan retained under the
 orphan-retention timeout is reclaimed by the root's close without waiting
 for that timeout; storage still used by native code holds the close
