@@ -1191,6 +1191,21 @@ S4. The family tree and the mapping written only on the owner's lane (L2, L3), t
           and "spin-nested cancel not fired" becomes a read of C's flags.
         The guard stays as ruled and the case is reachable. The falsifier on b5's next push: the 20 ms Sleep line
         is gone, and the cancel's target is a child of p.
+    - Green (b5, confirmed by the coordinator, 2026-09-15): sonnet/s4-guard 97fb41fd, 6 commits off 952d8e31,
+      touching lmx_message_exec.c, lmx_message_exec_selftest.c and tests/cancel_spin_host.c.
+      - cancel_after_settle, its Sleep(20) and CancelArg are gone. run_nested's c is the real spinning child (bound
+        with turn_spin); turn_parent_spin maps it explicitly and returns.
+      - One real hang was fixed on the way. spin_boot's exec_bind never launches a worker in this file, since
+        exec_start_contexts is never called, so only map_child's launch starts c. b5 diagnosed it with gdb on the
+        hung process.
+      - Accepted divergence from the ruled shape: the host outside any turn cancels c after polling its hit flag
+        (check_aftermath's pattern), because cancelling from p's turn would need a wait in a handler. The guard is
+        exercised by a lawful writer either way.
+      - Measured green: Cancel and Exec suites ok, scenario36's ten suites PASS twice, run_port_message plain and
+        -LaneCheck PASS (102 methods).
+      - Falsifier: the inverted condition, run against the S4 check alone (the full Cancel suite hangs under an
+        inverted guard).
+      Landing: land_base2.sh of 97fb41fd onto c9ac4dda (union base plus lmx_cancel).
 
 S5. The runtime-level lists (L5). Waits on 5.1.
     rt->slots, rt->n, the retire queue, the reap queue, rt->transport and e->ui_lane each either go or become a cell in
