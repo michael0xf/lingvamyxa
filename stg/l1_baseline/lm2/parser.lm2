@@ -1,3 +1,9 @@
+# Does not translate today: own_abi.lm2's split (701a1b80, 2026-09-15)
+# removed the message-thread declarations three sites in this file still
+# reference (668, 680, 1401-1426, each marked in place). Kept as source
+# for the L2 port ("потом опять делаем порт в L2", Mikhail, 2026-09-15),
+# not rewritten now since nothing can translate or test a rewrite.
+
 table:
     source
     name: `define.value`
@@ -665,6 +671,10 @@ fn: lm_p0_document_init_owners (LmP0Document: document) int
         return: 1
 
     document\owners_initialized: 1
+    # The Message mechanism is temporarily not used; in the L2 port the
+    # parsing Message's own arena and its own state replace the thread's
+    # arena and the per-thread registry component; undeclared since
+    # own_abi.lm2's split of 2026-09-15, 701a1b80.
     if: lm_own_arena_init(document\source_owner, c.lm_lmx_message_thread) != 0 || lm_own_arena_init(document\token_arena, c.lm_lmx_message_thread) != 0 || lm_own_arena_init(document\tree_arena, c.lm_lmx_message_thread) != 0 || lm_own_arena_init(document\diagnostic_arena, c.lm_lmx_message_thread) != 0
         lm_p0_document_destroy_owners(document)
         return: 1
@@ -677,6 +687,10 @@ return: 0
 fn: lm_p0_document_owners_belong_to_actor (const: (LmP0Document: document)) int
     if: document = 0 || document\owners_initialized = 0
         return: 1
+    # The Message mechanism is temporarily not used; in the L2 port the
+    # parsing Message's own arena and its own state replace the thread's
+    # arena and the per-thread registry component; undeclared since
+    # own_abi.lm2's split of 2026-09-15, 701a1b80.
     if: (document\diagnostic_arena != 0 && document\diagnostic_arena\owner_thread != 0 && document\diagnostic_arena\owner_thread != c.lm_lmx_message_thread) || (document\tree_arena != 0 && document\tree_arena\owner_thread != 0 && document\tree_arena\owner_thread != c.lm_lmx_message_thread) || (document\token_arena != 0 && document\token_arena\owner_thread != 0 && document\token_arena\owner_thread != c.lm_lmx_message_thread) || (document\source_owner != 0 && document\source_owner\owner_thread != 0 && document\source_owner\owner_thread != c.lm_lmx_message_thread)
         return: 0
 return: 1
@@ -1397,6 +1411,12 @@ sub: lm_p0_registry_component_destroy (@: void component)
     lm_own_delete(registry, 0)
 end: lm_p0_registry_component_destroy
 
+# The Message mechanism is temporarily not used; in the L2 port the
+# parsing Message's own arena and its own state replace the thread's
+# arena and the per-thread registry component; undeclared since
+# own_abi.lm2's split of 2026-09-15, 701a1b80. Covers this function and
+# lm_p0_registry_init/_destroy below (lm_message_thread_component_get/
+# _attach/_remove).
 fn: lm_p0_registry_current () LmP0Registry
 return: (cast: (LmP0Registry) lm_message_thread_component_get(@ lm_p0_registry_component_destroy))
 
