@@ -285,6 +285,12 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
         "... host=2395973".
       turn_other (38 at red, 17 now) is not 0; its attribution to call sites follows before the coordinator's
       re-measure.
+      Falsifier (scratch worktree ws2fals at 121f4b87, never committed): end_turn's
+      "if: lmx_msg_exec_is_runnable_msg(rt, ch) != 0" put back as "lmx_msg_exec_is_runnable(rt, ch\addr)" in
+      lmx_message.lm1, the one site the red attributed 48 walks to. Results:
+      - run_port_message with the counter: parity PASS;
+      - reference.exe twice with LMX_LOOKUP_COUNT=1: "lookup walks: C1=48 C2=0 turn_other=17" both times.
+      The put-back site's own 48 walks come back and nothing else moves.
       What the green then measures: no walk of the runtime's tree from a turn's C1/C2 site. A scan of the caller's
       own child list for a child address is not a lookup the counter hooks, and it is the design's "parent's child
       pointer"; stated here so that nobody reads the green as more than that.
