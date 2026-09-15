@@ -55,7 +55,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 142 -or $digest -ne '73174F6D034963849AE698E7979793E5723690543FAF3DEEC76055C0958B25C6') {
+if ($cases.Count -ne 143 -or $digest -ne '349D98CEFA2E378EB2F7543E7ACA118C633802AEB0DC4F9C99E8C4221D0AF8CE') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2327,6 +2327,9 @@ Invoke-Leaf "l2src\tests\unit_call_nested_index.lm2" "unit_call_nested_index" 4 
 # LmP0IndentStack is a foreign pointer type (INDENT_STACK_FOREIGN_DESIGN, 5e's repro
 # 23e2dbb7): stack\columns[idx] written and read back, a local allocated by cast; exit 5.
 Invoke-Leaf "l2src\tests\unit_indent_stack_field_index.lm2" "unit_indent_stack_field_index" 5 "probe"
+# c.sizeof of an element names the renamed formal or slot (5e's e3 pre-validation,
+# parser-l2 Stage e slice 3): c.sizeof(p[0]) and c.sizeof(cells[0]); exit 5.
+Invoke-Leaf "l2src\tests\unit_sizeof_element.lm2" "unit_sizeof_element" 5 "formal_width"
 # LmP0Document is a foreign pointer type like LmP0Frame (Stage B step 3): its
 # fields resolve as a formal and as a local.
 Invoke-Leaf "l2src\tests\unit_p0_document_field.lm2" "unit_p0_document_field" 0 "doc_field"
