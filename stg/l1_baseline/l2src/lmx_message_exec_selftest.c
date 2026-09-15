@@ -199,6 +199,29 @@ static int turn_root_count(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     InterlockedExchange(&g_root_turn_workers, (LONG)lmx_msg_exec_workers(rt));
     return lmx_msg_end_turn(rt, who, 1);
 }
+/* The thread's turn identity is the innermost turn and comes back to the outer one:
+ * a turn that runs one R0 turn of another runtime on this thread (as a library unit
+ * opened from inside a program's turn does) is still its own turn afterwards. */
+static LmxMsgRuntime *g_foreign_rt;
+static volatile LONG g_foreign_st;
+static LmxMsg *g_foreign_before;
+static LmxMsg *g_foreign_after;
+static int turn_foreign_root(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    (void)ctx;
+    g_foreign_before = lmx_msg_turn_self(rt);
+    InterlockedExchange(&g_foreign_st, (LONG)lmx_msg_root_turn(g_foreign_rt, turn_root_count, 0));
+    g_foreign_after = lmx_msg_turn_self(rt);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+/* The same rule for a stop: lmx_msg_exec_stop of a second runtime, run from inside a
+ * turn on this thread, clears only that runtime's identity and leaves the outer turn. */
+static int turn_foreign_stop(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    (void)ctx;
+    g_foreign_before = lmx_msg_turn_self(rt);
+    InterlockedExchange(&g_foreign_st, (LONG)lmx_msg_exec_stop(g_foreign_rt));
+    g_foreign_after = lmx_msg_turn_self(rt);
+    return lmx_msg_end_turn(rt, who, 1);
+}
 /* Stage 5 (d2b): R0's turn that runs the UI lane's step and records its status. */
 static volatile LONG g_ui_step_st;
 static int turn_root_ui_step(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
@@ -478,7 +501,6 @@ typedef struct StageJob {
     unsigned id1;
 } StageJob;
 static LmxMsgAddr g_nself_from;
-static LmxMsg *g_sched_drop;
 static LmxMsg *g_drive_drop;
 static LmxMsgRuntime *g_drive_mail_rt;
 static volatile LONG g_drive_exec_ok;
@@ -572,14 +594,6 @@ static void drive_close_mail_hook(LmxMsg *m) {
     SetEvent(g_mail_entered);
     w = WaitForSingleObject(g_mail_go, 5000);
     InterlockedExchange(&g_drive_hook_got_go, w == WAIT_OBJECT_0 ? 1 : 0);
-}
-static void sched_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
-    lmx_msg_test_after_sched_snap = 0;
-    (void)rt;
-    if (p != 0 && g_sched_drop != 0) {
-        lmx_msg_child_unlink(p, g_sched_drop);
-        g_sched_drop = 0;
-    }
 }
 static void drive_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
     (void)rt;
@@ -7778,48 +7792,6 @@ int main(int argc, char **argv) {
         }
         rti = lmx_msg_runtime_new();
         {
-            LmxMsgAddr p = 0, c1 = 0, c2 = 0;
-            LmxMsg *cm2;
-            memset(&any_ctx, 0, sizeof(any_ctx));
-            memset(&ui_ctx, 0, sizeof(ui_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &c1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &c2) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, c1, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, c2, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_host_post(rti, c1, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec sched-snap create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            lmx_msg_exec_unbind(rti, c2);
-            cm2 = lmx_msg_find(rti, c2);
-            g_sched_drop = cm2;
-            lmx_msg_test_after_sched_snap = sched_snap_drop_hook;
-            {
-                int sst = own_turn_in_root(rti, p, turn_sched_step, 0U);
-                if (sst != LMX_MSG_OK
-                    || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
-                    fprintf(stderr, "exec sched-snap step st=%d done=%ld\n",
-                        sst, (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
-                    lmx_msg_test_after_sched_snap = 0;
-                    g_sched_drop = 0;
-                    lmx_msg_runtime_delete(rti);
-                    return 1;
-                }
-            }
-            lmx_msg_test_after_sched_snap = 0;
-            g_sched_drop = 0;
-            fprintf(stderr, "exec wait: sched_step snap survives sibling unlink overlap\n");
-            lmx_msg_runtime_delete(rti);
-        }
-        rti = lmx_msg_runtime_new();
-        {
             enum { NIDLE = 64 };
             LmxMsgAddr p = 0, kids[NIDLE + 1];
             TurnCtx idle_ctx[NIDLE + 1];
@@ -8999,6 +8971,145 @@ int main(int argc, char **argv) {
                 return 1;
             }
             fprintf(stderr, "exec wait: the UI step runs in R0's turn as the UI lane's write and only takes; the host drains\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (d3), 19.28.R2.2 and model 29: a step is only its parent's act.
+             * From main outside any turn the host is R0's lane between turns, whose work
+             * is maintenance and the drain, never a step: run_child_turn (on P's child,
+             * and on a bound R0), sched_step, exec_ui_step and map_child refuse with
+             * nothing run, and R0's turn is started only by the bootstrap. */
+            LmxMsgAddr p = 0, a = 0, b = 0, r0;
+            int st_child, st_sched, st_ui, st_root, st_map, st;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_root_count, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, b, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec host step create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            r0 = lmx_msg_root_addr(rti);
+            InterlockedExchange(&g_root_turns, 0);
+            st_child = lmx_msg_run_child_turn(rti, a);
+            st_sched = lmx_msg_sched_step(rti, p);
+            st_ui = lmx_msg_exec_ui_step(rti);
+            st_root = -1;
+            if (lmx_msg_exec_bind(rti, r0, turn_root_count, 0, LMX_MSG_AFFINITY_ANY) == LMX_MSG_OK) {
+                st_root = lmx_msg_run_child_turn(rti, r0);
+                (void)lmx_msg_exec_unbind(rti, r0);
+            }
+            st_map = lmx_msg_map_child(rti, p, b);
+            if (st_child != LMX_MSG_INVALID || st_sched != LMX_MSG_INVALID || st_ui != LMX_MSG_INVALID
+                || st_root != LMX_MSG_INVALID || st_map != LMX_MSG_INVALID
+                || InterlockedCompareExchange(&g_root_turns, 0, 0) != 0) {
+                fprintf(stderr, "exec host step refused child=%d sched=%d ui=%d root=%d map=%d turns=%ld\n", st_child, st_sched,
+                    st_ui, st_root, st_map, (long)InterlockedCompareExchange(&g_root_turns, 0, 0));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            st = lmx_msg_root_turn(rti, turn_root_count, 0);
+            if ((st != LMX_MSG_OK && st != 1) || InterlockedCompareExchange(&g_root_turns, 0, 0) != 1) {
+                fprintf(stderr, "exec host step bootstrap st=%d turns=%ld\n", st, (long)InterlockedCompareExchange(&g_root_turns, 0, 0));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: from main the host steps nothing (child, R0, sched, UI and map refuse); the bootstrap starts R0's turn\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* The thread's one turn identity (model 29): R0's child P runs a turn that
+             * runs one R0 turn of a second runtime on this thread, as a library unit
+             * opened from inside a program's turn does (stage 5 (a)). The inner turn
+             * ends and P's turn is the thread's turn again: turn_self(rt) is P before
+             * and after, so turn_slot and the running-flag polls still see P. */
+            LmxMsgAddr p = 0;
+            unsigned cell[2];
+            int st;
+            g_foreign_rt = lmx_msg_runtime_new();
+            if (rti == 0 || g_foreign_rt == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, p, turn_foreign_root, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec foreign turn create\n");
+                if (g_foreign_rt != 0) {
+                    lmx_msg_runtime_delete(g_foreign_rt);
+                }
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_foreign_before = 0;
+            g_foreign_after = 0;
+            InterlockedExchange(&g_foreign_st, -1);
+            InterlockedExchange(&g_root_turns, 0);
+            cell[0] = p;
+            cell[1] = (unsigned)LMX_MSG_INVALID;
+            st = lmx_msg_root_turn(rti, turn_step_child_x, cell);
+            (void)lmx_msg_exec_unbind(rti, p);
+            if ((st != LMX_MSG_OK && st != 1) || ((int)cell[1] != LMX_MSG_OK && (int)cell[1] != 1)
+                || (InterlockedCompareExchange(&g_foreign_st, 0, 0) != LMX_MSG_OK && InterlockedCompareExchange(&g_foreign_st, 0, 0) != 1)
+                || InterlockedCompareExchange(&g_root_turns, 0, 0) != 1
+                || g_foreign_before == 0 || g_foreign_before->addr != p || g_foreign_after != g_foreign_before) {
+                fprintf(stderr, "exec foreign turn identity root=%d step=%d foreign=%ld turns=%ld before=%u after=%u\n", st, (int)cell[1],
+                    (long)InterlockedCompareExchange(&g_foreign_st, 0, 0), (long)InterlockedCompareExchange(&g_root_turns, 0, 0),
+                    g_foreign_before != 0 ? (unsigned)g_foreign_before->addr : 0U, g_foreign_after != 0 ? (unsigned)g_foreign_after->addr : 0U);
+                lmx_msg_runtime_delete(g_foreign_rt);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: a turn that runs another runtime's R0 turn on its thread is still the thread's turn afterwards\n");
+            lmx_msg_runtime_delete(g_foreign_rt);
+            g_foreign_rt = 0;
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* The same rule for lmx_msg_exec_stop: P's turn stops a second runtime whose
+             * contexts are started; the stop clears that runtime's own identity and
+             * turn_self(rt) is still P afterwards. */
+            LmxMsgAddr p = 0;
+            unsigned cell[2];
+            int st;
+            g_foreign_rt = lmx_msg_runtime_new();
+            if (rti == 0 || g_foreign_rt == 0 || lmx_msg_exec_start_contexts(g_foreign_rt) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, p, turn_foreign_stop, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec foreign stop create\n");
+                if (g_foreign_rt != 0) {
+                    lmx_msg_runtime_delete(g_foreign_rt);
+                }
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_foreign_before = 0;
+            g_foreign_after = 0;
+            InterlockedExchange(&g_foreign_st, -1);
+            cell[0] = p;
+            cell[1] = (unsigned)LMX_MSG_INVALID;
+            st = lmx_msg_root_turn(rti, turn_step_child_x, cell);
+            (void)lmx_msg_exec_unbind(rti, p);
+            if ((st != LMX_MSG_OK && st != 1) || ((int)cell[1] != LMX_MSG_OK && (int)cell[1] != 1)
+                || InterlockedCompareExchange(&g_foreign_st, 0, 0) != LMX_MSG_OK
+                || g_foreign_before == 0 || g_foreign_before->addr != p || g_foreign_after != g_foreign_before) {
+                fprintf(stderr, "exec foreign stop identity root=%d step=%d stop=%ld before=%u after=%u\n", st, (int)cell[1],
+                    (long)InterlockedCompareExchange(&g_foreign_st, 0, 0),
+                    g_foreign_before != 0 ? (unsigned)g_foreign_before->addr : 0U, g_foreign_after != 0 ? (unsigned)g_foreign_after->addr : 0U);
+                lmx_msg_runtime_delete(g_foreign_rt);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: a turn that stops another runtime on its thread is still the thread's turn afterwards\n");
+            lmx_msg_runtime_delete(g_foreign_rt);
+            g_foreign_rt = 0;
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

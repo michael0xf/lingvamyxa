@@ -2079,3 +2079,66 @@ Measured on d6/stage5d2b (on d2's dc3f6b18) in a private worktree.
 
 Gates:
 2bfce366 (the merge of d6/stage5d2b 2f9be580 over a4e11bb5): run_gates "gates GREEN: 11 of 11 in 335s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 24 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (d3): a step is only the parent's act
+
+Accepted by e2 (2026-09-14). Answers: Q1 (a) one static run-one core with two authority front-ends; Q2 (b) only the
+bootstrap starts R0's turn. It lands after 0c's migration of every stepping site from main: waves 1-3, shape (a),
+the UI redo, family_close_32, family_release_17 and tests/l2/sched_snapshot.c.
+
+Scope (e2's rulings):
+- After (d), the host outside any turn is R0's lane between turns. Its work is maintenance (drive), the drain
+  (host_drain) and, until (f), runtime_delete; never a step. A step of any Message is its own parent's act on the
+  parent's lane (19.28.R2.2, model 29), and exec_ui_step is the UI lane's step, R0's to give.
+- A stopped Message has no lane (19.29.6 with decision 17). Its children are closed by the chain: maintenance for an
+  idle empty-inbox closer (19.29.7.1, lines 13073-13074: "its owning executor applies the close/cleanup path without
+  starting a new user turn"), their own context if mapped, or the re-root under R0 at the parent's dispose and R0's
+  step. d3 adds no mechanism for them.
+- Unchanged: bind's authority (mapping_authority_locked), drive and host_drain outside any turn, and the lane
+  oracle's turn == 0 pass.
+
+What moved (lm1 and lm2 mirrored):
+- exec.c: run_child_turn's claim, run and release became static child_turn_core(rt, child, bootstrap).
+  - The public lmx_msg_run_child_turn passes bootstrap = 0: the child's parent turn must be held, so a parent-0
+    Message (R0) is refused.
+  - lmx_msg_run_entry_turn keeps its own checks (host thread, outside any turn, R0 or an unbound direct child of R0,
+    not bound), binds with launch 0, and calls the core with bootstrap = 1. root_turn goes through it unchanged.
+- exec.c lmx_msg_exec_ui_step: holding_turn(R0), else INVALID.
+- exec.c lmx_msg_map_child: holding_turn(parent), else INVALID.
+- lmx_message.lm1 lmx_msg_sched_step and lmx_message.lm2 msg_sched_step: holding_turn(parent), else INVALID.
+
+Case: the executor selftest "exec host step".
+- R0's child P has children A (bound, turn_root_count) and B (bound).
+- From main outside any turn: run_child_turn(A), sched_step(P), exec_ui_step, run_child_turn on a bound R0, and
+  map_child(P, B) each return INVALID, and no turn runs.
+- root_turn then runs R0's turn once: the bootstrap still starts it.
+
+Open after d3: sched_step's p = 0 pick (lmx_msg_sched_pick_host_child). The plan was that a parent whose turn is held
+always has its slot after d3, so the pick would die with the host path. A tripwire on d3's green tree (83f751b3,
+exit(97) at the pick's entry) says otherwise:
+- the executor selftest still reaches it, in run_port_message and in run_lmx -Suite Message, from sched_step inside P's
+  own turn in the mix case (own_turn_in_root with turn_sched_step), where lmx_msg_turn_slot(P) returned 0;
+- scenario36, sched_record, liveness, entry_turn, history, roots_stale, visit and c_scanners never reach it.
+The cause, measured with a print on every set_tls of the pick's thread: sched_step's first step creates P's scheduler
+record, a library unit on its own runtime, whose run_one restored its own old TLS and so nulled lmx_turn_msg (one
+thread-local shared by every runtime on the thread) while P's exec still held P ("set_tls e=..7dd0 rt=..37f0 who=0
+turn_msg=0" after P's "set_tls e=..ef20 rt=..2e90 who=3", then "host pick parent=3 raw=0"). A runtime gap, not an
+in-turn path: d6/stage5-turnmsg (84657ae3, e1b5303f) makes run_one, exec_unbound_close and lmx_msg_exec_stop restore
+the exact identity they replaced, red first with "exec foreign turn" and "exec foreign stop". With it, the tripwire is
+unreached by run_port_message and run_lmx -Suite Message, so the pick and its cursor argument are deleted in a follow-up
+with that measurement.
+
+Reds:
+Measured on d6/stage5d3 in a private worktree (wtp).
+- Red first: the executor selftest's "exec host step" case on the tip's unchanged exec.c and lm1/lm2 (d7f7e813's code). run_port_message -LaneCheck exits 1 with "exec host step refused child=0 sched=8 ui=8 root=0 map=0 turns=2": from main outside any turn, run_child_turn on P's child and on a bound R0 ran (two turns), sched_step and exec_ui_step returned EMPTY instead of refusing, and map_child mapped the child.
+- Readers on the d3 WIP b5f1e6cd before 0c's final migration (each gate run alone, past failures):
+  - run_port_message -LaneCheck and run_lmx -Suite Message stop at the executor selftest's first UI step from main, "ui_step st=2 recvd=0 / ui_step failed while slow active" (moved into R0's turn by 0c's 24a208a5);
+  - run_model_scenario36 is red at family_close_32, "FAIL C's ordinary turn had an effect and published a reply" and the checks after it (moved by 0c's 2892fac1, reading (1)); the runner stops at that test, so the ones after it (family_release_17 among them) were not reached;
+  - run_entry_turn passes, 24 checks: library-unit opens still go through the bootstrap's core;
+  - sched_record, history, roots_stale, visit, liveness, send_local, family_handoff and c_scanners pass.
+- The tree-wide grep by 0c found two more host-stepping files outside the inventory: family_release_17 (ten run_child_turn calls from main; migrated by 0c) and tests/l2/sched_snapshot.c (ungated, not compiling since e4c1dc70, pinning only the C host pick; deleted).
+- With a8127b79 and 0c's claude-0c/stage5d-exec-final e66f8b1e merged into d3 (83f751b3), run_model_scenario36 passes all nine: scenario36 49/0, delivery 27/0, checks_19_29_6 32/0, liveness_33 61/0, family_close_32 24/0, family_release_17 51/0, ui_lane_3d 22/0, orphan_mapped_17 17/0, root_ingress_5b 11/0; and run_port_message -LaneCheck reports "lmx_message parity PASS ... 100 methods redirected", with the case's exec wait line.
+- Falsifier: on that tree, with the host branch put back into child_turn_core (`bootstrap == 0 && lmx_msg_host_is_owner(rt) == 0 && (...)`; exec.c restored from a byte copy, hash equal), run_port_message -LaneCheck exits 1 at "exec host step refused child=0 sched=2 ui=2 root=0 map=2 turns=2": run_child_turn on P's child and on a bound R0 ran again from main (two turns), while sched_step, exec_ui_step and map_child keep refusing through their own checks.
+- 0c's d3 flip falsifier for family_release_17 (local scratch of b5f1e6cd with e66f8b1e): the migrated test passes 51/0; restored to its unmigrated text it fails at "FAIL C1 settled at its own end-turn: success, not running, handoff-ready", the settle check right after the first refused run_child_turn from main.
+
+Gates:
+f096e4fc (the merge of d6/stage5d3 83f751b3 over 864cd580): run_gates "gates GREEN: 11 of 11 in 333s" with lmx_model_family_close_32_selftest 24/0 lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 24 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".

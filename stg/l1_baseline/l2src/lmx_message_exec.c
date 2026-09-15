@@ -77,7 +77,6 @@ typedef struct LmxMsgExecBind {
 void (*lmx_msg_test_mail_locked)(LmxMsg *m);
 void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 void (*lmx_msg_test_after_recv_pin)(LmxMsgRuntime *rt, LmxMsg *m);
-void (*lmx_msg_test_after_sched_snap)(LmxMsgRuntime *rt, LmxMsg *p);
 void (*lmx_msg_test_after_drive_snap)(LmxMsgRuntime *rt, LmxMsg *p);
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
@@ -798,117 +797,6 @@ int lmx_msg_method_clone(LmxMsg *dest, LmxOwnedRange *source) {
 }
 
 
-int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned cursor, unsigned *out_addr) {
-    LmxMsg *p;
-    LmxMsg **tab;
-    LmxMsg *ch;
-    LmxMsg *start;
-    size_t cap = 0;
-    size_t n = 0;
-    size_t i;
-    int pass;
-    int pin_p;
-    unsigned addr = 0U;
-    if (out_addr != 0) {
-        *out_addr = 0U;
-    }
-    if (rt == 0 || parent == 0U || out_addr == 0) {
-        return LMX_MSG_INVALID;
-    }
-    lmx_msg_exec_lock(rt);
-    p = msg_at_addr(rt, parent);
-    if (p == 0) {
-        lmx_msg_exec_unlock(rt);
-        return LMX_MSG_INVALID;
-    }
-    for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
-        if (cap == SIZE_MAX / sizeof(*tab)) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_NOMEM;
-        }
-        cap += 1;
-    }
-    tab = 0;
-    if (cap > 0) {
-        tab = (LmxMsg **)malloc((size_t)cap * sizeof(LmxMsg *));
-        if (tab == 0) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_NOMEM;
-        }
-    }
-    pin_p = lmx_msg_endp_retain(p);
-    if (pin_p == 0) {
-        free(tab);
-        lmx_msg_exec_unlock(rt);
-        return LMX_MSG_NOMEM;
-    }
-    /* Decision 18: the parent's step, run by the host outside any turn with the
-     * parent's authority (the lane oracle's pass rule). It reads the direct
-     * children's own ready flags in family order, starting after the cursor
-     * the caller read from the parent's record and wrapping once. Stage 3c-2b:
-     * it writes nothing of the parent's; lmx_msg_sched_step writes the cursor
-     * into the record on the parent's lane. */
-    start = p->first_child;
-    for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
-        if (ch->addr == cursor) {
-            start = ch->next_sibling;
-            break;
-        }
-    }
-    for (pass = 0; pass < 2; pass++) {
-        for (ch = pass == 0 ? start : p->first_child; ch != 0 && (pass == 0 || ch != start); ch = ch->next_sibling) {
-            if (ch->mapped != 0 || ch->turn == 0 || ch->ready == 0
-                || ch->state == LMX_MSG_STATE_STOPPED
-                || ch->state == LMX_MSG_STATE_DEAD
-                || ch->state == LMX_MSG_STATE_RELEASED) {
-                continue;
-            }
-            if (lmx_msg_endp_retain(ch) == 0) {
-                while (n > 0) {
-                    n -= 1;
-                    lmx_msg_endp_release(tab[n]);
-                }
-                lmx_msg_endp_release(p);
-                free(tab);
-                lmx_msg_exec_unlock(rt);
-                return LMX_MSG_NOMEM;
-            }
-            tab[n] = ch;
-            n += 1;
-        }
-    }
-    lmx_msg_exec_unlock(rt);
-#if defined(LMX_MSG_EXEC_TEST)
-    if (lmx_msg_test_after_sched_snap != 0) {
-        lmx_msg_test_after_sched_snap(rt, p);
-    }
-#endif
-    for (i = 0; i < n && addr == 0U; i++) {
-        int ok;
-        int closing;
-        unsigned a;
-        ch = tab[i];
-        lmx_msg_exec_lock(rt);
-        ok = (ch->parent_msg == p && ch->mapped == 0 && ch->turn != 0 && ch->ready != 0
-            && ch->state != LMX_MSG_STATE_STOPPED
-            && ch->state != LMX_MSG_STATE_DEAD
-            && ch->state != LMX_MSG_STATE_RELEASED);
-        closing = ch->closing;
-        a = ch->addr;
-        lmx_msg_exec_unlock(rt);
-        if (ok != 0 && (lmx_msg_mail_inbox_has_input(ch) != 0 || closing != 0)) {
-            addr = a;
-        }
-    }
-    for (i = 0; i < n; i++) {
-        lmx_msg_endp_release(tab[i]);
-    }
-    lmx_msg_endp_release(p);
-    free(tab);
-    *out_addr = addr;
-    return LMX_MSG_OK;
-}
-
 int lmx_msg_drive_tree(LmxMsgRuntime *rt, LmxMsg *m);
 
 static int drive_walk_list(LmxMsgRuntime *rt, LmxMsg *parent, LmxMsg *head) {
@@ -1426,6 +1314,18 @@ static void set_tls(LmxMsgExec *e, LmxMsgAddr who) {
         lmx_turn_msg = 0;
         lmx_turn_running = 0;
     }
+}
+
+/* The thread's one turn identity (model 29) is lmx_turn_msg with lmx_turn_running,
+ * shared by every runtime on the thread, while the held turn is per exec (e->tls).
+ * A nested turn restores the exact identity it replaced, not one recomputed from its
+ * own exec's old TLS: an R0 turn of another runtime run from inside a turn on this
+ * thread (a library unit opened from a program's turn, stage 5 (a)) leaves the outer
+ * turn the thread's turn again. */
+static void restore_turn(LmxMsgExec *e, LmxMsgAddr old, LmxMsg *old_msg, uint_fast8_t *old_running) {
+    set_tls(e, old);
+    lmx_turn_msg = old_msg;
+    lmx_turn_running = old_running;
 }
 
 
@@ -2565,6 +2465,8 @@ static void requeue_if_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     LmxMsgExec *e = exof(rt);
     LmxMsgAddr old;
+    LmxMsg *old_msg;
+    uint_fast8_t *old_running;
     LmxMsg *m;
     int st;
     int live = 0;
@@ -2575,6 +2477,8 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     saved = lmx_turn_root;
     root.prev = saved;
     old = get_tls(e);
+    old_msg = lmx_turn_msg;
+    old_running = lmx_turn_running;
     set_tls(e, snap->addr);
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, snap->addr);
@@ -2607,7 +2511,7 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         }
         lmx_msg_exec_unlock(rt);
         turn_root_pop(&root, saved);
-        set_tls(e, old);
+        restore_turn(e, old, old_msg, old_running);
         native_leave_addr(rt, snap->addr);
         requeue_if_runnable(rt, snap->addr);
         return st;
@@ -2637,7 +2541,7 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         }
         lmx_msg_exec_unlock(rt);
         turn_root_pop(&root, saved);
-        set_tls(e, old);
+        restore_turn(e, old, old_msg, old_running);
         native_leave_addr(rt, snap->addr);
         return st;
     }
@@ -2681,7 +2585,7 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     lmx_msg_exec_wake_locked(rt);
     lmx_msg_exec_unlock(rt);
     turn_root_pop(&root, saved);
-    set_tls(e, old);
+    restore_turn(e, old, old_msg, old_running);
     native_leave_addr(rt, snap->addr);
     requeue_if_runnable(rt, snap->addr);
     return st;
@@ -3286,7 +3190,9 @@ int lmx_msg_exec_ui_step(LmxMsgRuntime *rt) {
     if (e == 0) {
         return LMX_MSG_INVALID;
     }
-    if (lmx_msg_host_is_owner(rt) == 0) {
+    /* Stage 5 (d3): the UI lane is R0's child, so its step is R0's act, run only
+     * from R0's turn; the host outside any turn steps nothing. */
+    if (rt->root == 0 || lmx_msg_exec_holding_turn(rt, rt->root->addr) == 0) {
         return LMX_MSG_INVALID;
     }
     /* Stage 5 (d2b): the UI step only takes; the drain is the host's maintenance
@@ -3333,6 +3239,8 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
     int st;
     LmxMsgAddr old;
+    LmxMsg *old_msg;
+    uint_fast8_t *old_running;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
     }
@@ -3351,12 +3259,14 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     }
     e->unbound_held = addr;
     old = get_tls(e);
+    old_msg = lmx_turn_msg;
+    old_running = lmx_turn_running;
     set_tls(e, addr);
     lmx_msg_exec_unlock(rt);
     st = lmx_msg_end_turn(rt, addr, 1);
     lmx_msg_exec_lock(rt);
     e->unbound_held = 0;
-    set_tls(e, old);
+    restore_turn(e, old, old_msg, old_running);
     /* Stage 5 (d1d), decision 17 rule 1: the end-turn above is the bookkeeping of
      * a Message with no lane, written by the maintaining lane (drive); the borrowed
      * TLS identity is that bookkeeping's spelling, not a turn, and no handler runs.
@@ -3417,6 +3327,8 @@ static int ctx_visit_stop_reset(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
 
 int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
+    LmxMsg *old_msg;
+    uint_fast8_t *old_running;
     if (e == 0) {
         return LMX_MSG_INVALID;
     }
@@ -3440,7 +3352,12 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     bind_reap_join_all(rt);
     e->nworkers = 0;
     lmx_msg_exec_lock(rt);
-    set_tls(e, 0);
+    /* The stop clears this exec's TLS and restores the thread's turn identity it
+     * replaced: a stop run from inside another runtime's turn on this thread leaves
+     * that turn the thread's turn (restore_turn). */
+    old_msg = lmx_turn_msg;
+    old_running = lmx_turn_running;
+    restore_turn(e, 0, old_msg, old_running);
     (void)rec_walk_locked(e, ctx_visit_stop_reset, 0);
     e->unbound_held = 0;
     e->stopped = 1;
@@ -3534,31 +3451,23 @@ int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     return LMX_MSG_OK;
 }
 
-int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
-    LmxMsgExec *e = exof(rt);
+/* Stage 5 (d3), 19.28.R2.2 and model 29: one turn of a bound, unmapped child on
+ * this thread (claim its record, run, release). A step is its parent's act on the
+ * parent's lane: the child's parent turn must be held. R0 has no parent; its turn
+ * is started only by the bootstrap, run_entry_turn, which has made its own checks
+ * and passes bootstrap = 1. */
+static int child_turn_core(LmxMsgRuntime *rt, LmxMsgAddr child, int bootstrap) {
     LmxMsg *m;
     LmxMsgExecBind snap;
-    LmxMsgAddr par;
-    int owner;
     int st;
     LmxMsgExecBind *rec;
-    if (e == 0 || child == 0U) {
-        return LMX_MSG_INVALID;
-    }
-    owner = lmx_msg_host_is_owner(rt);
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, child);
     if (m == 0 || m->turn == 0 || m->mapped != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    par = m->parent;
-    if (par != 0U) {
-        if (lmx_msg_exec_holding_turn(rt, par) == 0 && (owner == 0 || lmx_msg_exec_holding_any(rt) != 0)) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_INVALID;
-        }
-    } else if (owner == 0) {
+    if (bootstrap == 0 && (m->parent == 0U || lmx_msg_exec_holding_turn(rt, m->parent) == 0)) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -3589,6 +3498,13 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     return st == 0 ? LMX_MSG_OK : st;
 }
 
+int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
+    if (exof(rt) == 0 || child == 0U) {
+        return LMX_MSG_INVALID;
+    }
+    return child_turn_core(rt, child, 0);
+}
+
 /* Stage 5 step (a): the bootstrap of a process entry. On the host thread outside
  * any turn, bind addr to turn, run exactly one turn of it on this thread, and
  * unbind; returns the run's status. Stage 5 (d1): addr is R0 or an unbound direct
@@ -3614,7 +3530,7 @@ int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, 
     if (st != LMX_MSG_OK) {
         return st;
     }
-    st = lmx_msg_run_child_turn(rt, addr);
+    st = child_turn_core(rt, addr, 1);
     (void)lmx_msg_exec_unbind(rt, addr);
     return st;
 }
@@ -3637,10 +3553,10 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
     if (e == 0 || parent == 0U || child == 0U) {
         return LMX_MSG_INVALID;
     }
+    /* Stage 5 (d3), 19.28.R2.2: mapping a child to a context is its parent's act,
+     * run only from the parent's own turn. */
     if (lmx_msg_exec_holding_turn(rt, parent) == 0) {
-        if (lmx_msg_host_is_owner(rt) == 0 || lmx_msg_exec_holding_any(rt) != 0) {
-            return LMX_MSG_INVALID;
-        }
+        return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
     p = msg_at_addr(rt, parent);
