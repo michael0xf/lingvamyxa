@@ -5428,3 +5428,13 @@ guard 1; mapping_authority_locked's other caller is lmx_msg_exec_unbind
 at 2424, not map_child, corrected); sonnet/s4-guard-checks b84cb353 (the
 exec_bind check reworded as a guard-holds check; emergency_cancel's
 red check untouched). No builds run; the hold stands until e9's record.
+Ticket to b5 (the coordinator, 2026-09-15), code, to start at S2's "landed":
+S4's one guard on sonnet/s4-guard off the S2-landed tip: emergency_cancel
+refuses with INVALID unless the caller is the target's parent's lane
+(walking settled ancestors as mapping_authority_locked does) or the
+host outside any turn; b5's guard checks merged (emergency_cancel's
+turns green, exec_bind's stays green); the 29 test callers kept passing
+or read one by one; measured with run_lmx -Suite Cancel and Exec,
+run_model_scenario36, port_message plain and -LaneCheck; falsifier: the
+condition inverted on a scratch commit makes the check red again. S4
+then lands with the union base.
