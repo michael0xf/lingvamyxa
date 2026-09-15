@@ -978,6 +978,28 @@ prototype, largest first.
    called by lmx_message left "undefined reference to lmx_root_record_*";
    Build-L2RuntimeUnits gains -Exclude and run_sched_record passes its own
    unit (one copy of each unit in the link).
+   Step (f) scope given to the lead (2026-09-14, design to follow in the (a)
+   format after (e) lands): runtime_delete becomes R0's close, the
+   decision-17 chain from R0 down (its whole subtree released, running
+   descendants and retained orphans included, never at process end), then
+   R0's slot, then the runtime; today's slot loop over rt->slots is the
+   measure of what the chain must reach (a residue is a leak, not a loop
+   to keep); the host forms retire: host_is_owner as an authority (each
+   API says what R0's lane means without it and what stays a host-thread
+   check for OS primitives), the host lock and host_wait ((b)'s Q4 revisited:
+   R0's lane wait or the loop's), the ingress V0 flag and runtime_shutdown
+   if R0's close covers them; the lifecycle authority's host form goes, so
+   family_handoff's section-34 half takes the strict form (the chain's
+   first step inside P's adopt of C, the per-step identities read from the
+   end state or a TEST-only hook in settle_child); (f) leaves runtime_new
+   and runtime_delete as the only host calls, for the R0 loop step after
+   it (one input per turn, drain and maintenance between turns, the UI
+   child's turn adapter, the bootstrap main inside R0's loop). Acceptance
+   first: a running tree (a mapped child on its context, a retained failed
+   orphan, a pending UI request) deleted with every slot and arena freed by
+   the chain, the free wrap counting exactly the tree's blocks, the worker
+   joined; runtime_delete from inside a turn refusing; (b) and (e)
+   unchanged.
 
 ## 4. Acceptance
 
