@@ -70,8 +70,10 @@ HELD 2026-09-15 under Mikhail's standing rule, a contradiction sent through the 
       inbox), owner 5 with admits=2 wakes=3, and owner 7 with admits=0 wakes=1 input=0 ready=1 (the kick wakes a lane
       that never had an admission).
     - With the wake-all removed: the ctx_visit_wake line goes and the three exec_start_map_kick groups stay.
-    - No oracle miscount found. Limit: the probe keeps 64 (site, owner) pairs and hit the cap in both runs, so more
-      sites may exist beyond it.
+    - Corrected by 57: the probe records only whether input is present, not how many envelopes wait. What it shows
+      is that no line has input present with zero counted admissions. A strict miscount check needs the inbox
+      length beside admits, which comes with the uncapped re-probe at S3's change. Limit: the probe keeps 64
+      (site, owner) pairs and hit the cap in both runs, so more sites may exist beyond it.
     The design answer: under Y a context worker, when it starts, takes from its own mailbox before it first waits.
     exec_start_map_kick's re-ready of admitted lanes and its wake of unadmitted ones therefore have no role and go
     with S3, together with the wake-all. The S3 red must also be re-probed without the 64-pair cap.
