@@ -5915,3 +5915,29 @@ the tip merged with the probe plus the union base via land_base3.sh
 plus lmx_cancel, the UAF kit's 165 runs and scenario36; falsifier one
 lock/unlock pair put back around one census site (exec_lock_calls >= 1)
 and, for S6-2, one retain put back.
+S6 red measured (2026-09-15): the lead's probe runner on d6/lock-s6-red
+695d54fc (8eeb094f plus l2src/run_lock_s6_probe.ps1, two commits, builds
+nothing), by the lead and by the coordinator in exec-3a (8eeb094f an
+ancestor): "S6 probe: exec_lock_calls=601 exec_lock_decl=11
+host_lock=43 exec_fields=27 | refs=349 runtime_lists=36", S6-1 RED,
+S6-2 RED, exit 1 in 2 s; -Part 1 or -Part 2 makes only that part decide
+the exit. Patterns: literal substrings named in the script header over
+the tracked l2src sources; exec_lock_calls 601 = lm1 197, lm2 197,
+exec.c 175, exec.h 2, the exec selftest 10, checks_19_29_6 20 (lm1's
+197 = 61 lock + 136 unlock lines by hand); exec_lock_decl the e->lock
+lines plus LmxMsgExec's lock field; host_lock the call lines, host.c's
+h->lock and non-atomic h->shutting_down, LmxMsgHostSync's lock field;
+exec_fields exec.c's ->nworkers/contexts_live/stopping/stopped/no_retire/
+unbound_held without __atomic_; refs the retain/release/refs(, ->refs,
+\refs, InterlockedCompareExchange and LmxMsg's refs field;
+runtime_lists LmxMsgRuntime's slots and n fields plus ->slots, \slots,
+->alloc_next, \alloc_next. A probe bug fixed before the hand-off (the
+first commit aa309dd7 missed "LmxMsg *slots;"). S6's section census
+corrected to b5's second re-base dd90673b at 8eeb094f (82 sites,
+drive_walk_roots' own exec lock and addr_take included). S6's
+acceptance record: red 695d54fc (601/11/43/27 | 349/36); green 0 on
+each part's tip merged with the probe plus the union base
+(land_base3.sh) plus lmx_cancel, the UAF kit's 165 and scenario36;
+falsifier one hold put back (S6-1), one retain put back (S6-2). S6-1's
+code may start as edits now; the builds after b5's pre-read and e9's
+record.
