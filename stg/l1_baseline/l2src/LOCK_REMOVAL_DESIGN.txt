@@ -155,8 +155,16 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
     - no wake, no wait, no notify anywhere. Going, with nothing in their place: run_one's wake-all,
       exec_start_map_kick, the launch wake, and the three worker-lifecycle signals (bind_wait_retire, the unbind
       join, stop's retire walk), since no worker ever waits.
-    - Red: 0c's oracle, checking that no wake exists: any wake site at all is red. Red today on the three sources.
-    - Green: the oracle reports no wake site in the defaults and under -LaneCheck; the executor selftest green.
+    - Red: 0c's oracle, checking that no wake exists: any wake site at all is red. Measured (57, 2026-09-15,
+      claude-0c/s3-wake-oracle 022b1136 on 7200294b, cold Win32): run_port_message -LaneCheck red in 14 s on
+      "LANE WAKE FAIL site=ctx_visit_wake owner=3" with 0 LANE WRITE FAIL; plain green in 53 s (parity PASS); a
+      print-once-per-site probe without abort finds 11 wake sites firing in the executor selftest, identical in all
+      four stderr files: bind_reap_push, ctx_visit_wake, host_shutdown, host_wake, join_bind_worker, launch,
+      launch_gate_go, launch_gate_refuse, stop_event, stop_retire_walk, wake_addr_locked. The pthread paths are not
+      built. The oracle lands with S3's change, not before (it reddens lane_oracle).
+    - Green: all 11 removed: -LaneCheck with no LANE WAKE FAIL, the probe with 0 LANE WAKE SITE lines, the executor
+      selftest green. The list is S3's deletion list (coordinator, recorded on main). The pthread paths are not built
+      on this machine; S3's note names their wake and condition sites as removed by the same diff.
 
 M. The sequential mapping removed (X), after S3 and before S4.
     Mikhail on 5.5, verbatim (2026-09-15): "мы же обсудили миллион раз. Закрытие родителя это авария. _Каждый ребенок
