@@ -3759,3 +3759,15 @@ the lead designs it in the (a) format after S3's "landed", ahead of M.
 And on 57: the helper 0c is back in a restarted session (id
 6d55a058-ba1a-4a63-bfd4-793291f1f3bc, its own words relayed by Mikhail);
 the coordinator relays the pin and the verify-run ticket to it.
+0c is back as lingvamyxa-e9 (2026-09-15; identity confirmed: helper 0c,
+session 6d55a058, owner of the seed branch a30ed131, land_seed.sh and
+install_pin.ps1). It verified the relay (a30ed131 an ancestor of
+c063fd00, the integration tip; the pin binary hashing 0B3D85B3... at
+298308 bytes) and installed the pin with install_pin.ps1 into all 12
+wt0c_* worktrees with a stg gen2 dir (722AC86E to 0B3D85B3, each copy
+re-hashed); caveat: those trees' branches predate (c) and still carry
+L1_PIN.txt 722AC86E, so a pinned runner there throws on the mismatch
+until each branch merges integration; its window scripts build fresh
+trees on current bases. Its verify-only land_seed.sh c063fd00 waits for
+the lead's machine slot after the S3 measurement and landing; then the
+pin re-installed and the filled plan entry.
