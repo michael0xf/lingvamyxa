@@ -4052,3 +4052,11 @@ O1/O2 land; ruled: it is pointed at Add-L2RuntimeSupport in the same
 landing rather than patched by three lines. b5 also reported that its
 first draft used condensed lists and scored 38 on its own falsifier, and
 was rewritten to quote every line before sending.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only: the S5 inventory
+("runtime lists go"), LOCK_REMOVAL_S5_LISTS.txt on sonnet/s5-lists: at
+c063fd00 every field of LmxMsgRuntime and LmxMsgExec and any file-static
+table holding a collection or count spanning more than one Message,
+file:line, what it holds, who appends and who reads (lanes), the FIELDS
+row, and its fate (DEL with a named stage, or data of a named Message's
+arena: the parent, R0, the L3 Thread itself); any list read by a lane
+other than its owner's after S4 flagged as a contradiction to stop on.
