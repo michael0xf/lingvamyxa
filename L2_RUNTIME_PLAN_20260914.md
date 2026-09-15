@@ -4603,3 +4603,11 @@ wt0c_oneroot absent to 0B3D85B3 on both, wt0c_oneroot_gate after its
 gate run E7B20A6A/5EF62F14 to 0B3D85B3; the 13 old-layout wt0c_* trees
 untouched, now e9's ticket to retire (name, branch, last pushed hash)
 keeping only the trees used on the new layout, re-based onto 00b04751.
+M started (the lead, 2026-09-15): d6/lock-removal df60ff5d, M's code sites
+at 80101431 plus the decision that the core creates no UI lane (mixa
+builds it as an ordinary child of R0, launched through map_child), and
+ba1aa1ad recording the coordinator's red on 199dab84; d6/m-sequential
+594f0668 = integration 00b04751 plus 199dab84. Next the sites go and the
+tests convert under the no-wait rule, then -LaneCheck, the plain run, a
+one-site falsifier and the gates. b5's standing review of M's section
+starts now against its M and S2 files.
