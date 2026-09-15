@@ -1,0 +1,208 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# Lock removal O1 acceptance (d6/lock-removal LOCK_REMOVAL_DESIGN.txt, stage O, O1;
+# spec 19.29.2: every Message owns one arena, its blocks and registered domains).
+# An allocation made through the turn arena is one block of the turn Message's own
+# arena: made in A's turn on A's context worker it is in A's blocks and not in R0's;
+# made in R0's own turn it is in R0's blocks and not in A's; outside any turn the
+# turn arena allocates nothing. The block has no registered range, so the end-turn
+# collection (lmx_msg_arena_collect, which only takes blocks with a range) leaves it,
+# and the Message's release frees it: the two-cycle balance (ld --wrap live count
+# after the second runtime_delete equal to the first) shows nothing is left behind.
+# So the blocks are counted after the turns, not inside them and not through a root.
+# Classifying turn-arena blocks for reachability collection (19.29.4) belongs to the
+# design's later arena stage (A2), not to O1.
+# Written before the code (2026-09-15) on integration d7f3b569, where
+# lmx_msg_turn_new_zero, lmx_msg_turn_copy_bytes and lmx_msg_turn_current do not
+# exist: the test does not link, which is its red.
+
+prototype:
+    fn: __real_malloc (size_t: n) @: void
+    fn: __real_calloc (size_t: count; size_t: size) @: void
+    fn: __real_realloc (@: void p; size_t: n) @: void
+    fn: __real_free (@: void p) void
+end: prototype
+
+int: g_live 0
+
+fn: __wrap_malloc (size_t: n) @: void
+    @: void p
+    p: c.__real_malloc(n)
+    if: p != 0
+        c.__sync_fetch_and_add(@ g_live, 1)
+    ---
+    return: p
+
+fn: __wrap_calloc (size_t: count; size_t: size) @: void
+    @: void p
+    p: c.__real_calloc(count, size)
+    if: p != 0
+        c.__sync_fetch_and_add(@ g_live, 1)
+    ---
+    return: p
+
+fn: __wrap_realloc (@: void p; size_t: n) @: void
+    @: void q
+    q: c.__real_realloc(p, n)
+    if: p = 0 && q != 0
+        c.__sync_fetch_and_add(@ g_live, 1)
+    ---
+    if: p != 0 && n = 0U
+        c.__sync_fetch_and_add(@ g_live, -1)
+    ---
+    return: q
+
+sub: __wrap_free (@: void p)
+    if: p != 0
+        c.__sync_fetch_and_add(@ g_live, -1)
+    ---
+    c.__real_free(p)
+end: __wrap_free
+
+int: checks 0
+int: failures 0
+@: void g_a_ptr 0
+int: g_a_done 0
+@: void g_r_ptr 0
+int: g_r_ok 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+# One input posted by the host thread.
+fn: post (@: LmxMsgRuntime rt; LmxMsgAddr: to; unsigned: id) int
+    @: LmxMsgEnv env
+    int: ok
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: 0
+    env\id: id
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: (cast: (int) id)
+    ok: lmx_msg_host_post(rt, to, env) = c.LMX_MSG_STAGED
+    c.free((cast: (@: void) env))
+    return: ok
+
+# Whether p is the base of one of who's blocks.
+fn: in_blocks (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void p) int
+    int: i 0
+    int: n
+    n: lmx_msg_adopted_n(rt, who)
+    while: i < n
+        if: lmx_msg_adopted_base(rt, who, i) = p
+            return: 1
+        ---
+        i: i + 1
+    ---
+    return: 0
+
+# A's turn on its own context worker: take the input, allocate from the turn arena,
+# report the pointer, end.
+fn: turn_a_alloc (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    @: void p
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 2
+    if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
+        lmx_msg_env_release(got)
+    ---
+    c.free((cast: (@: void) got))
+    p: lmx_msg_turn_new_zero(32U)
+    g_a_ptr: p
+    c.__sync_fetch_and_add(@ g_a_done, 1)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# R0's own turn: copy bytes into the turn arena.
+fn: turn_root_alloc (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: char s
+    if: ctx != 0
+        return: 1
+    s: lmx_msg_turn_copy_bytes("r0", 2U)
+    g_r_ptr: (cast: (@: void) s)
+    if: s != 0 && s[0] = 'r' && s[1] = '0' && s[2] = 0
+        g_r_ok: 1
+    ---
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# R0's own turn maps its child; ctx is the cell, [0] the child, [1] the status.
+fn: turn_map_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_map_child(rt, who, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+[]: unsigned map_cell 2
+
+# One cycle: the checks, then runtime_delete; returns the live count after it.
+fn: cycle (@: LmxMsgRuntime rt) int
+    unsigned: a 0U
+    unsigned: r0
+    unsigned: deadline
+    int: done 0
+    int: an0
+    int: rn0
+    int: st
+    uchar: ini 1
+
+    g_a_ptr: 0
+    g_a_done: 0
+    g_r_ptr: 0
+    g_r_ok: 0
+    r0: lmx_msg_root_addr(rt)
+    check(lmx_msg_turn_new_zero(16U) = 0 && lmx_msg_turn_copy_bytes("x", 1U) = 0, "outside any turn the turn arena allocates nothing")
+    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ a) = c.LMX_MSG_OK, "A created as R0's child")
+    an0: lmx_msg_adopted_n(rt, a)
+    rn0: lmx_msg_adopted_n(rt, r0)
+    check(lmx_msg_exec_bind(rt, a, turn_a_alloc, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && post(rt, a, 7U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "A bound and given one input")
+    map_cell[0]: a
+    map_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_map_child, (cast: (@: void) map_cell))
+    check(st = c.LMX_MSG_OK && (cast: (int) map_cell[1]) = c.LMX_MSG_OK, "R0's turn mapped A onto its own context")
+    deadline: c.GetTickCount() + 5000U
+    while: done = 0 && c.GetTickCount() < deadline
+        done: c.__sync_fetch_and_add(@ g_a_done, 0)
+        if: done = 0
+            c.Sleep(2U)
+        ---
+    ---
+    check(done != 0 && g_a_ptr != 0, "A's turn on its context worker allocated from the turn arena")
+    check(lmx_msg_adopted_n(rt, a) = an0 + 1 && in_blocks(rt, a, g_a_ptr) != 0, "A's allocation is one block of A's own arena")
+    check(in_blocks(rt, r0, g_a_ptr) = 0, "and not a block of R0's arena")
+    rn0: lmx_msg_adopted_n(rt, r0)
+    st: lmx_msg_root_turn(rt, turn_root_alloc, 0)
+    check(st = c.LMX_MSG_OK && g_r_ok != 0, "R0's own turn copied bytes into the turn arena")
+    check(lmx_msg_adopted_n(rt, r0) = rn0 + 1 && in_blocks(rt, r0, g_r_ptr) != 0, "R0's allocation is one block of R0's own arena")
+    check(in_blocks(rt, a, g_r_ptr) = 0, "and not a block of A's arena")
+    lmx_msg_runtime_delete(rt)
+    return: g_live
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    int: first
+    int: second
+
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_root_addr(rt) != 0U, "the first runtime and its R0 exist")
+    if: rt = 0
+        return: 2
+    first: cycle(rt)
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_root_addr(rt) != 0U, "the second runtime and its R0 exist")
+    if: rt = 0
+        return: 2
+    second: cycle(rt)
+    check(second = first, "the second runtime's turn-arena blocks were freed with their Messages: the live count after its delete equals the first's")
+    c.printf("turn arena o1: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0

@@ -359,6 +359,11 @@ void lmx_msg_after_outbox_xfer(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb)
 void lmx_msg_after_recv_pin(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_test_post_dead_fail(void);
 LmxMsg *lmx_msg_turn_self(LmxMsgRuntime *rt);
+/* O1: the turn Message and its arena, reached without a runtime handle. The
+ * allocations are blocks of the turn Message's own arena; 0 outside a turn. */
+LmxMsg *lmx_msg_turn_current(void);
+void *lmx_msg_turn_new_zero(size_t size);
+char *lmx_msg_turn_copy_bytes(const char *source, size_t length);
 void lmx_msg_slot_free(LmxMsg *m);
 /* Integer resolver for remaining addr APIs. Runtime-owned endpoint list, not a directory. */
 LmxMsg *lmx_msg_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
