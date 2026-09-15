@@ -1,0 +1,655 @@
+LOCK_REMOVAL_D2_SITES: every declaration, definition and call in l2src and
+mixa_manager (outside vendor/) that still carries a create_id (or the
+__wrap_/__real_ retry-id) parameter, at 00b04751 (D1 already landed there:
+no stored LmxMsg.create_id field and no lmx_msg_find_create remain; only
+the parameter itself, D2's own target, is left) (sonnet/inventories-2,
+2026-09-15, doc-only).
+
+--- Counts
+
+Total sites: 490 (397 in l2src's core+selftest files, 91 under l2src/tests/,
+  2 in mixa_manager outside vendor/).
+Per file (occurrence count, not line count -- a line with two calls on it
+  is two sites; verified with `grep -oE` before this table was written, not
+  `grep -c`, which undercounts a shared line):
+  l2src/lmx_message.h                                3  (3 declarations)
+  l2src/lmx_message.lm1                               9  (2 defs, 2 calls
+    in runtime_new, 5 more: see listing)
+  l2src/lmx_message.lm2                              10  (mirror of lm1,
+    one more line: `end:` markers count as their own grep line in lm2's
+    style where lm1's do too -- both listed in full below)
+  l2src/lmx_message_exec.c                            0
+  l2src/lmx_message_exec.h                            0
+  l2src/lmx_message_host.c                            0
+  l2src/lmx_message_host.h                            0
+  l2src/lmx_message_exec_selftest.c                 295  (284 lines, 11
+    carrying 2 calls each)
+  l2src/lmx_message_host_selftest.c                   3
+  l2src/lmx_message_selftest.lm1                     77
+  l2src/tests/ (25 files, listed individually below)  91  (88 in 24 files
+    using the ordinary names, 3 in l2_message_root_driver.lm1's
+    __wrap_lmx_msg_create/__real_lmx_msg_create pair)
+  mixa_manager/tests/mixa_ingress_host_harness.c       2
+  mixa_manager elsewhere outside vendor/               0 code sites (3
+    doc-only text mentions, listed separately, not counted as declaration/
+    definition/call)
+Callers passing a non-zero value: every actual call in this file's listing
+  except two. All literal-argument calls use a non-zero unsigned literal
+  (1U through 22U, or LMX_MSG_UI_LANE_ID's 0xFFFFFFFF sentinel) or a
+  provably non-zero expression (`(unsigned)(N + k)` / `(unsigned)(10 + i)`
+  with N >= 1 and the loop variable non-negative). The two exceptions pass
+  a variable, `id`, whose own runtime value this file cannot determine by
+  reading alone: l2src/tests/l2_c_scanners_parse_driver.lm1:657 and the
+  pass-through inside l2src/tests/l2_message_root_driver.lm1:80 (the
+  __wrap_/__real_ ld-wrap pair used by a two-cycle balance test, matching
+  this project's other wrap-based tests -- id here is whatever the site
+  under test itself passes, not a site this survey controls). Both are
+  flagged individually in their file's own section below.
+Declarations/definitions (no value to flag, listed for D2's mechanical
+  target: the signature itself): l2src/lmx_message.h (3), lmx_message.lm1
+  (3: create, create_prepare, create_graph), lmx_message.lm2 (3, same
+  three under lm2's unprefixed names), l2_message_root_driver.lm1 (2:
+  __wrap_lmx_msg_create, __real_lmx_msg_create) -- 11 signature sites
+  total, the ones D2's own text calls "the parameter goes from lmx_msg_
+  create, _create_graph and _create_prepare ... mechanically".
+
+Scope note: 6f's ticket names "l2src (lm1, the lm2 mirror, exec.c, host.c,
+the selftests and tests/)" -- read as the specific files lmx_message.lm1/
+.lm2/_exec.c/_host.c plus every *_selftest.* file and everything under
+tests/, not l2trans.lm1's emitted process entry/library-open code or the
+generated units' own translator path, both of which
+LOCK_REMOVAL_DESIGN.txt's D2 paragraph names as separate bullets from "the
+487 sites" (l2trans.lm1's emitted text, the generated units and their
+collect C under l2trans's own translation, and run_l2trans's case pin) --
+left for whichever ticket covers l2trans.lm1 and run_l2trans directly,
+since 6f's own file list does not name them. tests/generated/*.lm1 and
+the *_collect.c files ARE included here (they physically live under
+l2src/tests/, inside 6f's named scope, even though the design's D2 prose
+mentions "generated units" in the same breath as l2trans -- the two are
+different things: these are checked-in test fixtures under tests/, not
+l2trans's own runtime-emitted code).
+
+--- Part 1: LOCK_REMOVAL_M_FIELDS.txt correction
+
+Done directly in that file (l2src/LOCK_REMOVAL_M_FIELDS.txt, the
+lmx_msg_runtime_new / UI lane creation site's flag, ~line 260): replaced
+"creating it is not itself something M removes" with the decided text,
+"the core creates no UI lane; mixa builds it as an ordinary child of R0
+through map_child", dated 2026-09-15, citing this ticket and
+LOCK_REMOVAL_DESIGN.txt's M section at ba1aa1ad. Verified: `grep -c
+map_child l2src/LOCK_REMOVAL_M_FIELDS.txt` is 4 (was 0 before this edit).
+
+--- Part 2: D2 sites
+
+=== l2src/lmx_message.h ===
+238:int lmx_msg_create(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id, const uchar *init, size_t n, LmxMsgAddr *out);  [create_id site]
+240:int lmx_msg_create_prepare(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id,  [create_id site]
+249:int lmx_msg_create_graph(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id,  [create_id site]
+=== l2src/lmx_message.lm1 ===
+887:    if: lmx_msg_create_prepare(rt, 0U, 1U, 0, 0, 0, 0, 0, 0U, @ r0) != c.LMX_MSG_OK  [create_id site]
+894:    if: lmx_msg_create_prepare(rt, 0U, c.LMX_MSG_UI_LANE_ID, 0, 0, 0, 0, 0, 0U, @ ui) != c.LMX_MSG_OK  [create_id site]
+1096:fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int  [create_id site]
+1228:fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int  [create_id site]
+1229:    return: lmx_msg_create_prepare(rt, parent, create_id, 0, 0, 0, 0, init, n, out)  [create_id site]
+1230:end: lmx_msg_create  [create_id site]
+1232:fn: lmx_msg_create_graph (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int  [create_id site]
+1235:    return: lmx_msg_create_prepare(rt, parent, create_id, source, src_ranges, eternal_ranges, method_ranges, init, n, out)  [create_id site]
+1236:end: lmx_msg_create_graph  [create_id site]
+=== l2src/lmx_message.lm2 ===
+939:    if: msg_create_prepare(rt, 0U, 1U, 0, 0, 0, 0, 0, 0U, @ r0) != c.LMX_MSG_OK  [create_id site]
+946:    if: msg_create_prepare(rt, 0U, c.LMX_MSG_UI_LANE_ID, 0, 0, 0, 0, 0, 0U, @ ui) != c.LMX_MSG_OK  [create_id site]
+1156:fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int  [create_id site]
+1287:end: msg_create_prepare  [create_id site]
+1289:fn: msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int  [create_id site]
+1290:    return: msg_create_prepare(rt, parent, create_id, 0, 0, 0, 0, init, n, out)  [create_id site]
+1291:end: msg_create  [create_id site]
+1293:fn: msg_create_graph (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int  [create_id site]
+1296:    return: msg_create_prepare(rt, parent, create_id, source, src_ranges, eternal_ranges, method_ranges, init, n, out)  [create_id site]
+1297:end: msg_create_graph  [create_id site]
+=== l2src/lmx_message_host_selftest.c ===
+109:    if (lmx_msg_create(g_rt, 0, 99, &b, 1, &a) != LMX_MSG_INVALID) {  [create_id site]
+176:    st = lmx_msg_create(g_rt, 0, 1, init, 1, &parent);  [create_id site]
+180:    st = lmx_msg_create(g_rt, parent, 2, init, 1, &child);  [create_id site]
+=== l2src/tests/cancel_spin_host.c ===
+283:    if (rt == 0 || lmx_msg_create(rt, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+286:    if (lmx_msg_create(rt, p, 2, &ini, 1, &sib) != LMX_MSG_OK || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {  [create_id site]
+290:    if (lmx_msg_create(rt, p, 3, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {  [create_id site]
+294:    if (lmx_msg_create(rt, c, 4, &ini, 1, &g) != LMX_MSG_OK || lmx_msg_end_turn(rt, c, 1) != LMX_MSG_OK) {  [create_id site]
+=== l2src/tests/generated/unit_for_own_arrays.lm1 ===
+265:        if: c.lmx_msg_create(process_runtime, 0U, 1U, 0, 0U, @ process_addr) = c.LMX_MSG_OK  [create_id site]
+=== l2src/tests/generated/unit_own_array_char_index.lm1 ===
+128:        if: c.lmx_msg_create(process_runtime, 0U, 1U, 0, 0U, @ process_addr) = c.LMX_MSG_OK  [create_id site]
+=== l2src/tests/generated/unit_own_array_index.lm1 ===
+128:        if: c.lmx_msg_create(process_runtime, 0U, 1U, 0, 0U, @ process_addr) = c.LMX_MSG_OK  [create_id site]
+=== l2src/tests/l2_c_scanners_parse_driver.lm1 ===
+657:    require(c.lmx_msg_create(rt, 0U, id, 0, 0U, @ addr) = c.LMX_MSG_OK, "create owner")  [create_id site]
+=== l2src/tests/lmx_entry_turn_selftest.lm1 ===
+88:    check(c.lmx_msg_create(rt, 0U, c.LMX_MSG_UI_LANE_ID, @ ini, 1U, @ rid) = c.LMX_MSG_INVALID && rid = 0U && rt\n = 2, "stage 5 (d2): the UI lane's create_id is refused for any other create")  [create_id site]
+89:    check(c.lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ a) = c.LMX_MSG_OK, "A, a parent-0 Message, created")  [create_id site]
+105:    check(c.lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ b) = c.LMX_MSG_OK && c.lmx_msg_exec_bind(rt, b, turn_nothing, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "B created and bound")  [create_id site]
+108:    check(c.lmx_msg_create(rt, a, 3U, @ ini, 1U, @ ch) = c.LMX_MSG_OK, "C, A's child, created")  [create_id site]
+110:    check(c.lmx_msg_create(rt, 0U, 4U, @ ini, 1U, @ d) = c.LMX_MSG_OK && c.lmx_msg_create(rt, 0U, 5U, @ ini, 1U, @ e) = c.LMX_MSG_OK, "D and E created")  [create_id site 1 of 2]
+110:    check(c.lmx_msg_create(rt, 0U, 4U, @ ini, 1U, @ d) = c.LMX_MSG_OK && c.lmx_msg_create(rt, 0U, 5U, @ ini, 1U, @ e) = c.LMX_MSG_OK, "D and E created")  [create_id site 2 of 2]
+126:    check(c.lmx_msg_create(rt2, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the second runtime's root, created")  [create_id site]
+=== l2src/tests/lmx_generated_array_char_index_collect.c ===
+32:    if (rt == 0 || lmx_msg_create(rt, 0, 1, 0, 0, &a) != LMX_MSG_OK) {  [create_id site]
+=== l2src/tests/lmx_generated_array_index_collect.c ===
+32:    if (rt == 0 || lmx_msg_create(rt, 0, 1, 0, 0, &a) != LMX_MSG_OK) {  [create_id site]
+=== l2src/tests/lmx_generated_for_arrays_collect.c ===
+36:    if (rt == 0 || lmx_msg_create(rt, 0, 1, 0, 0, &a) != LMX_MSG_OK) {  [create_id site]
+=== l2src/tests/lmx_message_graph_copy_selftest.lm1 ===
+111:    check(rt != 0 && c.lmx_msg_create(rt, 0U, 1U, 0, 0U, @ parent_addr) = c.LMX_MSG_OK, "runtime parent created")  [create_id site]
+115:    status: c.lmx_msg_create_graph(rt, parent_addr, 2U, bad_root, src\ranges, 0, 0, 0, 0U, @ child_addr)  [create_id site]
+117:    status: c.lmx_msg_create_graph(rt, parent_addr, 2U, root, src\ranges, c.lmx_msg_eternal_ranges(src), c.lmx_msg_method_ranges(src), 0, 0U, @ child_addr)  [create_id site]
+132:    status: c.lmx_msg_create_graph(rt, parent_addr, 3U, child_graph, child_msg\ranges, c.lmx_msg_eternal_ranges(child_msg), c.lmx_msg_method_ranges(child_msg), 0, 0U, @ forwarded_addr)  [create_id site]
+=== l2src/tests/lmx_model_checks_19_29_6_selftest.lm1 ===
+215:    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created")  [create_id site]
+225:    check(lmx_msg_create_graph(rt, p, 2U, t0, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ owner) = c.LMX_MSG_OK, "M0 created from the template")  [create_id site]
+229:        check(lmx_msg_create(rt, p, (cast: (unsigned) (10 + k)), @ ini, 1U, @ writers[k]) = c.LMX_MSG_OK, "writer created")  [create_id site]
+232:    check(lmx_msg_create(rt, p, 20U, @ ini, 1U, @ a) = c.LMX_MSG_OK && lmx_msg_create(rt, p, 21U, @ ini, 1U, @ b) = c.LMX_MSG_OK, "A and B created")  [create_id site 1 of 2]
+232:    check(lmx_msg_create(rt, p, 20U, @ ini, 1U, @ a) = c.LMX_MSG_OK && lmx_msg_create(rt, p, 21U, @ ini, 1U, @ b) = c.LMX_MSG_OK, "A and B created")  [create_id site 2 of 2]
+=== l2src/tests/lmx_model_family_close_32_selftest.lm1 ===
+122:    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created")  [create_id site]
+123:    check(lmx_msg_create(rt, p, 2U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "C created and published")  [create_id site]
+124:    check(lmx_msg_create(rt, c1, 3U, @ ini, 1U, @ g1) = c.LMX_MSG_OK && lmx_msg_create(rt, c1, 4U, @ ini, 1U, @ g2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, c1, 1) = c.LMX_MSG_OK, "G1 and G2 created by C and published")  [create_id site 1 of 2]
+124:    check(lmx_msg_create(rt, c1, 3U, @ ini, 1U, @ g1) = c.LMX_MSG_OK && lmx_msg_create(rt, c1, 4U, @ ini, 1U, @ g2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, c1, 1) = c.LMX_MSG_OK, "G1 and G2 created by C and published")  [create_id site 2 of 2]
+125:    check(lmx_msg_create(rt, g1, 5U, @ ini, 1U, @ h) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, g1, 1) = c.LMX_MSG_OK, "H created by G1 and published")  [create_id site]
+=== l2src/tests/lmx_model_family_release_17_selftest.lm1 ===
+168:    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")  [create_id site]
+171:    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ p1) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ p2) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 4U, @ ini, 1U, @ p3) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 8U, @ ini, 1U, @ p4) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 10U, @ ini, 1U, @ p5) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P1 to P5 created and published")  [create_id site 1 of 5]
+171:    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ p1) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ p2) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 4U, @ ini, 1U, @ p3) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 8U, @ ini, 1U, @ p4) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 10U, @ ini, 1U, @ p5) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P1 to P5 created and published")  [create_id site 2 of 5]
+171:    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ p1) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ p2) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 4U, @ ini, 1U, @ p3) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 8U, @ ini, 1U, @ p4) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 10U, @ ini, 1U, @ p5) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P1 to P5 created and published")  [create_id site 3 of 5]
+171:    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ p1) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ p2) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 4U, @ ini, 1U, @ p3) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 8U, @ ini, 1U, @ p4) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 10U, @ ini, 1U, @ p5) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P1 to P5 created and published")  [create_id site 4 of 5]
+171:    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ p1) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ p2) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 4U, @ ini, 1U, @ p3) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 8U, @ ini, 1U, @ p4) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 10U, @ ini, 1U, @ p5) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P1 to P5 created and published")  [create_id site 5 of 5]
+172:    check(lmx_msg_create(rt, p1, 5U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p1, 1) = c.LMX_MSG_OK, "C1 created by P1 and published")  [create_id site]
+173:    check(lmx_msg_create(rt, p2, 6U, @ ini, 1U, @ c2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p2, 1) = c.LMX_MSG_OK, "C2 created by P2 and published")  [create_id site]
+174:    check(lmx_msg_create(rt, p3, 7U, @ ini, 1U, @ c3) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p3, 1) = c.LMX_MSG_OK, "C3 created by P3 and published")  [create_id site]
+175:    check(lmx_msg_create(rt, p4, 9U, @ ini, 1U, @ c4) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p4, 1) = c.LMX_MSG_OK, "C4 created by P4 and published")  [create_id site]
+176:    check(lmx_msg_create(rt, p5, 11U, @ ini, 1U, @ c5) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p5, 1) = c.LMX_MSG_OK, "C5 created by P5 and published")  [create_id site]
+=== l2src/tests/lmx_model_liveness_33_selftest.lm1 ===
+199:    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P, created without a parent (R0's child)")  [create_id site]
+201:    check(lmx_msg_create(rt, p, 2U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "child C created and published")  [create_id site]
+251:    check(lmx_msg_create(rt, p, 3U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_create(rt, p, 4U, @ ini, 1U, @ e) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "children D and E created and published at 3000")  [create_id site 1 of 2]
+251:    check(lmx_msg_create(rt, p, 3U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_create(rt, p, 4U, @ ini, 1U, @ e) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "children D and E created and published at 3000")  [create_id site 2 of 2]
+288:    check(lmx_msg_create(rt, p, 5U, @ ini, 1U, @ q) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "Q created")  [create_id site]
+289:    check(lmx_msg_create(rt, q, 6U, @ ini, 1U, @ f) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, q, 1) = c.LMX_MSG_OK, "Q's child F created and published")  [create_id site]
+297:    check(lmx_msg_create(rt, 0U, 7U, @ ini, 1U, @ z) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, z, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "Z, created without a parent, is R0's child and launched on the host's mapping")  [create_id site]
+=== l2src/tests/lmx_model_orphan_mapped_17_selftest.lm1 ===
+167:    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")  [create_id site]
+170:    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ p) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P created and published")  [create_id site]
+176:    check(lmx_msg_create(rt, p, 3U, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_send(rt, p, cc, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "C created by P with one input staged; P published")  [create_id site]
+=== l2src/tests/lmx_model_root_ingress_5b_selftest.lm1 ===
+132:    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")  [create_id site]
+135:    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "C and D created and published")  [create_id site 1 of 2]
+135:    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "C and D created and published")  [create_id site 2 of 2]
+=== l2src/tests/lmx_model_root_record_5e_selftest.lm1 ===
+176:    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, p, turn_child_setters, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "P created as R0's child and bound")  [create_id site]
+186:    check(lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, d, turn_worker_setters, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && post(rt, d, 7U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "D created as R0's child, bound, given an input")  [create_id site]
+=== l2src/tests/lmx_model_scenario36_selftest.lm1 ===
+222:    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created as the first Message")  [create_id site]
+252:    st: lmx_msg_create_graph(rt, p, 2U, root, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ a)  [create_id site]
+312:    st: lmx_msg_create_graph(rt, p, 3U, root, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ b)  [create_id site]
+=== l2src/tests/lmx_model_turn_arena_o1_selftest.lm1 ===
+163:    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ a) = c.LMX_MSG_OK, "A created as R0's child")  [create_id site]
+=== l2src/tests/lmx_model_ui_lane_3d_selftest.lm1 ===
+95:    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")  [create_id site]
+98:    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ p1) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ p2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P1 and P2 created and published")  [create_id site 1 of 2]
+98:    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ p1) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ p2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P1 and P2 created and published")  [create_id site 2 of 2]
+99:    check(lmx_msg_create(rt, p1, 4U, @ ini, 1U, @ a) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p1, 1) = c.LMX_MSG_OK, "A created by P1 and published")  [create_id site]
+100:    check(lmx_msg_create(rt, p2, 5U, @ ini, 1U, @ b) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p2, 1) = c.LMX_MSG_OK, "B created by P2 and published")  [create_id site]
+=== l2src/tests/lmx_msg_adopt_unrooted_selftest.lm1 ===
+116:    probe_check(lmx_msg_create(rt, 0U, 1U, @ initial, 1U, @ receiver) = LMX_MSG_OK, "create receiver Message")  [create_id site]
+=== l2src/tests/lmx_msg_delivery_selftest.lm1 ===
+48:    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "root P created")  [create_id site]
+49:    check(lmx_msg_create(rt, p, 2U, @ ini, 1U, @ child) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "child C created and published")  [create_id site]
+=== l2src/tests/lmx_msg_family_handoff_selftest.lm1 ===
+248:    family_check(lmx_msg_create(rt, 0U, 1U, @ initial, 1U, @ root) = LMX_MSG_OK, "create fixture root")  [create_id site]
+249:    family_check(lmx_msg_create(rt, root, 2U, @ initial, 1U, @ parent) = LMX_MSG_OK && lmx_msg_end_turn(rt, root, 1) = LMX_MSG_OK, "create P and commit")  [create_id site]
+250:    family_check(lmx_msg_create(rt, parent, 3U, @ initial, 1U, @ child) = LMX_MSG_OK, "create C")  [create_id site]
+251:    family_check(lmx_msg_create(rt, parent, 4U, @ initial, 1U, @ sibling) = LMX_MSG_OK, "create unrelated S")  [create_id site]
+252:    family_check(lmx_msg_create(rt, parent, 5U, @ initial, 1U, @ successful) = LMX_MSG_OK && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "create K and commit siblings")  [create_id site]
+253:    family_check(lmx_msg_create(rt, child, 6U, @ initial, 1U, @ grandchild) = LMX_MSG_OK && lmx_msg_end_turn(rt, child, 1) = LMX_MSG_OK, "create G and commit")  [create_id site]
+=== l2src/tests/lmx_msg_send_local_selftest.lm1 ===
+295:    send_check(lmx_msg_create(rt, 0U, 1U, @ initial, 1U, @ root) = LMX_MSG_OK, "create root")  [create_id site]
+297:    send_check(lmx_msg_create(rt, root, 2U, @ initial, 1U, @ parent) = LMX_MSG_OK && lmx_msg_create(rt, root, 3U, @ initial, 1U, @ cousin_parent) = LMX_MSG_OK, "create two branches")  [create_id site 1 of 2]
+297:    send_check(lmx_msg_create(rt, root, 2U, @ initial, 1U, @ parent) = LMX_MSG_OK && lmx_msg_create(rt, root, 3U, @ initial, 1U, @ cousin_parent) = LMX_MSG_OK, "create two branches")  [create_id site 2 of 2]
+299:    send_check(lmx_msg_create(rt, parent, 4U, @ initial, 1U, @ child) = LMX_MSG_OK && lmx_msg_create(rt, parent, 5U, @ initial, 1U, @ sibling) = LMX_MSG_OK && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "create direct child and sibling")  [create_id site 1 of 2]
+299:    send_check(lmx_msg_create(rt, parent, 4U, @ initial, 1U, @ child) = LMX_MSG_OK && lmx_msg_create(rt, parent, 5U, @ initial, 1U, @ sibling) = LMX_MSG_OK && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "create direct child and sibling")  [create_id site 2 of 2]
+300:    send_check(lmx_msg_create(rt, cousin_parent, 6U, @ initial, 1U, @ cousin) = LMX_MSG_OK && lmx_msg_end_turn(rt, cousin_parent, 1) = LMX_MSG_OK, "create unrelated branch recipient")  [create_id site]
+=== l2src/tests/lmx_sched_record_selftest.lm1 ===
+115:    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created")  [create_id site]
+119:    check(lmx_msg_create(rt, p, 11U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_create(rt, p, 12U, @ ini, 1U, @ c2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "two children created and published")  [create_id site 1 of 2]
+119:    check(lmx_msg_create(rt, p, 11U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_create(rt, p, 12U, @ ini, 1U, @ c2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "two children created and published")  [create_id site 2 of 2]
+145:    check(lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ q) = c.LMX_MSG_OK && lmx_msg_create(rt, q, 21U, @ ini, 1U, @ q1) = c.LMX_MSG_OK && lmx_msg_create(rt, q, 22U, @ ini, 1U, @ q2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, q, 1) = c.LMX_MSG_OK, "Q created with Q1 and Q2, published")  [create_id site 1 of 3]
+145:    check(lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ q) = c.LMX_MSG_OK && lmx_msg_create(rt, q, 21U, @ ini, 1U, @ q1) = c.LMX_MSG_OK && lmx_msg_create(rt, q, 22U, @ ini, 1U, @ q2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, q, 1) = c.LMX_MSG_OK, "Q created with Q1 and Q2, published")  [create_id site 2 of 3]
+145:    check(lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ q) = c.LMX_MSG_OK && lmx_msg_create(rt, q, 21U, @ ini, 1U, @ q1) = c.LMX_MSG_OK && lmx_msg_create(rt, q, 22U, @ ini, 1U, @ q2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, q, 1) = c.LMX_MSG_OK, "Q created with Q1 and Q2, published")  [create_id site 3 of 3]
+=== l2src/tests/l2_message_root_driver.lm1 ===
+23:    fn: __real_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int  [create_id site]
+74:fn: __wrap_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int  [create_id site]
+80:    int: result c.__real_lmx_msg_create(rt, parent, id, init, n, out)  [create_id site]
+=== mixa_manager/tests/mixa_ingress_host_harness.c ===
+223:    st = lmx_msg_create(g_rt, 0, 1, init, 1, &parent);  [create_id site]
+228:    st = lmx_msg_create(g_rt, parent, 2, init, 1, &child);  [create_id site]
+
+=== l2src/lmx_message_exec_selftest.c (295) ===
+325:            if (lmx_msg_create(rt, who, (unsigned)(40 + k), &b, 1, &ch) != LMX_MSG_OK) {  [create_id site]
+391:        if (lmx_msg_create(rt, who, (unsigned)(200 + k), &b, 1, &extra) != LMX_MSG_OK || extra == 0) {  [create_id site]
+881:    s->st = lmx_msg_create(rt, who, 9, &ini, 1, &s->child);  [create_id site]
+1096:    if (lmx_msg_create(rt, who, 11, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_create(rt, who, 12, &ini, 1, &c2) != LMX_MSG_OK) {  [create_id site 1 of 2 on this line]
+1096:    if (lmx_msg_create(rt, who, 11, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_create(rt, who, 12, &ini, 1, &c2) != LMX_MSG_OK) {  [create_id site 2 of 2 on this line]
+1181:    if (lmx_msg_create(rt, who, 9, &ini, 1, &s->child) != LMX_MSG_OK || s->child == 0) {  [create_id site]
+1233:    if (lmx_msg_create(rt, who, 9, &ini, 1, &s->child) != LMX_MSG_OK) {  [create_id site]
+1561:    if (lmx_msg_create(rt, 0, 1, init, 1, &parent) != LMX_MSG_OK) {  [create_id site]
+1565:    if (lmx_msg_create(rt, parent, 2, init, 1, &w1) != LMX_MSG_OK) {  [create_id site]
+1569:    if (lmx_msg_create(rt, parent, 3, init, 1, &w2) != LMX_MSG_OK) {  [create_id site]
+1573:    if (lmx_msg_create(rt, parent, 4, init, 1, &ui) != LMX_MSG_OK) {  [create_id site]
+1577:    if (lmx_msg_create(rt, parent, 5, init, 1, &w3) != LMX_MSG_OK) {  [create_id site]
+1640:            if (lmx_msg_create(rt, parent, (unsigned)(100 + k), init, 1, &extra) != LMX_MSG_OK) {  [create_id site]
+1828:        if (lmx_msg_create(rtf, 0, 1, &ini, 1, &pf) != LMX_MSG_OK) {  [create_id site]
+1832:        if (lmx_msg_create(rtf, pf, 2, &ini, 1, &wf) != LMX_MSG_OK) {  [create_id site]
+1944:        lmx_msg_create(rte, 0, 1, &ini, 1, &pe);  [create_id site]
+1945:        lmx_msg_create(rte, pe, 2, &ini, 1, &we);  [create_id site]
+1985:        lmx_msg_create(rto, 0, 1, &ini, 1, &po);  [create_id site]
+1986:        lmx_msg_create(rto, po, 2, &ini, 1, &wo);  [create_id site]
+2033:        if (lmx_msg_create(rtb, 0, 1, &ini, 1, &pb) != LMX_MSG_OK) {  [create_id site]
+2036:        if (lmx_msg_create(rtb, pb, 2, &ini, 1, &wb) != LMX_MSG_OK) {  [create_id site]
+2039:        if (lmx_msg_create(rtb, pb, 3, &ini, 1, &ub) != LMX_MSG_OK) {  [create_id site]
+2115:        lmx_msg_create(rtc, 0, 1, &ini, 1, &pc);  [create_id site]
+2116:        lmx_msg_create(rtc, pc, 2, &ini, 1, &uc);  [create_id site]
+2117:        lmx_msg_create(rtc, pc, 3, &ini, 1, &cc);  [create_id site]
+2156:        lmx_msg_create(rtc, pc, 4, &ini, 1, &bc);  [create_id site]
+2179:        if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+2180:            || lmx_msg_create(rtd, dummy, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+2182:            || lmx_msg_create(rtd, p, 3, &ini, 1, &c1) != LMX_MSG_OK  [create_id site]
+2183:            || lmx_msg_create(rtd, p, 4, &ini, 1, &c2) != LMX_MSG_OK  [create_id site]
+2225:            || lmx_msg_create(rtd, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+2227:            || lmx_msg_create(rtd, 0, 2, &ini, 1, &closer) != LMX_MSG_OK  [create_id site]
+2324:        if (lmx_msg_create(rtl, 0, 1, &ini, 1, &rl) != LMX_MSG_OK || rl == 0) {  [create_id site]
+2328:        if (lmx_msg_create(rtl, rl, 2, &ini, 1, &pl) != LMX_MSG_OK || pl == 0) {  [create_id site]
+2332:        if (lmx_msg_create(rtl, pl, 3, &ini, 1, &cl) != LMX_MSG_OK || cl == 0) {  [create_id site]
+2336:        if (lmx_msg_create(rtl, cl, 4, &ini, 1, &gl) != LMX_MSG_OK || gl == 0) {  [create_id site]
+2340:        if (lmx_msg_create(rtl, rl, 5, &ini, 1, &ul) != LMX_MSG_OK || ul == 0) {  [create_id site]
+2344:        if (lmx_msg_create(rtl, rl, 6, &ini, 1, &fl) != LMX_MSG_OK || fl == 0) {  [create_id site]
+2516:        if (rtc == 0 || ra.entered == 0 || rb.entered == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+2520:        if (lmx_msg_create(rtc, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rtc, p, 3, &ini, 1, &b) != LMX_MSG_OK) {  [create_id site 1 of 2 on this line]
+2520:        if (lmx_msg_create(rtc, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rtc, p, 3, &ini, 1, &b) != LMX_MSG_OK) {  [create_id site 2 of 2 on this line]
+2660:        if (rts == 0 || lmx_msg_create(rts, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+2664:        if (lmx_msg_create(rts, p, 2, &ini, 1, &parent) != LMX_MSG_OK) {  [create_id site]
+2715:        if (rtu == 0 || lmx_msg_create(rtu, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+2718:        if (lmx_msg_create(rtu, p, 2, &ini, 1, &w) != LMX_MSG_OK || lmx_msg_end_turn(rtu, p, 1) != LMX_MSG_OK) {  [create_id site]
+2791:        if (rtf == 0 || fa.entered == 0 || lmx_msg_create(rtf, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+2794:        if (lmx_msg_create(rtf, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rtf, p, 3, &ini, 1, &b) != LMX_MSG_OK) {  [create_id site 1 of 2 on this line]
+2794:        if (lmx_msg_create(rtf, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rtf, p, 3, &ini, 1, &b) != LMX_MSG_OK) {  [create_id site 2 of 2 on this line]
+2863:        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+2866:        if (lmx_msg_create(rta, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rta, p, 3, &ini, 1, &b) != LMX_MSG_OK) {  [create_id site 1 of 2 on this line]
+2866:        if (lmx_msg_create(rta, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rta, p, 3, &ini, 1, &b) != LMX_MSG_OK) {  [create_id site 2 of 2 on this line]
+2932:        if (rtu == 0 || lmx_msg_create(rtu, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+2935:        if (lmx_msg_create(rtu, p, 2, &ini, 1, &w) != LMX_MSG_OK || lmx_msg_end_turn(rtu, p, 1) != LMX_MSG_OK) {  [create_id site]
+3001:        if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+3004:        if (lmx_msg_create(rth, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rth, p, 3, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_create(rth, p, 4, &ini, 1, &c2) != LMX_MSG_OK) {  [create_id site 1 of 3 on this line]
+3004:        if (lmx_msg_create(rth, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rth, p, 3, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_create(rth, p, 4, &ini, 1, &c2) != LMX_MSG_OK) {  [create_id site 2 of 3 on this line]
+3004:        if (lmx_msg_create(rth, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rth, p, 3, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_create(rth, p, 4, &ini, 1, &c2) != LMX_MSG_OK) {  [create_id site 3 of 3 on this line]
+3064:        if (rtr == 0 || spawn.started == 0 || spawn.go == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+3067:        if (lmx_msg_create(rtr, p, 2, &ini, 1, &parent) != LMX_MSG_OK || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {  [create_id site]
+3126:        if (lmx_msg_create(rtb, 0, 1, &ini, 1, &pb) != LMX_MSG_OK || lmx_msg_create(rtb, pb, 2, &ini, 1, &wb) != LMX_MSG_OK || lmx_msg_create(rtb, pb, 3, &ini, 1, &ub) != LMX_MSG_OK) {  [create_id site 1 of 3 on this line]
+3126:        if (lmx_msg_create(rtb, 0, 1, &ini, 1, &pb) != LMX_MSG_OK || lmx_msg_create(rtb, pb, 2, &ini, 1, &wb) != LMX_MSG_OK || lmx_msg_create(rtb, pb, 3, &ini, 1, &ub) != LMX_MSG_OK) {  [create_id site 2 of 3 on this line]
+3126:        if (lmx_msg_create(rtb, 0, 1, &ini, 1, &pb) != LMX_MSG_OK || lmx_msg_create(rtb, pb, 2, &ini, 1, &wb) != LMX_MSG_OK || lmx_msg_create(rtb, pb, 3, &ini, 1, &ub) != LMX_MSG_OK) {  [create_id site 3 of 3 on this line]
+3205:        if (rtp == 0 || a1.entered == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+3209:        if (lmx_msg_create(rtp, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {  [create_id site]
+3264:        if (rtm == 0 || lmx_msg_create(rtm, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+3267:        if (lmx_msg_create(rtm, p, 2, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtm, p, 1) != LMX_MSG_OK) {  [create_id site]
+3351:        if (lmx_msg_create(rtl, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+3354:        if (lmx_msg_create(rtl, p, 2, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtl, p, 1) != LMX_MSG_OK) {  [create_id site]
+3412:        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+3415:        if (lmx_msg_create(rtr, p, 2, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {  [create_id site]
+3470:        if (rtb == 0 || lmx_msg_create(rtb, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+3473:        if (lmx_msg_create(rtb, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {  [create_id site]
+3476:        if (lmx_msg_create(rtb, p, 3, &ini, 1, &c1) != LMX_MSG_OK) {  [create_id site]
+3520:            if (rtt == 0 || lmx_msg_create(rtt, 0, 1, &ini, 1, &tp) != LMX_MSG_OK  [create_id site]
+3521:                || lmx_msg_create(rtt, tp, 2, &ini, 1, &tc2) != LMX_MSG_OK  [create_id site]
+3523:                || lmx_msg_create(rtt, tp, 3, &ini, 1, &tc1) != LMX_MSG_OK) {  [create_id site]
+3611:            if (rtv == 0 || lmx_msg_create(rtv, 0, 1, &ini, 1, &vp) != LMX_MSG_OK  [create_id site]
+3612:                || lmx_msg_create(rtv, 0, 2, &ini, 1, &vq) != LMX_MSG_OK  [create_id site]
+3613:                || lmx_msg_create(rtv, vp, 3, &ini, 1, &vc) != LMX_MSG_OK  [create_id site]
+3618:                || lmx_msg_create(rtv, vc, 4, &ini, 1, &vg) != LMX_MSG_OK) {  [create_id site]
+3697:            if (rtq == 0 || lmx_msg_create(rtq, 0, 1, &ini, 1, &qr) != LMX_MSG_OK  [create_id site]
+3698:                || lmx_msg_create(rtq, qr, 2, &ini, 1, &qp) != LMX_MSG_OK  [create_id site]
+3700:                || lmx_msg_create(rtq, qp, 3, &ini, 1, &qc) != LMX_MSG_OK  [create_id site]
+3749:            if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &orr) != LMX_MSG_OK  [create_id site]
+3750:                || lmx_msg_create(rto, orr, 2, &ini, 1, &op) != LMX_MSG_OK  [create_id site]
+3752:                || lmx_msg_create(rto, op, 3, &ini, 1, &oc) != LMX_MSG_OK  [create_id site]
+3811:        if (rtb == 0 || lmx_msg_create(rtb, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+3814:        if (lmx_msg_create(rtb, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {  [create_id site]
+3817:        if (lmx_msg_create(rtb, p, 3, &ini, 1, &c1) != LMX_MSG_OK) {  [create_id site]
+3887:            if (rtu == 0 || lmx_msg_create(rtu, 0, 1, &iniu, 1, &pu) != LMX_MSG_OK  [create_id site]
+3888:                || lmx_msg_create(rtu, pu, 2, &iniu, 1, &cu) != LMX_MSG_OK) {  [create_id site]
+3926:            if (rtb == 0 || lmx_msg_create(rtb, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+3929:            if (lmx_msg_create(rtb, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {  [create_id site]
+3993:        if (rtb == 0 || lmx_msg_create(rtb, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+3996:        if (lmx_msg_create(rtb, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {  [create_id site]
+3999:        if (lmx_msg_create(rtb, p, 3, &ini, 1, &c1) != LMX_MSG_OK) {  [create_id site]
+4056:        if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+4059:        if (lmx_msg_create(rtc, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtc, p, 1) != LMX_MSG_OK) {  [create_id site]
+4062:        if (lmx_msg_create(rtc, p, 3, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_end_turn(rtc, p, 1) != LMX_MSG_OK) {  [create_id site]
+4065:        if (lmx_msg_create(rtc, c1, 4, &ini, 1, &g) != LMX_MSG_OK || lmx_msg_end_turn(rtc, c1, 1) != LMX_MSG_OK) {  [create_id site]
+4122:        if (rtp == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {  [create_id site]
+4125:        if (lmx_msg_create(rtp, p, 2, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {  [create_id site]
+4128:        if (lmx_msg_create(rtp, p, 3, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {  [create_id site]
+4184:        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {  [create_id site]
+4187:        if (lmx_msg_create(rta, dummy, 2, &ini, 1, &m0) != LMX_MSG_OK  [create_id site]
+4188:            || lmx_msg_create(rta, dummy, 3, &ini, 1, &m1) != LMX_MSG_OK  [create_id site]
+4189:            || lmx_msg_create(rta, dummy, 4, &ini, 1, &m2) != LMX_MSG_OK  [create_id site]
+4291:        if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {  [create_id site]
+4294:        if (lmx_msg_create(rth, dummy, 2, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rth, dummy, 1) != LMX_MSG_OK) {  [create_id site]
+4297:        if (lmx_msg_create(rth, p, 3, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_create(rth, p, 4, &ini2, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {  [create_id site 1 of 2 on this line]
+4297:        if (lmx_msg_create(rth, p, 3, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_create(rth, p, 4, &ini2, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {  [create_id site 2 of 2 on this line]
+4300:        if (lmx_msg_create(rth, c, 5, &ini3, 1, &g) != LMX_MSG_OK || lmx_msg_end_turn(rth, c, 1) != LMX_MSG_OK) {  [create_id site]
+4396:            if (lmx_msg_create(rth, p, 9, &ini, 1, &live) != LMX_MSG_OK || lmx_msg_create(rth, p, 10, &ini, 1, &drop) != LMX_MSG_OK  [create_id site 1 of 2 on this line]
+4396:            if (lmx_msg_create(rth, p, 9, &ini, 1, &live) != LMX_MSG_OK || lmx_msg_create(rth, p, 10, &ini, 1, &drop) != LMX_MSG_OK  [create_id site 2 of 2 on this line]
+4488:        if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {  [create_id site]
+4491:        if (lmx_msg_create(rto, dummy, 2, &ini, 1, &src) != LMX_MSG_OK || lmx_msg_create(rto, dummy, 3, &ini, 1, &dst) != LMX_MSG_OK  [create_id site 1 of 2 on this line]
+4491:        if (lmx_msg_create(rto, dummy, 2, &ini, 1, &src) != LMX_MSG_OK || lmx_msg_create(rto, dummy, 3, &ini, 1, &dst) != LMX_MSG_OK  [create_id site 2 of 2 on this line]
+4528:        if (rts == 0 || lmx_msg_create(rts, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {  [create_id site]
+4531:        if (lmx_msg_create(rts, dummy, 2, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rts, dummy, 1) != LMX_MSG_OK) {  [create_id site]
+4536:            if (lmx_msg_create(rts, p, (unsigned)(3 + i), &ini, 1, &kids[i]) != LMX_MSG_OK) {  [create_id site]
+4580:        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+4581:            || lmx_msg_create(rtr, dummy, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+4583:            || lmx_msg_create(rtr, p, 3, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+4661:        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+4662:            || lmx_msg_create(rta, dummy, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+4664:            || lmx_msg_create(rta, p, 3, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+4742:        if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+4743:            || lmx_msg_create(rtc, 0, 2, &ini, 1, &b) != LMX_MSG_OK) {  [create_id site]
+4823:        if (rtv == 0 || lmx_msg_create(rtv, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {  [create_id site]
+4913:        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+4914:            || lmx_msg_create(rta, 0, 2, &ini, 1, &b) != LMX_MSG_OK) {  [create_id site]
+5000:        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {  [create_id site]
+5151:        if (rte == 0 || lmx_msg_create(rte, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {  [create_id site]
+5227:        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {  [create_id site]
+5309:        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {  [create_id site]
+5393:        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {  [create_id site]
+5452:        if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {  [create_id site]
+5496:        if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {  [create_id site]
+5537:        if (rtt == 0 || lmx_msg_create(rtt, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+5538:            || lmx_msg_create(rtt, dummy, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+5540:            || lmx_msg_create(rtt, p, 3, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+5619:        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+5620:            || lmx_msg_create(rtg, dummy, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+5622:            || lmx_msg_create(rtg, p, 3, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+5733:        if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &top) != LMX_MSG_OK  [create_id site]
+5734:            || lmx_msg_create(rtd, top, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+5736:            || lmx_msg_create(rtd, p, 3, &ini, 1, &srca) != LMX_MSG_OK  [create_id site]
+5737:            || lmx_msg_create(rtd, p, 4, &ini, 1, &dsta) != LMX_MSG_OK  [create_id site]
+5808:        if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+5809:            || lmx_msg_create(rth, dummy, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+5811:            || lmx_msg_create(rth, p, 3, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+5883:        if (rtp == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+5884:            || lmx_msg_create(rtp, dummy, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+5886:            || lmx_msg_create(rtp, p, 3, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+5944:        if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {  [create_id site]
+5986:        if (rtrp == 0 || lmx_msg_create(rtrp, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {  [create_id site]
+6039:        if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6040:            || lmx_msg_create(rto, dummy, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+6042:            || lmx_msg_create(rto, p, 3, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+6121:        if (rtn == 0 || lmx_msg_create(rtn, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6122:            || lmx_msg_create(rtn, dummy, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+6124:            || lmx_msg_create(rtn, p, 3, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+6126:            || lmx_msg_create(rtn, c, 4, &ini, 1, &g) != LMX_MSG_OK  [create_id site]
+6220:        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6221:            || lmx_msg_create(rtr, dummy, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+6223:            || lmx_msg_create(rtr, p, 3, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+6225:            || lmx_msg_create(rtr, c, 4, &ini, 1, &g) != LMX_MSG_OK  [create_id site]
+6335:        if (rts == 0 || lmx_msg_create(rts, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6337:            || lmx_msg_create(rts, dummy, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+6338:            || lmx_msg_create(rts, dummy, 3, &ini, 1, &b) != LMX_MSG_OK  [create_id site]
+6375:        if (rtk == 0 || lmx_msg_create(rtk, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6377:            || lmx_msg_create(rtk, dummy, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+6411:        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6465:        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6466:            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK  [create_id site]
+6467:            || lmx_msg_create(rti, dummy, 3, &ini, 1, &any) != LMX_MSG_OK  [create_id site]
+6517:        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6518:            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK  [create_id site]
+6519:            || lmx_msg_create(rti, dummy, 3, &ini, 1, &any) != LMX_MSG_OK  [create_id site]
+6578:            if (rtw == 0 || lmx_msg_create(rtw, 0, 1, &ini, 1, &pa) != LMX_MSG_OK  [create_id site]
+6580:                || lmx_msg_create(rtw, pa, 2, &ini, 1, &ca) != LMX_MSG_OK  [create_id site]
+6582:                || lmx_msg_create(rtw, 0, 3, &ini, 1, &pb) != LMX_MSG_OK  [create_id site]
+6584:                || lmx_msg_create(rtw, pb, 4, &ini, 1, &cb) != LMX_MSG_OK  [create_id site]
+6616:        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6617:            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK  [create_id site]
+6652:        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6653:            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK  [create_id site]
+6702:        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6703:            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK  [create_id site]
+6704:            || lmx_msg_create(rti, dummy, 3, &ini, 1, &any) != LMX_MSG_OK  [create_id site]
+6774:        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6775:            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK  [create_id site]
+6776:            || lmx_msg_create(rti, dummy, 3, &ini, 1, &any) != LMX_MSG_OK  [create_id site]
+6821:        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+6822:            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK  [create_id site]
+6823:            || lmx_msg_create(rti, 0, 3, &ini, 1, &any) != LMX_MSG_OK  [create_id site]
+6870:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &pa) != LMX_MSG_OK  [create_id site]
+6872:                || lmx_msg_create(rti, pa, 2, &ini, 1, &ca) != LMX_MSG_OK  [create_id site]
+6874:                || lmx_msg_create(rti, 0, 3, &ini, 1, &pb) != LMX_MSG_OK  [create_id site]
+6876:                || lmx_msg_create(rti, pb, 4, &ini, 1, &cb) != LMX_MSG_OK  [create_id site]
+6936:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+6945:                if (lmx_msg_create(rti, p, (unsigned)(10 + i), &ini, 1, &idle[i]) != LMX_MSG_OK  [create_id site]
+6953:            if (lmx_msg_create(rti, 0, 2, &ini, 1, &pa) != LMX_MSG_OK  [create_id site]
+6955:                || lmx_msg_create(rti, pa, 3, &ini, 1, &ca) != LMX_MSG_OK  [create_id site]
+6957:                || lmx_msg_create(rti, 0, 4, &ini, 1, &pb) != LMX_MSG_OK  [create_id site]
+6959:                || lmx_msg_create(rti, pb, 5, &ini, 1, &cb) != LMX_MSG_OK  [create_id site]
+7000:                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7002:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7003:                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK  [create_id site]
+7004:                || lmx_msg_create(rti, p, 4, &ini, 1, &d) != LMX_MSG_OK  [create_id site]
+7125:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7127:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7128:                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK  [create_id site]
+7167:                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7169:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7170:                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK  [create_id site]
+7171:                || lmx_msg_create(rti, p, 4, &ini, 1, &d) != LMX_MSG_OK  [create_id site]
+7172:                || lmx_msg_create(rti, p, 5, &ini, 1, &eaddr) != LMX_MSG_OK  [create_id site]
+7264:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7266:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7267:                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK  [create_id site]
+7310:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7312:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7313:                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK  [create_id site]
+7372:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7374:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7375:                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK  [create_id site]
+7428:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7430:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7431:                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK  [create_id site]
+7496:                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7498:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7499:                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK  [create_id site]
+7500:                || lmx_msg_create(rti, p, 4, &ini, 1, &d) != LMX_MSG_OK  [create_id site]
+7552:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7554:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7588:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7590:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7591:                || lmx_msg_create(rti, p, 3, &ini, 1, &r1) != LMX_MSG_OK  [create_id site]
+7592:                || lmx_msg_create(rti, p, 4, &ini, 1, &r2) != LMX_MSG_OK  [create_id site]
+7659:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7661:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7688:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7690:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7720:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7722:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+7757:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7766:                if (lmx_msg_create(rti, p, (unsigned)(10 + i), &ini, 1, &kids[i]) != LMX_MSG_OK  [create_id site]
+7802:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7804:                || lmx_msg_create(rti, p, 2, &ini, 1, &ka) != LMX_MSG_OK  [create_id site]
+7805:                || lmx_msg_create(rti, p, 3, &ini, 1, &kb) != LMX_MSG_OK  [create_id site]
+7845:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7846:                || lmx_msg_create(rti, p, 2, &ini, 1, &sib) != LMX_MSG_OK  [create_id site]
+7848:                || lmx_msg_create(rti, p, 3, &ini, 1, &kid) != LMX_MSG_OK  [create_id site]
+7925:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7927:                || lmx_msg_create(rti, p, 2, &ini, 1, &kid) != LMX_MSG_OK  [create_id site]
+7961:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+7963:                || lmx_msg_create(rti, p, 2, &ini, 1, &c0) != LMX_MSG_OK) {  [create_id site]
+7971:                if (lmx_msg_create(rti, p, (unsigned)(10 + k), &ini, 1, &extras[k]) != LMX_MSG_OK) {  [create_id site]
+8029:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8031:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+8032:                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK  [create_id site]
+8033:                || lmx_msg_create(rti, p, 4, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+8119:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8121:                || lmx_msg_create(rti, p, 2, &ini, 1, &any) != LMX_MSG_OK  [create_id site]
+8122:                || lmx_msg_create(rti, p, 3, &ini, 1, &ui) != LMX_MSG_OK  [create_id site]
+8178:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8180:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+8207:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8209:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+8280:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8282:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+8283:                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK  [create_id site]
+8322:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8324:                || lmx_msg_create(rti, p, 2, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+8326:                || lmx_msg_create(rti, c, 3, &ini, 1, &g) != LMX_MSG_OK  [create_id site]
+8378:                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+8435:                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+8481:                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+8524:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK  [create_id site]
+8525:                || lmx_msg_create(rti, r, 2, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8527:                || lmx_msg_create(rti, p, 3, &ini, 1, &c) != LMX_MSG_OK  [create_id site]
+8611:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8612:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+8613:                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK  [create_id site]
+8663:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8664:                || lmx_msg_create(rti, p, 2, &ini, 1, &g) != LMX_MSG_OK  [create_id site]
+8702:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8703:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+8740:            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8741:                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK  [create_id site]
+8742:                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK  [create_id site]
+8791:            if (rti == 0 || g_foreign_rt == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK  [create_id site]
+8837:                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK  [create_id site]
+8896:            || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK  [create_id site]
+
+=== l2src/lmx_message_selftest.lm1 (77) ===
+53:    st: lmx_msg_create(rt, 0U, 1U, payload, 4U, @ parent)  [create_id site]
+58:    st: lmx_msg_create(rt, 0U, 1U, payload, 4U, @ parent)  [create_id site]
+62:    st: lmx_msg_create(rt, parent, 7U, payload, 4U, @ child)  [create_id site]
+73:    st: lmx_msg_create(rt, 0U, 2U, payload, 4U, @ parent_b)  [create_id site]
+78:    st: lmx_msg_create(rt, 0U, 2U, payload, 4U, @ parent_b)  [create_id site]
+82:    st: lmx_msg_create(rt, parent_b, 1U, payload, 4U, @ child_b)  [create_id site]
+93:    st: lmx_msg_create(rt, parent_b, 2U, payload, 4U, @ sib_a)  [create_id site]
+94:    st: lmx_msg_create(rt, parent_b, 3U, payload, 4U, @ sib_b)  [create_id site]
+95:    st: lmx_msg_create(rt, parent_b, 4U, payload, 4U, @ sib_c)  [create_id site]
+103:    st: lmx_msg_create(rt, parent_b, 5U, payload, 4U, @ sib_a)  [create_id site]
+104:    st: lmx_msg_create(rt, parent_b, 6U, payload, 4U, @ sib_b)  [create_id site]
+105:    st: lmx_msg_create(rt, parent_b, 7U, payload, 4U, @ sib_c)  [create_id site]
+215:    st: lmx_msg_create(rt, parent, 90U, payload, 4U, @ dropc)  [create_id site]
+245:    st: lmx_msg_create(rt, parent, 41U, payload, 4U, @ later)  [create_id site]
+250:    st: lmx_msg_create(rt, parent, 8U, payload, 4U, @ child2)  [create_id site]
+281:    st: lmx_msg_create(rt, parent, 20U, payload, 4U, @ stale)  [create_id site]
+286:    st: lmx_msg_create(rt, parent, 20U, payload, 4U, @ retried)  [create_id site]
+290:    st: lmx_msg_create(rt, parent, 21U, payload, 4U, @ req)  [create_id site]
+292:    st: lmx_msg_create(rt, parent, 22U, payload, 4U, @ mid)  [create_id site]
+327:    st: lmx_msg_create(rt, parent, 23U, payload, 4U, @ mid)  [create_id site]
+329:    st: lmx_msg_create(rt, mid, 24U, payload, 4U, @ leaf)  [create_id site]
+342:    st: lmx_msg_create(rt, parent, 30U, payload, 4U, @ mid2)  [create_id site]
+344:    st: lmx_msg_create(rt, mid2, 31U, payload, 4U, @ leaf2)  [create_id site]
+367:    st: lmx_msg_create(rt, parent, 25U, payload, 4U, @ mid)  [create_id site]
+377:    st: lmx_msg_create(rt, parent, 26U, payload, 4U, @ idle)  [create_id site]
+393:    st: lmx_msg_create(rt, parent, 40U, payload, 4U, @ ui)  [create_id site]
+395:    st: lmx_msg_create(rt, ui, 41U, payload, 4U, @ worker)  [create_id site]
+433:    st: lmx_msg_create(rt, parent, 42U, payload, 4U, @ w2)  [create_id site]
+435:    st: lmx_msg_create(rt, parent, 45U, payload, 4U, @ log)  [create_id site]
+478:    st: lmx_msg_create(rt, parent, 43U, payload, 4U, @ ctrl)  [create_id site]
+480:    st: lmx_msg_create(rt, ctrl, 44U, payload, 4U, @ idle2)  [create_id site]
+518:        st: lmx_msg_create(rt2, 0U, 1U, payload, 4U, @ p0)  [create_id site]
+519:        st: lmx_msg_create(rt2, p0, 1U, payload, 4U, @ c1)  [create_id site]
+520:        st: lmx_msg_create(rt2, p0, 2U, payload, 4U, @ c2)  [create_id site]
+521:        st: lmx_msg_create(rt2, c1, 1U, payload, 4U, @ g1)  [create_id site]
+548:            st: lmx_msg_create(rt2, p0, (cast: (unsigned) k), payload, 4U, @ c10)  [create_id site]
+560:        st: lmx_msg_create(rt2, p0, 20U, payload, 4U, @ stale_p)  [create_id site]
+565:        st: lmx_msg_create(rt2, p0, 20U, payload, 4U, @ retried_p)  [create_id site]
+583:    st: lmx_msg_create(hrt, 0U, 1U, payload, 4U, @ host_parent)  [create_id site]
+584:    st: lmx_msg_create(hrt, host_parent, 90U, payload, 4U, @ host_child)  [create_id site]
+659:    st: lmx_msg_create(prt, 0U, 1U, payload, 4U, @ deep)  [create_id site]
+662:        st: lmx_msg_create(prt, deep, (cast: (unsigned) (100 + di)), payload, 4U, @ nxt)  [create_id site]
+682:    st: lmx_msg_create(lrt, 0U, 1U, payload, 4U, @ lp)  [create_id site]
+683:    st: lmx_msg_create(lrt, lp, 1U, payload, 4U, @ lc)  [create_id site]
+718:    st: lmx_msg_create(lrt2, 0U, 1U, payload, 4U, @ lp2)  [create_id site]
+719:    st: lmx_msg_create(lrt2, lp2, 1U, payload, 4U, @ lc2)  [create_id site]
+737:    st: lmx_msg_create(lrt3, 0U, 1U, payload, 4U, @ lp3)  [create_id site]
+738:    st: lmx_msg_create(lrt3, lp3, 1U, payload, 4U, @ lc3)  [create_id site]
+768:    st: lmx_msg_create(lrt4, 0U, 1U, payload, 4U, @ lp4)  [create_id site]
+769:    st: lmx_msg_create(lrt4, lp4, 1U, payload, 4U, @ lc4)  [create_id site]
+784:    st: lmx_msg_create(lrt5, 0U, 1U, payload, 4U, @ lp5)  [create_id site]
+785:    st: lmx_msg_create(lrt5, lp5, 1U, payload, 4U, @ lc5)  [create_id site]
+809:    st: lmx_msg_create(lrt6, 0U, 1U, payload, 4U, @ lp6)  [create_id site]
+810:    st: lmx_msg_create(lrt6, lp6, 1U, payload, 4U, @ lc6)  [create_id site]
+835:    st: lmx_msg_create(lrt7, 0U, 1U, payload, 4U, @ lp7)  [create_id site]
+836:    st: lmx_msg_create(lrt7, lp7, 1U, payload, 4U, @ lc7)  [create_id site]
+837:    st: lmx_msg_create(lrt7, lp7, 2U, payload, 4U, @ sib7)  [create_id site]
+862:    st: lmx_msg_create(trt, 0U, 1U, payload, 4U, @ tp)  [create_id site]
+863:    st: lmx_msg_create(trt, tp, 1U, payload, 4U, @ ta)  [create_id site]
+864:    st: lmx_msg_create(trt, tp, 2U, payload, 4U, @ tb)  [create_id site]
+898:    st: lmx_msg_create(rrt, 0U, 1U, payload, 4U, @ rp)  [create_id site]
+899:    st: lmx_msg_create(rrt, rp, 1U, payload, 4U, @ rc)  [create_id site]
+942:    st: lmx_msg_create(rrt2, 0U, 1U, payload, 4U, @ rp2)  [create_id site]
+958:    st: lmx_msg_create(rrt3, 0U, 1U, payload, 4U, @ rp3)  [create_id site]
+959:    st: lmx_msg_create(rrt3, rp3, 1U, payload, 4U, @ rs3)  [create_id site]
+961:    st: lmx_msg_create(rrt3, rp3, 2U, payload, 4U, @ rc3)  [create_id site]
+1007:    st: lmx_msg_create(crt, 0U, 1U, payload, 4U, @ cp)  [create_id site]
+1008:    st: lmx_msg_create(crt, cp, 1U, payload, 4U, @ cc)  [create_id site]
+1009:    st: lmx_msg_create(crt, cp, 2U, payload, 4U, @ cs)  [create_id site]
+1040:    st: lmx_msg_create(lct, 0U, 1U, payload, 4U, @ lcp)  [create_id site]
+1041:    st: lmx_msg_create(lct, lcp, 1U, payload, 4U, @ lcd)  [create_id site]
+1042:    st: lmx_msg_create(lct, lcp, 2U, payload, 4U, @ lcu)  [create_id site]
+1081:    st: lmx_msg_create(oomrt, 0U, 1U, payload, 4U, @ oom_a)  [create_id site]
+1086:    st: lmx_msg_create(oomrt, 0U, 1U, payload, 4U, @ oom_a)  [create_id site]
+1092:    st: lmx_msg_create(oomrt, 0U, 2U, payload, 4U, @ oom_b)  [create_id site]
+1097:    st: lmx_msg_create(oomrt, 0U, 2U, payload, 4U, @ oom_b)  [create_id site]
+1102:    st: lmx_msg_create(oomrt, oom_a, 3U, payload, 4U, @ oom_c)  [create_id site]
+
+--- mixa_manager doc-only mentions (not code sites, not counted)
+
+mixa_manager/lib_l2_runtime_support.ps1:74:#      runtime symbols (lmx_msg_create, lmx_branch_struct_known, etc.)
+mixa_manager/PROCESS_SEAM.txt:252:stg/l1_baseline/l2src/lmx_message.h. It exposes lmx_msg_create/send/stop,
+mixa_manager/SPEC_DIGEST.txt:47:    lmx_msg_create(rt, parent, create_id, init, n, out)
+mixa_manager/SPEC_DIGEST.txt:96:    retry of the same (parent, create_id) returns the SAME child and path and
+mixa_manager/SPEC_DIGEST.txt:98:    an ABORTED reservation is not reused - a later retry of that create_id gets
+
+PROCESS_SEAM.txt:252 is doubly stale: it names both the removed create_id
+retry semantics AND the pre-ONE-ROOT path stg/l1_baseline/l2src/
+lmx_message.h (the file is at l2src/lmx_message.h now). SPEC_DIGEST.txt:
+96,98 describe the (parent, create_id) retry/tombstone rule D1 already
+deleted from the runtime (no lmx_msg_find_create, no stored create_id
+field remain at 00b04751) -- this digest is stale on D1's own account,
+not just D2's; worth a ticket of its own, not this one's job to fix.
+
+--- Non-zero flagging, in full
+
+Every one of the 490 sites above that is an actual CALL (not a bare
+declaration or definition) passes a non-zero value in the create_id
+position, with exactly two exceptions, both already named in the Counts
+section: l2src/tests/l2_c_scanners_parse_driver.lm1:657 (`id`, a loop
+variable whose value this survey cannot determine statically) and the
+pass-through call inside l2src/tests/l2_message_root_driver.lm1:80
+(`__real_lmx_msg_create(rt, parent, id, init, n, out)`, forwarding
+whatever value the wrap's own caller supplied). No call anywhere in this
+survey's scope passes a literal 0 or 0U. The bootstrap sites
+(lmx_message.lm1:887/894, lmx_message.lm2:939/946, runtime_new's own R0
+and UI-lane creates) use 1U and LMX_MSG_UI_LANE_ID respectively, both
+non-zero; runtime_new's own create_id argument for R0 is the literal
+constant used throughout the model for the root's own address, and for
+the UI lane is the reserved sentinel D2's own removal (with M's UI-lane
+deletion) makes moot.
+
+--- Falsifier
+
+`grep -c "create_id" l2src/LOCK_REMOVAL_D2_SITES.txt` on this file,
+re-run against the actual written file (not asserted), is 502, at least
+the 490 sites claimed: every one of the 490 tagged site lines carries the
+literal "[create_id site ...]" tag (one tag per occurrence, not per
+source line, so a source line with two calls on it produces two tagged
+rows, each independently grep-matchable; verified per-file by summing
+each section's own tag count before this line was written), plus 12 more
+matches from this document's own header, count and falsifier prose. The
+corrected LOCK_REMOVAL_M_FIELDS.txt line greps for "map_child" (4
+occurrences in that file, 0 before this edit).

@@ -257,9 +257,16 @@ fields read/written: goes through lmx_msg_create_prepare's normal child-creation
   here, already fully covered by LOCK_REMOVAL_FIELDS.txt's own rows for ordinary
   creation, none of them M-specific)
 table rows: n/a (creation path, not the sequential-mapping mechanism itself)
-flag: none -- UI_LANE_ID is a create-time sentinel, not a stepping mechanism; it
-  identifies which child the UI-stepping sites above operate on, but creating it
-  is not itself something M removes.
+flag: CORRECTED (2026-09-15, per 6f's ticket and LOCK_REMOVAL_DESIGN.txt's M
+  section at ba1aa1ad): the lead has since decided the core creates no UI
+  lane of its own; mixa_manager builds it as an ordinary child of R0 through
+  map_child. This runtime_new call site itself is removed by M ("Code sites
+  at 80101431": "runtime_new's UI lane creation (lm1 894-897, lm2 946-949)"
+  is in what "goes"). The earlier claim on this line -- "creating it is not
+  itself something M removes" -- was accurate for the ticket this survey
+  answered (whether the sequential-mapping mechanism touches UI-lane
+  creation; it does not) but is superseded by this later, separate decision
+  and is struck.
 
 site: lmx_msg_create_prepare (UI_LANE_ID detection)
 file:line range: lmx_message.lm1:1099-... , the check at 1111 (mirror
