@@ -13,10 +13,11 @@ moved to L2 and the remainder to L3, "а причем тут вообще Си?"
 
 The record, now in the documentation (spec section 2, model section 2, main c7f9d375; Mikhail asked for the handoff
 flag and confirmed its meaning, "Так"):
-  typedef struct LmxMsg { volatile uint_fast8_t running;       1 at launch; 0 written by the parent (its close) and by
-                                                               the L3 Thread at its loop's exit (Mikhail 2026-09-15:
-                                                               "success && !running, с выходом выставляется running = 0")
-                          volatile uint_fast8_t success;       0 at launch, 1 written by the Message itself
+  typedef struct LmxMsg { volatile uint_fast8_t running;       1 at launch; polled while root executes; 0 is the
+                                                               parent's stop request, and is set at exit (Mikhail
+                                                               2026-09-15: "success && !running, с выходом
+                                                               выставляется running = 0")
+                          volatile uint_fast8_t success;       0 at launch; 1 is written by user code
                           volatile uint_fast8_t handoff_safe;  1 written by the Message itself when it has left its
                                                                last turn and nothing native uses its arena (19.29.7,
                                                                19.29.8); today's native_users folds into when it is set
@@ -141,7 +142,7 @@ LmxMsgRuntime.root_record | h:227 | R0's policy record, already Structure data i
 LmxMsgBindWait.wait_ev / .cv / .sig | c:36,39,40 | the wait primitive | DEL | ruled (map 5.7; S3) | S3
 LmxMsgBindWait.worker / .worker_on | c:37,41,42 | the worker thread handle | L3T (L1 data of the L3 Thread's code, like any other) | ruled (Mikhail struck the "native primitives" sentence: the L3 Thread too is written in L1, then L2, then L3, "а причем тут вообще Си?") | M/S3
 LmxMsgBindWait.gen, .slot, .launch_n | c:44,46,47 | wait generations and launch gate | DEL | ruled (map 5.7; S3 launch wake goes) | S3
-LmxMsgBindWait.retired | c:45 | a generation's stop flag, polled by the worker loop (exec.c 3063, 3078, 3156, 3170; set at 2123 join_bind_worker, 2241 stop_retire_walk, 3376 stop) | DEL; the owner's loop leaves when MSG success becomes 1 (user code) and sets MSG running = 0 as it leaves; running is polled by the code under root, and the parent's close also writes it | ruled (coordinator, confirming b5 FLAG-1; with M there are no generations to retire; Mikhail: the loop ends on success==1) | M/S3
+LmxMsgBindWait.retired | c:45 | a generation's stop flag, polled by the worker loop (exec.c 3063, 3078, 3156, 3170; set at 2123 join_bind_worker, 2241 stop_retire_walk, 3376 stop) | DEL; its stop role is MSG running = 0, the parent's stop request, which in the end leaves the L3 Thread's loop (polled while root executes; running is also set to 0 at exit) | ruled (coordinator, confirming b5 FLAG-1; with M there are no generations to retire; Mikhail: "Да, 0 это запрос остановки от родителя") | M/S3
 LmxMsgBindWait.reaping, .on_reap, .reap_next | c:48,49,51 | the reap list | DEL (each thread frees itself; no join) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | S3/S5
 LmxMsgBindWait.owner_tid | c:50 | the owning thread's id | L3T (L1 data of the L3 Thread's code) | ruled (Mikhail struck the "native primitives" sentence) | S3
 LmxMsgBindWait.rec | c:54 | back link to the bind record | DEL | ruled (map 5.7) | S3
