@@ -17,9 +17,7 @@ int lmx_msg_host_shutdown(LmxMsgRuntime *rt);
 int lmx_msg_host_test_get_nomem(void);
 #if defined(LMX_MSG_HOST_TEST)
 extern int lmx_msg_host_test_nomem;
-extern int lmx_msg_host_test_nowake;
 void lmx_msg_host_test_set_nomem(int v);
-void lmx_msg_host_test_set_nowake(int v);
 #endif
 
 #endif

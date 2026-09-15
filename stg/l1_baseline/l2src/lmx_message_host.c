@@ -6,7 +6,6 @@
 
 #if defined(LMX_MSG_HOST_TEST)
 int lmx_msg_host_test_nomem;
-int lmx_msg_host_test_nowake;
 
 int lmx_msg_host_test_get_nomem(void) {
     return lmx_msg_host_test_nomem;
@@ -14,10 +13,6 @@ int lmx_msg_host_test_get_nomem(void) {
 
 void lmx_msg_host_test_set_nomem(int v) {
     lmx_msg_host_test_nomem = v;
-}
-
-void lmx_msg_host_test_set_nowake(int v) {
-    lmx_msg_host_test_nowake = v;
 }
 #else
 int lmx_msg_host_test_get_nomem(void) {
