@@ -4434,3 +4434,16 @@ and the UI-step case) recorded here as a known limit that M removes
 with the UI step and the mapped turns; the lead's scan for another
 session's writes under any build/ tree in 09:08:30-09:09:30 is reported
 if it finds one.
+b5's S5 inventory landed on sonnet/s5-lists f86a85ad
+(LOCK_REMOVAL_S5_LISTS.txt; checked by the coordinator): 24 fields read
+(10 LmxMsgRuntime, 14 LmxMsgExec production; 4 test-only excluded), 8 of
+them genuine cross-Message collections or counts; fates: DEL with a
+named stage 7 (transport/transport_tail S5/Y3 as in the Y file; nworkers
+M; reap_head S3; retire_head/retire_tail S5; wait_serial S3); "becomes
+data of X's arena" 1: slots and n become R0's own data, proposed by
+extension of the ruled root_record/next_addr/root_seq precedent.
+Coordinator's ruling: confirmed, slots and n are R0's data (the root's
+record of its Messages is the root's Structure data; the FIELDS header's
+"L3T of R0"). Flagged lists read by a foreign lane after S4: 0, stated
+explicitly. The S3/M/Y/S4/S6/A/S5 inventories are now complete for the
+lead's stage notes.
