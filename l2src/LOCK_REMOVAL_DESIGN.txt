@@ -1071,6 +1071,16 @@ S4. The family tree and the mapping written only on the owner's lane (L2, L3), t
       sonnet/s4-guard-checks a3576110, each calling from a spawned thread and expecting INVALID:
       run_s4_guard_exec_bind in the exec selftest and run_s4_guard_emergency_cancel in cancel_spin_host.c. They are
       measured red after the struct-field fix and D2 land.
+    - Second correction (b5 measured both checks on d8f758e6; the coordinator, 2026-09-15):
+      - run_s4_guard_emergency_cancel is red as expected: the call returns 0, where INVALID is wanted.
+      - run_s4_guard_exec_bind is green, because exec_bind_mode already calls mapping_authority_locked
+        (lmx_message_exec.c 1686-1696, called at 1721). That is the very S4 check: the host outside any turn, or the
+        holder of the parent's turn, walking settled ancestors per 19.29.6. It is unchanged since before M, and the
+        census missed that read.
+      So S4's code list is one guard: emergency_cancel refuses a caller that is not the child's parent's lane or
+      the host outside any turn (INVALID). Its acceptance is run_s4_guard_emergency_cancel, red now and green with
+      the guard. The exec_bind check stays in the Exec suite as a green check that the guard holds. S4_SITES site 5
+      becomes "nothing (guarded at mapping_authority_locked)". S4's code is small enough to follow S2 directly.
 
 S5. The runtime-level lists (L5). Waits on 5.1.
     rt->slots, rt->n, the retire queue, the reap queue, rt->transport and e->ui_lane each either go or become a cell in
