@@ -99,8 +99,10 @@ function Test-GoldensBetween([string]$ExeRef, [string]$ExePort, [string]$StageOu
 $guardDir = Join-Path $out "cmdline_guard"
 New-Item -ItemType Directory -Force -Path $guardDir | Out-Null
 $guardC = Join-Path $guardDir "empty.c"
-[IO.File]::WriteAllText((Join-Path (Get-Location).ProviderPath $guardC), "int cmdline_guard_unit;`n")
-$guardArgs = @("-std=c99", "-w", "-c") + @(0..129 | ForEach-Object { "-DCMDLINE_GUARD_PAD_{0:D3}=0123456789012345678901234567890123456789" -f $_ }) + @("-o", (Join-Path $guardDir "empty.o"), $guardC)
+# One quoted -D value holds a backslash: the unit compiles only if it arrives as the 4-byte
+# string "a\\b", which needs Invoke-Gcc's escaping of \ and " in the response file (6f).
+[IO.File]::WriteAllText((Join-Path (Get-Location).ProviderPath $guardC), "int cmdline_guard_unit;`ntypedef char cmdline_guard_escape_check[(sizeof(CMDLINE_GUARD_STRING) == 4) ? 1 : -1];`n")
+$guardArgs = @("-std=c99", "-w", "-c", '-DCMDLINE_GUARD_STRING="a\\b"') + @(0..129 | ForEach-Object { "-DCMDLINE_GUARD_PAD_{0:D3}=0123456789012345678901234567890123456789" -f $_ }) + @("-o", (Join-Path $guardDir "empty.o"), $guardC)
 $guardInline = "gcc " + (($guardArgs | ForEach-Object { "`"$_`"" }) -join " ")
 if ($guardInline.Length -le 8192) { throw "cmdline guard is only $($guardInline.Length) characters inline; it must exceed 8192" }
 Invoke-Gcc $guardArgs (Join-Path $log "cmdline_guard.gcc.log")
