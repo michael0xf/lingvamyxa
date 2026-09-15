@@ -146,9 +146,15 @@ S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and e
     после выхода из turn'а\" -- нет!!!! L3 Thread точно так же завершается только по success пользовательским кодом.
     Каким образом вы будете код писать иначе?". The owner thread never ends because its mailbox is empty; there is
     no "the thread ends and the next admission relaunches it".
-    OPEN, put to him by the coordinator for a yes: between turns the owner thread keeps its own loop running (its
-    self-maintenance, the liveness queries to its parent, its timers) and looks into its mailbox each time round
-    without blocking on anything. Nothing is coded for the between-turns loop until his word.
+    Between turns, confirmed by Mikhail, verbatim: "никакого success у многих фоновых задач вообще нет, то есть это
+    не может быть правилом ядра \"в ящике ничего нет поэтому ухожу\"" and "иначе не реализуешь цикл бесконечный --
+    он тупо не будет проверять почту!!!". Final for S3 and Y (spec 19.28.R2.2, model sections 30 and 31):
+    - the owner thread runs an infinite loop; each round it does its self-maintenance (the liveness queries to its
+      parent, its timers) and looks into its mailbox under synchronized, and runs a turn when there is a Message;
+    - it never blocks on any primitive and never exits for lack of mail; it ends only when user code ends it;
+    - no wake, no wait, no notify anywhere. Going, with nothing in their place: run_one's wake-all,
+      exec_start_map_kick, the launch wake, and the three worker-lifecycle signals (bind_wait_retire, the unbind
+      join, stop's retire walk), since no worker ever waits.
     - Red: 0c's oracle, checking that no wake exists: any wake site at all is red. Red today on the three sources.
     - Green: the oracle reports no wake site in the defaults and under -LaneCheck; the executor selftest green.
 
@@ -486,10 +492,11 @@ Y. The mailbox's one synchronization as a Java monitor through the synchronized 
         - Red: a hook test (two threads, a counter under synchronized, reentrant entry from the owner) that does not
           link before the hook exists.
     Y3. The mailbox in L2: inbox and outbox reads and writes under synchronized on the mailbox object, nothing else.
-        It replaces m->mail and the lmx_msg_mail_* C functions. The owner looks at its mailbox after its turn; the
-        empty-mailbox case is open (S3) and nothing is coded for it until Mikhail answers.
-        - Red: S3's no-wake oracle red today. Green: the oracle green with the bind waits' events and conditions
-          gone.
+        It replaces m->mail and the lmx_msg_mail_* C functions. The owner thread's infinite loop (S3) looks into the
+        mailbox under synchronized each round and runs a turn when there is a Message; it never blocks and never
+        exits for lack of mail.
+        - Red: S3's no-wake oracle red today. Green: the oracle green with the bind waits' events and conditions,
+          bind_wait_retire, the unbind join and stop's retire walk gone.
     Under option (b) (self-build first, the L2 port after), the design's reading: Y1, the synchronized receiver in
     l2trans, belongs to the L2 port after the self-build. Until then the mailbox is written in L1
     (lmx_message.lm1 and its lm2 mirror), calling Y2's monitor hook explicitly: enter and leave only. Y2 and
