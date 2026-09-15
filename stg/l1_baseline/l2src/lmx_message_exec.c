@@ -27,30 +27,18 @@ typedef DWORD LmxTid;
 #define lmx_tid() GetCurrentThreadId()
 #else
 #include <pthread.h>
+#include <sched.h>
 typedef pthread_t LmxTid;
 #define lmx_tid() pthread_self()
 #endif
 
+/* S3: what a context worker's thread needs of its binding: worker_on while the
+ * thread is in its loop, retired once the binding has let it go, and the record
+ * it serves (0 once retired). The thread frees a retired one when it leaves its
+ * loop; the retire frees one no thread runs. Read and written under the exec lock. */
 typedef struct LmxMsgBindWait {
-#if defined(_WIN32)
-    HANDLE wait_ev;
-    HANDLE worker;
-#else
-    pthread_cond_t cv;
-    int sig;
-    pthread_t worker;
     int worker_on;
-#endif
-    unsigned gen;
     int retired;
-    int slot;
-    int launch_n;
-    int reaping;
-    int on_reap;
-    LmxTid owner_tid;
-    struct LmxMsgBindWait *reap_next;
-    /* Stage 3a-2: the bind record this generation serves while attached;
-     * 0 once detached. Read and written under the exec lock. */
     struct LmxMsgExecBind *rec;
 } LmxMsgBindWait;
 
@@ -63,9 +51,8 @@ typedef struct LmxMsgExecBind {
     LmxTid held_by;
     int held;
     int last_st;
-    int launching;
     int gone;
-    /* Heap-stable wait generation. */
+    /* The context worker's record, heap-stable. */
     LmxMsgBindWait *wait;
     /* Stage 3a-2/3b-7d: 1 while this record is bound: set by lmx_msg_exec_bind,
      * cleared where it is unbound (unbind_slot_locked). Read only under the exec
@@ -80,8 +67,6 @@ void (*lmx_msg_test_after_recv_pin)(LmxMsgRuntime *rt, LmxMsg *m);
 void (*lmx_msg_test_after_drive_snap)(LmxMsgRuntime *rt, LmxMsg *p);
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
-void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr addr, int after_create);
-void (*lmx_msg_exec_test_during_reap_kept)(LmxMsgRuntime *rt) = 0;
 /* Stage 3b-9: fires in lmx_msg_release_slot after unbind, inside the exec lock
  * that covers the tree change (child_unlink and the root-list removal). */
 void (*lmx_msg_exec_test_during_release_tree)(LmxMsgRuntime *rt, LmxMsg *m) = 0;
@@ -96,23 +81,17 @@ void lmx_msg_test_release_tree(LmxMsgRuntime *rt, LmxMsg *m) {
  * and aborts at the first write whose owner is not the current-turn Message;
  * the host outside any turn acts with the parent's authority and passes. */
 int lmx_msg_test_lane_check;
-static LmxMsgBindWait *test_launch_cap;
-static unsigned test_launch_cap_gen;
-static unsigned test_wait_destroy_n;
-static unsigned test_wait_destroy_last_gen;
 #endif
 
 typedef struct LmxMsgExec {
 #if defined(_WIN32)
     CRITICAL_SECTION lock;
-    HANDLE stop_ev;
     DWORD tls;
 #else
     pthread_mutex_t lock;
     pthread_key_t tls;
 #endif
     int nworkers;
-    LmxMsgBindWait *reap_head;
     int stopping;
     int stopped;
     int no_retire;
@@ -125,12 +104,10 @@ typedef struct LmxMsgExec {
     LmxMsg *ui_lane;
     LmxMsg *retire_head;
     LmxMsg *retire_tail;
-    unsigned wait_serial;
     LmxMsgAddr unbound_held;
 #if defined(LMX_MSG_EXEC_TEST)
     int test_fail_ctx;
     int test_fail_adopt_block;
-    int test_fail_start_kicks;
     /* The thread that attached the executor (runtime_new's caller): the only
      * thread that may write a scheduler cell outside any turn (lane tripwire). */
 #if defined(_WIN32)
@@ -141,12 +118,9 @@ typedef struct LmxMsgExec {
 #endif
 } LmxMsgExec;
 
-static LmxMsgBindWait *bind_wait_new(LmxMsgExec *e);
-static void bind_wait_signal(LmxMsgBindWait *w);
-static void bind_wait_destroy(LmxMsgBindWait *w);
-static void bind_reap_join_all(LmxMsgRuntime *rt);
+static void bind_wait_retire_locked(LmxMsgBindWait *w);
+static void exec_yield(void);
 static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr);
-static int launch_same_gen(const LmxMsgExecBind *b, LmxMsgBindWait *cap, unsigned gen);
 #if defined(_WIN32)
 static DWORD WINAPI context_worker(void *arg);
 #endif
@@ -154,8 +128,6 @@ static LmxMsgExecBind *bind_rec_locked(LmxMsg *m);
 static LmxMsgExecBind *rec_at_addr_locked(LmxMsgExec *e, LmxMsgAddr addr);
 static int bind_has_worker(const LmxMsgExecBind *b);
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr);
-static void bind_wait_launch_hold_locked(LmxMsgBindWait *w);
-static void bind_wait_launch_release(LmxMsgRuntime *rt, LmxMsgBindWait *w);
 
 typedef struct LmxTurnRoot {
     jmp_buf jmp;
@@ -269,6 +241,22 @@ void lmx_msg_test_unbind_refused(LmxMsgRuntime *rt, LmxMsg *m, int st, const cha
 }
 #else
 #define lmx_msg_test_lane_take(r, o, h, s) ((void)0)
+#endif
+
+#if defined(LMX_MSG_EXEC_TEST)
+/* S3 (Mikhail 2026-09-15): an owner thread loops forever, looks into its own
+ * mailbox each round and waits on no primitive, so nothing signals a lane thread.
+ * Under LMX_LANE_CHECK=1 every such signal aborts with its site named; green is 0
+ * sites. Called before each signal in exec.c and lmx_message_host.c. */
+void lmx_msg_test_wake_site(const char *site, unsigned owner) {
+    if (lmx_msg_test_lane_check == 0) {
+        return;
+    }
+    fprintf(stderr, "LANE WAKE FAIL site=%s owner=%u: a lane thread was signalled; an owner loops over its mailbox and waits on nothing (S3)\n",
+        site, owner);
+    fflush(stderr);
+    abort();
+}
 #endif
 
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
@@ -1242,11 +1230,8 @@ int lmx_msg_exec_attach(LmxMsgRuntime *rt) {
 #endif
 #if defined(_WIN32)
     InitializeCriticalSection(&e->lock);
-    e->stop_ev = CreateEventA(0, 1, 0, 0);
     e->tls = TlsAlloc();
-    if (e->stop_ev == 0 || e->tls == TLS_OUT_OF_INDEXES) {
-        if (e->stop_ev) CloseHandle(e->stop_ev);
-        if (e->tls != TLS_OUT_OF_INDEXES) TlsFree(e->tls);
+    if (e->tls == TLS_OUT_OF_INDEXES) {
         DeleteCriticalSection(&e->lock);
         free(e);
         return 1;
@@ -1271,20 +1256,10 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
     if (e->stopped == 0) {
         lmx_msg_exec_stop(rt);
     }
-    {
-        LmxMsgBindWait *w = e->reap_head;
-        while (w != 0) {
-            LmxMsgBindWait *nxt = w->reap_next;
-            bind_wait_destroy(w);
-            w = nxt;
-        }
-        e->reap_head = 0;
-    }
     /* Stage 5 (d2): the UI lane is R0's child, a slot of the runtime; runtime_delete's
      * slot loop has already freed it and its MAP requests. */
     e->ui_lane = 0;
 #if defined(_WIN32)
-    CloseHandle(e->stop_ev);
     TlsFree(e->tls);
     DeleteCriticalSection(&e->lock);
 #else
@@ -1336,10 +1311,14 @@ int lmx_msg_exec_holding_any(LmxMsgRuntime *rt) {
 
 int lmx_msg_exec_workers(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
+    int n;
     if (e == 0) {
         return 0;
     }
-    return e->nworkers;
+    lmx_msg_exec_lock(rt);
+    n = e->nworkers;
+    lmx_msg_exec_unlock(rt);
+    return n;
 }
 
 int lmx_msg_exec_contexts_live(LmxMsgRuntime *rt) {
@@ -1439,41 +1418,12 @@ static int rec_walk_locked(LmxMsgExec *e, LmxRecVisit visit, void *arg) {
     return 0;
 }
 
-static int ctx_visit_wake(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
-    (void)e;
-    (void)arg;
-    if (rec->affinity != LMX_MSG_AFFINITY_UI) {
-        bind_wait_signal(rec->wait);
-    }
-    return 0;
-}
-
 /* Stage 3b-7d: the number of bound records. */
 static int ctx_visit_count(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
     (void)e;
     (void)rec;
     *(int *)arg += 1;
     return 0;
-}
-
-void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0) {
-        return;
-    }
-    (void)rec_walk_locked(e, ctx_visit_wake, 0);
-}
-
-void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
-    LmxMsgExec *e = exof(rt);
-    LmxMsgExecBind *r;
-    if (e == 0 || addr == 0U) {
-        return;
-    }
-    r = rec_at_addr_locked(e, addr);
-    if (r != 0 && r->affinity != LMX_MSG_AFFINITY_UI) {
-        bind_wait_signal(r->wait);
-    }
 }
 
 
@@ -1570,8 +1520,8 @@ static void ui_request_if_ready_locked(LmxMsgRuntime *rt, LmxMsg *m) {
 
 /* Decision 18, stage 3d: the UI lane's take. It drains the lane's inbox in
  * admission order. Each request clears its Message's ui_pending (the taking
- * lane); a request whose Message is gone, no longer bound to UI, held,
- * launching or not ready is dropped (its next readiness sends again), and a
+ * lane); a request whose Message is gone, no longer bound to UI, held
+ * or not ready is dropped (its next readiness sends again), and a
  * ready Message that is no longer runnable has its flag cleared. The first
  * eligible Message is held, its ready flag cleared, and its turn taken. No
  * parent's cells are written. Caller holds the exec lock. */
@@ -1613,7 +1563,7 @@ unsigned lmx_msg_exec_take_ui_locked(LmxMsgRuntime *rt) {
         m->ui_pending = 0;
         rj = bind_rec_locked(m);
         if (rj == 0 || rj->gone != 0 || rj->affinity != LMX_MSG_AFFINITY_UI || m->ready == 0
-            || rj->held != 0 || rj->launching != 0) {
+            || rj->held != 0) {
             continue;
         }
         if (lmx_msg_exec_is_runnable_locked(rt, addr) == 0) {
@@ -1642,16 +1592,6 @@ LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i) {
 }
 
 #if defined(LMX_MSG_EXEC_TEST)
-void lmx_msg_exec_test_set_fail_start_kicks(LmxMsgRuntime *rt, int v) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0) {
-        return;
-    }
-    lmx_msg_exec_lock(rt);
-    e->test_fail_start_kicks = v;
-    lmx_msg_exec_unlock(rt);
-}
-
 void lmx_msg_exec_test_set_fail_ctx(LmxMsgRuntime *rt, int v) {
     LmxMsgExec *e = exof(rt);
     if (e == 0) {
@@ -1776,85 +1716,6 @@ int lmx_msg_exec_bind_has_worker(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     return h;
 }
 
-unsigned lmx_msg_exec_test_wait_gen(LmxMsgRuntime *rt, LmxMsgAddr addr) {
-    LmxMsgExec *e = exof(rt);
-    LmxMsgExecBind *r;
-    unsigned g = 0U;
-    if (e == 0 || addr == 0U) {
-        return 0U;
-    }
-    lmx_msg_exec_lock(rt);
-    r = rec_at_addr_locked(e, addr);
-    if (r != 0 && r->wait != 0) {
-        g = r->wait->gen;
-    }
-    lmx_msg_exec_unlock(rt);
-    return g;
-}
-
-void *lmx_msg_exec_test_worker_handle(LmxMsgRuntime *rt, LmxMsgAddr addr) {
-    LmxMsgExec *e = exof(rt);
-    LmxMsgExecBind *r;
-    void *h = 0;
-    if (e == 0 || addr == 0U) {
-        return 0;
-    }
-    lmx_msg_exec_lock(rt);
-    r = rec_at_addr_locked(e, addr);
-    if (r != 0 && r->wait != 0) {
-#if defined(_WIN32)
-        h = (void *)r->wait->worker;
-#else
-        h = r->wait->worker_on != 0 ? (void *)(uintptr_t)1 : 0;
-#endif
-    }
-    lmx_msg_exec_unlock(rt);
-    return h;
-}
-
-int lmx_msg_exec_test_launching(LmxMsgRuntime *rt, LmxMsgAddr addr) {
-    LmxMsgExec *e = exof(rt);
-    LmxMsgExecBind *r;
-    int v = 0;
-    if (e == 0 || addr == 0U) {
-        return 0;
-    }
-    lmx_msg_exec_lock(rt);
-    r = rec_at_addr_locked(e, addr);
-    if (r != 0) {
-        v = r->launching;
-    }
-    lmx_msg_exec_unlock(rt);
-    return v;
-}
-
-void *lmx_msg_exec_test_launch_cap(void) {
-    return test_launch_cap;
-}
-
-unsigned lmx_msg_exec_test_launch_cap_gen(void) {
-    return test_launch_cap_gen;
-}
-
-unsigned lmx_msg_exec_test_wait_gen_raw(const void *cap) {
-    const LmxMsgBindWait *w = (const LmxMsgBindWait *)cap;
-    return w != 0 ? w->gen : 0U;
-}
-
-int lmx_msg_exec_test_wait_launch_n(const void *cap) {
-    const LmxMsgBindWait *w = (const LmxMsgBindWait *)cap;
-    return w != 0 ? w->launch_n : -1;
-}
-
-unsigned lmx_msg_exec_test_wait_destroy_n(void) {
-    return test_wait_destroy_n;
-}
-
-unsigned lmx_msg_exec_test_wait_destroy_last_gen(void) {
-    return test_wait_destroy_last_gen;
-}
-
-
 #endif
 
 /* Stage 3a-2: the Message's own record while it is a counted table entry,
@@ -1954,254 +1815,31 @@ int lmx_msg_exec_route_locked(LmxMsg *m, int *ui, int *pool) {
 }
 
 static int bind_has_worker(const LmxMsgExecBind *b) {
-    if (b == 0 || b->wait == 0 || b->wait->retired != 0) {
-        return 0;
-    }
-#if defined(_WIN32)
-    return b->wait->worker != 0;
-#else
-    return b->wait->worker_on != 0;
-#endif
+    return b != 0 && b->wait != 0 && b->wait->worker_on != 0;
 }
 
-static LmxMsgBindWait *bind_wait_new(LmxMsgExec *e) {
-    LmxMsgBindWait *w = (LmxMsgBindWait *)calloc(1U, sizeof(LmxMsgBindWait));
-    if (w == 0 || e == 0) {
-        free(w);
-        return 0;
-    }
-#if defined(_WIN32)
-    w->wait_ev = CreateEventA(0, 0, 0, 0);
-    if (w->wait_ev == 0) {
-        free(w);
-        return 0;
-    }
-#else
-    if (pthread_cond_init(&w->cv, 0) != 0) {
-        free(w);
-        return 0;
-    }
-#endif
-    e->wait_serial += 1U;
-    if (e->wait_serial == 0U) {
-        e->wait_serial = 1U;
-    }
-    w->gen = e->wait_serial;
-    w->slot = 1;
-    return w;
-}
-
-static void bind_wait_signal(LmxMsgBindWait *w) {
+/* S3 (R4, R5): the binding lets its worker record go. No signal and no join: the
+ * worker reads retired at the head of its next round and frees the record as it
+ * leaves its loop; a record no thread runs is freed here. Exec lock held. */
+static void bind_wait_retire_locked(LmxMsgBindWait *w) {
     if (w == 0) {
-        return;
-    }
-#if defined(_WIN32)
-    if (w->wait_ev != 0) {
-        SetEvent(w->wait_ev);
-    }
-#else
-    w->sig = 1;
-    pthread_cond_signal(&w->cv);
-#endif
-}
-
-static void bind_wait_destroy(LmxMsgBindWait *w) {
-    if (w == 0) {
-        return;
-    }
-#if defined(LMX_MSG_EXEC_TEST)
-    test_wait_destroy_n += 1U;
-    test_wait_destroy_last_gen = w->gen;
-#endif
-#if defined(_WIN32)
-    if (w->wait_ev != 0) {
-        CloseHandle(w->wait_ev);
-        w->wait_ev = 0;
-    }
-#else
-    pthread_cond_destroy(&w->cv);
-#endif
-    free(w);
-}
-
-static int wait_has_native(const LmxMsgBindWait *w) {
-    if (w == 0) {
-        return 0;
-    }
-#if defined(_WIN32)
-    return w->worker != 0;
-#else
-    return w->worker_on != 0;
-#endif
-}
-
-static int bind_wait_can_free(const LmxMsgBindWait *w) {
-    return w != 0 && w->slot == 0 && w->launch_n == 0 && w->reaping == 0 && wait_has_native(w) == 0;
-}
-
-static void bind_wait_reap_unlink_locked(LmxMsgExec *e, LmxMsgBindWait *w) {
-    LmxMsgBindWait **pp;
-    if (e == 0 || w == 0) {
-        return;
-    }
-    pp = &e->reap_head;
-    while (*pp != 0) {
-        if (*pp == w) {
-            *pp = w->reap_next;
-            w->reap_next = 0;
-            w->on_reap = 0;
-            return;
-        }
-        pp = &(*pp)->reap_next;
-    }
-}
-
-static void bind_wait_maybe_free_locked(LmxMsgExec *e, LmxMsgBindWait *w) {
-    if (bind_wait_can_free(w) == 0) {
-        return;
-    }
-    bind_wait_reap_unlink_locked(e, w);
-    bind_wait_destroy(w);
-}
-
-static void bind_wait_launch_hold_locked(LmxMsgBindWait *w) {
-    if (w != 0) {
-        w->launch_n += 1;
-    }
-}
-
-static void bind_wait_launch_release(LmxMsgRuntime *rt, LmxMsgBindWait *w) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0 || w == 0) {
-        return;
-    }
-    lmx_msg_exec_lock(rt);
-    if (w->launch_n > 0) {
-        w->launch_n -= 1;
-    }
-    bind_wait_maybe_free_locked(e, w);
-    lmx_msg_exec_unlock(rt);
-}
-
-static int bind_wait_is_self(const LmxMsgBindWait *w) {
-    if (w == 0) {
-        return 0;
-    }
-#if defined(_WIN32)
-    return w->owner_tid != 0 && w->owner_tid == GetCurrentThreadId();
-#else
-    return w->worker_on != 0 && pthread_equal(w->worker, pthread_self());
-#endif
-}
-
-static int bind_wait_join(LmxMsgBindWait *w) {
-    int had = 0;
-    if (w == 0) {
-        return 0;
-    }
-#if defined(_WIN32)
-    if (w->worker != 0) {
-        had = 1;
-        WaitForSingleObject(w->worker, INFINITE);
-        CloseHandle(w->worker);
-        w->worker = 0;
-    }
-#else
-    if (w->worker_on != 0) {
-        had = 1;
-        pthread_join(w->worker, 0);
-        w->worker_on = 0;
-    }
-#endif
-    return had;
-}
-
-static void bind_reap_push(LmxMsgExec *e, LmxMsgBindWait *w) {
-    if (e == 0 || w == 0) {
         return;
     }
     w->retired = 1;
-    w->slot = 0;
-    if (w->on_reap == 0 && w->reaping == 0) {
-        w->reap_next = e->reap_head;
-        e->reap_head = w;
-        w->on_reap = 1;
+    w->rec = 0;
+    if (w->worker_on == 0) {
+        free(w);
     }
-    bind_wait_signal(w);
 }
 
-static void bind_reap_join_all(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    LmxMsgBindWait *head;
-    LmxMsgBindWait *w;
-    LmxMsgBindWait *nxt;
-    int n;
-    if (e == 0) {
-        return;
-    }
-    lmx_msg_exec_lock(rt);
-    head = e->reap_head;
-    e->reap_head = 0;
-    w = head;
-    while (w != 0) {
-        nxt = w->reap_next;
-        w->on_reap = 0;
-        w->reaping = 1;
-        if (nxt == head) {
-            w->reap_next = 0;
-            nxt = 0;
-        }
-        w = nxt;
-    }
-    lmx_msg_exec_unlock(rt);
-    w = head;
-    n = 0;
-    while (w != 0) {
-        nxt = w->reap_next;
-        w->reap_next = 0;
-        if (bind_wait_is_self(w) != 0) {
-            lmx_msg_exec_lock(rt);
-            w->reaping = 1;
-            w->on_reap = 1;
-            w->reap_next = e->reap_head;
-            e->reap_head = w;
-            lmx_msg_exec_unlock(rt);
-        } else {
-            if (bind_wait_join(w) != 0) {
-                n += 1;
-            }
-            lmx_msg_exec_lock(rt);
-            w->reaping = 1;
-            w->on_reap = 0;
-#if defined(LMX_MSG_EXEC_TEST)
-            if (lmx_msg_exec_test_during_reap_kept != 0
-                && (w->launch_n > 0 || w->slot != 0)) {
-                lmx_msg_exec_unlock(rt);
-                lmx_msg_exec_test_during_reap_kept(rt);
-                lmx_msg_exec_lock(rt);
-            }
+/* S3 (R8): the coordinator's one line after a round that found neither mail nor
+ * work; not part of the model. */
+static void exec_yield(void) {
+#if defined(_WIN32)
+    SwitchToThread();
+#else
+    sched_yield();
 #endif
-            w->reaping = 0;
-            if (bind_wait_can_free(w) != 0) {
-                bind_wait_destroy(w);
-            } else {
-                w->on_reap = 1;
-                w->reap_next = e->reap_head;
-                e->reap_head = w;
-            }
-            lmx_msg_exec_unlock(rt);
-        }
-        w = nxt;
-    }
-    lmx_msg_exec_lock(rt);
-    if (n > 0) {
-        if (e->nworkers >= n) {
-            e->nworkers -= n;
-        } else {
-            e->nworkers = 0;
-        }
-    }
-    lmx_msg_exec_unlock(rt);
 }
 
 static void unbind_slot_locked(LmxMsgExec *e, LmxMsgExecBind *rec) {
@@ -2212,43 +1850,13 @@ static void unbind_slot_locked(LmxMsgExec *e, LmxMsgExecBind *rec) {
     }
     w = rec->wait;
     rec->wait = 0;
-    if (w != 0) {
-        w->slot = 0;
-        bind_reap_push(e, w);
-        bind_wait_maybe_free_locked(e, w);
-    }
+    bind_wait_retire_locked(w);
     old = rec->msg;
     rec->msg = 0;
     if (old != 0) {
         lmx_msg_endp_release(old);
     }
     rec->in_table = 0;
-}
-
-static void join_bind_worker(LmxMsgRuntime *rt, LmxMsgExecBind *rec) {
-    LmxMsgExec *e = exof(rt);
-    LmxMsgBindWait *w;
-    int had;
-    if (e == 0 || rec == 0) {
-        return;
-    }
-    w = rec->wait;
-    rec->wait = 0;
-    if (w == 0) {
-        return;
-    }
-    w->slot = 0;
-    w->retired = 1;
-    w->reaping = 1;
-    bind_wait_signal(w);
-    lmx_msg_exec_unlock(rt);
-    had = bind_wait_join(w);
-    lmx_msg_exec_lock(rt);
-    w->reaping = 0;
-    if (had != 0 && e->nworkers > 0) {
-        e->nworkers -= 1;
-    }
-    bind_wait_maybe_free_locked(e, w);
 }
 
 static int bind_kick_needed_locked(LmxMsg *m) {
@@ -2299,7 +1907,6 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
         return LMX_MSG_INVALID;
     }
     owner = lmx_msg_host_is_owner(rt) != 0 && lmx_msg_exec_holding_any(rt) == 0;
-    bind_reap_join_all(rt);
     lmx_msg_exec_lock(rt);
     if (e->unbound_held == addr) {
         lmx_msg_exec_unlock(rt);
@@ -2338,7 +1945,11 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
             if (affinity == LMX_MSG_AFFINITY_UI) {
                 lmx_msg_test_lane_write(rt, m->parent_msg, "bind:affinity");
                 rec->affinity = LMX_MSG_AFFINITY_UI;
-                join_bind_worker(rt, rec);
+                {
+                    LmxMsgBindWait *w = rec->wait;
+                    rec->wait = 0;
+                    bind_wait_retire_locked(w);
+                }
                 lmx_msg_exec_unlock(rt);
                 lmx_msg_exec_flush_retire(rt);
                 if (kick != 0) {
@@ -2349,44 +1960,20 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
             /* UI->ANY: the ready flag is the Message's own and survives a failed launch. */
             need = launch != 0 && e->contexts_live != 0 && bind_has_worker(rec) == 0;
             if (need != 0) {
-                LmxMsgBindWait *cap;
-                unsigned gen;
-                if (rec->wait == 0) {
-                    rec->wait = bind_wait_new(e);
-                    if (rec->wait == 0) {
-                        lmx_msg_exec_unlock(rt);
-                        return LMX_MSG_NOMEM;
-                    }
-                    rec->wait->rec = rec;
-                }
-                cap = rec->wait;
-                gen = cap->gen;
-                rec->launching = 1;
+                /* S3 (R6): the launch runs inside this lock hold, so no other bind
+                 * interleaves and no launch generation is kept. */
                 lmx_msg_test_lane_write(rt, m->parent_msg, "bind:affinity");
                 rec->affinity = affinity;
-                bind_wait_launch_hold_locked(cap);
-                lmx_msg_exec_unlock(rt);
                 st = launch_ctx_thread(rt, addr);
-                lmx_msg_exec_lock(rt);
-                rec = rec_at_addr_locked(e, addr);
                 if (st != LMX_MSG_OK) {
-                    if (rec != 0 && launch_same_gen(rec, cap, gen) != 0
-                        && bind_has_worker(rec) == 0) {
-                        lmx_msg_test_lane_write(rt, rec->msg != 0 ? rec->msg->parent_msg : 0, "bind:affinity");
-                        rec->affinity = old_aff;
-                        rec->launching = 0;
-                        ui_request_if_ready_locked(rt, rec->msg);
-                    }
+                    lmx_msg_test_lane_write(rt, m->parent_msg, "bind:affinity");
+                    rec->affinity = old_aff;
+                    ui_request_if_ready_locked(rt, m);
                     lmx_msg_exec_unlock(rt);
-                    bind_wait_launch_release(rt, cap);
                     lmx_msg_exec_flush_retire(rt);
                     return st;
                 }
-                if (rec != 0 && launch_same_gen(rec, cap, gen) != 0) {
-                    rec->launching = 0;
-                }
                 lmx_msg_exec_unlock(rt);
-                bind_wait_launch_release(rt, cap);
                 lmx_msg_exec_flush_retire(rt);
                 if (kick != 0) {
                     lmx_msg_exec_ready(rt, addr);
@@ -2437,46 +2024,26 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
     rec->msg = m;
     m->turn = turn;
     m->turn_ctx = ctx;
-    {
-        LmxMsgBindWait *w = bind_wait_new(e);
-        if (w == 0) {
-            rec->msg = 0;
-            lmx_msg_endp_release(m);
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_NOMEM;
-        }
-        rec->wait = w;
-        w->rec = rec;
-    }
+    /* S3: the worker record is made by the launch that needs it. */
     rec->in_table = 1;
     live = launch != 0 ? e->contexts_live : 0;
     kick = bind_kick_needed_locked(m);
-    {
-        LmxMsgBindWait *cap = rec->wait;
-        unsigned gen = cap != 0 ? cap->gen : 0U;
-        if (live != 0 && affinity != LMX_MSG_AFFINITY_UI) {
-            bind_wait_launch_hold_locked(cap);
-        }
-        lmx_msg_exec_unlock(rt);
+    lmx_msg_exec_unlock(rt);
 #if defined(LMX_MSG_EXEC_TEST)
-        if (lmx_msg_exec_test_after_bind_add != 0) {
-            lmx_msg_exec_test_after_bind_add(rt);
-        }
+    if (lmx_msg_exec_test_after_bind_add != 0) {
+        lmx_msg_exec_test_after_bind_add(rt);
+    }
 #endif
-        if (live != 0 && affinity != LMX_MSG_AFFINITY_UI) {
-            int st = launch_ctx_thread(rt, addr);
-            if (st != LMX_MSG_OK) {
-                lmx_msg_exec_lock(rt);
-                rec = rec_at_addr_locked(e, addr);
-                if (rec != 0 && launch_same_gen(rec, cap, gen) != 0
-                    && bind_has_worker(rec) == 0) {
-                    unbind_slot_locked(e, rec);
-                }
-                lmx_msg_exec_unlock(rt);
-                bind_wait_launch_release(rt, cap);
-                return st;
+    if (live != 0 && affinity != LMX_MSG_AFFINITY_UI) {
+        int st = launch_ctx_thread(rt, addr);
+        if (st != LMX_MSG_OK) {
+            lmx_msg_exec_lock(rt);
+            rec = rec_at_addr_locked(e, addr);
+            if (rec != 0 && bind_has_worker(rec) == 0) {
+                unbind_slot_locked(e, rec);
             }
-            bind_wait_launch_release(rt, cap);
+            lmx_msg_exec_unlock(rt);
+            return st;
         }
     }
     if (kick != 0) {
@@ -2652,8 +2219,6 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
             rec->last_st = st;
         }
     }
-    /* take_addr skips held without dequeue; waiters must re-scan. */
-    lmx_msg_exec_wake_locked(rt);
     lmx_msg_exec_unlock(rt);
     turn_root_pop(&root, saved);
     restore_turn(e, old, old_msg, old_running);
@@ -2662,195 +2227,25 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     return st;
 }
 
-/* Stage 3b-7b: exec_start_map_kick's collection, over the bound records. */
-typedef struct CtxKickCollect {
-    LmxMsgAddr *kicks;
-    LmxMsg **pars;
-    LmxMsg **chs;
-    int nk;
-    int nu;
-    int st;
-} CtxKickCollect;
-
-static int ctx_visit_kick(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
-    CtxKickCollect *k = (CtxKickCollect *)arg;
-    LmxMsg *cm = rec->msg;
-    LmxMsg *par;
-    (void)e;
-    if (cm == 0 || cm->mapped != 0 || rec->addr == 0U) {
+/* S3 (R3): start_contexts maps every bound, unmapped record and marks it ready
+ * (a UI-mapped one asks the UI lane for its turn) inside one lock hold; a pool
+ * worker takes its first Message from its mailbox in its own round. */
+static int ctx_visit_start_map(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
+    (void)arg;
+    if (rec->msg == 0 || rec->msg->mapped != 0 || rec->addr == 0U) {
         return 0;
     }
-    par = cm->parent_msg;
-    if (lmx_msg_endp_retain(cm) == 0) {
-        k->st = LMX_MSG_NOMEM;
-        return 1;
-    }
-    if (par != 0 && lmx_msg_endp_retain(par) == 0) {
-        lmx_msg_endp_release(cm);
-        k->st = LMX_MSG_NOMEM;
-        return 1;
-    }
-    k->pars[k->nu] = par;
-    k->chs[k->nu] = cm;
-    k->kicks[k->nk] = rec->addr;
-    k->nk += 1;
-    k->nu += 1;
+    rec->msg->mapped = 1;
+    lmx_msg_exec_ready(e->rt, rec->addr);
     return 0;
 }
 
-static int exec_start_map_kick(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    LmxMsgAddr *kicks = 0;
-    int nk = 0;
-    int b;
-    int nrec = 0;
-    if (e == 0) {
-        return LMX_MSG_INVALID;
-    }
-    lmx_msg_exec_lock(rt);
-    (void)rec_walk_locked(e, ctx_visit_count, &nrec);
-    if (nrec > 0) {
-#if defined(LMX_MSG_EXEC_TEST)
-        if (e->test_fail_start_kicks != 0) {
-            e->test_fail_start_kicks = 0;
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_NOMEM;
-        }
-#endif
-        kicks = (LmxMsgAddr *)calloc((size_t)nrec, sizeof(LmxMsgAddr));
-        if (kicks == 0) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_NOMEM;
-        }
-        {
-            LmxMsg **pars = (LmxMsg **)calloc((size_t)nrec, sizeof(LmxMsg *));
-            LmxMsg **chs = (LmxMsg **)calloc((size_t)nrec, sizeof(LmxMsg *));
-            int nu = 0;
-            if (pars == 0 || chs == 0) {
-                free(pars);
-                free(chs);
-                free(kicks);
-                lmx_msg_exec_unlock(rt);
-                return LMX_MSG_NOMEM;
-            }
-            {
-                CtxKickCollect kc;
-                kc.kicks = kicks;
-                kc.pars = pars;
-                kc.chs = chs;
-                kc.nk = 0;
-                kc.nu = 0;
-                kc.st = LMX_MSG_OK;
-                (void)rec_walk_locked(e, ctx_visit_kick, &kc);
-                nk = kc.nk;
-                nu = kc.nu;
-                if (kc.st != LMX_MSG_OK) {
-                    while (nu > 0) {
-                        nu -= 1;
-                        lmx_msg_endp_release(chs[nu]);
-                        if (pars[nu] != 0) {
-                            lmx_msg_endp_release(pars[nu]);
-                        }
-                    }
-                    free(pars);
-                    free(chs);
-                    free(kicks);
-                    lmx_msg_exec_unlock(rt);
-                    return kc.st;
-                }
-            }
-            for (b = 0; b < nu; b++) {
-                if (chs[b] != 0 && (pars[b] == 0 || chs[b]->parent_msg == pars[b]
-                    || chs[b]->parent_msg == 0)) {
-                    chs[b]->mapped = 1;
-                }
-            }
-            lmx_msg_exec_unlock(rt);
-            for (b = 0; b < nu; b++) {
-                lmx_msg_endp_release(chs[b]);
-                if (pars[b] != 0) {
-                    lmx_msg_endp_release(pars[b]);
-                }
-            }
-            lmx_msg_exec_lock(rt);
-            free(pars);
-            free(chs);
-        }
-    }
-    lmx_msg_exec_unlock(rt);
-    for (b = 0; b < nk; b++) {
-        lmx_msg_exec_ready(rt, kicks[b]);
-    }
-    free(kicks);
-    return LMX_MSG_OK;
-}
-
+/* S3 (R6): what the launch hands its thread; the thread frees it on entry. */
 typedef struct LmxMsgCtxPack {
     LmxMsgRuntime *rt;
     LmxMsgAddr addr;
     LmxMsgBindWait *wait;
-    volatile int go;
-#if defined(_WIN32)
-    HANDLE gate;
-#else
-    pthread_mutex_t gm;
-    pthread_cond_t gc;
-#endif
 } LmxMsgCtxPack;
-
-static int pack_gate_init(LmxMsgCtxPack *p) {
-    p->go = 0;
-    p->wait = 0;
-#if defined(_WIN32)
-    p->gate = CreateEventA(0, 1, 0, 0);
-    return p->gate != 0 ? 0 : 1;
-#else
-    if (pthread_mutex_init(&p->gm, 0) != 0) {
-        return 1;
-    }
-    if (pthread_cond_init(&p->gc, 0) != 0) {
-        pthread_mutex_destroy(&p->gm);
-        return 1;
-    }
-    return 0;
-#endif
-}
-
-static void pack_gate_wait(LmxMsgCtxPack *p) {
-#if defined(_WIN32)
-    WaitForSingleObject(p->gate, INFINITE);
-#else
-    pthread_mutex_lock(&p->gm);
-    while (p->go == 0) {
-        pthread_cond_wait(&p->gc, &p->gm);
-    }
-    pthread_mutex_unlock(&p->gm);
-#endif
-}
-
-static void pack_gate_signal(LmxMsgCtxPack *p, int go) {
-#if defined(_WIN32)
-    p->go = go;
-    SetEvent(p->gate);
-#else
-    pthread_mutex_lock(&p->gm);
-    p->go = go;
-    pthread_cond_signal(&p->gc);
-    pthread_mutex_unlock(&p->gm);
-#endif
-}
-
-static void pack_gate_destroy(LmxMsgCtxPack *p) {
-#if defined(_WIN32)
-    if (p->gate != 0) {
-        CloseHandle(p->gate);
-        p->gate = 0;
-    }
-#else
-    pthread_cond_destroy(&p->gc);
-    pthread_mutex_destroy(&p->gm);
-#endif
-}
 
 #if defined(_WIN32)
 static DWORD WINAPI context_worker(void *arg);
@@ -2858,38 +2253,18 @@ static DWORD WINAPI context_worker(void *arg);
 static void *context_worker(void *arg);
 #endif
 
-static int launch_same_gen(const LmxMsgExecBind *b, LmxMsgBindWait *cap, unsigned gen) {
-    return b != 0 && cap != 0 && b->wait == cap && cap->gen == gen && cap->retired == 0;
-}
-
-static void launch_clear_if_gen(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgBindWait *cap, unsigned gen) {
-    LmxMsgExec *e = exof(rt);
-    LmxMsgExecBind *r;
-    if (e == 0) {
-        return;
-    }
-    lmx_msg_exec_lock(rt);
-    r = rec_at_addr_locked(e, addr);
-    if (r != 0 && launch_same_gen(r, cap, gen) != 0) {
-        r->launching = 0;
-    }
-    lmx_msg_exec_unlock(rt);
-}
-
+/* S3 (R6): the launch runs in one exec lock hold. The thread is created with its
+ * pack complete and worker_on already set, so it waits on no gate; its handle is
+ * closed (detached) at once, and it leaves on its own round checks. */
 static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
     LmxMsgCtxPack *pack;
-    LmxMsgBindWait *cap;
-    unsigned gen;
     LmxMsgExecBind *r;
 #if defined(_WIN32)
     HANDLE th;
 #else
     pthread_t th;
-    int pr;
 #endif
-    cap = 0;
-    gen = 0U;
     if (e == 0) {
         return LMX_MSG_INVALID;
     }
@@ -2913,94 +2288,41 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         return LMX_MSG_OK;
     }
     if (r->wait == 0) {
-        r->wait = bind_wait_new(e);
+        r->wait = (LmxMsgBindWait *)calloc(1U, sizeof(LmxMsgBindWait));
         if (r->wait == 0) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_NOMEM;
         }
         r->wait->rec = r;
     }
-    r->launching = 1;
-    cap = r->wait;
-    gen = cap->gen;
-    bind_wait_launch_hold_locked(cap);
-#if defined(LMX_MSG_EXEC_TEST)
-    test_launch_cap = cap;
-    test_launch_cap_gen = gen;
-#endif
-    lmx_msg_exec_unlock(rt);
-#if defined(LMX_MSG_EXEC_TEST)
-    if (lmx_msg_exec_test_during_launch != 0) {
-        lmx_msg_exec_test_during_launch(rt, addr, 0);
-    }
-#endif
     pack = (LmxMsgCtxPack *)malloc(sizeof(LmxMsgCtxPack));
     if (pack == 0) {
-        launch_clear_if_gen(rt, addr, cap, gen);
-        bind_wait_launch_release(rt, cap);
+        lmx_msg_exec_unlock(rt);
         return LMX_MSG_NOMEM;
     }
-    memset(pack, 0, sizeof(*pack));
     pack->rt = rt;
     pack->addr = addr;
-    if (pack_gate_init(pack) != 0) {
-        free(pack);
-        launch_clear_if_gen(rt, addr, cap, gen);
-        bind_wait_launch_release(rt, cap);
-        return LMX_MSG_NOMEM;
-    }
+    pack->wait = r->wait;
+    r->wait->worker_on = 1;
+    e->nworkers += 1;
 #if defined(_WIN32)
     th = CreateThread(0, 0, context_worker, pack, 0, 0);
     if (th == 0) {
 #else
-    pr = pthread_create(&th, 0, context_worker, pack);
-    if (pr != 0) {
+    if (pthread_create(&th, 0, context_worker, pack) != 0) {
 #endif
-        pack_gate_destroy(pack);
+        r->wait->worker_on = 0;
+        e->nworkers -= 1;
         free(pack);
-        launch_clear_if_gen(rt, addr, cap, gen);
-        bind_wait_launch_release(rt, cap);
+        lmx_msg_exec_unlock(rt);
         return LMX_MSG_NOMEM;
     }
-    lmx_msg_exec_lock(rt);
-    r = rec_at_addr_locked(e, addr);
-    if (r == 0 || e->stopping != 0 || r->gone != 0
-        || r->affinity == LMX_MSG_AFFINITY_UI
-        || launch_same_gen(r, cap, gen) == 0
-        || bind_has_worker(r) != 0) {
-        if (r != 0 && launch_same_gen(r, cap, gen) != 0
-            && bind_has_worker(r) == 0) {
-            r->launching = 0;
-        }
-        lmx_msg_exec_unlock(rt);
-        pack_gate_signal(pack, 2);
 #if defined(_WIN32)
-        WaitForSingleObject(th, INFINITE);
-        CloseHandle(th);
+    CloseHandle(th);
 #else
-        pthread_join(th, 0);
+    pthread_detach(th);
 #endif
-        bind_wait_launch_release(rt, cap);
-        return LMX_MSG_INVALID;
-    }
-#if defined(_WIN32)
-    r->wait->worker = th;
-#else
-    r->wait->worker = th;
-    r->wait->worker_on = 1;
-#endif
-    r->launching = 0;
-    e->nworkers += 1;
-    pack->wait = r->wait;
-    bind_wait_signal(r->wait);
     lmx_msg_exec_unlock(rt);
-    pack_gate_signal(pack, 1);
-#if defined(LMX_MSG_EXEC_TEST)
-    if (lmx_msg_exec_test_during_launch != 0) {
-        lmx_msg_exec_test_during_launch(rt, addr, 1);
-    }
-#endif
-    bind_wait_launch_release(rt, cap);
     return LMX_MSG_OK;
 }
 
@@ -3038,166 +2360,78 @@ static int take_this(LmxMsgExec *e, LmxMsgExecBind *r, LmxMsgAddr addr, LmxMsgEx
     return 1;
 }
 
+/* S3 (R5, R8): the head of a worker's round, exec lock held. It returns the record
+ * the worker serves, or 0 when the worker leaves its loop: a stop, a retired
+ * record, or a record mapped to UI. Leaving is the thread's last touch of the
+ * binding, in this same lock hold: worker_on cleared, the count taken down, and a
+ * retired record freed by the thread itself. */
+static LmxMsgExecBind *worker_round_rec_locked(LmxMsgExec *e, LmxMsgBindWait *w) {
+    LmxMsgExecBind *rec = w->retired == 0 ? w->rec : 0;
+    if (e->stopping == 0 && rec != 0 && rec->affinity != LMX_MSG_AFFINITY_UI && rec->gone == 0) {
+        return rec;
+    }
+    w->worker_on = 0;
+    if (e->nworkers > 0) {
+        e->nworkers -= 1;
+    }
+    if (w->retired != 0) {
+        free(w);
+    }
+    return 0;
+}
+
+/* S3 (R8): each round is the L3 Thread's model round. Its end_turn work first:
+ * the arena collection, closing and settling run inside lmx_msg_end_turn at the
+ * turn boundary (run_one), and the timeout evaluation (lmx_msg_live_check) runs
+ * here in every round while a threshold is set. Then the look into its mailbox
+ * and a turn when there is a Message. After a round with neither mail nor work,
+ * the coordinator's yield line. */
 #if defined(_WIN32)
 static DWORD WINAPI context_worker(void *arg) {
-    LmxMsgCtxPack *p = (LmxMsgCtxPack *)arg;
-    LmxMsgRuntime *rt;
-    LmxMsgAddr addr;
-    LmxMsgExec *e;
-    LmxMsgExecBind snap;
-    HANDLE ev;
-    HANDLE wh[2];
-    LmxMsgBindWait *mine;
-    LmxMsgExecBind *rec;
-    int go;
-    if (p == 0) {
-        return 1;
-    }
-    rt = p->rt;
-    addr = p->addr;
-    pack_gate_wait(p);
-    go = p->go;
-    mine = p->wait;
-    pack_gate_destroy(p);
-    free(p);
-    if (go != 1 || mine == 0 || mine->retired != 0) {
-        return 0;
-    }
-    mine->owner_tid = lmx_tid();
-    e = exof(rt);
-    if (e == 0) {
-        return 1;
-    }
-    for (;;) {
-        ev = 0;
-        lmx_msg_exec_lock(rt);
-        if (e->stopping != 0) {
-            lmx_msg_exec_unlock(rt);
-            return 0;
-        }
-        if (mine != 0 && mine->retired != 0) {
-            lmx_msg_exec_unlock(rt);
-            return 0;
-        }
-        /* Stage 3a-2: this worker's own record, through its generation. Every
-         * detach retires the generation under the lock, so after the retired
-         * exit above rec is the live record. */
-        rec = mine->rec;
-        if (rec->affinity == LMX_MSG_AFFINITY_UI || rec->gone != 0) {
-            lmx_msg_exec_unlock(rt);
-            return 0;
-        }
-        ev = mine->wait_ev;
-        if (take_this(e, rec, addr, &snap) != 0) {
-            lmx_msg_exec_unlock(rt);
-            run_one(rt, &snap);
-            continue;
-        }
-        lmx_msg_exec_unlock(rt);
-        if (ev == 0) {
-            return 0;
-        }
-        wh[0] = e->stop_ev;
-        wh[1] = ev;
-        {
-            LmxMsg *self;
-            unsigned th = 0;
-            unsigned now = 0;
-            DWORD to = INFINITE;
-            DWORD wr;
-            lmx_msg_exec_lock(rt);
-            self = msg_at_addr(rt, addr);
-            if (self != 0) {
-                th = self->live_wait_th;
-            }
-            lmx_msg_exec_unlock(rt);
-            if (th != 0U) {
-                to = 20;
-            }
-            wr = WaitForMultipleObjects(2, wh, 0, to);
-            if (wr == WAIT_OBJECT_0) {
-                return 0;
-            }
-            if (th != 0U && wr != WAIT_FAILED) {
-                now = lmx_msg_now(rt);
-                lmx_msg_exec_lock(rt);
-                set_tls(e, addr);
-                lmx_msg_exec_unlock(rt);
-                lmx_msg_live_check(rt, addr, now, th);
-                lmx_msg_exec_lock(rt);
-                set_tls(e, 0);
-                lmx_msg_exec_unlock(rt);
-            }
-        }
-    }
-}
 #else
 static void *context_worker(void *arg) {
+#endif
     LmxMsgCtxPack *p = (LmxMsgCtxPack *)arg;
-    LmxMsgRuntime *rt;
-    LmxMsgAddr addr;
-    LmxMsgExec *e;
+    LmxMsgRuntime *rt = p->rt;
+    LmxMsgAddr addr = p->addr;
+    LmxMsgBindWait *mine = p->wait;
+    LmxMsgExec *e = exof(rt);
     LmxMsgExecBind snap;
-    LmxMsgBindWait *w;
     LmxMsgExecBind *rec;
-    int gone;
-    int ui;
-    int go;
-    if (p == 0) {
-        return 0;
-    }
-    rt = p->rt;
-    addr = p->addr;
-    pack_gate_wait(p);
-    go = p->go;
-    w = p->wait;
-    pack_gate_destroy(p);
+    LmxMsg *self;
+    unsigned th;
     free(p);
-    if (go != 1 || w == 0 || w->retired != 0) {
-        return 0;
-    }
-    w->owner_tid = lmx_tid();
-    e = exof(rt);
-    if (e == 0) {
-        return 0;
-    }
     for (;;) {
         lmx_msg_exec_lock(rt);
-        if (e->stopping != 0) {
+        if (worker_round_rec_locked(e, mine) == 0) {
             lmx_msg_exec_unlock(rt);
             return 0;
         }
-        if (w != 0 && w->retired != 0) {
+        self = msg_at_addr(rt, addr);
+        th = self != 0 ? self->live_wait_th : 0U;
+        if (th != 0U) {
+            set_tls(e, addr);
             lmx_msg_exec_unlock(rt);
-            return 0;
-        }
-        /* Stage 3a-2: this worker's own record, through its generation (see
-         * the Win32 worker). A detached generation exits on retired above; the
-         * address scan used to keep waiting when no entry had the address. */
-        rec = w->rec;
-        gone = (rec->gone != 0);
-        ui = (rec->affinity == LMX_MSG_AFFINITY_UI);
-        if (ui != 0 || gone != 0) {
-            lmx_msg_exec_unlock(rt);
-            return 0;
+            lmx_msg_live_check(rt, addr, lmx_msg_now(rt), th);
+            lmx_msg_exec_lock(rt);
+            set_tls(e, 0);
+            rec = worker_round_rec_locked(e, mine);
+            if (rec == 0) {
+                lmx_msg_exec_unlock(rt);
+                return 0;
+            }
+        } else {
+            rec = mine->rec;
         }
         if (take_this(e, rec, addr, &snap) != 0) {
             lmx_msg_exec_unlock(rt);
             run_one(rt, &snap);
             continue;
         }
-        if (w == 0) {
-            lmx_msg_exec_unlock(rt);
-            return 0;
-        }
-        while (e->stopping == 0 && w->sig == 0) {
-            pthread_cond_wait(&w->cv, &e->lock);
-        }
-        w->sig = 0;
         lmx_msg_exec_unlock(rt);
+        exec_yield();
     }
 }
-#endif
 
 /* Stage 3b-7b: start_contexts restarts the walk after each launch; a successful
  * launch records the worker under the lock, so the record is not picked again. */
@@ -3220,7 +2454,6 @@ int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt) {
     if (lmx_msg_host_is_owner(rt) == 0) {
         return LMX_MSG_INVALID;
     }
-    bind_reap_join_all(rt);
     lmx_msg_exec_lock(rt);
     if (e->contexts_live != 0) {
         lmx_msg_exec_unlock(rt);
@@ -3228,16 +2461,9 @@ int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt) {
     }
     e->stopping = 0;
     e->stopped = 0;
-#if defined(_WIN32)
-    ResetEvent(e->stop_ev);
-#endif
     e->contexts_live = 1;
+    (void)rec_walk_locked(e, ctx_visit_start_map, 0);
     lmx_msg_exec_unlock(rt);
-    st = exec_start_map_kick(rt);
-    if (st != LMX_MSG_OK) {
-        lmx_msg_exec_stop(rt);
-        return st;
-    }
     for (;;) {
         addr = 0U;
         lmx_msg_exec_lock(rt);
@@ -3370,23 +2596,11 @@ static int ctx_visit_stop_unmap(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
     return 0;
 }
 
-static int ctx_visit_stop_retire_waits(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
-    (void)arg;
-    if (rec->wait != 0) {
-        rec->wait->retired = 1;
-        bind_wait_signal(rec->wait);
-        bind_reap_push(e, rec->wait);
-        rec->wait = 0;
-    }
-    return 0;
-}
-
 static int ctx_visit_stop_reset(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
     (void)e;
     (void)arg;
     rec->held = 0;
     rec->held_by = 0;
-    rec->launching = 0;
     rec->gone = 0;
     if (rec->msg != 0) {
         lmx_msg_test_lane_write(e->rt, rec->msg, "stop_reset:ready_clear");
@@ -3414,14 +2628,14 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     e->stopping = 1;
     e->contexts_live = 0;
     (void)rec_walk_locked(e, ctx_visit_stop_unmap, 0);
-    (void)rec_walk_locked(e, ctx_visit_stop_retire_waits, 0);
-#if defined(_WIN32)
-    SetEvent(e->stop_ev);
-#endif
     lmx_msg_exec_unlock(rt);
     lmx_msg_exec_flush_retire(rt);
-    bind_reap_join_all(rt);
-    e->nworkers = 0;
+    /* S3 (R7): the stop writes stopping and signals nothing; each worker reads it
+     * at the head of its next round and leaves its loop. The host's rounds read the
+     * worker count until every worker has left: no primitive, no join. */
+    while (lmx_msg_exec_workers(rt) != 0) {
+        exec_yield();
+    }
     lmx_msg_exec_lock(rt);
     /* The stop clears this exec's TLS and restores the thread's turn identity it
      * replaced: a stop run from inside another runtime's turn on this thread leaves
@@ -3505,19 +2719,8 @@ int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         return LMX_MSG_OK;
     }
     lmx_msg_test_lane_write(rt, m != 0 ? m->parent_msg : 0, "unbind:record");
-    if (r->wait != 0) {
-        LmxMsgBindWait *w = r->wait;
-        r->wait = 0;
-        bind_reap_push(e, w);
-    }
     unbind_slot_locked(e, r);
-    {
-        int host = get_tls(e) == 0U;
-        lmx_msg_exec_unlock(rt);
-        if (host != 0) {
-            bind_reap_join_all(rt);
-        }
-    }
+    lmx_msg_exec_unlock(rt);
     lmx_msg_exec_flush_retire(rt);
     return LMX_MSG_OK;
 }
@@ -3639,8 +2842,6 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
     {
         /* Stage 3a-2: the child's own record (c resolved above). */
         LmxMsgExecBind *rb = bind_rec_locked(c);
-        LmxMsgBindWait *cap;
-        unsigned gen;
         if (rb == 0) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
@@ -3654,29 +2855,12 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
             return LMX_MSG_OK;
         }
         c->mapped = 1;
-        cap = rb->wait;
-        gen = cap != 0 ? cap->gen : 0U;
-        bind_wait_launch_hold_locked(cap);
-        lmx_msg_exec_unlock(rt);
+        /* S3 (R6): the launch runs inside this lock hold. */
         st = launch_ctx_thread(rt, child);
         if (st != LMX_MSG_OK) {
-            lmx_msg_exec_lock(rt);
-            c = msg_at_addr(rt, child);
-            rb = bind_rec_locked(c);
-            if (c != 0) {
-                if (rb == 0) {
-                    c->mapped = 0;
-                } else if (cap != 0 && launch_same_gen(rb, cap, gen) != 0
-                    && bind_has_worker(rb) == 0) {
-                    c->mapped = 0;
-                } else if (cap == 0 && bind_has_worker(rb) == 0
-                    && rb->wait == 0) {
-                    c->mapped = 0;
-                }
-            }
-            lmx_msg_exec_unlock(rt);
+            c->mapped = 0;
         }
-        bind_wait_launch_release(rt, cap);
+        lmx_msg_exec_unlock(rt);
     }
     return st;
 }
