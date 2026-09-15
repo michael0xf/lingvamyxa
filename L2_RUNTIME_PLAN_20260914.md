@@ -6438,3 +6438,20 @@ test rewrites as agreed. S6-1's acceptance record: red 695d54fc
 land_base3.sh with the union base plus lmx_cancel and scenario36, the
 allowlist the S6-1 files plus e9's archive-timeout runner; the probe
 never folded in.
+S6-1 falsifier and landing (the lead, 2026-09-15): the falsifier measured
+on d6/lock-s6 as a working-tree mutation restored from git in a finally:
+one lock/unlock pair put back around a census site at lmx_message.lm1
+1650 gives "exec_lock_calls=2 ... S6-1 RED", exit 1; the tree back to
+zero lock lines. The landing runs on merge 8f290ad6 onto 11f581e0
+(files M 10, inside the allowlist; self-build PASS 8 of 8 in 8 s, tag
+selfbuild/8f290ad6, the log line cbfbb930, the landing branch
+d6/lock-s6-landing-8f290ad6 pushed with the tag; the gates under their
+1200 s bound, then the rest of the union base). Correction by the lead:
+land_base3.sh's EXTRA list knows lmx_cancel only, so this run does not
+cover scenario36 on the merge; scenario36 is green on the branch tip
+(ten fixtures, two agreeing runs) and the lead runs it on the merge
+commit in the landing worktree after the script, calling nothing
+landed before it reads green (the merge's code equals baa8ec23's: the
+branch is off 11f581e0, the integration tip, so the merge adds
+nothing). Rule from it: scenario36 joins land_base3.sh's fixed base
+from the next landing (the union rule), not a per-stage extra.
