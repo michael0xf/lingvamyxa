@@ -1,0 +1,26 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h"
+
+# R0's policy record (stage 5 step (e), accepted by 6f 2026-09-14): the
+# runtime's policy cells as ordinary Structure data in R0's own arena, rooted
+# there, written only on R0's lane. Three fixed cells:
+#   clock          (unsigned) the logical time lmx_msg_now reports while
+#                  clock_test is set
+#   clock_test     (int) nonzero once lmx_msg_set_now set the clock
+#   orphan_retain  (unsigned) a failed orphan's retention (decision 17),
+#                  LMX_MSG_ORPHAN_RETAIN at creation
+# Rule (6f, 2026-09-14): no function of an L2 runtime unit runs on runtime_new's
+# or runtime_delete's path. A unit's external wrapper opens a library runtime
+# through lmx_msg_runtime_new on its first call, so a runtime_new that created
+# this record re-entered the unit: "lmx: library open failed: l2_u1F56E43EEF46CF7B
+# lmx_root_record_new". The record is created at the first set_now or
+# set_orphan_retain on R0's lane; while it is 0 the readers take the defaults.
+
+prototype:
+    fn: lmx_root_record_new (@: LmxMsg owner) @: Lmx
+    fn: lmx_root_record_clock (@: Lmx rec) unsigned
+    fn: lmx_root_record_set_clock (@: Lmx rec; unsigned: now) int
+    fn: lmx_root_record_clock_test (@: Lmx rec) int
+    fn: lmx_root_record_set_clock_test (@: Lmx rec; int: on) int
+    fn: lmx_root_record_orphan_retain (@: Lmx rec) unsigned
+    fn: lmx_root_record_set_orphan_retain (@: Lmx rec; unsigned: retain) int
+end: prototype

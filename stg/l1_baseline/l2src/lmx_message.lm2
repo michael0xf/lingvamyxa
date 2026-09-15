@@ -912,7 +912,6 @@ fn: msg_runtime_new () @: LmxMsgRuntime
     if: rt = 0
         return: 0
     rt\next_addr: 1U
-    rt\orphan_retain: c.LMX_MSG_ORPHAN_RETAIN
     if: c.lmx_msg_host_attach(rt) != 0
         c.free((cast: (@: void) rt))
         return: 0
@@ -1625,7 +1624,7 @@ end: msg_orphan_settled
 # orphan retention; 0 means no deadline, so a wrapped 0 becomes 1.
 fn: msg_orphan_deadline (@: LmxMsgRuntime rt; unsigned: now) unsigned
     unsigned: d
-    d: now + rt\orphan_retain
+    d: now + c.lmx_root_record_orphan_retain(rt\root_record)
     if: d = 0U
         d: 1U
     ---
@@ -2283,12 +2282,25 @@ fn: msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned: thr
     return: n
 end: msg_poll
 
+# Stage 5 (e): the clock is R0's management state, written only on R0's lane:
+# R0's own turn, or until (f) the host outside any turn. Refused, nothing moves.
 fn: msg_set_now (@: LmxMsgRuntime rt; unsigned: now) int
-    if: c.lmx_msg_host_is_owner(rt) = 0
+    if: rt = 0 || rt\root = 0
         return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, rt\root\addr) = 0 && (c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0)
+        return: c.LMX_MSG_INVALID
+    # Created at the first set on R0's lane, as a parent's scheduler record is at
+    # its first step: runtime_new cannot call the generated unit (6f's rule).
+    if: rt\root_record = 0
+        rt\root_record: c.lmx_root_record_new(rt\root)
+        if: rt\root_record = 0
+            return: c.LMX_MSG_NOMEM
+        ---
+    ---
     c.lmx_msg_exec_lock(rt)
-    rt\clock: now
-    rt\clock_test: 1
+    if: c.lmx_root_record_set_clock(rt\root_record, now) != c.LMX_MSG_OK || c.lmx_root_record_set_clock_test(rt\root_record, 1) != c.LMX_MSG_OK
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_unlock(rt)
     return: c.LMX_MSG_OK
 end: msg_set_now

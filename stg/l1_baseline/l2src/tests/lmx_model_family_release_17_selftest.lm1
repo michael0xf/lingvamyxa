@@ -162,6 +162,7 @@ fn: main () int
     uchar: ini 1
     int: st
     int: n0
+    int: adopted0
 
     rt: lmx_msg_runtime_new()
     check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
@@ -269,8 +270,14 @@ fn: main () int
     g_step: r
     check(lmx_msg_exec_bind(rt, r, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "R bound, to be stepped from R0's turn")
     n0: rt\n
+    # Stage 5 (e): R0's arena holds R0's policy record since the first set_now
+    # above, so "not adopted" is R0's block count unchanged by the step, not 0.
+    # lmx_msg_adopted_n counts every block of the Message's arena (its own graph
+    # included), so it reads as "adopted" only against a baseline; R0's arena
+    # holds its policy record's five blocks by design (6f).
+    adopted0: lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt))
     check(lmx_msg_root_turn(rt, turn_root_step, 0) = c.LMX_MSG_OK && (g_step_st = c.LMX_MSG_OK || g_step_st = 1), "R0's own turn steps R")
-    check(lmx_msg_find(rt, c5) != 0 && lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt)) = 0 && rt\n = n0, "R0's settle after the step leaves the failed orphan C5 to the sweep: still found, not adopted, no slot gone")
+    check(lmx_msg_find(rt, c5) != 0 && lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt)) = adopted0 && rt\n = n0, "R0's settle after the step leaves the failed orphan C5 to the sweep: still found, not adopted, no slot gone")
     check(lmx_msg_find(rt, r) != 0, "the stepped child R is still there after R0's settle")
     check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 4, "the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop")
     check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 4, "within the retention window the orphan is still retained")

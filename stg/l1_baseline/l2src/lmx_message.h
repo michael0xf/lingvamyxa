@@ -218,12 +218,14 @@ struct LmxMsgRuntime {
     void *host_sync;
     void *exec;
     unsigned next_addr;
-    unsigned clock;
-    int clock_test;
     unsigned root_seq;
-    /* Decision 17 (spec 19.29.8): how long a failed orphan is retained, in
-     * lmx_msg_now's units; LMX_MSG_ORPHAN_RETAIN by default. */
-    unsigned orphan_retain;
+    /* Stage 5 (e): R0's policy record (l2src/lmx_root_record.lm2), Structure data
+     * in R0's arena: the clock, its test flag and a failed orphan's retention
+     * (decision 17, LMX_MSG_ORPHAN_RETAIN by default), written only on R0's lane.
+     * 0 until the first policy set on R0's lane creates it (runtime_new cannot call
+     * the generated unit, whose library open creates a runtime); readers take the
+     * defaults while it is 0: the real clock, LMX_MSG_ORPHAN_RETAIN. */
+    struct Lmx *root_record;
 };
 
 #define LMX_MSG_ORPHAN_RETAIN 30000U
@@ -315,6 +317,15 @@ unsigned lmx_sched_record_cursor(struct Lmx *rec);
 int lmx_sched_record_set_cursor(struct Lmx *rec, unsigned child);
 int lmx_sched_record_policy(struct Lmx *rec);
 int lmx_sched_record_set_policy(struct Lmx *rec, int policy);
+/* Stage 5 (e): R0's policy record, l2src/lmx_root_record.lm2 (the same generated
+ * unit rule as the scheduler record above). */
+struct Lmx *lmx_root_record_new(LmxMsg *owner);
+unsigned lmx_root_record_clock(struct Lmx *rec);
+int lmx_root_record_set_clock(struct Lmx *rec, unsigned now);
+int lmx_root_record_clock_test(struct Lmx *rec);
+int lmx_root_record_set_clock_test(struct Lmx *rec, int on);
+unsigned lmx_root_record_orphan_retain(struct Lmx *rec);
+int lmx_root_record_set_orphan_retain(struct Lmx *rec, unsigned retain);
 int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child);
 int lmx_msg_live_query(LmxMsgRuntime *rt, LmxMsgAddr who);
