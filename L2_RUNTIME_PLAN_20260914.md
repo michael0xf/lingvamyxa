@@ -3421,3 +3421,13 @@ The model rule in the design: d6/lock-removal abc36542 (the lead), checked
 on the branch by the coordinator: "fixes no loop shape" 0 in the design and
 the table; Mikhail's sentence present verbatim in KERNEL, S3, Y3 and the
 FIELDS success comment; categories 16/36/47.
+Mikhail (2026-09-15, in the lead's chat, verbatim, narrowing the model rule):
+"Однако планировщик L3 Thread может что-то делать со своими детьми (вот это зависит отреализации так как дети могут крутиться на том же потоке) так как success относится к Lmx* root -- то есть к основной функциональности." So success belongs to Lmx* root, the main functionality, and
+the rule is that no turn of root repeats once success == 1; what the L3
+Thread's scheduler does with its children afterwards is implementation,
+as children may run on the same thread, and so is where the return stands.
+Replaced on main in spec 19.28.R2.2 and model 31 with his sentence; the
+lead applies "no turn of root" to KERNEL, S3, Y3 and the FIELDS success
+comment (abc36542 superseded by his next hash). Stage M, which removes
+the sequential mapping of children onto the parent's thread, is an
+implementation choice the model allows either way; it is not a model rule.

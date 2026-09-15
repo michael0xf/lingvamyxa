@@ -11638,10 +11638,13 @@ the mail).
 And on the coordinator's words "the thread with its infinite loop", the same
 day, verbatim: "поток с бесконечным циклом" -- цикл в L3 Thread очеивдно прерывается по success==1 (the loop in an L3 Thread obviously
 breaks on success==1). And, the same hour, verbatim: "success && !running, с выходом выставляется running = 0. Просто running опрашивается при выполнении Lmx* root и я же не знаю как кокнретный планировщик устроен и когда выйдет. Но условия выхода очевидно есть!": the
-exit conditions exist: by the model an L3 Thread does not repeat a turn once
-success == 1, and only where the return stands is implementation (verbatim,
+exit conditions exist: by the model no turn of root repeats once success ==
+1, since success belongs to Lmx* root, the main functionality; what the L3
+Thread's scheduler does with its children after that is implementation, as
+children may run on the same thread, and so is where the return stands
+(verbatim,
 the same day, to the lead's "the loop leaves on success == 1 is a
-description of the implementation, not of the model": "«цикл выходит по success == 1», а это описание реализации, а не модели." -- просто по модели L3 Thread не может повторять turn когда success == 1, это не деталь реализации. Деталь реализации это где будет стоять return."); user
+description of the implementation, not of the model": "«цикл выходит по success == 1», а это описание реализации, а не модели." -- просто по модели L3 Thread не может повторять turn когда success == 1, это не деталь реализации. Деталь реализации это где будет стоять return." and, narrowing it: "Однако планировщик L3 Thread может что-то делать со своими детьми (вот это зависит отреализации так как дети могут крутиться на том же потоке) так как success относится к Lmx* root -- то есть к основной функциональности."); user
 code sets success, running is polled while root executes, and at exit
 running is set to 0, so a finished L3 Thread reads success && !running. And:
 "то есть цикл не бесконечный -- из него есть выход хоть по return хоть как" (that is, the loop is not infinite: there is a way out of it,
