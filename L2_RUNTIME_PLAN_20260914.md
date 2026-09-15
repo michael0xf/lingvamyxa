@@ -4235,3 +4235,35 @@ Mikhail (2026-09-15, verbatim, closing the architecture exchange): "Это по�
 Entered verbatim in spec section 2 (after the L1-as-kernel sentence) and
 model section 2. The coordinator's four notes stand as implementation
 notes only; no objection to the model remains.
+ONE ROOT landing #1 red (the lead, 2026-09-15), merge 5cee1426 on
+b4e1296d, unpushed: gate.ps1 FAILED only at "gen2 l2 run_lmx",
+lmx_message_exec_selftest exit 1 "UI did not continue during live
+parent-loss recvd=0" (exec_selftest.c 2438, the live-cascade case);
+gen0's run_lmx passed in the same gate; everything else green on the
+moved tree so far (root buildCore/run_seed/run_gen, run_legacy_p0 n=131,
+run_self_build 8 of 8, p0_tree_contract n=36, cmake configure, the pin
+re-installed at build/l1trans/gen2 and gen3; the 33 gates, l2trans,
+port_parser, port_message -LaneCheck and the mixa runners still running).
+Not a path fault: the same gen2 exe rerun 11 times from the root with
+the landing's runners active exited 0 all 11 times. The second
+S3-surfaced timing failure in this selftest (the first a3e907d0), so
+the case's timing assumptions are listed before any fix: (1) three
+2000 ms waits for the parent, child and factory turns; (2) the factory
+held in its create phase by its unblock event (deterministic); (3) the
+timer parent-loss through set_now/poll (synthetic clock); (4) the failing
+one: after host_post to the UI child, ui_step_in_root_x = host_drain then
+one R0 turn calling lmx_msg_exec_ui_step exactly once, expecting OK with
+ui_recvd 1, while ui_step returns EMPTY when take_ready finds no takeable
+UI request at that instant, with two turn_held_live turns spinning and
+S3's idle workers yield-looping; (5) 3000 ms for child and parent done;
+(6) 2000 ms of drive to STOPPED; (7) 2000 ms for the factory. Ruling
+(coordinator): no plain relaunch; measure (4) in isolation under CPU load
+(the case with g_ui_step_st and the drain status printed, in a loop);
+if the request was merely not yet takeable, fix the case in the test
+with a bounded retry of the UI step as other cases do (the mechanism
+goes with M anyway), evidence five cold gen2 run_lmx runs under load,
+and the fix rides in ONE ROOT's landing as one more allowlisted file
+(l2src/lmx_message_exec_selftest.c at the new path, test only); if the
+cause is a real refusal in take_ui_locked or the drain (a behaviour
+change from S3), stop and report with the measurement, since that would
+be S3's defect and not the test's.
