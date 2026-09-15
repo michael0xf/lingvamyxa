@@ -4981,3 +4981,22 @@ defect, provided nothing touches freed memory: the test reads the live
 count in yield rounds until it equals the expected balance, bounded by
 the runner's timeout, in M's landing; the lead confirms by reading that
 the worker's late free touches only the worker's own BindWait.
+turn_arena_o1 under M (the lead, 2026-09-15; accepted by the coordinator):
+the condition holds, the late free touches none of the deleted runtime;
+what is freed late is the worker's emutls thread-local blocks (lmx_turn_msg,
+lmx_turn_root, lmx_turn_running are __thread, compiled by MinGW as
+emutls: nm shows __emutls_v.lmx_turn_* and emutls_destroy), malloc'd
+through the wrapped malloc on each worker's first touch and freed at OS
+thread exit, after exec_stop has seen the worker count reach 0 (5 red
+in 30 on 56a74dae). The coordinator's yield-until-equal loop would not
+be reliable, since the first cycle's count is read under the same race;
+so the test now watches, through __wrap_free, the exact bases of A's
+and R0's turn-arena blocks, each to be freed once by its runtime's
+delete, O1's own claim and no wait; A publishes done after end_turn and
+the GetTickCount/Sleep loop is yield rounds; turn_arena_o1 joins M's
+converted list; checks_19_29_6 keeps 7 wall-clock sites (debt, not
+M's). e9's 0dfccada merged: d6/m-sequential d2f5d8c5. Next: the test
+cold, 30 direct runs, commit only at 0 red. Lesson for every balance
+acceptance: with own-thread workers, thread-exit frees (emutls) pass
+through the wrapped allocator after the runtime's delete, so a count
+balance across cycles races; pin the exact blocks the claim is about.
