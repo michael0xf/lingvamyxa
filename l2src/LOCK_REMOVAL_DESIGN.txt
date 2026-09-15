@@ -690,6 +690,10 @@ D. create_id and create-retry idempotence deleted (X), with S1's dead-code kind.
       Fix (asked of b5): revert only the harness hunk. SPEC_DIGEST's edit stays, and the vendor copy is untouched.
       The per-stage set this document named above would have caught it only through run_mixa; the ingress harness
       is in the union base.
+      Cause confirmed by measurement (a local, uncommitted probe on d5343746 with the harness at its d8f758e6 form):
+      run_mixa exit 0 ("mixa backend table ok"), run_ingress_harness exit 0 ("mixa ingress fail_keep_runtime path
+      ok"). b5's fix is sonnet/d2-create-id 3a37ca87: 1 file, 2+/2-, and the harness diff against d8f758e6 is 0 lines.
+      Second landing attempt: land_base.sh of 3a37ca87 onto 1bdbfca0 with the union base plus lmx_cancel.
 
 O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced by the one core (X).
     Mikhail, verbatim (2026-09-15), to its real extent: "3- да, удаляйте целиком".
