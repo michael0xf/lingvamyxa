@@ -1571,26 +1571,42 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         branch, exec_unbound_close's impersonation and unbound_held go.
       Sent to the coordinator as a question, possibly for Mikhail, since the ruling and the spec's "each Message's
       own mechanism" / "owning executor" name different owners.
-    - RULED (the coordinator, 2026-09-15; d6's candidate; a design choice with no lock, wait or signal, recorded here
-      and not in the spec; the coordinator tells Mikhail in one sentence so he can object): the spec's sentences
-      leave the owner unnamed rather than pulling apart.
-      - The owning executor of a nonexecuting Message (spec 13277-13278) is its nearest executing ancestor's L3
-        Thread, and R0's thread for R0's subtree.
-      - That thread applies already-requested closes to its idle nonexecuting descendants (closing, not
-        exec_live, empty inbox, RUNNING or committed INACTIVE) in cascade order, in its own rounds, before its own
-        settle. A grandchild's close is requested only by its own parent's close.
-      - The same lane is the only one that binds such a Message: under a stopped parent there is no other mapping
-        authority, and mapping_authority_locked's host-outside-any-turn branch serves the bootstrap only. The bind
-        and the close are therefore on one lane.
-      - Hence unbound_held, exec_unbound_close's TLS impersonation and drive's unbound branch go. The close is a
-        direct call on the owning lane of the closing path of end_turn for that Message, with no borrowed
-        identity.
-      Fixtures that exercise it, all with a STOPPED or gone parent, so their owning executor is R0's thread (the
-        host's drive round):
-      - tests/lmx_model_family_close_32_selftest.lm1 (G1, H, G2 under the stopped C);
-      - tests/lmx_model_family_release_17_selftest.lm1 (C2 under the stopped P2, C3 under the completed P3);
-      - tests/lmx_model_liveness_33_selftest.lm1 (F under the stopped Q);
-      - lmx_message_exec_selftest.c's case at 7458 (an emergency-cancelled nonexecuting child of R0).
+    - WITHDRAWN (2026-09-15): the owning-executor candidate above, and the coordinator's ruling on it. Mikhail,
+      verbatim: "в спеке написано что ребенок опрашивает родителя и если родитель не доступен ил остановлен --
+      закрывается сам" (the spec says the child polls its parent and closes itself if the parent is unavailable or
+      stopped). The question was a search not yet done, not a gap: the spec answers it, and no new owner is named.
+      Mikhail's standing rule from this episode, verbatim: "я тебя уверяю -- если тебе кажется что что-то нелогично,
+      просто поищи в доках. Там все должно работать, я не с луны свалился :)" -- grep the spec and the model by the
+      behaviour's own words before any ruling or question, and cite the lines; only a search shown empty goes on.
+    - RULED (the spec, read at origin/main; the coordinator relayed Mikhail, 2026-09-15). No executor ever closes
+      another Message's idle descendants.
+      - Spec 13147-13161, the child liveness poll: "each non-root Message periodically checks its parent. If the
+        parent is absent, DEAD, STOPPED, RELEASED, or sustained-nonresponsive while in a handler, the child requests
+        its own orderly close (same end_turn path as stop)", and "Normal parent close already requests children
+        close at the parent's end_turn. Poll is only the fallback when the parent died abruptly", the child then
+        closing "at its own end_turn without waiting for the poll timeout". 13161 adds that a child's observation of
+        its parent's liveness is not access to the parent's protected data.
+      - So a launched Message (bound, its loop running) closes itself: it polls its parent, and at its own end_turn
+        it requests the close of its own direct children. The cascade runs one level per lane, which is why H is
+        asked only by G1's close.
+      - A Message not yet launched has no lane and is its creator's data: it is released or settled by the creator's
+        own lane at the creator's close.
+      - Hence unbound_held, exec_unbound_close's TLS impersonation and drive's unbound branch go with nothing in
+        their place.
+      Fixture states, measured on d6/lock-s6 before the edit (not assumed):
+      - tests/lmx_model_family_close_32_selftest.lm1:181 binds all four, "the family is bound" -- C, G1, G2 and H
+        are launched. The fixture then unbinds each (224, 228, 231) precisely to reach drive's unbound branch; it
+        converts by not unbinding, each child closing itself once C is STOPPED.
+      - tests/lmx_model_family_release_17_selftest.lm1:195 binds all ten, "all ten bound; none is mapped yet" --
+        C2 and C3 are launched; it unbinds at 242 and 264 for the same reason, and converts the same way.
+      - tests/lmx_model_liveness_33_selftest.lm1: F is created inside Q's turn (turn_q_create_f) and never bound, so
+        it is Q's data; Q is launched and runs its own closing turn (the fixture waits for "Q's closing turn"), so
+        F is settled on Q's lane at Q's close instead of converging by the sweep at 523.
+      - lmx_message_exec_selftest.c's case at 7458: P creates g, publishes it, emergency_cancel marks it; g is never
+        bound and P is alive, and the case already ends with P's own dispose_child(p, g). Only drive's close moves:
+        P's lane settles it.
+      No fixture is in the third state the coordinator asked me to stop on (a committed child never launched whose
+      parent is stopped and gone): in both unlaunched cases the creator's lane still exists at the close.
     - Red measured by d6 (2026-09-15, d6/lock-s6-red 695d54fc = 8eeb094f plus l2src/run_lock_s6_probe.ps1; builds
       nothing): -Part all exits 1 with "S6 probe: exec_lock_calls=601 exec_lock_decl=11 host_lock=43 exec_fields=27
       | refs=349 runtime_lists=36", S6-1 RED, S6-2 RED.
