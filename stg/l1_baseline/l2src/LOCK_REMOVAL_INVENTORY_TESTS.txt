@@ -125,14 +125,19 @@ tests are not on c067bed9 and are listed from origin/d6/stage5f-impl ee8b80c9.)
   Counting note: the chain's automatic verdict first said RED, because it counted the two strings inside the
   built parity.exe, reference.exe and lmx_message_exec.o. The counts above are over output files only
   (.c .h .lm1 .lm2 .exe .o excluded), and the baseline's count is 0.
-  Tripwire as 6f ruled it (the executor records the thread that attached it; a lane write with no turn from any
-  other thread aborts), uncommitted: run A on the unmutated runtime exits 1 in 15 s with "LANE WRITE FAIL
-  site=take_this:ready_clear owner=4 turn=none". take_this (exec.c L2940) is called by context_worker, which
-  marks the record held_by and clears m->ready before it enters m's turn (lmx_turn_msg is set later, L1313), so
-  every worker take is a lane write outside any turn off the bootstrap thread. Not exempted. Three ways went to
-  6f for a ruling: the worker enters the turn identity before the take (runtime change), the thread holding the
-  owner's run claim counts as its lane (tripwire rule change), or the tripwire lands with this as a known
-  violation for the design to remove.
+  Tripwire, committed as 95fb6a62 on this branch after 6f's ruling (b). First cut: the executor records the
+  thread that attached it and a no-turn write from any other thread aborts; unmutated it went red at
+  "LANE WRITE FAIL site=take_this:ready_clear owner=4 turn=none" (context_worker clears m->ready before entering
+  the turn). Ruling (b), by 19.28.R2.2 (3): the thread holding the run claim (held_by) is the Message's lane for
+  the take, so take_this calls lmx_msg_test_lane_take, which admits exactly that. Measured cold, run_port_message
+  -LaneCheck, counts over output files:
+    A, the committed bytes: exit 0 in 53 s, parity PASS, 0 LANE WRITE FAIL.
+    P, scratch probe: exit 0; admitted held takes: take_this:ready_clear; passing on the bootstrap thread outside a
+    turn: bind:affinity, run_child_turn:ready_clear, unbind:record, stop_unmap:ready_clear, stop_reset:ready_clear.
+    F, held_by comparison removed: exit 1, "LANE WRITE FAIL site=take_this:ready_clear turn=none".
+    C, m->ready written by a helper thread that does not hold the claim: exit 1, marker 3x,
+    "LANE WRITE FAIL site=run_child_turn:ready_clear(moved) turn=none" (green before the tripwire, above).
+  The same commit goes to d6 as S0 on claude-0c/lane-tripwire off c067bed9.
 
 5. Every other lock or wait primitive in tests and runners (Mikhail's rule, 2026-09-15, relayed by d6: the
    only lock allowed is the message collection's own local lock; no other lock anywhere in the project).
