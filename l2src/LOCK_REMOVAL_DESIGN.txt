@@ -484,7 +484,9 @@ M. The sequential mapping removed (X), after S3 and before S4.
       lmx_msg_exec_set_ui_lane 1454, lmx_msg_exec_has_ui_lane 1464, the test APIs lmx_msg_exec_ui_nrequests 1653
       and lmx_msg_exec_map_queued 1618 (the executor selftest's 15 and 23 uses go with their cases), the ui
       out-parameter of lmx_msg_exec_route_locked 1797, and the 14 LMX_MSG_AFFINITY_UI branches (1512, 1565, 1628,
-      1808, 1933-1947, 1992, 2037, 2282, 2339, 2370, 2440, 2849) go; LmxMsgExec.ui_lane goes.
+      1808, 1933-1947, 1992, 2037, 2282, 2339, 2370, 2440, 2849: route_locked, exec_bind_mode, launch_ctx_thread,
+      take_this, worker_round_rec_locked as context_worker's head, ctx_visit_first_launchable, map_child) go;
+      LmxMsgExec.ui_lane goes.
     - l2src/lmx_message.lm1 and .lm2 (one commit each pair): lmx_msg_exec_ready's UI request block (lm1 773-782,
       lm2 819-828), lmx_msg_exec_take_addr (lm1 787, lm2 833), runtime_new's UI lane creation (lm1 894-897, lm2
       946-949), create_prepare's UI_LANE_ID refusal (lm1 1108, lm2 1168), lmx_msg_sched_step (lm1 2581, lm2 2678).
