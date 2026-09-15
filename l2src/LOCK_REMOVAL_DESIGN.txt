@@ -207,6 +207,15 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
       built in, 0 report lines without the variable. M took C1 from 1812 to 112 and C2 from 2 to 1 by deleting the
       parent's steps and the scheduler step; the remaining 112 + 1 walks are S2's threading list. S2's code comes
       after D2.
+    - Acceptance (the coordinator, 2026-09-15): the oracle is the counter branch d6/lock-s2-red-oneroot c8f9cb50,
+      kept on its own branch and cited, never folded in (as the wake and map oracles). Red: c8f9cb50, C1=112 C2=1
+      turn_other=38. Green: C1=0 and C2=0 on the S2 branch merged with the counter, the counter armed, run_port_message
+      parity PASS; turn_other and host reported as they fall, turn_other stated here with its reason if not 0.
+      Falsifier: one address lookup put back on a scratch commit gives C1 >= 1. The coordinator re-measures the red
+      on c8f9cb50 before S2's code starts (after b5's D2 runs) and the green on d6's S2 tip before landing.
+    - Site list: b5's census (l2src/LOCK_REMOVAL_S2_LOOKUPS.txt, at b4e1296d, before M: 88 sites, C1 27 and C2 18)
+      predates M's deletions; before the code, d6 attributes the 112 C1 and 1 C2 walks on fc8e9d6e to their call
+      sites with the counter (a scratch build keyed by caller), and each is threaded or deleted.
 
 S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and every wake-matching rule above.
     Mikhail, verbatim (relayed by the coordinator): "тупейший вложенный synchronized по локу на чтение и запись как в
