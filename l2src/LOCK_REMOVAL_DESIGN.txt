@@ -1417,6 +1417,20 @@ S5. The runtime-level lists (L5). Waits on 5.1.
       - Fix d6/lock-s5 1f5b0c82. land_s5.sh's allowlist adds tests/lmx_msg_slots_selftest.lm1.
       - Merge 30d88a43 on 3e6fc02a (6 M): run_self_build 8 of 8, tag selfbuild/30d88a43 and log d6e00998 on
         d6/lock-s5-landing-30d88a43; the union base continues.
+    - Second landing attempt HUNG, not pushed (2026-09-15):
+      - The gates reached c_scanners at 16:37. run_candidate_c_scanners.ps1's `git archive --format=zip ... HEAD --
+        l1src l2src lm1/build/l1src/p0.lm1.h` sat blocked until 19:06: 0.016 CPU seconds, 1 thread, no zip, no
+        .lock files. It is the second hang of that step; the coordinator gives e9 the isolation ticket.
+      - d6 waited on the notification instead of checking; Mikhail flagged it.
+      - The whole tree was stopped (git, the runner powershell, run_gates, the land_base2/land_s5 bash chain), and
+        origin was confirmed unchanged (integration 3e6fc02a). The same git archive by hand took 1 s.
+      Relaunch: land_s5.sh 3e6fc02a 1f5b0c82, merge 7985e2a2, self-build 8 of 8 (tag selfbuild/7985e2a2, log
+      8eeb094f on d6/lock-s5-landing-7985e2a2). A stall watchdog runs on the landing's output: nothing written
+      under wti/build for 15 min prints the processes. The first watchdog exited at once, because msys ps shows no
+      script arguments; it was restarted on the output file.
+      Rule (the coordinator): every landing step runs under a timeout that turns the landing red. land_base3.sh
+      prints the step timeouts in its header: self_build 600, gates 1200, port_message 300 each, l2trans 900,
+      port_parser 900, mixa/ingress/lmx_cancel 180.
     - UAF kit for S5's green, rebuilt in scratch (never committed):
       - q_alloc.c: a poisoning quarantine allocator (0xDD, 8192 blocks, 256 MB, free-site frames, eviction and
         atexit checks, double free);
