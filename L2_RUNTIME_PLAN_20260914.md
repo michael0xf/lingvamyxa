@@ -5303,3 +5303,18 @@ from a lane that is neither the child's parent's lane nor the host
 outside any turn, required refused (INVALID by the existing refusals),
 failing today; measured red once the machine is free after the lead's
 landings; they become S4's acceptance with the guards' green.
+The struct-field fix (the lead, 2026-09-15; checked by the coordinator):
+d6/struct-field-after-m aa156868 off d8f758e6, two files: the unit and
+run_l2trans.ps1's pin moved to LmxMsg.success, the unit keeping its
+field-follow backslash; the red measured at d8f758e6; run_l2trans on
+aa156868 and the run_port_parser baseline at d8f758e6 (the one
+union-base runner not yet measured there) running. Recorded in the
+design: 244b0b35 (M's miss, the union-base rule, S2's form: no
+signature changes, the child resolved on the caller's own child list,
+the mode 3 case); 8a715f70 (b5's S4 site table, the three-guard ruling,
+the two corrections); claude-0c/s2-gate-impact 0d9eb00a (the mode 3 case
+added). land_base.sh carries the fixed base (the self-build with tag and
+log, the 31 gates, port_message plain and -LaneCheck, run_l2trans,
+run_port_parser, run_mixa, the ingress harness) with per-stage suites
+on top and the allowlist as a regex. Next: the fix landed with
+land_base.sh, then D2 on the new tip (D2's allowlist plus lmx_cancel).
