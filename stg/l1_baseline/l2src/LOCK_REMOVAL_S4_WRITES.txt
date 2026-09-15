@@ -192,19 +192,64 @@ notes: covered instead by the spec's fourth, separately-named clause
   reference counts explicitly -- flagged because the ticket's own answer set
   has no box to check for it.
 
---- running: checked, no site to list
+--- running: the control-flags clause's own API, unguarded today
 
-Checked explicitly since the control-flags clause names it (the parent clears
-a child's running to signal stop): the only write call site found is the
-atomic store inside lmx_msg_end_turn (lmx_message.lm1:1759), where the target
-is the ending Message's own record -- its own clause-one running clear at
-end_turn, not a foreign-lane write. A parent's stop reaches the target only by
-sending a STOP-kind envelope (a sender's delivery into the target's own
-queue), which the target then acts on during its own turn -- a self-write, not
-a direct field write from the parent's lane. The spec's sentence describes the
-logical effect; the code implements it through delivery, not a direct
-cross-lane store. No site is listed for this field; recorded here so the
-absence reads as checked, not missed.
+Correction (2026-09-15, 6f, on the earlier reading of this section): the
+earlier draft of this file said running has no foreign-lane write site --
+wrong. lmx_msg_end_turn's own atomic store (lmx_message.lm1:1759) is still
+the self-write it was described as (clause one, the Message's own running
+clear at end_turn), but that is not running's only write path. A separate
+function is the control-flags clause's actual API for the parent's half of
+the sentence ("the parent clears a child's running... (stop)"), Mikhail's
+own words for it: "0 is the parent's stop request."
+
+site: lmx_msg_emergency_cancel
+file:line: lmx_message_exec.c:439-455
+writer: whichever thread calls it -- today unguarded (no lmx_msg_require_turn,
+  lmx_msg_host_is_owner or lmx_msg_exec_holding_turn check anywhere in the
+  function), unlike every other site in this file
+fields & rows: LmxMsg.running (h:176, kept) via lmx_msg_running_store(m, 0);
+  m->closing (S3-excluded, not counted here) is also written in the same
+  call
+permits: item (3)
+notes: this is the clause-three API itself, not an oversight -- 36 call
+  sites across seven files, at c063fd00, all standing for exactly "the
+  parent or the host stops a running Message":
+    lmx_message_exec_selftest.c (22 calls) -- called from main(), outside
+      any turn, on a mapped/bound child; stands for the host outside any
+      turn stopping a mapped Message (e.g. line 4116, c1 mapped via
+      exec_bind then map_child, then cancelled from the test driver)
+    tests/cancel_spin_host.c (5 calls) -- called from a CreateThread-spawned
+      worker (cancel_after_settle, cancel_child_then_parent), after a fixed
+      delay (Sleep(20)), not the thread that created/attached the runtime
+      and not any parent's own turn -- a genuine third caller shape, see the
+      caveat below
+    lmx_message_selftest.lm1 (1 call) -- c.lmx_msg_emergency_cancel(crt, cs),
+      host-driven, same shape as the exec_selftest.c cases
+    tests/lmx_model_family_release_17_selftest.lm1 (3 calls) -- each
+      commented in place: "R stops P2 while C2 runs", "R stops P4 while C4
+      runs", "R stops P5 while C5 runs" -- R is the test's name for the
+      runtime/host driver, calling from outside any turn on a parent (P)
+      that itself has a running child
+    tests/lmx_model_orphan_mapped_17_selftest.lm1 (1 call) -- "R stops P
+      while C runs", the same R-stops-parent shape
+    tests/lmx_model_scenario36_selftest.lm1 (1 call) -- "P requests B's
+      stop", the parent's own lane stopping its direct child (the clause's
+      literal wording, not the host-outside-any-turn variant)
+    tests/lmx_msg_family_handoff_selftest.lm1 (2 calls) -- "stop failed
+      branch", cancelling a grandchild and a child together after a
+      handoff, same parent-or-host shape
+  Every call site outside cancel_spin_host.c states in its own name or
+  comment which of clause three's two legitimate cross-lane writers (the
+  parent's lane, or the host outside any turn) it stands in for. Caveat:
+  cancel_spin_host.c's 5 calls run on a CreateThread-spawned worker that is
+  neither of those two -- if S4's guard is added exactly as ruled (caller
+  must be the parent's own lane or the host outside any turn), these 5 calls
+  would start failing lmx_msg_emergency_cancel's own precondition, not just
+  losing an assertion elsewhere; that test file would need its cancel calls
+  moved onto the host thread (or a rule that the spawned worker is allowed
+  to act as the host's proxy) before S4's guard lands, or it breaks on
+  landing. Reported for 6f/the coordinator to route, not decided here.
 
 --- Sites needing a new lock, wait or signal to keep: zero found
 
@@ -215,8 +260,9 @@ here would need to newly add.
 
 --- Falsifier (run separately; not quoted verbatim in this file to avoid
     self-counting its own search terms)
-Count the lines beginning "permits: " above: 11 (create_prepare, child_link,
+Count the lines beginning "permits: " above: 12 (create_prepare, child_link,
 child_chain_remove, handoff_supervision, orphan re-rooting, end_turn
 committed/tracked, end_turn child_heard_at, exec_bind_mode, map_child,
-adopt/dispose/reclaim_mark, endp_retain/release). Each carries exactly one of
-the four tagged words; no other line in this file repeats any of them.
+adopt/dispose/reclaim_mark, endp_retain/release, emergency_cancel). Each
+carries exactly one of the four tagged words; no other line in this file
+repeats any of them.
