@@ -1089,7 +1089,15 @@ mutually, with the child's poll the priority since it is the child that
 must leave the trace that it is alive, is perfectly reliable too; there
 will never be leaks there, since it does not depend on the user's
 single-threaded L3 code; L2 and L1 are the user's responsibility, but we
-can write without that).
+can write without that). And on why nothing can hang, verbatim: "если у тебя у каждого родителя стоит таймаут на ребенка и у ребенка на родителя таймаут и в каждой буквально точке (цикл, вход, выход) проверяетс runnable, у одной арены строго один поток, то у тебя зависание никогда не будет дольше чем таймаут, это схема железобетонная. Программа может упасть, но завсинуть -- с чего, на чем? На ресурсах или что-то в этом роде? В Си есть механизм прибить поток принудительно (потом реализуем, сейчас бы хоть ядро запустить) , в конце концов по таймауту сработает корневой поток и тупо выйдет из процесс ОС. Тут не может быть никаких зависаний"
+(if every parent has a timeout on its child and every child a timeout on
+its parent, and at literally every point, loop, entry, exit, runnable is
+checked, and one arena has strictly one thread, then no hang ever lasts
+longer than the timeout; the scheme is reinforced concrete; a program
+can crash, but hang on what, resources or the like? C has a way to kill
+a thread by force, to be done later, now the kernel has to run at all;
+in the end the root thread's timeout fires and simply leaves the OS
+process; there can be no hangs here).
 And on what L1 is for, verbatim: "Вы пытаетесь писать на Си, а на Си (L1) надо просто пилить ядро _на котором_ уже пилить дальнейший функционал самого ядра. Это как я бы попросил на goto имитировать все циклы, а вы бы заменили задание на "написать примеры while и for"  -- совершенно разне задачи" (you are trying to write in
 C, while in C, that is L1, one simply builds the kernel on which the further
 functionality of the kernel itself is then built; as if I asked you to

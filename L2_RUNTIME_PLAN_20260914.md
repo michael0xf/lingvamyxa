@@ -6293,3 +6293,13 @@ case the two rules do not cover, named. No question to Mikhail: the
 spec is explicit and consistent. The deletion patch saved and the tree
 restored; (a) proceeds on the green base (the transport move onto R0's
 monitor, then the lock).
+Mikhail (2026-09-15, verbatim, on hangs): "если у тебя у каждого родителя стоит таймаут на ребенка и у ребенка на родителя таймаут и в каждой буквально точке (цикл, вход, выход) проверяетс runnable, у одной арены строго один поток, то у тебя зависание никогда не будет дольше чем таймаут, это схема железобетонная. Программа может упасть, но завсинуть -- с чего, на чем? На ресурсах или что-то в этом роде? В Си есть механизм прибить поток принудительно (потом реализуем, сейчас бы хоть ядро запустить) , в конце концов по таймауту сработает корневой поток и тупо выйдет из процесс ОС. Тут не может быть никаких зависаний" Entered verbatim in spec
+section 2 and model section 2 after his synchronization sentence. Read
+by the coordinator: the liveness scheme bounds every hang by a timeout
+(the parent's on the child, the child's on the parent), runnable is
+checked at every point (loop, entry, exit), one arena has exactly one
+thread, the root thread's timeout ends the process; a forced thread
+kill is a later mechanism; so a hang is never a model state. Today's
+hangs (the git archive in a runner, timing assumptions in prototype
+selftests) were outside the model, and the per-step timeouts in the
+landing scripts are the same idea applied to our own tooling.
