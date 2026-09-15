@@ -1167,7 +1167,19 @@ units get their includes from l2_emit_unit's fixed line, and nothing brought
 ctype), no name table and no flag under decision 12, the prototype's
 l2_is_known ctype table out with it; if run_l2trans's historical set compares
 emitted text, the goldens' regeneration is in commit 3 with one include-line
-hunk per golden and nothing else. Two more gaps from b5, queued after the
+hunk per golden and nothing else (measured: no runner stores a golden of
+emitted unit text, nothing to regenerate). The branch as pushed,
+d6/uchar-local 80b0a77b (1b2d4620 uchar as type code 42 through the
+own-local paths with the leaf unit_uchar_local exit 10 and the historical
+set at 145; 0f07f1de the four-line bare-atom cast; 80b0a77b the one token
+in l2_emit_unit's fixed include line), reviewed 2026-09-15 and approved to
+land as a whole: l2_ctype_word is pre-existing (multi-word C type words),
+no ctype name table or flag remains; full run_l2trans on the tip 145 cases
+"l2trans gen2 ok"; the reds per commit as ruled ("unsupported body,
+frame=uchar" then "unsupported cast type" at 6:13, then gcc's implicit
+declaration of isalpha, then green); the landing falsifier: "<ctype.h>"
+removed from the fixed line turns exactly the uchar leaf red. Two more
+gaps from b5, queued after the
 uchar branch and before U4 and the handler deletion, in this order: the
 expression length (sonnet/parser-l2 af150cd6, the oracle's 318-character `||`
 condition in lm_p0_scan_builtin_compact_atom_piece fails "expression too
