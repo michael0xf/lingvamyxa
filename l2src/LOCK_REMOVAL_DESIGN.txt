@@ -538,6 +538,12 @@ M. The sequential mapping removed (X), after S3 and before S4.
       "LANE MAP FAIL site=run_child_turn owner=4".
     - Unbind clears LmxMsg.mapped (e9's find; 56a74dae): red first on 2006d9d1 at "exec remap unbind mapped=1", green
       with the one-line clear in unbind_slot_locked.
+    - Acceptance record complete (the coordinator, exec-3a, pin in place): red on 199dab84 at "LANE MAP FAIL
+      site=ui_step owner=6"; green on d6/m-sequential 26dde049 (b5's and e9's conversions merged, turn_arena_o1
+      restated, the lane's numbering pins fixed): run_port_message -LaneCheck exit 0 in 68 s, no LANE MAP FAIL, parity
+      PASS, 97 methods redirected (101 before M); plain run exit 0 in 61 s, parity PASS; falsifier red on 2006d9d1.
+      d6 on 26dde049: run_gates -L2MessageRoot "gates GREEN: 31 of 31 in 657s". Landing: land_m.sh on 86bb9468
+      (26dde049 plus install_pin 8479fdab) onto integration 00b04751.
     - M keeps no Message's turn on a foreign lane. Mikhail's allowance that children may run on the parent's thread
       is not used by M; a later stage that uses it names the site first, and the coordinator re-cuts the oracle.
     - Fields (b5's survey sonnet/m-fields 18d5e3e2; every site it lists has a row in LOCK_REMOVAL_FIELDS.txt): M
