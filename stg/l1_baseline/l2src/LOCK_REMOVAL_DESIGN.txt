@@ -221,9 +221,12 @@ O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced 
     repository.
     Stage O under (b), which replaces everything below in this section:
     - The project's self-build is the live chain: l1trans from its committed C, l2trans in l2src, the l2src core.
-    - O is the deletion, whole, of lm2/own.lm2 and the unbuildable lm2 self-host: own.lm2, own_abi.lm2, trans.lm2's
-      chain, its CMake targets, and its C tests and fixtures, each named. Owner b5, red first by the greps (the five
-      prefixes and the chain's file list nonzero today), green on the live chain's gates.
+    - O is split (Mikhail, verbatim: "расщепляйте"). b5 owns it, one commit per group on sonnet/stage-o, red first by
+      the greps (the five prefixes and the chain's file list are nonzero today), green on the live chain's gates.
+      Staying: the L2 sources parser.lm2, l1trans.lm2, printTree.lm2, table.lm2, registry_control.lm2, mix/, and
+      table_descriptor.lm2. own_abi.lm2 is split: the message-thread declarations go, the ownership and arena ABI
+      stays. Going: own.lm2, the trans.lm2 chain, its kept generated C with those gitignore exceptions, its CMake
+      targets, and its C tests and fixtures, each named.
     - O2 is void. O1 stays as a core primitive (the turn Message's arena). Switching l2trans's allocations onto it
       is a stage after the locks are out, not now.
     - Order under the single goal: S2, M and D in the live chain; the lm2 deletion; the live chain's self-build
