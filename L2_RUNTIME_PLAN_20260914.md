@@ -4336,3 +4336,16 @@ fixed point 8 of 8, pin <pin>" and whose only change is the appended
 SELF_BUILD_LOG.txt line, plus the tag selfbuild/<hash> on the measured
 commit, so git log --decorate reads the mark at the commit itself and
 the next commit's subject says it in words.
+The self-build mark in its exact form (the lead, 2026-09-15; checked by the
+coordinator): branch d6/one-root-selfbuild, git log --oneline -2 reads
+"27edf717 SELF-BUILD OK 5cee1426: fixed point 8 of 8, pin 0B3D85B3"
+above the measured merge 5cee1426; its only change is
+l2src/SELF_BUILD_LOG.txt (a header and the 5cee1426 line: date, commit,
+pin, the fixed-point line, the eight generated-C blob ids, measured by
+d6); the tag selfbuild/5cee1426 on the measured commit. The earlier
+d6/one-root-landing carried the same file under the previous subject
+(2eb5d122) and is left as history, not rewritten; d6/one-root-selfbuild
+carries the mark forward and the relaunched ONE ROOT landing merges it
+(5cee1426 + 27edf717), so the line lands in integration. land_oneroot.sh
+commits exactly that subject with only the appended line, right after
+the tag.
