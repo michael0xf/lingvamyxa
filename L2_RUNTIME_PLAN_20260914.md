@@ -4738,3 +4738,23 @@ and run_msg_family_handoff as the measure); e9, claude-0c/m-tests-scenario
 under the two loop rulings and the go-cell rule, each pushing a branch
 for the lead to merge, each falsified by a grep for Sleep(, GetTickCount,
 WaitForSingleObject and g_go giving 0 on the converted tests.
+M's core commit (the lead, 2026-09-15): d6/m-sequential 793c267f, parent
+594f0668 (the merge of 00b04751 and 199dab84); checked by the
+coordinator on origin (no sched_record file left under l2src). Deleted:
+the UI lane, the MAP take, UI affinity, run_child_turn, the sched step,
+the sched record unit whole, the ui_lane_3d test and
+run_turn_step_child_copies with their gate rows; entry_turn restated;
+run_gates down to 30 rows. Measured on the cut core before the commit:
+run_port_message compiles lmx_message.c, lmx_message_exec.c and
+lmx_message_host.c with no new warning (mark_from's sign-compare
+warning pre-existing), then stops at the exec selftest compile;
+everything that steps a child does not build at 793c267f, by design.
+Conversion notes: for e9, the scenario36 set still has 5
+turn_step_child copies and the map_child_in_root/step_from_root
+helpers; a parent that steps its child becomes the child mapped from
+its parent's own turn (map_child), R0's direct children mapped from
+root_turn with a turn_map_child cell; for b5, send_local's
+parent-schedule and prebind cases assert the parent's scheduler step
+(FIFO through sched_step), mapping properties that go, while the
+send/admission checks convert; the lead takes the exec selftest and
+cancel_spin_host.
