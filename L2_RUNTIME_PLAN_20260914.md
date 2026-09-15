@@ -2337,3 +2337,23 @@ The coordinator's operating rule (c) adjusted to his order: until the
 self-build is achieved, new executor policy or state is written in L1
 (lmx_message.lm1 with its lm2 mirror as today), not as new L2 units; the C
 keeps shrinking; test hooks under the test define as before.
+The design updated at d6/lock-removal e7d96d6f with Mikhail's (b): stage O
+the whole deletion of the lm2 self-host (b5, red by the greps, green on the
+live chain's gates, O0's measurement the why); O1 a core primitive with
+l2trans's allocation switch after the locks; the operating rule until the
+self-build (new executor state in L1 with the lm2 mirror, C shrinking,
+hooks under the test define); stage Y, the mailbox monitor per his Java
+order: Y1 the synchronized receiver in l2trans (red: the old
+trans_synchronized_cleanup as a run_l2trans leaf), Y2 the native monitor
+hook (reentrant enter and leave, one mutex and one condition per monitor,
+wait and notify), Y3 the mailbox using it (notify on admission, wait in
+take, replacing m->mail and the bind waits; red: 0c's S3 oracle). Ruling
+(the coordinator, 2026-09-15, implementation order, Mikhail may overrule):
+until the L2 port, the L1 mailbox calls Y2's hook as an explicit
+enter/leave/wait/notify sequence, which 19.28.R2.2 at 11623 allows for the
+bootstrap ("temporarily L1/native bootstrap"), 20.5.7's "not a raw
+lock/unlock pair in source syntax" being said of the L2 receiver; Y1 is the
+first item of the L2 port after the self-build; conditions: the hook is the
+monitor exactly as Java's so the receiver's later lowering changes nothing,
+and the hook is called only by the mailbox's own functions, a grep for its
+names elsewhere at 0 being Y3's proof beside the S3 oracle.
