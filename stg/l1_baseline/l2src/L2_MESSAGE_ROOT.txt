@@ -820,6 +820,16 @@ brackets into temps that l1trans refused, an L2 call failed "incompatible entry
 signature". l2_index_span now counts a balanced index, at an operand's head and
 after a binary operator; before the fix both actuals fail l2trans.
 
+Added 2026-09-14, making 142 (73174F6D034963849AE698E7979793E5723690543FAF3DEEC76055C0958B25C6):
+Leaf (1):
+  unit_indent_stack_field_index
+Removing only that line reproduces the 141-case digest (A54C65A1...) exactly.
+It is the acceptance for INDENT_STACK_FOREIGN_DESIGN (5e's repro 23e2dbb7 from
+parser-l2 Stage e slice 3): `stack\columns[idx]: value` on an `@: LmP0IndentStack`
+formal failed "unsupported index" because the type kept legacy codes 13/14/15;
+it is now a foreign pointer type, and the leaf writes and reads the index and
+allocates a local of the type through the explicit cast.
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for
