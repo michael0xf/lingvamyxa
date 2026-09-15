@@ -3213,3 +3213,25 @@ l1trans.lm1, p0.h, stg's four stale generated files); run_gates 32 of 32 in
 behind it (refresh_c.sh and land_c.sh syntax-checked, the four-document
 replacement dry-run, the pin procedure per (A)); the design's field table
 under the map's 5.7 committed as aec5ad2b, one count under re-verification.
+The lead's field table (stg/l1_baseline/l2src/LOCK_REMOVAL_FIELDS.txt,
+162f38ec on d6/lock-removal; the design's FIELDS paragraph before S0):
+all 63 fields of LmxMsg plus Env, Copy, Runtime, BindWait and ExecBind, 93
+rows, owner codes MSG (running, success, root), L3T, PAR, ARENA, MBOX, R0,
+NATIVE, DEL; 39 rows ruled with their sources (running and success MSG;
+blocks, ranges, eternal_ranges, method_ranges ARENA; mail MBOX; sched_rec
+L3T; refs, owner_rt, alloc_next, ui_pending, mapped, closing DEL; Env and
+Copy DEL whole; Runtime DEL with root, next_addr, root_seq and root_record
+to R0; BindWait DEL except the worker handle, NATIVE); 54 proposed, of
+which the coordinator confirmed: parent/parent_msg as the L3 Thread's
+parent capability (L3T), the child list, path and child_seq PAR, init
+ARENA, turn/turn_ctx L3T, the liveness fields L3T, exec_id/corr/from/reply
+DEL. The four questions: Q1 (state, committed) ruled PAR from 19.29.7.1's
+reserved child (committed is the parent's child entry written at its
+end-turn; state derived from running and success plus that entry); Q3
+(native_users) ruled L3T folded into handoff_safe's condition; Q4
+(ExecBind's held/held_by) ruled DEL with M; Q2 (done_from/done_id/done_n/
+done_cap, the at-most-once delivery history) put to Mikhail with DEL
+proposed by analogy with the deleted create retry; and "ready" put to
+him too, since his 2026-09-14 sentence names readiness as the child's own
+flag written by the sender at admission while his final loop makes the
+mailbox's non-emptiness the readiness, DEL proposed; those two rows held.
