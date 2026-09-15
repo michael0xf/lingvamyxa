@@ -486,13 +486,15 @@ M. The sequential mapping removed (X), after S3 and before S4.
     commit after reading it. The rule for the decision: a property of the sequential mapping itself (round-robin
     order, the cursor, the UI take) is deleted; a property of the child (its close, its settle, its mail) moves
     onto its own thread.
-    - Acceptance (the coordinator's, cited here and never folded in): fable/m-acceptance 03fc0f65 = b4e1296d plus
-      lmx_msg_test_map_site in the S3 oracle's shape, aborting "LANE MAP FAIL site=... owner=..." where a Message's
-      turn runs on another Message's lane: child_turn_core with bootstrap == 0 (site run_child_turn) and the UI step
-      from R0's turn (site ui_step). run_entry_turn's bootstrap is the host mapping and is not marked.
-    - Red, measured by the coordinator on b4e1296d with the pin: run_port_message -LaneCheck exit 1 in 15 s at
-      "site=ui_step owner=6"; the plain run parity PASS in 56 s.
-    - Green: M's branch merged with 03fc0f65 gives -LaneCheck exit 0 and the plain run PASS; the functions deleted
+    - Acceptance (the coordinator's, cited here and never folded in): fable/m-acceptance-oneroot 199dab84 = 80101431
+      (after ONE ROOT) plus lmx_msg_test_map_site in the S3 oracle's shape at l2src/lmx_message_exec.[ch], aborting
+      "LANE MAP FAIL site=... owner=..." where a Message's turn runs on another Message's lane: child_turn_core with
+      bootstrap == 0 (site run_child_turn) and the UI step from R0's turn (site ui_step). run_entry_turn's bootstrap
+      is the host mapping and is not marked. It re-cuts fable/m-acceptance 03fc0f65 (the same two edits on b4e1296d).
+    - Red: on 03fc0f65 the coordinator measured run_port_message -LaneCheck exit 1 in 15 s at "site=ui_step owner=6"
+      and the plain run parity PASS in 56 s; the red on 199dab84 is measured by the coordinator after e9's cold gate
+      record on 80101431 and is recorded here when it arrives.
+    - Green: M's branch merged with 199dab84 gives -LaneCheck exit 0 and the plain run PASS; the functions deleted
       (grep at 0 for run_child_turn, sched_step, exec_ui_step, turn_step_child, AFFINITY_UI outside the oracle);
       every converted test green on its own thread; the 33 gates.
     - Falsifier: one site's mapping and its marker put back turns -LaneCheck red at that site.
