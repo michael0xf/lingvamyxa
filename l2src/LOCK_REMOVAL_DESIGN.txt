@@ -1439,6 +1439,11 @@ S5. The runtime-level lists (L5). Waits on 5.1.
       - run_port_parser, run_mixa, run_ingress_harness and run_lmx -Suite Cancel ok.
       Tag selfbuild/7985e2a2 and log commit 8eeb094f are on d6/lock-s5-landing-7985e2a2.
       integration/main-absorbs-core is 8eeb094f. The probe branch d6/lock-s5-red is not folded in.
+      e9's cold record on 8eeb094f (worktree wt0c_landed_8eeb094f, no build/ before; S4's own tip record was skipped
+      for S5's green):
+      - run_self_build PASS 8 of 8 in 11 s; tag selfbuild/8eeb094f (tag object f2767b9c);
+      - gate.ps1 exit 0 in 304 s, "gate: all green", 27 of 27 steps;
+      - the log line claude-0c/selfbuild-log-8eeb094f 11f581e0, fast-forwarded into integration.
     - UAF kit for S5's green, rebuilt in scratch (never committed):
       - q_alloc.c: a poisoning quarantine allocator (0xDD, 8192 blocks, 256 MB, free-site frames, eviction and
         atexit checks, double free);
@@ -1533,6 +1538,21 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       host_lock and exec_fields for S6-1; refs and runtime_lists for S6-2. Red now, green 0 with land_base3.sh's
       union base plus lmx_cancel, the UAF kit's 165 runs and scenario36. Falsifier: one hold put back (for S6-2,
       one retain).
+    - Red measured by d6 (2026-09-15, d6/lock-s6-red 695d54fc = 8eeb094f plus l2src/run_lock_s6_probe.ps1; builds
+      nothing): -Part all exits 1 with "S6 probe: exec_lock_calls=601 exec_lock_decl=11 host_lock=43 exec_fields=27
+      | refs=349 runtime_lists=36", S6-1 RED, S6-2 RED.
+      - exec_lock_calls by file: lm1 197, lm2 197, exec.c 175, exec.h 2, lmx_message_exec_selftest.c 10,
+        tests/lmx_model_checks_19_29_6_selftest.lm1 20.
+      - exec_lock_decl: exec.c e->lock lines 9, plus the LmxMsgExec lock field 2.
+      - host_lock: calls in lm1 8, lm2 8, host.c 2, host.h 2; h->lock and h->shutting_down lines 21; the
+        LmxMsgHostSync lock field 2.
+      - exec_fields: exec.c 27.
+      - refs: lmx_message.h 3 plus the field 1, lm1 52, lm2 52, exec.c 28, exec selftest 200,
+        lmx_message_selftest.lm1 8, cancel_spin_host.c 5.
+      - runtime_lists: the slots and n fields 2, lm1 7, lm2 7, exec.c 5, exec.h 1, lmx_msg_slots.lm1 2 and .lm2 2,
+        slots selftest 8, unit_msg_cursor.lm2 2.
+      The probe's first commit (aa309dd7) missed the pointer field "LmxMsg *slots;" (tail " slots;"). 695d54fc
+      fixed the tail before the hand-off.
 
 A1-A3. The arena (19.29.2), after S6 or interleaved where a stage touches the same record.
     Mikhail on 5.4, verbatim (2026-09-15): "какая копия? У нас нет никаких копий message -- выше же с тобой обсуждали.
