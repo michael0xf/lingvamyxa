@@ -3431,3 +3431,11 @@ lead applies "no turn of root" to KERNEL, S3, Y3 and the FIELDS success
 comment (abc36542 superseded by his next hash). Stage M, which removes
 the sequential mapping of children onto the parent's thread, is an
 implementation choice the model allows either way; it is not a model rule.
+Mikhail (2026-09-15, in the lead's chat, verbatim, closing the point): "Однако так как при остановке родителя останавливаются и дети (там в обе стороны проверки) то очеивдно что в конечном итоге по success==1 ыикл прервется. От реализации зависит только в каком месте"
+So: once success == 1 no turn of root repeats and the scheduler may still
+do something with its children, but the children stop when the parent
+stops (the checks go both ways), so the loop does in the end break on
+success == 1, and only where is the implementation's. Entered verbatim in
+spec 19.28.R2.2 and model 31 after the root sentence; the lead's c4442c56
+carries the root narrowing, his next commit carries this sentence in
+KERNEL, S3 and the FIELDS success comment.

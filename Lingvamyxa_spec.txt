@@ -11644,7 +11644,9 @@ Thread's scheduler does with its children after that is implementation, as
 children may run on the same thread, and so is where the return stands
 (verbatim,
 the same day, to the lead's "the loop leaves on success == 1 is a
-description of the implementation, not of the model": "«цикл выходит по success == 1», а это описание реализации, а не модели." -- просто по модели L3 Thread не может повторять turn когда success == 1, это не деталь реализации. Деталь реализации это где будет стоять return." and, narrowing it: "Однако планировщик L3 Thread может что-то делать со своими детьми (вот это зависит отреализации так как дети могут крутиться на том же потоке) так как success относится к Lmx* root -- то есть к основной функциональности."); user
+description of the implementation, not of the model": "«цикл выходит по success == 1», а это описание реализации, а не модели." -- просто по модели L3 Thread не может повторять turn когда success == 1, это не деталь реализации. Деталь реализации это где будет стоять return." and, narrowing it: "Однако планировщик L3 Thread может что-то делать со своими детьми (вот это зависит отреализации так как дети могут крутиться на том же потоке) так как success относится к Lmx* root -- то есть к основной функциональности." and, closing the point: "Однако так как при остановке родителя останавливаются и дети (там в обе стороны проверки) то очеивдно что в конечном итоге по success==1 ыикл прервется. От реализации зависит только в каком месте" (since the children stop when the parent stops, the checks
+going both ways, the loop does in the end break on success == 1; only
+where is up to the implementation)); user
 code sets success, running is polled while root executes, and at exit
 running is set to 0, so a finished L3 Thread reads success && !running. And:
 "то есть цикл не бесконечный -- из него есть выход хоть по return хоть как" (that is, the loop is not infinite: there is a way out of it,
