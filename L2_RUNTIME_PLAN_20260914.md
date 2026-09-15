@@ -4180,3 +4180,14 @@ copy from build/pin_<hash>/l1trans.exe into <tree>/build/l1trans/gen2 and
 gen3 with each copy re-hashed, exit 2 on any mismatch; e9's loop over
 its wt0c_* worktrees is a scratchpad wrapper. On claude-0c/oneroot-runners
 off 6bfefa81, run nothing before the lead's "landed".
+Mikhail (2026-09-15, verbatim, on the coordinator's "cost of idle" note):
+"не имеет, на чём заснуть;" --  так я же выше тебе написал "спать, планировщика вызывать" и тп.!!!!, аналог yield делать. Ты что ли не понимаешь разницы между абстрактной моделью (которую тоже нельзя нарушать введением лишних сущностей) и нюансами реализации? Message это простейшая структура как и Lmx структура, а L3 Thread надо разумеется заодить корректно. Я не понимаю твоего возражения про "сон"!!! The coordinator's objection is withdrawn as empty: the model has the
+L3 Thread's loop over turns and nothing else; how the implementation
+passes an empty round (a sleep, a scheduler yield, anything that is not a
+lock, a wait on a primitive or a signal) is an implementation nuance,
+which his earlier answer already said; Message stays the simplest
+structure, like Lmx, and the L3 Thread is coded correctly with such a
+pause where it needs one. The three other notes (one monitor at a time;
+release/acquire on the flags on weak-memory hardware; non-moving
+collection and long-lived consumers) stand as implementation notes, not
+model objections.
