@@ -134,16 +134,16 @@ KERNEL. What L1 is for (Mikhail, spec section 2 line 1078 and model section 2, m
       по success==1 ыикл прервется. От реализации зависит только в каком месте"; and, correcting the coordinator's
       gloss on how an ended L3 Thread reads: ""завершённый L3 Thread читается как success && !running" -- если
       пользовательский код не поставит success=1 то success останется 0 если running стал 0"
-    Of the 112 rows of LOCK_REMOVAL_FIELDS.txt (99 until the S3 landing split BindWait.worker and added LmxMsgExec's
-    12), 16 are kernel:
+    Of the 113 rows of LOCK_REMOVAL_FIELDS.txt (99 until the S3 landing split BindWait.worker and added LmxMsgExec's
+    13 rows), 16 are kernel:
     - 4 MSG: running, success, handoff_ready as handoff_safe, graph as root;
     - 7 arena rows inside root: init, init_n, blocks, ranges, eternal_ranges, method_ranges, roots;
     - 5 mailbox rows: inbox, inbox_tail, mail (the mailbox's monitor, the one lock: a kernel row), and the runtime's
       transport and transport_tail as admissions into R0's mailbox.
-    38 rows (28 L3T, 10 PAR) are functionality to be written on that kernel in the generated shape (a function with
+    40 rows (30 L3T, 10 PAR) are functionality to be written on that kernel in the generated shape (a function with
     arguments, hidden arguments and the graph node). They are listed as such, not carried as C fields. That includes
     the worker's in-loop flag and the thread's turn identity: the thread and its loop are kernel code, their data is
-    L3T. The other 58 rows are deleted.
+    L3T. The other 57 rows are deleted.
     Stages S2-S6, M, Y and A stay as the lock removal that reduces today's C to that kernel.
 
 FIELDS. Every stage names its fields' owners (coordinator, 2026-09-15; map section 5.7, main 8c3d06bc). Mikhail,

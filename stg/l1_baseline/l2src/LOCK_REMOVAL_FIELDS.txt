@@ -135,8 +135,8 @@ LmxMsgCopy.next | h:115 | list link | DEL (the collection's own link, MBOX) | ru
 
 --- LmxMsgRuntime (lmx_message.h 211-228): the process-wide record. Goes (map 5.7)
 LmxMsgRuntime.root | h:212 | the root list | L3T of R0 (R0's children, in R0's arena) | ruled (map 5.7) | S5
-LmxMsgRuntime.slots | h:213 | every slot | DEL | ruled (map 5.7) | S5
-LmxMsgRuntime.n | h:214 | slot count | DEL | ruled (map 5.7) | S5
+LmxMsgRuntime.slots | h:213 | every slot | L3T of R0 (the root's record of its Messages) | ruled (coordinator, after b5's crosscheck f36fb2e3) | S5
+LmxMsgRuntime.n | h:214 | slot count | L3T of R0 (the count in the root's record of its Messages) | ruled (coordinator, after b5's crosscheck f36fb2e3) | S5
 LmxMsgRuntime.transport | h:215 | host transport queue | MBOX (host posts are admissions into R0's mailbox); the queue DEL | proposed | S5/Y3
 LmxMsgRuntime.transport_tail | h:216 | its tail | MBOX (host posts are admissions into R0's mailbox); the queue DEL | proposed | S5/Y3
 LmxMsgRuntime.host_sync | h:217 | the host lock | DEL | ruled (census 2.6; no lock but the mailbox's) | S6
@@ -180,13 +180,14 @@ LmxMsgExecBind.in_table | c:73 | indexed in the executor's table | DEL (the exec
     (b5's M field survey sonnet/m-fields 18d5e3e2; the coordinator asked for its rows before M); it describes no Message
 LmxMsgExec.lock | c:88,91 | the executor's table lock (CRITICAL_SECTION / recursive pthread mutex) | DEL (no lock but the mailbox's) | ruled (Mikhail: no locks except the mailbox collection; census 2.6) | S6
 LmxMsgExec.tls | c:89,92 | the thread's current-turn identity (holding_turn) | L3T (the L3 Thread's own current turn, L1 data of its code) | proposed | S4
-LmxMsgExec.nworkers | c:94 | count of context workers in their loops (S3: stop's rounds read it) | L3T of R0 (R0's children still running, read from their running flags) | proposed | S4
+LmxMsgExec.nworkers | c:94 | count of context workers in their loops (S3: stop's rounds read it) | L3T of R0 (R0's children still running, read from their running flags) | decided (lead, after b5's crosscheck f36fb2e3: S3's stop rounds read this count until S4 makes the stop the parent's running = 0 and the host reads its children's !running; the S5 file's M is superseded) | S4
 LmxMsgExec.stopping | c:95 | the stop request every worker reads at its round head | DEL; MSG running = 0 of each child, the parent's stop request | ruled (Mikhail: "Да, 0 это запрос остановки от родителя") | S4
 LmxMsgExec.stopped | c:96 | stop has completed | DEL (derived: the children read !running) | proposed | S4
 LmxMsgExec.no_retire | c:97 | runtime_delete's retire suppression | DEL (LmxMsgRuntime goes) | proposed | S5
 LmxMsgExec.contexts_live | c:98 | contexts started (start_contexts to stop) | DEL (each L3 Thread is launched by its parent) | ruled (coordinator: b5's S6 lock-site census 65a7ec63 places start_contexts' flags at S5) | S5
 LmxMsgExec.rt | c:99 | back pointer to the runtime | DEL (LmxMsgRuntime goes) | ruled (map 5.7) | S5
 LmxMsgExec.ui_lane | c:104 | the UI lane's record, stepped from R0's turn today | L3T of R0 (the UI lane is R0's child L3 Thread on its own thread) | ruled (Mikhail: "Полоса на экране не может не быть L3 Thread"; today's lane "это просто кривая реализация") | M/S5
+LmxMsgExec.reap_head | c:115 at 7200294b | the reap list's head (joined workers' records) | DEL (each thread frees itself; no join) | ruled (Mikhail: "Исполнитель сам освобождает свою память") | done (S3, b4e1296d)
 LmxMsgExec.retire_head, .retire_tail | c:105-106 | the deferred retire list flushed after turns | DEL (the parent's settle frees an ended child, 19.29.8) | proposed | S5
 LmxMsgExec.unbound_held | c:107 | the address whose close borrows an identity in unbound_close | DEL (the close of an unbound child is its parent's settle, no borrowed identity) | ruled (coordinator: census 65a7ec63 places exec_unbound_close at S5) | S5
 LmxMsgExec.test_fail_ctx, .test_fail_adopt_block, .test_boot_tid | c:109-116 | test-build failure injection and the lane tripwire's boot thread | DEL with the mechanisms they test (launch, adopt block, the host outside any turn) | proposed | M/S4
