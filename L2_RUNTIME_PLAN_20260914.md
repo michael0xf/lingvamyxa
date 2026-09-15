@@ -5422,3 +5422,9 @@ red-first item. Note: b5 ran the two short suites while e9's cold gate
 record was in progress; if that record shows a load-sensitive red, this
 is the cause; the hold rule stands for everyone until the record is
 reported.
+b5's edits pushed (2026-09-15; checked): sonnet/s4-sites 108e340a (site 5
+"nothing (guarded at mapping_authority_locked)", counts nothing 11 /
+guard 1; mapping_authority_locked's other caller is lmx_msg_exec_unbind
+at 2424, not map_child, corrected); sonnet/s4-guard-checks b84cb353 (the
+exec_bind check reworded as a guard-holds check; emergency_cancel's
+red check untouched). No builds run; the hold stands until e9's record.
