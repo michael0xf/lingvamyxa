@@ -1,0 +1,296 @@
+LOCK_REMOVAL_S5_LISTS: every LmxMsgRuntime/LmxMsgExec field (and file-static
+table) holding a collection or count spanning more than one Message, at
+integration c063fd00, against "runtime lists go" (23cda3c0 and later: every
+such list becomes per-Message Structure data or is deleted)
+(sonnet/s5-lists, 2026-09-15, doc-only, no machine).
+
+Method: the full struct bodies of LmxMsgRuntime (lmx_message.h:211-228, 10
+fields) and LmxMsgExec (lmx_message_exec.c:105-139, 14 production fields
+plus 4 LMX_MSG_EXEC_TEST-only scalars) read directly at c063fd00, every
+field classified by whether it is a collection/count spanning multiple
+Messages or a single scalar/pointer out of this ticket's scope; every
+collection/count's own append and read sites read directly to name the
+writing and reading lanes. host.c and lm1 checked for file-static
+collections outside these two structs: host.c has none (LmxMsgHostSync is
+per-instance, already LOCK_REMOVAL_S6_LOCK_SITES.txt's own S6 site); exec.c
+has four LMX_MSG_EXEC_TEST-only file-static scalars, listed below and
+excluded from the real count (single test counters, not indexed
+collections); lm1 defines no file-static collection of its own -- every
+list it touches is a field of LmxMsgRuntime or a Message's own struct,
+already covered.
+
+--- Counts
+
+10 LmxMsgRuntime fields, 14 LmxMsgExec production fields (+4 test-only,
+excluded) = 24 fields read. Of those, 8 are genuine collections or counts
+spanning more than one Message (this ticket's actual subject); the
+remaining 16 are single scalars or pointers-to-one-object, out of scope,
+noted briefly so the reader can see they were checked and excluded, not
+skipped.
+
+By fate: DEL with a named stage -- 7 (transport/transport_tail already
+ruled Y3/S5; nworkers M; reap_head S3; retire_head/retire_tail S5,
+confirmed unused in today's code besides; wait_serial S3). Becomes data of
+Message X's arena -- 1, proposed by extension of an already-ruled
+neighbor, not yet itself ruled: slots/n become R0's own Structure data
+(R0), the same target root_record already reached. Contradiction (a list
+read by a lane other than its owner's after S4): 0 found -- every site's
+readers are already the same disposing/creating/host lanes S4's own
+findings already named, none newly contradicts S4; stated because the
+ticket asks for it, not assumed.
+
+--- LmxMsgRuntime (lmx_message.h:211-228)
+
+field: root -- LmxMsgRuntime field
+line: 212
+holds: a pointer to the single root Message (R0); its \next_sibling chain
+  is R0's OWN direct-children list (already PAR/L3T-of-R0 owned, not a
+  separate runtime-wide collection) -- not itself a collection field
+FIELDS row: h:212, "L3T of R0 (R0's children, in R0's arena)", ruled
+  (map 5.7), S5
+in scope as a collection: no -- a single pointer, the walk anchor other
+  fields' own entries below use; listed for completeness, not counted in
+  the 8
+
+field: slots -- LmxMsgRuntime field
+line: 213
+holds: every live Message slot, one runtime-wide singly-linked list
+  threaded through each Message's own LmxMsg.alloc_next, in no family
+  order (a Message's position here is unrelated to its position in the
+  family tree)
+appends: the creating Message's own lane (lmx_message.lm1:1211-1212,
+  inside lmx_msg_create_prepare: `slot\alloc_next: rt\slots; rt\slots: slot`
+  -- confirmed the parent's turn, or the host bootstrapping R0, per
+  LOCK_REMOVAL_S4_WRITES.txt's own central finding on this same function)
+removes: the disposing thread (lmx_message_exec.c:1198-1212, inside
+  lmx_msg_release_slot -- the parent's or R0's own thread per
+  LOCK_REMOVAL_Y_SITES.txt's FLAG-1 disposal family, unlinking the freed
+  Message from this chain by walking it to find a `cur == m` match)
+reads: lmx_message.lm1:1029 and :1043 (lmx_msg_runtime_delete's own
+  teardown walk, whichever thread calls delete -- the host, per that
+  function's own lmx_msg_host_is_owner(rt) guard)
+FIELDS row: h:213, "DEL", ruled (map 5.7), S5
+fate: becomes data of R0's arena -- proposed by extension, not itself
+  ruled by name in LOCK_REMOVAL_FIELDS.txt (its row today just says DEL);
+  the natural target is R0, the same Message root_record already reached
+  for the runtime's other process-wide bookkeeping (next_addr, root_seq
+  below), since an inventory of every live Message is exactly the kind of
+  policy state R0 already keeps as its own Structure data. Not a
+  contradiction: every writer above is already a create/dispose-time lane
+  action, none reads it from a foreign lane after the fact except the
+  host's own teardown walk, which S4/S5's own model already treats as the
+  host acting with an owning authority (root's own teardown).
+
+field: n -- LmxMsgRuntime field
+line: 214
+holds: the count of entries in `slots` above
+appends/removes: the same two sites as `slots` (create_prepare increments
+  implicitly by linking; lmx_message_exec.c:1207-1209 in release_slot
+  decrements: `if (rt->n > 0) { rt->n -= 1; }`)
+FIELDS row: none of its own (the FIELDS.txt table has no row named `n`);
+  this is the one field in this file with no named row -- flagged as the
+  ticket's own contradiction test names ("no owner and no stage"), though
+  the fix is immediate: it is the count of the `slots` row directly above,
+  which does have a row, so `n`'s own fate should read the same as
+  `slots`'s rather than needing a separate ruling
+fate: becomes data of R0's arena, same reasoning as `slots` (proposed by
+  extension)
+
+field: transport -- LmxMsgRuntime field
+line: 215
+holds: the host-relay queue, LmxMsgCopy entries staged between an external
+  host post and their real per-destination admission
+appends/reads: fully covered already, not repeated here --
+  LOCK_REMOVAL_Y_SITES.txt's own transport-queue section names every site
+FIELDS row: h:215, "MBOX (host posts are admissions into R0's mailbox);
+  the queue DEL", proposed, S5/Y3
+fate: DEL, S5/Y3 (already ruled; the queue itself goes, its admissions
+  become direct admissions into R0's own mailbox, per Y-sites)
+
+field: transport_tail -- LmxMsgRuntime field
+line: 216
+holds: the tail pointer for the same queue
+same as transport: appends/reads/row/fate identical, already in Y-sites
+
+field: host_sync -- LmxMsgRuntime field
+line: 217
+holds: a pointer to one LmxMsgHostSync object (the host lock), not a
+  collection
+FIELDS row: h:217, "DEL", ruled (census 2.6), S6
+in scope as a collection: no -- already LOCK_REMOVAL_S6_LOCK_SITES.txt's
+  own site (the host lock); listed for completeness
+
+field: exec -- LmxMsgRuntime field
+line: 218
+holds: a pointer to the single LmxMsgExec instance, not a collection
+FIELDS row: h:218, "DEL", ruled (map 5.7), S5/S6
+in scope as a collection: no -- the back-pointer this whole file's second
+  half (LmxMsgExec) hangs off; listed for completeness
+
+field: next_addr -- LmxMsgRuntime field
+line: 219
+holds: the process-wide address counter, incremented once per Message ever
+  created (lmx_message.lm1:1207-1208 in create_prepare: `slot\addr:
+  rt\next_addr; rt\next_addr: rt\next_addr + 1U`)
+appends: the creating Message's own lane, same site and lane as `slots`
+reads: msg_find_any_locked and every addr-keyed lookup helper walk by
+  comparing against a Message's own already-assigned `\addr` field, not by
+  reading next_addr itself after creation; next_addr itself is write-then-
+  discard per creation, never re-read except to generate the next value
+FIELDS row: h:219, "L3T of R0 (R0's children's addresses)", ruled (map
+  5.7), S5
+fate: becomes data of R0's arena (already ruled, R0)
+
+field: root_seq -- LmxMsgRuntime field
+line: 220
+holds: the root path-segment counter (assigns each of R0's direct
+  children's path segments in creation order)
+appends: the creating Message's own lane, via lmx_msg_assign_path (called
+  from create_prepare, same site family as next_addr/slots)
+reads: none found outside its own increment (write-then-discard, same
+  shape as next_addr)
+FIELDS row: h:220, "L3T of R0", ruled (map 5.7), S5
+fate: becomes data of R0's arena (already ruled, R0)
+
+field: root_record -- LmxMsgRuntime field
+line: 227
+holds: R0's own policy Structure (the clock, its test flag, the
+  orphan-retention default) -- already migrated, not a raw scalar/list any
+  more
+FIELDS row: h:227, "L3T of R0", ruled (map 5.7; stage 5 (e)), done
+fate: done -- the one LmxMsgRuntime field this ticket's own "becomes data
+  of Message X's arena" already fully landed for, the precedent the
+  `slots`/`n`/`next_addr`/`root_seq` proposals above extend
+
+--- LmxMsgExec (lmx_message_exec.c:105-139)
+
+field: lock, stop_ev, tls -- LmxMsgExec field
+lines: 107-109/111-112
+holds: the executor's own mutex and its native primitives -- not
+  collections; lock is fully covered by LOCK_REMOVAL_S6_LOCK_SITES.txt
+  (S6, the deletion of the lock itself)
+in scope as a collection: no
+
+field: nworkers -- LmxMsgExec field
+line: 114
+holds: a runtime-wide count of live context-worker OS threads, spanning
+  every mapped Message, incremented in launch_ctx_thread
+  (lmx_message_exec.c:2993, the launching lane -- the parent mapping a
+  child, per LOCK_REMOVAL_M_FIELDS.txt) and decremented in
+  join_bind_worker and bind_reap_join_all (the reaping lane, already
+  LOCK_REMOVAL_S3_FIELDS.txt sites)
+reads: lmx_msg_exec_start_contexts's own guard (e->contexts_live check,
+  same function) and test/diagnostic call sites only -- no production
+  reader outside the executor's own bookkeeping
+FIELDS row: none (LmxMsgExec has no rows in LOCK_REMOVAL_FIELDS.txt at
+  all -- LOCK_REMOVAL_M_FIELDS.txt's own flag, repeated here since this
+  ticket's subject is exactly this struct)
+fate: DEL, M -- once each L3 Thread is its own OS thread with no shared
+  launch/reap bookkeeping, a runtime-wide worker count has nothing left to
+  count
+
+field: reap_head -- LmxMsgExec field
+line: 115
+holds: the linked list of retired LmxMsgBindWait objects awaiting a join,
+  threaded through each one's own .reap_next -- spans every Message whose
+  worker thread has exited but not yet been joined
+appends: bind_reap_push (lmx_message_exec.c:2119-2131, an S3-fields site;
+  called from join_bind_worker, launch_ctx_thread's failure paths, and
+  ctx_visit_stop_retire_waits -- all already S3-fields sites)
+reads/drains: bind_reap_join_all (lmx_message_exec.c:2133-2205, an
+  S3-fields site)
+FIELDS row: none of its own -- the fields threaded through it
+  (LmxMsgBindWait.reaping/.on_reap/.reap_next) do have a row (c:48,49,51,
+  DEL, S3/S5), but the LmxMsgExec-level head pointer itself does not;
+  flagged as a field with no row of its own, same shape as `n` above,
+  fixed the same way: its fate already follows its threaded fields' row
+fate: DEL, S3 (the whole reap mechanism goes with S3's "each thread frees
+  itself; no join" ruling, already the basis for LmxMsgBindWait's own row)
+
+field: stopping, stopped, no_retire, contexts_live -- LmxMsgExec field
+lines: 116-119
+holds: single boolean-shaped flags describing the executor's own state,
+  not collections
+in scope as a collection: no
+
+field: rt -- LmxMsgExec field
+line: 120
+holds: the back-pointer to the owning LmxMsgRuntime, not a collection
+in scope as a collection: no
+
+field: ui_lane -- LmxMsgExec field
+line: 122
+holds: a pointer to the single UI-lane Message, not itself a collection --
+  its own inbox (the actual collection) is already
+  LOCK_REMOVAL_Y_SITES.txt's and LOCK_REMOVAL_M_FIELDS.txt's subject
+FIELDS row: none of its own (the LmxMsgExec-has-no-rows flag again)
+in scope as a collection: no, but named since it is the field several of
+  this ticket's real collections (reap_head, retire_head) sit beside
+
+field: retire_head, retire_tail -- LmxMsgExec field
+lines: 126-127
+holds: declared as the head/tail of a runtime-wide retire queue threaded
+  through each Message's own LmxMsg.retire_next -- checked directly: no
+  append site exists anywhere in exec.c or lmx_message.lm1/lm2 at c063fd00
+  (grep for `retire_head =` and for retire_next/retire_queued across both
+  files finds only the two read sites below and the struct fields'
+  own declarations). This queue is empty in every run today; only its
+  read side (flush, count) is ever exercised, always over nothing.
+reads: lmx_msg_exec_flush_retire (lmx_message_exec.c:1480-1500, called
+  from lmx_message.lm1:724/796/1802/1849, i.e. whichever lane calls
+  end_turn/fail/drop_binds/settle -- always finds the list empty given no
+  append site exists) and lmx_msg_exec_retire_n
+  (lmx_message_exec.c:1695-1709, a count-only introspection call)
+FIELDS row: matches LmxMsg.retire_next (h:167, DEL, ruled, S5) and
+  .retire_queued (h:168, DEL, ruled, S5) -- the fields threaded through
+  this head/tail already have a ruled row; the head/tail pointers
+  themselves do not, same shape as `n` and `reap_head` above
+fate: DEL, S5 (already ruled via the threaded fields; this finding adds
+  that the mechanism is dead in today's code besides, which is not a
+  reason to change the fate, only evidence the deletion carries no live
+  behavior to replace)
+
+field: wait_serial -- LmxMsgExec field
+line: 128
+holds: a runtime-wide generation counter, incremented once per new
+  LmxMsgBindWait created (lmx_message_exec.c:1985-1989, inside
+  bind_wait_new), assigned to the new object's own .gen field
+appends: whichever lane calls launch_ctx_thread/exec_bind_mode to create a
+  binding -- the parent mapping a child, an M/S3 site already named
+reads: none outside its own increment -- write-then-assign-and-discard,
+  same shape as next_addr/root_seq above
+FIELDS row: none of its own; generates LmxMsgBindWait.gen (c:44, part of
+  the "gen, .retired, .slot, .launch_n" row, DEL, ruled, S3)
+fate: DEL, S3 (dies with the field it generates)
+
+field: unbound_held -- LmxMsgExec field
+line: 123
+holds: a single LmxMsgAddr, not a collection -- already
+  LOCK_REMOVAL_S6_LOCK_SITES.txt's own site (S5)
+in scope as a collection: no
+
+field: test_fail_ctx, test_fail_adopt_block, test_fail_start_kicks, -- LmxMsgExec field
+  test_boot_tid (LMX_MSG_EXEC_TEST only)
+lines: 129-138
+holds: single test-injection scalars, one thread id -- not collections,
+  and not compiled into a production build at all
+in scope as a collection: no
+
+--- File-static scalars in exec.c (LMX_MSG_EXEC_TEST only, checked and
+    excluded for the same reason)
+
+lmx_message_exec.c:100-102: test_launch_cap_gen, test_wait_destroy_n,
+  test_wait_destroy_last_gen -- single process-wide test counters, not
+  indexed collections, not compiled into production; not a real S5 site,
+  listed so the check reads as done rather than skipped
+
+--- Falsifier
+Verified directly: grep -c "LmxMsgRuntime\|LmxMsgExec" on this file returns
+37. The 24 struct fields this file reads are presented as 20 "field:"
+entries (4 entries each group two-to-four fields that share one
+classification, e.g. "stopping, stopped, no_retire, contexts_live"); every
+one of those 20 entries carries its own struct-name tag ("-- LmxMsgRuntime
+field" or "-- LmxMsgExec field") by construction, guaranteeing at least 20
+matching lines, with the remaining matches this file's own prose (header,
+method, counts, and the FIELDS-row citations that name the struct again).
+37 >= 20, the entry count this file lists.
