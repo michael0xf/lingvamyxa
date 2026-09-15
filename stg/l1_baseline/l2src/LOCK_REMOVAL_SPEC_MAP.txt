@@ -21,7 +21,7 @@ cite this map's owner codes in their target-owner column.
   a local one; no other locks are needed, not even local ones; there must be no more of them in the
   project at all). So the target is every lock in the project, not only the executor's.
 - His question to the coordinator on item (5), "from which of my words did you conclude that a shared
-  lock is needed?", answered: from none; the coordinator wrote the L1 prototype's state (the root list,
+  lock is needed?", answered: from none; the coordinator wrote the L1 runtime's implementation state (the root list,
   the slot list and the retire queue under the executor's lock) into the spec as an exception to his
   rule, which his rule excludes; item (4) is of the same nature.
 - On shared memory inside rt used by children's threads: "значит реализуйте полноценную арену для
@@ -174,7 +174,7 @@ cite this map's owner codes in their target-owner column.
   Section 30 (1397-1417): "Message internally synchronizes its mailbox, execution tables, lifecycle and
     ownership transfer. Application modules need no second scheduler or global lock. A short lock of
     the execution table must not cover a wait on another's mailbox or the execution of a user
-    handler." Written for the prototype; under the order the "execution tables" and their short lock go
+    handler." Written for the L1 implementation; under the order the "execution tables" and their short lock go
     with the rest, and only the mailbox's own lock stays: S, question 5.3 (the section's rewrite).
 
 2.5 THE CENSUS OF LOCKS, EVENTS AND ATOMICS IN THE PROJECT (git grep -c on c067bed9; refutable by the
@@ -301,7 +301,7 @@ cite this map's owner codes in their target-owner column.
   5.3 Model section 30 speaks of "execution tables" and their short lock. Proposed: rewrite to "Message
       internally synchronizes its mailbox's admission; lifecycle and ownership transfer are writes on
       the owner's lane; there are no execution tables", keeping the snapshot rule for a parent reading
-      its children's cells. Alternative: leave the section as a prototype description, marked
+      its children's cells. Alternative: leave the section as a description of the L1 implementation, marked
       historical.
   5.4 Which arena holds an admitted copy (a sender's envelope queued in the recipient's inbox)?
       Proposed: the recipient's arena, allocated under the recipient's admission lock (the one

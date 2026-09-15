@@ -1474,10 +1474,16 @@ stage-5 (f) paragraph of the spec and the model stay until Mikhail answers
 the lead's question about them, the coordinator's view being that they too
 should go, leaving his sentences alone. His question to the coordinator,
 "from which of my words did you conclude that a shared lock is needed?",
-answered the same hour: from none; the coordinator wrote the L1 prototype's
+answered the same hour: from none; the coordinator wrote the L1 runtime's implementation
 state (the root list, the slot list and the retire queue under the
 executor's lock) into the spec as an exception to his rule, which his rule
-excludes, and item (4) is of the same nature. From now on the spec and the model take only his
+excludes, and item (4) is of the same nature. His correction on the word
+"prototype" (2026-09-15, verbatim): "Прототипом ядра является спецификация
+ядра, а не какой-то код!!! Я это уже писал один раз" (the prototype of the
+core is the core specification, not some code; I have written this once
+already): no sentence of the spec or the model is derived from what the
+runtime's code does; the code is checked against the spec and a mismatch
+is a code defect with a ticket here. From now on the spec and the model take only his
 sentences, verbatim with the date; every consequence the coordinator or the
 lead derives lives in this plan or a design file as a question with options
 until he agrees. The coordinator's spec-and-model map for the lock removal
