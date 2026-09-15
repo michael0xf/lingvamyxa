@@ -17,9 +17,11 @@ flag and confirmed its meaning, "Так"):
                                                                parent's stop request, and is set at exit (Mikhail
                                                                2026-09-15: "success && !running, с выходом
                                                                выставляется running = 0")
-                          volatile uint_fast8_t success;       0 at launch; 1 is written by user code; by the model
-                                                               no turn repeats once it is 1 (where the return stands
-                                                               is implementation)
+                          volatile uint_fast8_t success;       0 at launch; 1 is written by user code; it belongs
+                                                               to root, the main functionality: by the model no turn
+                                                               of root repeats once it is 1 (where the return stands,
+                                                               and what the scheduler still does with its children,
+                                                               are implementation)
                           volatile uint_fast8_t handoff_safe;  1 written by the Message itself when it has left its
                                                                last turn and nothing native uses its arena (19.29.7,
                                                                19.29.8); today's native_users folds into when it is set
