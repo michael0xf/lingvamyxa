@@ -471,6 +471,29 @@ M. The sequential mapping removed (X), after S3 and before S4.
     The sequential scheduler is not a core mechanism: a scheduler that runs over its attached Messages itself is a
     variety of L3 Thread built in L2, first in mixa_manager (b5's ticket, design first). The runtime keeps nothing of
     the sequential mapping and provides what any L3 Thread needs: a thread, a mailbox, launch and close of children.
+    Decided (lead; no lock, wait or signal involved): the core runtime no longer creates a UI lane of its own. Today
+    runtime_new creates R0's child with the reserved LMX_MSG_UI_LANE_ID and hands it to the executor
+    (lmx_msg_exec_set_ui_lane); that reserved lane is the threadless lane Mikhail called "кривая реализация". After M
+    the UI lane is what his sentence says, a full L3 Thread: the application (mixa_manager) creates it as an ordinary
+    child of R0 and R0's code launches it on its own thread through map_child, like any child. The core has no UI
+    affinity, no UI request and no reserved address.
+    Code sites at 80101431 (after ONE ROOT; read, not yet edited):
+    - l2src/lmx_message_exec.c: child_turn_core 2733 keeps only its bootstrap path (run_entry_turn 2786, root_turn
+      2815 stay); lmx_msg_run_child_turn 2775 goes. lmx_msg_exec_ui_step 2484, take_ready 2063 (its only caller),
+      lmx_msg_exec_take_ui_locked 1528, lmx_msg_exec_ui_request_locked 1482, ui_request_if_ready_locked 1510,
+      lmx_msg_exec_set_ui_lane 1454, lmx_msg_exec_has_ui_lane 1464, the test APIs lmx_msg_exec_ui_nrequests 1653
+      and lmx_msg_exec_map_queued 1618 (the executor selftest's 15 and 23 uses go with their cases), the ui
+      out-parameter of lmx_msg_exec_route_locked 1797, and the 14 LMX_MSG_AFFINITY_UI branches (1512, 1565, 1628,
+      1808, 1933-1947, 1992, 2037, 2282, 2339, 2370, 2440, 2849) go; LmxMsgExec.ui_lane goes.
+    - l2src/lmx_message.lm1 and .lm2 (one commit each pair): lmx_msg_exec_ready's UI request block (lm1 773-782,
+      lm2 819-828), lmx_msg_exec_take_addr (lm1 787, lm2 833), runtime_new's UI lane creation (lm1 894-897, lm2
+      946-949), create_prepare's UI_LANE_ID refusal (lm1 1108, lm2 1168), lmx_msg_sched_step (lm1 2581, lm2 2678).
+    - l2src/lmx_message.h: LMX_MSG_UI_LANE_ID, LMX_MSG_AFFINITY_UI, lmx_msg_exec_has_ui_lane, lmx_msg_exec_ui_step,
+      lmx_msg_sched_step, lmx_msg_run_child_turn; l2src/lmx_message_exec.h: its copies and take_ui/ui_request.
+    - l2src/lmx_sched_record.lm2 and .h.lm1: lmx_sched_record_cursor / set_cursor.
+    - Fields (the table's stage M): LmxMsg.mapped, .ui_pending, .ready; LmxMsgExecBind.affinity, .held/.held_by,
+      .gone; LmxMsgBindWait.retired, .rec; LmxMsgCtxPack.wait.
+    - l2src/run_turn_step_child_copies.ps1 and its run_gates.ps1 row go with the helper.
     Tests migrated onto turn_step_child / run_child_turn in stage 5 (d), by name (grep counts of
     turn_step_child / run_child_turn / root_turn):
       lmx_model_family_close_32_selftest (3/1/1), lmx_model_family_release_17_selftest (7/2/4),
