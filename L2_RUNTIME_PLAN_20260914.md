@@ -5318,3 +5318,22 @@ log, the 31 gates, port_message plain and -LaneCheck, run_l2trans,
 run_port_parser, run_mixa, the ingress harness) with per-stage suites
 on top and the allowlist as a regex. Next: the fix landed with
 land_base.sh, then D2 on the new tip (D2's allowlist plus lmx_cancel).
+b5's S4 guard checks (2026-09-15): sonnet/s4-guard-checks a3576110, two of
+three written, unmeasured (the machine is the lead's):
+run_s4_guard_emergency_cancel in cancel_spin_host.c (modeled on
+cancel_after_settle, asserting refusal) and run_s4_guard_exec_bind in
+lmx_message_exec_selftest.c (self-contained), both calling the guarded
+function from a spawned thread and expecting LMX_MSG_INVALID, both red
+today since neither checks caller identity. The third held back:
+orphan_sweep's chain has no public entry but lmx_msg_drive (its only
+caller, reclaim_orphan's only caller, single call sites), and drive
+already refuses a spawned-thread call (lmx_message.lm1 2264-2265:
+lmx_msg_require_owner(rt) != OK or exec_holding_any != 0 gives
+INVALID; require_owner compares GetCurrentThreadId with the attaching
+thread, in host.c; checked by the coordinator), so no red case exists
+through the public API. Ruling (coordinator, by Mikhail's rule to cut
+checks the spec does not require): no third guard; orphan_sweep's chain
+is guarded at drive's entry, its S4_SITES row becomes "nothing (guarded
+at lmx_msg_drive's require_owner)", and S4's code list is the two
+guards, lmx_msg_exec_bind and emergency_cancel, with b5's two checks as
+their red-first acceptance; measured red after the lead's landings.
