@@ -879,10 +879,22 @@ fn: lmx_msg_runtime_new () @: LmxMsgRuntime
     # creates as a child of R0 and maps like any child.
 return: rt
 
+# S6 (c): shutdown is set under R0's mailbox monitor, the one lock kept, so a
+# post (checked under the same monitor) is ordered against it.
 fn: lmx_msg_runtime_shutdown (@: LmxMsgRuntime rt) int
+    @: LmxMsg root
+    int: st
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
-    return: c.lmx_msg_host_shutdown(rt)
+    root: rt\root
+    if: root != 0
+        c.lmx_msg_mail_lock(root)
+    ---
+    st: c.lmx_msg_host_shutdown(rt)
+    if: root != 0
+        c.lmx_msg_mail_unlock(root)
+    ---
+return: st
 
 # Stage 5 (d1): the ingress root is R0, the runtime's only root. Exec lock held.
 fn: lmx_msg_ingress_root (@: LmxMsgRuntime rt) @: LmxMsg
@@ -896,8 +908,9 @@ return: rt\root\addr
 
 # Stage 5 (b): a host post is an admission into the root Message's mailbox, an
 # internal INGRESS envelope that the root's drain forwards between its turns (spec
-# 19.29.6 stage-5 clarification (iii)). Any OS thread may post; the host lock
-# orders a post against runtime_shutdown. No root: GONE, never a silent drop.
+# 19.29.6 stage-5 clarification (iii)). Any OS thread may post; R0's mailbox
+# monitor orders a post against runtime_shutdown (S6 (c): no host lock). No root:
+# GONE, never a silent drop.
 fn: lmx_msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv env)) int
     @: LmxMsgCopy node
     @: uchar bytes
@@ -907,13 +920,11 @@ fn: lmx_msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv
         return: c.LMX_MSG_INVALID
     if: env\n != 0U && env\bytes = 0
         return: c.LMX_MSG_INVALID
-    if: c.lmx_msg_host_lock(rt) != 0
-        return: c.LMX_MSG_INVALID
+    # S6 (c): no host lock. This early look is only a fast path; the post is ordered
+    # against runtime_shutdown by the check under R0's mailbox monitor below.
     if: c.lmx_msg_host_is_shutdown(rt) != 0
-        c.lmx_msg_host_unlock(rt)
         return: c.LMX_MSG_STOPPED
     if: c.lmx_msg_host_test_get_nomem() != 0
-        c.lmx_msg_host_unlock(rt)
         return: c.LMX_MSG_NOMEM
     c.lmx_msg_exec_lock(rt)
     root: lmx_msg_ingress_root(rt)
@@ -922,21 +933,17 @@ fn: lmx_msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv
     ---
     c.lmx_msg_exec_unlock(rt)
     if: root = 0
-        c.lmx_msg_host_unlock(rt)
         return: c.LMX_MSG_GONE
     if: pin = 0
-        c.lmx_msg_host_unlock(rt)
         return: c.LMX_MSG_NOMEM
     node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
     if: node = 0
         c.lmx_msg_endp_release(root)
-        c.lmx_msg_host_unlock(rt)
         return: c.LMX_MSG_NOMEM
     bytes: lmx_msg_copy_bytes(env\bytes, env\n)
     if: env\n != 0U && bytes = 0
         c.free((cast: (@: void) node))
         c.lmx_msg_endp_release(root)
-        c.lmx_msg_host_unlock(rt)
         return: c.LMX_MSG_NOMEM
     node\id: env\id
     node\correlation: env\correlation
@@ -949,10 +956,16 @@ fn: lmx_msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv
     node\bytes: bytes
     node\n: env\n
     c.lmx_msg_mail_lock(root)
+    # S6 (c), 5.6: a post after runtime_shutdown is refused here, under the monitor
+    # the shutdown was set under, with a status to the poster.
+    if: c.lmx_msg_host_is_shutdown(rt) != 0
+        c.lmx_msg_mail_unlock(root)
+        lmx_msg_copy_free(node)
+        c.lmx_msg_endp_release(root)
+        return: c.LMX_MSG_STOPPED
     lmx_msg_q_push(@ root\inbox, @ root\inbox_tail, node)
     c.lmx_msg_mail_unlock(root)
     c.lmx_msg_endp_release(root)
-    c.lmx_msg_host_unlock(rt)
 return: c.LMX_MSG_STAGED
 
 # Stage 5 (b): the root's between-turns work on the root's lane: forward every

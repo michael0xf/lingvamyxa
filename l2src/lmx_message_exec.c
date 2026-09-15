@@ -3010,8 +3010,14 @@ int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent) {
     return LMX_MSG_OK;
 }
 
+/* S6 (the coordinator's ruling on b5's pre-read): a test hook with no production
+ * caller. The sweep writes orphan_until on its own lane through drive's guard, and
+ * this hook takes the same guard: the host outside any turn. */
 int lmx_msg_set_orphan_until(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned until) {
     LmxMsg *m;
+    if (lmx_msg_host_is_owner(rt) == 0 || lmx_msg_exec_holding_any(rt) != 0) {
+        return LMX_MSG_INVALID;
+    }
     lmx_msg_exec_lock(rt);
     m = lmx_msg_self_or_find(rt, who);
     if (m == 0) {

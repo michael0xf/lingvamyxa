@@ -7,8 +7,6 @@
 int lmx_msg_host_attach(LmxMsgRuntime *rt);
 void lmx_msg_host_detach(LmxMsgRuntime *rt);
 int lmx_msg_host_is_owner(LmxMsgRuntime *rt);
-int lmx_msg_host_lock(LmxMsgRuntime *rt);
-void lmx_msg_host_unlock(LmxMsgRuntime *rt);
 int lmx_msg_host_is_shutdown(LmxMsgRuntime *rt);
 int lmx_msg_host_shutdown(LmxMsgRuntime *rt);
 
