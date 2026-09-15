@@ -5587,3 +5587,25 @@ selfbuild/952d8e31 pushed at 15:03:48; the log commit
 claude-0c/selfbuild-log-952d8e31 c9ac4dda (13 to 14 lines) merged;
 pins installed in all three trees; D2's record tree removed. The
 machine is free for b5's S4 build; the lead lands S4 onto c9ac4dda.
+S5 red measured (2026-09-15): the lead's probe runner on d6/lock-s5-red
+7ae76896 (952d8e31 plus l2src/run_lock_s5_probe.ps1, a grep over the
+tracked l2src sources, builds nothing): "S5 probe: retire_queue=28
+runtime_fields=4 root_list_loops=14", exit 1, by the lead and by the
+coordinator in exec-3a (parent 952d8e31 checked; 1 s). retire_queue
+counts the lines naming retire_head, retire_tail, retire_next,
+retire_queued, lmx_msg_exec_flush_retire, lmx_msg_exec_retire_n or
+msg_exec_flush_retire (lmx_message.h 3, lm1 3, lm2 3, exec.c 17, exec.h
+2); runtime_fields counts next_addr, root_seq, slots and n declared in
+struct LmxMsgRuntime (all four); root_list_loops counts the literal
+patterns named in the script's header (in lm1 and lm2 each: "fam:
+rt\root" 2 for find and poll, "ch: rt\root" 2 for create_prepare's tail
+append and release_slot's unlink, "rt\root: m\next_sibling" 1; in
+exec.c the drive_walk_list for-loop, "drive_walk_list(rt, 0,
+rt->root)", "cur = rt->root;", "rt->root = m->next_sibling;"), with
+orphan_sweep's descent into first_child and the whole-tree walks
+excluded as valid with one root. S5's acceptance record: red 7ae76896
+(28/4/14); green 0/0/0 on the S5 branch merged with it plus the union
+base and the UAF kit over runtime_delete; falsifier one item put back.
+S5's code is the lead's ticket (core surgery: the root list, R0's
+record), on d6/lock-s5 off c9ac4dda, edits now, builds after S4 lands;
+b5 stays on S4 then the S6 census re-base.
