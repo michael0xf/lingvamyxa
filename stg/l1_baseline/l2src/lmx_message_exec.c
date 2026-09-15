@@ -1428,6 +1428,18 @@ static void set_tls(LmxMsgExec *e, LmxMsgAddr who) {
     }
 }
 
+/* The thread's one turn identity (model 29) is lmx_turn_msg with lmx_turn_running,
+ * shared by every runtime on the thread, while the held turn is per exec (e->tls).
+ * A nested turn restores the exact identity it replaced, not one recomputed from its
+ * own exec's old TLS: an R0 turn of another runtime run from inside a turn on this
+ * thread (a library unit opened from a program's turn, stage 5 (a)) leaves the outer
+ * turn the thread's turn again. */
+static void restore_turn(LmxMsgExec *e, LmxMsgAddr old, LmxMsg *old_msg, uint_fast8_t *old_running) {
+    set_tls(e, old);
+    lmx_turn_msg = old_msg;
+    lmx_turn_running = old_running;
+}
+
 
 
 /* Decision 18: the walk over every bound record, in family-tree order from
@@ -2565,6 +2577,8 @@ static void requeue_if_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     LmxMsgExec *e = exof(rt);
     LmxMsgAddr old;
+    LmxMsg *old_msg;
+    uint_fast8_t *old_running;
     LmxMsg *m;
     int st;
     int live = 0;
@@ -2575,6 +2589,8 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     saved = lmx_turn_root;
     root.prev = saved;
     old = get_tls(e);
+    old_msg = lmx_turn_msg;
+    old_running = lmx_turn_running;
     set_tls(e, snap->addr);
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, snap->addr);
@@ -2607,7 +2623,7 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         }
         lmx_msg_exec_unlock(rt);
         turn_root_pop(&root, saved);
-        set_tls(e, old);
+        restore_turn(e, old, old_msg, old_running);
         native_leave_addr(rt, snap->addr);
         requeue_if_runnable(rt, snap->addr);
         return st;
@@ -2637,7 +2653,7 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         }
         lmx_msg_exec_unlock(rt);
         turn_root_pop(&root, saved);
-        set_tls(e, old);
+        restore_turn(e, old, old_msg, old_running);
         native_leave_addr(rt, snap->addr);
         return st;
     }
@@ -2681,7 +2697,7 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     lmx_msg_exec_wake_locked(rt);
     lmx_msg_exec_unlock(rt);
     turn_root_pop(&root, saved);
-    set_tls(e, old);
+    restore_turn(e, old, old_msg, old_running);
     native_leave_addr(rt, snap->addr);
     requeue_if_runnable(rt, snap->addr);
     return st;
@@ -3335,6 +3351,8 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
     int st;
     LmxMsgAddr old;
+    LmxMsg *old_msg;
+    uint_fast8_t *old_running;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
     }
@@ -3353,12 +3371,14 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     }
     e->unbound_held = addr;
     old = get_tls(e);
+    old_msg = lmx_turn_msg;
+    old_running = lmx_turn_running;
     set_tls(e, addr);
     lmx_msg_exec_unlock(rt);
     st = lmx_msg_end_turn(rt, addr, 1);
     lmx_msg_exec_lock(rt);
     e->unbound_held = 0;
-    set_tls(e, old);
+    restore_turn(e, old, old_msg, old_running);
     /* Stage 5 (d1d), decision 17 rule 1: the end-turn above is the bookkeeping of
      * a Message with no lane, written by the maintaining lane (drive); the borrowed
      * TLS identity is that bookkeeping's spelling, not a turn, and no handler runs.
@@ -3419,6 +3439,8 @@ static int ctx_visit_stop_reset(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
 
 int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
+    LmxMsg *old_msg;
+    uint_fast8_t *old_running;
     if (e == 0) {
         return LMX_MSG_INVALID;
     }
@@ -3442,7 +3464,12 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     bind_reap_join_all(rt);
     e->nworkers = 0;
     lmx_msg_exec_lock(rt);
-    set_tls(e, 0);
+    /* The stop clears this exec's TLS and restores the thread's turn identity it
+     * replaced: a stop run from inside another runtime's turn on this thread leaves
+     * that turn the thread's turn (restore_turn). */
+    old_msg = lmx_turn_msg;
+    old_running = lmx_turn_running;
+    restore_turn(e, 0, old_msg, old_running);
     (void)rec_walk_locked(e, ctx_visit_stop_reset, 0);
     e->unbound_held = 0;
     e->stopped = 1;
