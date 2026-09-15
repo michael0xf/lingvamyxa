@@ -5526,3 +5526,28 @@ inverted condition), lands b5's branch with land_base2.sh when green,
 and meanwhile writes S5's design on the S5 lists (f86a85ad) and the S6
 census (65a7ec63), S5's acceptance defined with the coordinator before
 its code.
+b5's S4 guard pushed (2026-09-15): sonnet/s4-guard 2d9cf5fa off 952d8e31,
+code only (checked by the coordinator: the guard calls
+mapping_authority_locked in emergency_cancel): 73e023ba the guard
+(mapping_authority_locked reused, forward-declared; placed after who's
+own lookup, before running_store and closing, under the lock held);
+ab099a8a the two checks cherry-picked onto 952d8e31 with their
+fixtures' create calls on the D2 form; 2d9cf5fa the exec_bind
+guard-holds re-comment. Stop before cancel_spin_host.c: in spin_boot p
+is created with parent 0 on a fresh runtime, so p is R0 itself
+(create_prepare, lmx_message.lm1 1198-1206), with no parent_msg;
+mapping_authority_locked's only branch for it is the host outside any
+turn; run_nested runs R0's turn synchronously on the host thread
+(run_entry_turn with turn_parent_spin, whose l2_m1 is the spin), so
+while R0 spins no lane on any thread may cancel it: not a parent's turn
+(none) and not the host (inside the very call). Ruling (coordinator,
+test-only): under the model nobody outside cancels R0 mid-turn (R0
+ends by its own code; a stop is its parent's request, which for R0
+has no writer but the host outside a turn); the old prototype's host
+cancel of R0 is not a model operation. Option (a): the fixture's p
+creates and maps a real child C whose turn is the spin on C's own
+thread, the cancel comes from p's own turn or from the host outside
+any turn after p's entry turn returns, the host reads C's field flag
+and running/success in yield rounds, no Sleep; the property "an
+instrumented spin is aborted by its running flag from a lawful writer"
+stays; the generated spin body unchanged.
