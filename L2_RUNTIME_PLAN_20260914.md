@@ -2941,3 +2941,11 @@ built from stg's committed lm1/build, no old-chain file in build/lm0, no
 oldchain/ directory, old-chain names only in comments, the tracked tree
 clean); lands with 0c's seed branch after (b). D1's relanding (17b4d5e1,
 MessageApi green on the branch) running.
+D1 landed on integration as 7200294b (d6/lock-d-create-id 17b4d5e1 onto
+88934463; the first attempt 2c880103 red only on the leftover retry checks,
+their deletion of 8 lines the branch's second commit): the grep for
+create_id and find_create at 0, run_port_message plain and -LaneCheck PASS
+(101 methods redirected), run_lmx -Suite MessageApi ok, scenario36 PASS,
+run_gates 32 of 32 in 510 s. Machine order: 0c's S3 re-cut slot, b5's
+CMake configure-only check on sonnet/stage-o 010271f7 (local), the lead's
+probe (a) at 7200294b, then (b).
