@@ -40,6 +40,10 @@ Rulings for the conversions (the coordinator, 2026-09-15, after the core commit 
    d6/m-sequential after d2f5d8c5: 30 direct runs 0 red, before 5 of 30) and joins M's converted list;
    lmx_model_checks_19_29_6_selftest keeps its 7 wall-clock sites as debt (not M's subject).
 Merged for M: b5's sonnet/m-tests-send 76ad060d (c66bbfcd) and e9's claude-0c/m-tests-scenario 0dfccada (d2f5d8c5).
+Numbering pins of the deleted UI lane (found by the gates on 14cb1960, RED at lmx_message; 26dde049): the UI lane
+took R0's first child sequence and one placement path, so lmx_message_selftest.lm1 expected p0's path [1, 2] (now
+[1, 1]) and run_port_msg_path_storage.ps1 pinned pre_allocations=3 (now 2). The coordinator's lesson: an impact
+list for a deletion also greps its numeric side effects (sequences, slot and pre-allocation counts, check counts).
 Split (accepted): d6 the core, lmx_message_exec_selftest.c and tests/cancel_spin_host.c, the runners and the landing;
 b5 the send_local, family_handoff and adopt_unrooted tests; e9 the run_model_scenario36 set (liveness_33,
 family_close_32, family_release_17, orphan_mapped_17, scenario36, root_ingress_5b, root_record_5e), whose rt\n pins
