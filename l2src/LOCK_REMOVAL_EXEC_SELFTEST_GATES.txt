@@ -1,0 +1,141 @@
+LOCK_REMOVAL_EXEC_SELFTEST_GATES: every gated scenario block in
+l2src/lmx_message_exec_selftest.c's one main, at 793c267f (sonnet/exec-gates,
+2026-09-15, doc-only, git and reading only).
+
+--- Method (stated up front, since the file names no block boundary of its own)
+
+main() is 7419 lines (1526-8945), one function, no helper-function-per-
+scenario structure and no formal block-naming convention. The one reliable,
+mechanically-verifiable scenario boundary is each of its 111
+`= lmx_msg_runtime_new()` calls: each starts an independent fixture (its own
+runtime, family, binds, checks), matching "about 120" once the first span
+(1526-1820, boot: parent/w1/w2/w3/ui created on one shared `rt`, several
+distinct checks run against it before any later runtime_new) is further
+split at its own 9 inner `{ }` scopes. Total: 125 blocks after merging
+trivial (<=3-line) connective leftovers into their neighbor. This is a
+stated choice, not the file's own convention -- a different, reasonable
+segmentation would give a different total near 120.
+Gate patterns (five kinds, one pattern each, the same ones grep -c is run
+against in the falsifier below): Sleep(; WaitForSingleObject|CreateEvent|
+SetEvent (one "event" kind, since CreateEvent/SetEvent are the same
+Win32-event mechanism WaitForSingleObject blocks on, not a separate
+gate); GetTickCount (a loop's deadline read, always paired with a Sleep in
+this file -- listed as its own kind since the ticket names it "GetTickCount
+loop" separately from Sleep); a "go"-named cell (\bgo\b or _go\b: g_mail_go,
+g_cleanup_go, g_drive_hook_got_go and the local `go` HANDLE, all rendezvous
+signals a thread waits to be released by); lmx_msg_exec_lock (the executor
+lock taken directly around a test's own cells, not the ordinary API-internal
+holds).
+Stage: M if the block steps a child, uses AFFINITY_UI/turn_ui/map_child, or
+is otherwise about a Message running its own turn on its own thread; else
+S2/S4/S5/S6/Y by which one the block's content most names (address lookups,
+family/adopt/handoff, runtime-level lists, generic executor/lock lifecycle,
+mailbox/send/recv/host). Assigned here by keyword density per block
+(counts of stage-indicative terms, highest wins, ties toward the more
+specific stage over S6), not by reading every block's full narrative --
+stated so the classification is checked against the same rule that
+produced it, not asserted as individually reasoned.
+Block names: this file has no formal per-scenario label. Where a nearby
+`fprintf(stderr, "... start")` names the scenario, that name is used, even
+though it sometimes precedes the block by a few lines (shared setup) or is
+reused by several adjacent blocks under one named phase (e.g. the "exec
+wait" cluster, c:6768-8473, where the file itself keeps returning to the
+same "exec wait..." lead-in for a run of related retry/map/mail-gate
+sub-cases); where none is close, the name is left blank rather than
+invented.
+
+--- Counts
+
+Blocks: 125 total. Gated: 49 (listed below). Ungated: 76 (counted only,
+per the ticket's own instruction not to list them).
+By stage (the 49 gated blocks only): M 4, S2 0, S4 2, S5 0, S6 37, Y 6.
+By kind (gate occurrences, one block can have several; verified by direct
+grep against the checked-out file, see Falsifier): Sleep 61, event 65,
+go-cell 66, GetTickCount 117, exec_lock 2. Total gate occurrences across
+the 49 blocks: 61+65+66+117+2 = 311.
+
+--- Gated blocks (line range, name, gates as kind@line, stage)
+
+1671-1689	host_post	event@1681, GetTickCount@1689	S6
+1699-1707	slow start	GetTickCount@1699	M
+1708-1740	slow start (mass/fast/slow/peer completion wait)	GetTickCount@1709, GetTickCount@1710, Sleep@1711, GetTickCount@1721, Sleep@1722	S6
+1741-1751	mass wait ok (worker-to-UI drain poll)	GetTickCount@1742, GetTickCount@1743, Sleep@1745	M
+1821-1942	fail rt (cleanup-gate race: exec_stop vs after_cleanup hook)	event@1853, go@1854, event@1854, event@1868, event@1876, go@1876, event@1889, go@1889, event@1895, go@1895, go@1896, GetTickCount@1898, GetTickCount@1899, Sleep@1900, go@1914, go@1930	S6
+1943-1983	err-after start (error-after-end_turn race)	GetTickCount@1957, GetTickCount@1958, Sleep@1959	S6
+1984-2028	omit-end start (worker omits end_turn)	GetTickCount@1998, GetTickCount@1999, Sleep@2000, event@2028	S6
+2029-2112	cpu-busy start (UI responsiveness under a CPU-busy worker)	event@2065, GetTickCount@2073, GetTickCount@2078, GetTickCount@2089, GetTickCount@2090, Sleep@2091	M
+2113-2177	close-path start	GetTickCount@2137, GetTickCount@2138, Sleep@2140	S6
+2221-2318	drive-mail create (host mail admission/drive)	event@2222, go@2223, event@2223, go@2224, go@2233, go@2234, go@2245, go@2253, go@2256, go@2265, event@2270, go@2272, go@2273, go@2275, event@2280, go@2280, event@2281, go@2284, go@2294, event@2315, event@2316, event@2317, event@2318	Y
+2319-2514	live-cascade start	event@2397, event@2398, event@2399, event@2401, event@2410, event@2416, event@2421, GetTickCount@2447, GetTickCount@2448, Sleep@2449, GetTickCount@2452, GetTickCount@2453, Sleep@2455, GetTickCount@2468, GetTickCount@2469, Sleep@2470, event@2511, event@2512	Y
+2515-2658	ctx family setup (adopt/dispose retry timing)	GetTickCount@2554, GetTickCount@2555, Sleep@2556, GetTickCount@2589, GetTickCount@2590, Sleep@2591, GetTickCount@2630, GetTickCount@2631, Sleep@2632	S6
+2659-2713	ctx serial start	GetTickCount@2688, GetTickCount@2689, Sleep@2690	S6
+2714-2789	spawn start	GetTickCount@2737, GetTickCount@2738, Sleep@2739, event@2786, event@2787	S6
+2790-2861	(unnamed nearby; retry/rebind timing)	GetTickCount@2832, GetTickCount@2833, Sleep@2834	S6
+2862-2930	ctx fail retry start	GetTickCount@2889, GetTickCount@2890, Sleep@2891, GetTickCount@2906, GetTickCount@2907, Sleep@2908	S6
+2931-2999	(unnamed nearby)	GetTickCount@2952, GetTickCount@2953, Sleep@2954	S6
+3000-3062	(unnamed nearby)	event@3061, go@3062, event@3062	S6
+3063-3121	(unnamed nearby)	go@3064, event@3085, event@3090, go@3090, GetTickCount@3092, GetTickCount@3093, Sleep@3094, go@3105, event@3121	S6
+3122-3203	race start	event@3147, GetTickCount@3155, GetTickCount@3163, GetTickCount@3173, GetTickCount@3174, Sleep@3175, event@3198, event@3199	S6
+3204-3262	mix family	GetTickCount@3224, GetTickCount@3225, Sleep@3227, GetTickCount@3230, GetTickCount@3231, Sleep@3232	S6
+3263-3343	map fail expected NOMEM	GetTickCount@3288, GetTickCount@3289, Sleep@3291, GetTickCount@3318, GetTickCount@3319, Sleep@3320	S6
+3344-3410	(unnamed nearby)	GetTickCount@3375, GetTickCount@3376, Sleep@3377, GetTickCount@3386, GetTickCount@3387, Sleep@3388	S6
+3411-3468	(unnamed nearby)	GetTickCount@3433, GetTickCount@3434, Sleep@3435, Sleep@3437, GetTickCount@3444, GetTickCount@3445, Sleep@3446	S6
+3519-3609	release-tree create	event@3530, event@3531, event@3544, event@3558, event@3561	S4
+3610-3695	handoff create	exec_lock@3661, exec_lock@3666	S4
+3748-3805	orphan mapped create	GetTickCount@3765, GetTickCount@3766, Sleep@3767, go@3772, go@3783, GetTickCount@3790, GetTickCount@3791, Sleep@3793	S6
+3917-3987	ctx_unbound_record (unbound-close timing)	GetTickCount@3952, GetTickCount@3953, Sleep@3954, Sleep@3956	S6
+3988-4054	rollback start	GetTickCount@4006, GetTickCount@4013	S6
+4055-4120	(unnamed nearby)	GetTickCount@4083, GetTickCount@4084, Sleep@4085, Sleep@4087	S6
+4121-4182	(unnamed nearby)	GetTickCount@4142, GetTickCount@4143, Sleep@4144, Sleep@4146	S6
+4183-4288	(unnamed nearby)	GetTickCount@4226, GetTickCount@4227, Sleep@4229	S6
+6464-6510	exec_stop retry start	GetTickCount@6485, GetTickCount@6486, Sleep@6487, Sleep@6489	S6
+6768-6814	exec wait (retry cluster)	GetTickCount@6794, GetTickCount@6797, Sleep@6798	S6
+6815-6861	exec map-ready start	GetTickCount@6842, GetTickCount@6845, Sleep@6846	S6
+6862-6923	exec map-isol start	GetTickCount@6898, GetTickCount@6901, Sleep@6902	S6
+6924-6991	exec map-fair start	GetTickCount@6973, GetTickCount@6976	M
+6992-7118	exec wait (mail-gate cluster)	event@6997, go@6998, event@6998, go@6999, go@7010, go@7011, go@7021, event@7030, go@7030, go@7033, Sleep@7037, event@7045, go@7045, go@7048, event@7052, event@7057, go@7057, go@7060, event@7070, go@7070, go@7073, GetTickCount@7077, GetTickCount@7078, Sleep@7079, event@7089, go@7089, go@7092, event@7096, go@7096, GetTickCount@7097, GetTickCount@7098, Sleep@7099, go@7109, go@7115	Y
+7159-7257	exec wait (mail-gate cluster)	event@7164, go@7165, event@7165, go@7166, go@7181, go@7182, Sleep@7189, go@7196, event@7200, event@7204, go@7204, go@7207, event@7216, go@7216, go@7219, GetTickCount@7223, GetTickCount@7224, Sleep@7225, event@7232, go@7232, go@7235, event@7239, go@7239, GetTickCount@7240, GetTickCount@7241, Sleep@7242, go@7249	Y
+7421-7485	exec wait (mail-gate cluster)	event@7445, event@7446	Y
+7486-7546	exec wait (mail-gate cluster)	event@7493, go@7494, event@7494, go@7495, go@7508, go@7509, go@7520, event@7524, event@7528, go@7528, event@7530, go@7534, go@7542	Y
+7835-7916	exec wait (map-reparent cluster)	GetTickCount@7898, GetTickCount@7899, Sleep@7900	S6
+7955-8019	exec wait-grow start	GetTickCount@7999, GetTickCount@8000, Sleep@8001	S6
+8020-8112	exec wait-grow (continued)	GetTickCount@8059, GetTickCount@8062, Sleep@8063, GetTickCount@8085, GetTickCount@8086, Sleep@8087	S6
+8113-8172	exec wait-grow (continued)	GetTickCount@8148, GetTickCount@8149, Sleep@8150	S6
+8198-8269	exec wait-grow (continued)	GetTickCount@8221, GetTickCount@8222, Sleep@8223, GetTickCount@8255, GetTickCount@8256, Sleep@8257	S6
+8427-8473	(unnamed nearby)	GetTickCount@8460, GetTickCount@8461, Sleep@8462	S6
+8870-8891	exec wait idle (start)	GetTickCount@8878, GetTickCount@8884	S6
+8892-8945	exec wait idle (continued, root_turn)	Sleep@8906, GetTickCount@8909, GetTickCount@8910, Sleep@8911	S6
+
+--- On the "exec wait" / "exec map-*" / "exec mail-gate" clusters
+
+Several adjacent blocks (6768-8473, roughly a third of all 49) share one
+named phase in the source (the file keeps re-printing variants of "exec
+wait..." as it walks a run of closely related retry, map-fairness,
+mail-gate and reparent sub-cases with their own runtime_new each) rather
+than naming each sub-case distinctly. They are still counted as
+separate blocks here (each has its own fresh runtime and its own gate
+sites), consistent with this file's own runtime_new boundary, but their
+names above say "(cluster)" or "(continued)" rather than invent a unique
+label the source does not give them.
+
+--- Falsifier
+
+Per-kind sums from the 49-block listing above, verified by direct grep
+against the checked-out file (not asserted from the running totals while
+this file was being written): Sleep 61 (grep -c 'Sleep(' restricted to
+the 49 blocks' own line ranges), event 65 (grep -c
+'WaitForSingleObject\|CreateEvent\|SetEvent'), go-cell 66 (grep -cE
+'_go\b|[^a-zA-Z_]go[^a-zA-Z_]'), GetTickCount 117, exec_lock 2. These
+five sums equal grep -c of the same five patterns run over
+l2src/lmx_message_exec_selftest.c restricted to main() (lines 1526-8945):
+Sleep 61/61, event 68/65 (3 short -- lines 1550-1553, the CreateEvent
+calls for the very first block's own fixture, sit before that block's
+own runtime_new at line 1554 and are not inside any block's range),
+go-cell 66/66, GetTickCount 117/117, exec_lock 2/2. Whole-file grep -c
+(including the pre-main() turn-handler functions, lines 1-1525, which are
+not "in main" and so are not part of any block by the ticket's own
+framing) is higher for every kind: Sleep 65, event 96, go-cell 86,
+GetTickCount 127, exec_lock 5 -- the difference in each case is
+occurrences inside those helper functions (turn_slow, turn_fast, the
+g_mail_go/g_cleanup_go machinery, etc.), verified line-by-line, not
+estimated.
