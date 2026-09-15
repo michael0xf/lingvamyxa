@@ -4191,3 +4191,22 @@ pause where it needs one. The three other notes (one monitor at a time;
 release/acquire on the flags on weak-memory hardware; non-moving
 collection and long-lived consumers) stand as implementation notes, not
 model objections.
+Field table at d6/lock-removal f5573902 (the lead, 2026-09-15; checked by the
+coordinator on the branch): LmxMsgExec added as a scaffolding block (12
+rows: lock DEL S6; tls, nworkers, ui_lane L3T; stopping, stopped,
+no_retire, contexts_live, rt, retire_head/tail, unbound_held and the
+test hooks DEL); BindWait, CtxPack and ExecBind.launching brought to
+b4e1296d (S3 done rows marked; worker split from worker_on; owner_tid
+DEL). Table: 112 rows, 16 kernel, 38 functionality (28 L3T, 10 PAR), 58
+DEL, 0 without an owner; KERNEL's counts follow. M's section cites
+fable/m-acceptance 03fc0f65 (red at ui_step owner=6, the green and the
+falsifier defined, never folded in), keeps no turn on a foreign lane, so
+the oracle needs no re-cut, and lists its fields from b5's 18d5e3e2.
+Correction for the record, no stop: LmxMsg.ready was staged S3 in the
+table and in b5's survey, but S3 as landed kept it (lmx_msg_exec_ready
+marks it, take_this clears it); with the UI requests gone at M its only
+reader is take_this's clear, so the row says M and M deletes it (Mikhail's
+ruling on ready, DEL, holds). ONE ROOT landing still running (root chain
+green, gate.ps1 in progress). Note: d6/lock-removal still carries the
+design and tables under stg/l1_baseline/l2src; after ONE ROOT lands the
+branch is re-based and the files move with l2src.
