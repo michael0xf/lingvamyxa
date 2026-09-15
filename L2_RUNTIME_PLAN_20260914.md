@@ -3029,3 +3029,18 @@ parser.lm2 markers, own.lm2 and the trans.lm2 chain, the whole lm2/ tree,
 the REST backends, the remaining 65 tests and fixtures, the CMake group,
 the generated-C group; lands through the lead with or after 0c's seed
 branch, after (b).
+(b) running: regen_root.sh at 7200294b in a fresh worktree on d6/root-regen
+(T0 from gcc on the committed root lm1/build/l1trans.lm1.c; three passes in
+place in lm_build_generate_all's order; green: pass 3 equal to pass 2 on
+all eight, the other tools compiling, root run_gen green, git status naming
+only the eight, the changed set and blobs matching 0c's independent
+measurement, own 5cb4f9a3, parser 649b093a, l1trans 7ccb37c0, printTree
+64c0c4e1, or it stops; on green the changed files committed with blob ids
+and pushed). The landing land_b.sh merges d6/root-regen, claude-0c/
+self-build-rows 92f70d7c and claude-0c/hazards-bat-exit 760adb3d onto the
+tip in one push (allowlists the eight generated paths, the two runners,
+RUNNER_HAZARDS.txt) and runs root buildCore.lm0.bat, root run_gen,
+run_self_build (required "committed generated C 8 of 8"), run_slice_equal
+(recorded, not required until (c)) and the 32 gates. 0c's goldens and seed
+red-first done, lines coming. b5 holds for the landing and recounts the
+lock census on da7d61f1 (a doc ticket, section 2.6 of the map).
