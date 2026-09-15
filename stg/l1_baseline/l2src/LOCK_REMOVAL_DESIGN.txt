@@ -51,6 +51,18 @@ HELD 2026-09-15 under Mikhail's standing rule, a contradiction sent through the 
     S3's red (57, local only). Options put to him: (a) keep changing today's exec.c as the prototype and port the
     executor later; (b) rewrite the executor in L2/L1 first and remove the locks there; (c) deletions in exec.c
     proceed, anything added or reshaped is written in L2/L1. The design text and stage M's test reading continue.
+    LIFTED the same day. Mikhail, verbatim: "это разве противоречие или баг который требует синхронизации? Планируйте
+    как вам удобно". The coordinator rules (c) as the operating rule for every stage:
+    - deletions and lock removals go directly in lmx_message_exec.c, which only shrinks;
+    - anything new that is executor policy or state (a record, a list, a scheduler cell, a wake owner) is written as
+      an L2 runtime unit in its Message's arena on the lmx_sched_record pattern, called through c., and joins
+      Build-L2RuntimeUnits and its parity runner as stage 3c did;
+    - what stays in C is the native primitives the plan's Target names (threads, the mailbox's wake, TLS, the setjmp
+      turn root);
+    - test-build hooks and oracles (the S0 tripwire, S3's wake rule, S2's walk counter) may live in exec.c under
+      LMX_MSG_EXEC_TEST as proof tools, not design.
+    S3's proof is the oracle rule "every wake of a lane comes from an admission into that lane's mailbox; a wake
+    with no admission is LANE WAKE FAIL", red today on run_one's wake-all.
 
 S0. The proof tool (57): the lane tripwire red on a lane write from a thread with no turn. It is the proof for S2-S5
     and lands first.
