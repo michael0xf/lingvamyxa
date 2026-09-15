@@ -1,0 +1,38 @@
+structure fields=1
+  frame head="external" body=structure fields=1
+    frame head="fn" body=structure fields=4
+      atom "main"
+      structure fields=0
+      atom "int"
+      structure fields=6
+        frame head="int" body=structure fields=2
+          atom "v"
+          atom "1"
+        frame head="v" body=structure fields=3
+          atom "v"
+          atom "<<"
+          atom "2"
+        frame head="if" body=structure fields=4
+          atom "v"
+          atom "!="
+          atom "4"
+          structure fields=1
+            frame head="return" body=structure fields=1
+              atom "1"
+        frame head="v" body=structure fields=3
+          atom "v"
+          atom ">>"
+          atom "1"
+        frame head="if" body=structure fields=4
+          atom "v"
+          atom "!="
+          atom "2"
+          structure fields=1
+            frame head="return" body=structure fields=1
+              atom "2"
+        frame head="return" body=structure fields=1
+          atom "0"
+      Tail cutter trailer spelling="end" fields=1
+        atom "main"
+    Tail cutter trailer spelling="end" fields=1
+      atom "external"

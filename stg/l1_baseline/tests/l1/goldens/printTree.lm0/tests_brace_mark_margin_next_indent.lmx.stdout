@@ -1,0 +1,9 @@
+structure fields=1
+  frame head="root" body=structure fields=1
+    frame head="child" body=structure fields=2
+      MIX structure fields=1
+        frame head="style" body=structure fields=1
+          atom "x"
+      atom "item"
+    Tail cutter trailer spelling="end" fields=1
+      atom "root"

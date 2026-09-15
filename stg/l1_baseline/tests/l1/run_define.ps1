@@ -106,12 +106,7 @@ function Negative([string]$name, [string]$diag) {
     Write-D "EXIT negative $src $LASTEXITCODE diagnostic ok"
 }
 
-# Frozen STG gen0 is lm2 seed (old P0). Promoted gen2 has empty-colon P0.
-if ($gen -eq "gen0") {
-    Negative "invalid_define_noname" "define receiver expects macro name as first atom"
-} else {
-    Negative "invalid_define_noname" "empty colon Frame is not allowed"
-}
+Negative "invalid_define_noname" "empty colon Frame is not allowed"
 Negative "invalid_define_quoted_name" "define receiver expects macro name as identifier atom"
 Negative "invalid_define_nonatom" "define receiver expects atom tokens"
 Negative "invalid_define_end" "end target does not match close target"

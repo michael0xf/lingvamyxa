@@ -1,0 +1,3 @@
+structure fields=1
+  frame head="outer" body=structure fields=1
+    frame head="inner" body=structure fields=0

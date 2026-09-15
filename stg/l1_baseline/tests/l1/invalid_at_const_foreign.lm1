@@ -1,0 +1,9 @@
+fn: bad (@: const MixVT p) int
+    return: 0
+end: bad
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

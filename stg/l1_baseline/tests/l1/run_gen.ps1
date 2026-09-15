@@ -33,17 +33,22 @@ function Invoke-LoggedExe([string]$title, [string]$exe, [string[]]$argv) {
     }
 }
 
-# Native published-C bootstrap: compile the tracked l1trans.lm1.c with gcc.
-# This is the supported route for current l1src (including immutable:).
-# Hosted gen0 from run_seed.ps1 / lm2 remains a separate historical seed;
-# it is not used to parse current l1src and is not required here.
-New-Item -ItemType Directory -Force -Path "build\l1trans\boot" | Out-Null
-$bootC = "lm1\build\l1trans.lm1.c"
-if (-not (Test-Path $bootC)) { throw "missing tracked bootstrap $bootC" }
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\boot\l1trans.exe $bootC > $log\gcc_boot.log 2>&1"
-if ($LASTEXITCODE -ne 0) { throw "native bootstrap gcc failed (see $log\gcc_boot.log)" }
-$seed = "build\l1trans\boot\l1trans.exe"
-Write-G "native boot exe ok hash=$((Get-FileHash $seed).Hash) from $bootC"
+# gen0 is run_seed's published binary: gcc of the committed lm1\build\l1trans.lm1.c,
+# the previous binary that always exists. gen1 is gen0 translating l1src\l1trans.lm1,
+# gen2 is gen1's translation, gen3 is gen2's. Each gen gets
+# build\l1trans\<gen>\l1trans.sources.txt (the SHA256 of l1src\l1trans.lm1 and of the C
+# it was compiled from) for run_smoke's staleness check.
+$seed = "build\l1trans\gen0\l1trans.exe"
+if (-not (Test-Path -LiteralPath $seed)) { throw "missing $seed (run tests\l1\run_seed.ps1 first)" }
+Write-G "gen0 exe hash=$((Get-FileHash $seed).Hash) from run_seed"
+
+function Write-GenRecord([string]$genName, [string]$cPath) {
+    $record = Join-Path "build\l1trans\$genName" "l1trans.sources.txt"
+    $srcHash = (Get-FileHash -LiteralPath "l1src\l1trans.lm1" -Algorithm SHA256).Hash
+    $cHash = (Get-FileHash -LiteralPath $cPath -Algorithm SHA256).Hash
+    [IO.File]::WriteAllLines((Join-Path (Get-Location) $record), [string[]]@("l1src\l1trans.lm1 $srcHash", "$cPath $cHash"))
+    Write-G "record $record l1src\l1trans.lm1=$srcHash $cPath=$cHash"
+}
 
 $savedHosted = @{
     LM_TRANS_REGISTRY = $env:LM_TRANS_REGISTRY
@@ -69,6 +74,7 @@ if ($LASTEXITCODE -ne 0) { throw "gen1 translate failed" }
 cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\gen1\l1trans.exe build\obj\l1trans\gen1\l1trans.c > $log\gcc_gen1.log 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "gen1 gcc failed" }
 Write-G "gen1 exe ok hash=$((Get-FileHash build\l1trans\gen1\l1trans.exe).Hash)"
+Write-GenRecord "gen1" "build\obj\l1trans\gen1\l1trans.c"
 
 Write-G "BEGIN gen2 translate"
 & "build\l1trans\gen1\l1trans.exe" "l1src\l1trans.lm1" "build\obj\l1trans\gen2\l1trans.c"
@@ -76,47 +82,19 @@ if ($LASTEXITCODE -ne 0) { throw "gen2 translate failed" }
 cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\gen2\l1trans.exe build\obj\l1trans\gen2\l1trans.c > $log\gcc_gen2.log 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "gen2 gcc failed" }
 Write-G "gen2 exe ok hash=$((Get-FileHash build\l1trans\gen2\l1trans.exe).Hash)"
+Write-GenRecord "gen2" "build\obj\l1trans\gen2\l1trans.c"
 
 $h1 = (Get-FileHash "build\obj\l1trans\gen1\l1trans.c").Hash
 $h2 = (Get-FileHash "build\obj\l1trans\gen2\l1trans.c").Hash
 Write-G "gen1_c=$h1"
 Write-G "gen2_c=$h2"
-
-# WHY gen1 IS NOT COMPARED, decided 2026-09-13.
-#
-# gen1 is the output of the SEED translator, built from lm2/l1trans.lm2 through
-# the frozen old chain. gen2 and gen3 are outputs of translators built from
-# l1src/l1trans.lm1 itself. Requiring gen1 C to equal gen2 C therefore required
-# the bootstrap seed to reproduce the current source's emission byte for byte.
-#
-# Measured on 2026-09-13 with l2src/tools_seed_drift.py: 59 functions exist only
-# in l1src/l1trans.lm1 and not in the seed, none the other way, and 26 common
-# functions differ in what they call -- l1_emit_stmt, the statement dispatcher,
-# among them. The seed has no header-unit emitter at all. Nothing regenerates
-# it: port_l1trans.py runs lm2 to lm1, not back, and its output does not
-# resemble the current lm1. So that requirement pinned a frozen bootstrap
-# artifact to the live language, and every future change to statement emission
-# would have had to be mirrored into it by hand.
-#
-# What certifies the translator is the FIXED POINT: a translator built from the
-# source reproduces its own input's translation. That is gen2 C == gen3 C, and
-# it is checked below and is what makes this gate fail when the self-build
-# breaks. gen1 remains a real step -- it must translate, compile and run -- it
-# is simply not required to be byte-identical to a generation built from a
-# source it is 59 functions behind.
-#
-# The divergence is REPORTED, not hidden. If it ever reaches zero the seed has
-# caught up with the source, which is worth knowing; if it grows, that is worth
-# knowing too.
-if ($h1 -ne $h2) {
-    $g1 = Get-Content "build\obj\l1trans\gen1\l1trans.c"
-    $g2 = Get-Content "build\obj\l1trans\gen2\l1trans.c"
-    $d = (Compare-Object $g1 $g2 | Measure-Object).Count
-    Write-G "gen1/gen2 C differ in $d lines -- seed drift, not a self-build failure (see the note above)"
-    Write-Host "note: gen1 and gen2 C differ in $d lines (bootstrap seed drift; the fixed point is gen2 == gen3)"
-} else {
-    Write-G "gen1_c == gen2_c: the seed has caught up with the source"
-}
+if ($h1 -ne $h2) { throw "gen1/gen2 C differ" }
+# The committed generated C is the fixed point: gen2's C equals lm1/build/l1trans.lm1.c by
+# git blob id (hash-object --path applies .gitattributes).
+$committedBlob = (git hash-object "--path=lm1/build/l1trans.lm1.c" -- "lm1\build\l1trans.lm1.c") -join ''
+$gen2Blob = (git hash-object "--path=lm1/build/l1trans.lm1.c" -- "build\obj\l1trans\gen2\l1trans.c") -join ''
+Write-G "committed_c_blob=$committedBlob gen2_c_blob=$gen2Blob"
+if ($gen2Blob -ne $committedBlob) { throw "gen2 C ($gen2Blob) differs from the committed lm1/build/l1trans.lm1.c ($committedBlob): regenerate and commit it" }
 
 Write-G "BEGIN gen3 check from gen2"
 & "build\l1trans\gen2\l1trans.exe" "l1src\l1trans.lm1" "build\obj\l1trans\gen3\l1trans.c"
@@ -163,6 +141,8 @@ Write-G "spaced builder route exit 0 (seed+obj+bin with spaces, second pass quot
 
 Invoke-LoggedExe "build_l1_bootstrap_gen3" "build\l1trans\gen2\build_l1.exe" @(
     "build\l1trans\gen2\l1trans.exe", "build\obj\l1trans\gen3", "build\l1trans\gen3")
+# Recorded after the builder's second pass, which rewrites gen3's C and exe.
+Write-GenRecord "gen3" "build\obj\l1trans\gen3\l1trans.c"
 
 $env:L1_GEN = "gen2"
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_smoke.ps1

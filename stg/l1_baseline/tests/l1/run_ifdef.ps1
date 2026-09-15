@@ -105,12 +105,7 @@ Negative "invalid_ifdef_empty_cond" "ifdef branch expects a non-empty condition"
 Negative "invalid_ifdef_end_outer" "end target does not match close target"
 Negative "invalid_ifdef_end_branch" "end target does not match close target"
 Negative "invalid_ifdef_end_count" "end trailer expects exactly one target name"
-# Frozen STG gen0 is lm2 seed (old P0). Promoted gen2 has empty-colon P0.
-if ($gen -eq "gen0") {
-    Negative "invalid_ifdef_end_empty" "end target does not match close target"
-} else {
-    Negative "invalid_ifdef_end_empty" "empty colon Frame is not allowed"
-}
+Negative "invalid_ifdef_end_empty" "empty colon Frame is not allowed"
 Negative "invalid_lm1_ifdef_l3" "reserved L1 name"
 
 Write-I "ifdef ok"

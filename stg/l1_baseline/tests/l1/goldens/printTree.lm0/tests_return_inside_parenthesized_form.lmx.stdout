@@ -1,0 +1,8 @@
+structure fields=1
+  frame head="fn" body=structure fields=3
+    frame head="test" body=structure fields=0
+    structure fields=1
+      atom "u16"
+    structure fields=1
+      frame head="return" body=structure fields=1
+        atom "1"

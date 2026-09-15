@@ -1,0 +1,17 @@
+structure fields=1
+  frame head="root" body=structure fields=5
+    MIX structure fields=1
+      frame head="meta" body=structure fields=2
+        atom ""broken { stays in string""
+        frame head="after" body=structure fields=1
+          atom "ok"
+    frame head="balanced" body=structure fields=1
+      atom ""keep {mark: nested} exact""
+    frame head="quoted_close" body=structure fields=1
+      atom ""keep {text: \"}\" tail} exact""
+    frame head="unclosed" body=structure fields=1
+      atom ""keep {unclosed exact""
+    frame head="after" body=structure fields=1
+      atom "survives"
+    Tail cutter trailer spelling="end" fields=1
+      atom "root"
