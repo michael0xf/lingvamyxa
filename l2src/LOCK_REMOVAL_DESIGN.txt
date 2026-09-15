@@ -1699,6 +1699,34 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         end_turn and runtime_delete each take a mailbox monitor at least once and release it as often as they
         take it. It is deliberately written about the monitor, not about the executor lock, so that (a3)'s
         deletion cannot turn it into a check that can no longer fail.
+      - (a3) the executor lock itself is deleted, landed on d6/lock-s6 after the (a2) commit.
+        - 588 lines: 191 call lines in lmx_message.lm1, 191 in lmx_message.lm2, 172 in lmx_message_exec.c, the two
+          declarations in lmx_message_exec.h, and the object -- the field in both branches of LmxMsgExec, its
+          InitializeCriticalSection and its recursive pthread_mutex_init in exec_attach, its destruction in
+          exec_detach, and the two functions. The TLS turn identity stays: identity, not synchronization. The
+          mailbox monitor is untouched (19 m->mail sites in exec.c).
+        - The deletion was done by line filter with a guard that refused to touch any matching line that was not a
+          plain call statement; in exec.c it stopped on exactly the two function definitions, which were then
+          removed by hand. lm1 and lm2 were dry-run first: matched + kept = total, and zero empty L1 blocks.
+        - Three test uses were rewritten rather than line-deleted, since dropping their lock alone would have left
+          them asserting nothing:
+          - checks_19_29_6 used the lock as its own mutex over its observation cells. M0's cells are written only
+            inside M0's own turn and are serial by the model; A and B run on two lanes, so each now has its own
+            arrived/saw/turns cell and reads only the other's (19.28.R2.2, one writer).
+          - the executor selftest's drive_mail_overlap case asserted "drive close mail does not hold exec"; it now
+            takes a DIFFERENT Message's monitor while the hook holds the closer's, which is what it was about --
+            the monitor belongs to one mailbox, not to the runtime.
+          - the release-tree case is narrowed, on the coordinator's decision: its second thread read the parent's
+            family chain inside the unlink window, which meant something only while a lock existed to wait on, and
+            a cross-lane read of that chain is what the one-writer rule forbids (spec 11543-11553). The host's own
+            lane now asserts release_slot's result after end_turn returns. Coverage lost: the interleaving claim,
+            replaced by the rule itself. Not taken to Mikhail: it tested the removed mechanism and asks the model
+            nothing.
+        - Measured on that tree: S6 probe -Part 1 GREEN -- exec_lock_calls=0, exec_lock_decl=0, host_lock=0,
+          exec_fields=0 (S6-2 still red as expected, refs=342, runtime_lists=36); run_port_message parity PASS with
+          103 methods; run_lmx -Suite Message ok; run_model_scenario36 PASS over all ten fixtures, two agreeing
+          runs on the production runtime, including the rewritten checks_19_29_6 at 32/0 and the unbound-close
+          fixtures family_close_32 26/0, family_release_17 58/0 and liveness_33 76/0.
       - Proven able to fail before being trusted (the rule against unfalsifiable assertions): removing exactly one
         line from lmx_message.lm2 -- post_dead's c.lmx_msg_mail_unlock(root), verified as a one-line change with
         the other 8 holds intact and no name corrupted -- turned the gate red with "msg_post_dead takes a mailbox
