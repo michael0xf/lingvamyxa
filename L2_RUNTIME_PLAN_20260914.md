@@ -4480,3 +4480,19 @@ function, and the capability replacing them (the turn's own Message, the
 parent's child capability, the mailbox's admitted Message, R0's record);
 a function no capability covers flagged as a contradiction to stop on;
 counts at the top reconciled with the design's C1 grep.
+b5's S2 lookup census landed on sonnet/s2-lookups d53f15bb
+(LOCK_REMOVAL_S2_LOOKUPS.txt at b4e1296d; checked by the coordinator):
+69 functions (34 exec.c, 0 host.c, 35 lm1, the lm2 mirror the same 35),
+88 lookup sites (49 exec.c, 39 lm1) by the four names SPINE's falsifier
+grep uses, verified against the files; per capability: the parent's
+child 27 sites/18 functions, the turn's own Message 18/12, the mailbox's
+admitted Message 9/8, R0's record 3/3, plus liveness 6/4 (spec 11442,
+the child's query to its parent), the UI lane's open request 1/1 (goes
+with M), the wrapper mechanism itself 2/2, and outside any Message
+22/21 (the host and bootstrap paths), all resolved by the design's text;
+no slot-array walk by LmxMsgAddr exists; zero contradictions. The
+difference from SPINE's 96 at c067bed9 is exec.c 57 to 49, accounted
+site by site by S3's wake and launch-retry deletions (7200294b against
+b4e1296d). Two false positives caught by reading (a comment naming
+msg_at_addr in endp_try_retire; a multi-line signature and two lm1 sub:
+blocks merged by a naive boundary tracker).
