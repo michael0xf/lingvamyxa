@@ -3637,3 +3637,18 @@ is older than the threshold it marks that child closing (19.28.R2.2: the
 parent removes on timeout, the second, emergency mechanism). After S3 both
 run as part of the L3 Thread's end_turn work each round, no timer; the
 design's R8 is to name them so, not "liveness".
+Mikhail (2026-09-15): "может я вопрос не понимаю, а он читает -отправляет
+почту?" Answered from the spec's "Child liveness poll" paragraph (after
+19.29.8, lines 13147-13195 at main e2e4d77e): yes, it is mail and flags.
+The child's end_turn is the check/send opportunity: the child sends its
+query Message to its parent and reads the reply from its own mailbox; the
+pending query and the timeout decision are the child's own; a parent
+sends no polling Messages automatically and inspects its children's
+control flags during its own turns (required by the completion
+mechanism); the normal parent close is the parent's request at its
+end_turn (the running=0 / closing flags). In the L1 code the two checks
+of lmx_msg_live_check are only the timeout evaluation over that traffic
+(live_query_id/live_query_at = the child's pending query; child_heard_at
+= when the parent last heard the child's Message); the timer that ran them
+goes with S3, and the evaluation is done at end_turn. Nothing in the
+model is a liveness mechanism outside mail and flags; R8 is to say so.
