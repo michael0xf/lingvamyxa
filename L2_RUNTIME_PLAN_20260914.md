@@ -1978,3 +1978,26 @@ no LANE WRITE FAIL in any log. 57's quiet window off e88dab64 for
 lane_oracle and S3 red; then S1 aef95e1c lands on e88dab64, then S2's red is
 measured. 0c's inventory header fixed at a21fa962 (the column's five values;
 the "not a lock" grep prints nothing; the withdrawal record at L160 kept).
+Stage O STOPPED under the stop rule (the lead, 2026-09-15), a contradiction
+put to Mikhail by the coordinator: side 1, his "3- да, удаляйте целиком";
+side 2, b5's own.lm2 inventory (sonnet/lock-inventory 19a95a26,
+LOCK_REMOVAL_OWN_INVENTORY.txt): the L2-to-L1 translator's code generator
+(lm2/trans_l1_statement.lm2) emits lm_message_thread_new/_begin_turn/
+_end_turn and lm_own_arena_new_zero(thread, ...) into every translated
+program's main and every generated heap allocation (123 matches of emitted
+text), parser.lm2 keeps its P0 registry as a component of that thread, the
+REST server and client use its providers with no substitute, 13 native C
+tests and 33 translator fixtures build it, a CMake target refreshes it; the
+L1 baseline has none of it, and the one core (lmx_message in l2src) has no
+lm2 entry point today; so the arena-per-thread allocation of the lm2 chain
+rides on the same records as the locks, and whole deletion breaks every
+program the lm2 translator produces. Options put to him: (a) O waits until
+the core serves the lm2 translator's emission and the emitted text switches
+to it in the deletion's stage; (b) the translator stops emitting the
+boilerplate now and its programs build without an arena until the core is
+there, the REST providers and the registry component going with it; (c)
+only the lock-bearing parts go now (the router and the pool with
+route_mutex, the pool mutex, work_ready, state_mutex, stopped_condition),
+the thread with its arena and mailbox staying as the lm2 chain's L3 Thread
+until the core is available to it and then replaced, O completing then;
+the coordinator proposing (c). S1-S3, M and D continue; nothing deleted.
