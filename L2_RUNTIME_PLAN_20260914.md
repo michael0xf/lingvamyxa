@@ -2436,3 +2436,11 @@ sites beyond may exist; the landing note replaces ee5b2cb0's false "0
 sites" line. Falsifier at ee5b2cb0 with the wake-all removed:
 run_port_message -LaneCheck exits non-zero with "LANE WAKE FAIL
 site=wake_addr_locked owner=4 admits=1 wakes=2" (19 s).
+Corrected by 0c the same hour: the probe records only whether input is
+present, not how many envelopes wait, so a miscount in the oracle is not
+ruled out; the 61-lane group fits the kick re-waking one unconsumed
+admission but does not prove it. Ordered: the strict check printing the
+inbox length beside admits for every violating pair (length greater than
+the counted admissions is a miscount; equal with wakes greater is the
+kick's extra wake; owner 7 stands either way); the finding is "fits, not
+proven" until its numbers are in.
