@@ -1,0 +1,161 @@
+M_GATE_IMPACT: the default gate set (l2src/run_gates.ps1) against stage M
+Measured by 0c on integration 00b04751, read only (nothing built or run), 2026-09-15.
+
+Stage M deletes the sequential mapping of children onto a parent's thread, the UI step from R0's turn,
+AFFINITY_UI and UI_LANE_ID (the core creates no UI lane; mixa builds it as an ordinary child of R0).
+The deleted names, as the core exports them at 00b04751:
+  lmx_msg_exec_ui_step        lmx_message.h:303, lmx_message_exec.h:35, lmx_message_exec.c:2484
+  LMX_MSG_AFFINITY_UI         lmx_message.h:292
+  LMX_MSG_UI_LANE_ID          lmx_message.h:233
+  lmx_msg_exec_set_ui_lane / lmx_msg_exec_has_ui_lane   lmx_message.h:245/246
+  lmx_msg_sched_step          lmx_message.h:307
+  lmx_sched_record_cursor / lmx_sched_record_set_cursor lmx_message.h:314/315 (the round-robin cursor)
+  lmx_msg_run_child_turn      lmx_message.h:328, lmx_message_exec.h:29, lmx_message_exec.c:2775
+  and the test helpers built on them: turn_step_child, step_from_root, step_in_root, own_turn_via_parent.
+The lead's test list is l2src/LOCK_REMOVAL_STAGE_M_TESTS.txt on d6/lock-removal (ba1aa1ad), cited below as TESTS.
+This file is the gate side: which gate builds which of those tests, and what each gate asserts.
+
+Counts (32 gates in the default set: run_gates.ps1's $gates holds 32 rows at 00b04751; the opt-in
+l2_message_root is appended at line 105 only with -L2MessageRoot):
+  asserts a mechanism M deletes:          8  (lane_oracle, scenario36, sched_record, lmx_message, send_local,
+                                              family_handoff, turn_step_child, entry_turn)
+    of these, also timing-sensitive:      3  (lane_oracle, scenario36, lmx_message)
+  measures timing only (no deleted name): 0
+  unaffected:                            24
+
+Method: each runner's referenced files (every *.lm1/*.lm2/*.c/*.h path in the runner, plus the runners and
+l2units_build.ps1 it calls); git grep of the deleted names above in those runners and test files; git grep of
+Sleep, GetTickCount, WaitForSingleObject, CreateThread, deadline and timeout for the timing column. A grep hit
+in a core source a gate only links (lmx_message_exec.c, lmx_message_host.c, lmx_sched_record.lm2) is a build
+input, not an assertion.
+
+== Asserts a mechanism M deletes (the lead's test conversion must touch it) ==
+
+lane_oracle   run_port_message.ps1 -TranslatorPath <pin> -LaneCheck
+  builds: lmx_message_exec_selftest.c (L1 reference and L2 port), tests/lmx_exec_crash_report.c, parity_driver.c,
+    lmx_message.lm1/.lm2, lmx_message_exec.c, lmx_message_host.c, lmx_sched_record.lm2 (l2units_build.ps1)
+  asserts: lmx_message_exec_selftest.c names AFFINITY_UI 29 times, exec_ui_step 3, sched_step 9,
+    run_child_turn 7, turn_step_child 24, step_from_root 38, step_in_root 26, own_turn_via_parent 5;
+    e.g. line 7786 "exec wait: sched_step runs 65th child when first 64 inboxes are empty".
+    The runner itself: run_port_message.ps1:25 and :108 normalise the selftest's UI wall-clock fields
+    (ui_ms, cpu_busy_ui_ms, ui_step_ms), printed at lmx_message_exec_selftest.c:8929/8938; those fields go with
+    the UI step, so the parity comparison's normalisation changes too.
+  timing: WaitForSingleObject(..., 5000) handoffs (lines 296-586, 1129), GetTickCount 127, Sleep 66, CreateThread 5.
+  TESTS: "lmx_message_exec_selftest.c: ... read by section; the UI-affinity sections are the largest deletion".
+
+scenario36    run_model_scenario36.ps1
+  builds (its -Tests default, line 19): lmx_model_scenario36_selftest, lmx_msg_delivery_selftest,
+    lmx_model_checks_19_29_6_selftest, lmx_model_liveness_33_selftest, lmx_model_family_close_32_selftest,
+    lmx_model_family_release_17_selftest, lmx_model_ui_lane_3d_selftest, lmx_model_orphan_mapped_17_selftest,
+    lmx_model_root_ingress_5b_selftest, lmx_model_root_record_5e_selftest, lmx_model_turn_arena_o1_selftest
+  asserts:
+    ui_lane_3d        101 exec_bind(..., LMX_MSG_AFFINITY_UI); 102-129 ui_step_in_root serving order ("the first step
+                      serves A", "the second step serves B"). TESTS: deleted, a new UI-lane test instead.
+    scenario36        step_from_root at 289, 324, 330. TESTS: child properties, convert.
+    liveness_33       step_from_root 278/283, step_in_root 301/310. TESTS: convert; main acting as P's turn moves.
+    family_close_32   step_from_root 140/152. TESTS: convert.
+    family_release_17 step_from_root/step_in_root at 191-264; turn_step_child 7. TESTS: convert, the ordering point
+                      restated as flag reads.
+    orphan_mapped_17  step_from_root 192. TESTS: convert.
+    root_ingress_5b   turn_step_child/run_child_turn at 80-113. TESTS: R's host-side step becomes R's own turn.
+    root_record_5e    root_turn(turn_step_child) 179. TESTS: convert.
+    delivery, checks_19_29_6, turn_arena_o1: no deleted name.
+  timing: GetTickCount deadline loops waiting on worker threads: checks_19_29_6 153-161 (2000 ms, Sleep 1),
+    orphan_mapped_17 61 (5000 ms), root_ingress_5b 154-169 (5000 ms, lmx_msg_exec_workers), root_record_5e,
+    turn_arena_o1 171-175 (5000 ms). The runner's own limit is TestTimeoutSeconds = 120 (line 17). With M's
+    children on their own threads these loops wait on more threads: the load-sensitive part of this gate.
+  (liveness_33 and family_release_17's "deadline" and "timeout" are the model's clock, set by lmx_msg_set_now and
+  lmx_msg_drive, not wall time.)
+
+sched_record  run_sched_record.ps1
+  builds: tests/lmx_sched_record_selftest.lm1, lmx_sched_record.lm2 / .h.lm1, lmx_root_record.lm2
+  asserts: the cursor: 127 "a fresh record: no child given a turn yet, sequential policy", 131 "the cursor names the
+    child last given a turn", 132; sched_step at 58-91 (11 hits). The runner pins the exported symbols at
+    run_sched_record.ps1:113 ('lmx_sched_record_cursor', 'lmx_sched_record_set_cursor', policy, set_policy).
+  TESTS: "the scheduler record's cursor is the mapping: the test is deleted ... Check whether any policy cell
+  survives." The gate row, its pass line 'sched record' and the symbol pin go or shrink with it.
+
+lmx_message   run_lmx.ps1 -Suite Message  (MessageApi + Host + Exec + Production; Cancel is not in Message, line 17)
+  builds: lmx_message_selftest (MessageApi), lmx_message_host_selftest.c (Host), lmx_message_exec_selftest.c (Exec,
+    the same file as lane_oracle), lmx_generated_for_arrays_collect and the other Production units
+  asserts: lmx_message_exec_selftest.c, as under lane_oracle. lmx_message_host_selftest.c has no deleted name.
+  timing: as lane_oracle for the exec selftest; lmx_message_host_selftest.c CreateThread 2, WaitForSingleObject 3.
+
+send_local    run_msg_send_local.ps1
+  builds: tests/lmx_msg_send_local_selftest.lm1 with lmx_message.lm1, lmx_message_exec.c, lmx_message_host.c,
+    lmx_sched_record.lm2
+  asserts: sched_step at 111 (the parent's scheduler step), run_child_turn helper, turn_step_child 6.
+  TESTS: "the sched_step checks are mapping properties and go; the send/admission checks convert".
+
+family_handoff  run_msg_family_handoff.ps1  (the gate runs the default -Scenario Family, line 14)
+  builds: tests/lmx_msg_family_handoff_selftest.lm1 (tests/lmx_msg_adopt_unrooted_selftest.lm1 only with
+    -Scenario UnrootedAdopt, not in the gate)
+  asserts: exec_bind(top, turn_step_child) and exec_bind(mid, turn_step_child) at 180/183, root_turn(turn_step_child)
+    at 187. TESTS: "the chain of steps is the mapping and goes; the handoff checks convert".
+
+turn_step_child run_turn_step_child_copies.ps1
+  builds: nothing; reads every tests/*.lm1 for its copy of `fn: turn_step_child` (line 11) and passes on
+    "turn_step_child copies: N; distinct hashes: 1".
+  asserts: the helper M deletes. TESTS: "run_turn_step_child_copies.ps1 ... goes with the helper". The gate row goes
+    with it: the runner exits 1 when no copy is left (line 22, $rows.Count -eq 0), so the commit that deletes the
+    last copy must also remove the row (run_gates.ps1:83), or the chain is red at this gate.
+
+entry_turn    run_entry_turn.ps1
+  builds: tests/lmx_entry_turn_selftest.lm1, tests/entry_turn_main.lm2, tests/entry_turn_lib.lm2
+  asserts: 87 "stage 5 (d2): the UI lane is R0's child at address 2" (lmx_msg_exec_has_ui_lane), 88 "the UI lane's
+    create_id is refused for any other creator" (LMX_MSG_UI_LANE_ID). M: the core creates no UI lane, so both checks
+    and the expected rt\n = 2 after start change.
+  Not in TESTS: this test is not on the lead's list; it needs a line there.
+
+== Measures timing only ==
+
+None. Every gate with wall-time waits (lane_oracle, scenario36, lmx_message) also asserts a deleted name, listed above.
+
+== Unaffected (no deleted name in the runner or its tests; 24) ==
+
+Each rebuilds against M's core and asserts nothing M deletes. Those marked (links) compile lmx_message_exec.c,
+lmx_message_host.c and lmx_sched_record.lm2 through l2units_build.ps1 or run_lmx's Exec object list
+(run_graph_abi.ps1:113), so a removed export still referenced by a support object would red them at compile time,
+not at a check.
+
+  history              run_lmx_msg_history_owned.ps1   tests/lmx_msg_history_owned_selftest.lm1
+  roots_stale          run_lmx_msg_roots_stale.ps1     tests/lmx_msg_roots_stale_selftest.lm1
+  visit                run_msg_visit.ps1               tests/lmx_msg_visit_selftest.lm1
+  liveness             run_msg_liveness.ps1            tests/lmx_msg_liveness_selftest.lm1
+  c_scanners           run_candidate_c_scanners.ps1    tests/l2_c_scanners_parse_driver.lm1; it also parses every
+                                                       tests/*.lm1 as a parser corpus (line 295), 13 of which carry a
+                                                       deleted name as text: parsed, not asserted; a converted test
+                                                       only has to stay parseable
+  port_array_owned     run_port_array_owned.ps1        tests/lmx_array_owned_selftest.lm1 (links)
+  port_array_ref_owned run_port_array_ref_owned.ps1    tests/lmx_array_ref_owned_selftest.lm1 (links)
+  port_branch_owned    run_port_branch_owned.ps1       tests/lmx_graph_abi_selftest.lm1 (links)
+  port_chars_owned     run_port_chars_owned.ps1        tests/lmx_chars_owned_selftest.lm1 (links)
+  port_graph_copy      run_port_graph_copy_owned.ps1   tests/lmx_graph_copy_selftest.lm1 (links)
+  port_merge_owned     run_port_merge_owned.ps1        tests/lmx_merge_selftest.lm1 (links)
+  port_msg_graph_copy  run_port_message_graph_copy.ps1 tests/lmx_message_graph_copy_selftest.lm1 (links)
+  port_msg_blocks      run_port_msg_blocks.ps1         tests/lmx_msg_blocks_selftest.lm1 (links)
+  port_history         run_port_msg_history_owned.ps1  tests/lmx_msg_history_owned_selftest.lm1 (links)
+  port_liveness        run_port_msg_liveness.ps1       tests/lmx_msg_liveness_selftest.lm1 (links)
+  port_mail_chain      run_port_msg_mail_chain.ps1     tests/lmx_msg_mail_chain_selftest.lm1 (links)
+  port_path_storage    run_port_msg_path_storage.ps1   tests/lmx_msg_path_storage_selftest.lm1 (links)
+  port_roots_stale     run_port_msg_roots_stale.ps1    tests/lmx_msg_roots_stale_selftest.lm1 (links)
+  port_slots           run_port_msg_slots.ps1          tests/lmx_msg_slots_selftest.lm1 (links)
+  port_storage         run_port_msg_storage.ps1        tests/lmx_msg_storage_selftest.lm1 (links)
+  port_visit           run_port_msg_visit.ps1          tests/lmx_msg_visit_selftest.lm1 (links)
+  port_owned_ranges    run_port_owned_ranges.ps1       tests/lmx_owned_ranges_selftest.lm1 (links)
+  port_value_owned     run_port_value_owned.ps1        tests/lmx_graph_abi_selftest.lm1 (links)
+  graph_abi            run_graph_abi.ps1               tests/lmx_graph_abi_selftest.lm1, graph_copy, merge,
+                                                       message_graph_copy, pointer_array selftests, tests/unit_*.lm2 (links)
+
+== Outside the default set, touched by M (for the lead's list, not gates) ==
+
+  tests/cancel_spin_host.c        run_lmx.ps1 -Suite Cancel (not in -Suite Message): sched_step 6, turn_step_child 4,
+                                  step_in_root 4, run_child_turn 1; run_lmx.ps1:425 "parent-thread sched_step". In TESTS.
+  tests/lmx_msg_adopt_unrooted_selftest.lm1  run_msg_family_handoff.ps1 -Scenario UnrootedAdopt: step_in_root at
+                                  121/130/135/138. In TESTS.
+
+Falsify: git grep -c -E 'exec_ui_step|UI_LANE_ID|AFFINITY_UI|has_ui_lane|set_ui_lane|sched_step|sched_record_cursor|
+sched_record_set_cursor|run_child_turn|turn_step_child|step_from_root|step_in_root|own_turn_via_parent' 00b04751 --
+<the gate's runner> <the test files listed for it>. Measured at 00b04751: lane_oracle 137, scenario36 91,
+sched_record 20, lmx_message 138, send_local 8, family_handoff 5, turn_step_child 3, entry_turn 2; each of the 24
+unaffected gates 0 (c_scanners counted over its runner and driver; its parsed corpus is noted in its row).
