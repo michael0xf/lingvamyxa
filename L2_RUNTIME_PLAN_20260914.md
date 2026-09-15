@@ -5399,3 +5399,7 @@ threading plan in d6/lock-removal ca45129f; green C1=0 and C2=0 with
 c8f9cb50's counter merged, re-measured by the coordinator before the
 landing. Now: e9's gate record on 391b5062, then b5's red measurement
 of the two S4 guard checks; the lead merges integration into main.
+Main d3c0cc40 = 0c376f79 + integration 391b5062 (the lead, 2026-09-15; 37
+files, no conflict; checked by the coordinator). S2's code starts on
+d6/lock-s2 off 391b5062 (worktree ws2code, pin installed), edits only
+until the machine is free after e9's record and b5's two runs.
