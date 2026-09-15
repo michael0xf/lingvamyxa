@@ -4231,3 +4231,7 @@ message as a Message into the inbox its own parent thread reads; nothing
 of Win32 touches the kernel. Entered verbatim in spec 19.28.R2.2 (after
 the mixa_manager sentence) and model section 25; the mixa_manager host
 takes this shape after the lock work.
+Mikhail (2026-09-15, verbatim, closing the architecture exchange): "Это полноценный ООП язык, объект --Message, исполняемый  объект -- L3 Thread. Такие же странные вопросы ты можешь задавать любому языку программирования высокого уровня.Потому он и называется "L3 Thread""
+Entered verbatim in spec section 2 (after the L1-as-kernel sentence) and
+model section 2. The coordinator's four notes stand as implementation
+notes only; no objection to the model remains.

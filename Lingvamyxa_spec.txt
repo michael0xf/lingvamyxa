@@ -1086,7 +1086,11 @@ And on what L1 is for, verbatim: "Вы пытаетесь писать на Си
 C, while in C, that is L1, one simply builds the kernel on which the further
 functionality of the kernel itself is then built; as if I asked you to
 imitate all loops with goto and you replaced the task with "write examples
-of while and for": entirely different tasks).
+of while and for": entirely different tasks). And, the same day, on what
+the whole is, verbatim: "Это полноценный ООП язык, объект --Message, исполняемый  объект -- L3 Thread. Такие же странные вопросы ты можешь задавать любому языку программирования высокого уровня.Потому он и называется "L3 Thread"" (this is a full object-oriented
+language: the object is Message, the executing object is L3 Thread; the
+same strange questions could be asked of any high-level language; that is
+why it is called "L3 Thread").
 
 `node` is the Structure's lexical parent. Merge and Message creation copy the
 complete used graph with the same traversal, including lexical node chains to
