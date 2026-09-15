@@ -315,7 +315,18 @@ cite this map's owner codes in their target-owner column.
       thread frees what is R0's, or does R0 leave them ready with no scheduler? Proposed: the former,
       as R0 finishing its own work (each L3 Thread has its own scheduler), not a wait on any thread.
 
+  5.6 (added after the lead's exec.c inventory, 39435ed2: 35 of its 41 silent 5.1 lines are address
+      resolution, a tree walk from rt->root under the lock, replaced by a capability the caller already
+      holds, 19.28.R2.2 11447.) What is a capability held by a non-parent worth after its target closes?
+      The spec says nothing about a send to a released Message (R2.4, R2.5 and 19.29.7 name no
+      undeliverable case). Proposed: a capability is the target's mailbox handle, and a closing
+      Message's mailbox is settled into its parent with the rest of its storage (the parent's settle
+      write, 2.1 (2)), so a late send reaches a mailbox the parent owns and is refused there on the
+      parent's lane with the sender's own status, one owner and no reference count; today's post_dead
+      through the slot table is the X form of this. Alternative: mailbox records kept alive by a count
+      of their holders, which is the atomic cell of 5.2.
+
 6. WHAT THIS MAP DOES NOT DECIDE
   The removal's stages, their order and their reds are the lead's design in the (a) format after the
   three inventories are in; the gate per stage is 0c's; the map is amended by line when Mikhail answers
-  5.1-5.5, and every answer goes into the spec and the model the same hour.
+  5.1-5.6, and every answer goes into the spec and the model the same hour, in his words only.
