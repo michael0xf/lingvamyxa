@@ -2375,3 +2375,19 @@ link), green on the O1 test and the defaults, the falsifier (pushing onto
 parent_msg's blocks prints FAIL), run_port_message plain and -LaneCheck;
 land_o1.sh with an allowlist of the six files; both waiting for 57's
 "done".
+Stage O stopped again at the deletion list's scope (b5, 2026-09-15, nothing
+touched): lm2/own_abi.lm2 (1126 lines) is predef'd by lm2/parser.lm2,
+l1trans.lm2, printTree.lm2, registry_control.lm2 and table.lm2 besides
+own.lm2, and declares both the message-thread types (LmHostThread, LmMutex,
+LmCondition, LmMessageThreadComponent) and the general ownership and arena
+ABI (LmSlice, the own stacks, LmOwnAllocationDescriptor, LmOwnLazyEdge,
+LmOwnArena) those files need; table_descriptor.lm2 is shared the same way;
+nothing in the tree builds any lm2/*.lm2 except the dead trans.lm0; the
+live chain reads none of them. Put to Mikhail: delete the whole lm2
+self-host (lm2/ and its stg/l1_baseline/lm2 mirror, history keeping the
+reference for the L2 port "again"), or keep those L2 sources live and split
+own_abi.lm2 and table_descriptor.lm2 instead; the coordinator proposing the
+whole deletion. Every group held; trans.lm2's closure (trans_library,
+table_descriptor, trans_schema, trans_l1_registry, trans_l1_namespace,
+trans_l1_expr, trans_l1_statement, trans_l1_top_level,
+trans_l1_l4_registry, trans_text, trans_core, trans_internal_abi) listed.
