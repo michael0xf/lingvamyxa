@@ -3312,3 +3312,22 @@ core's functionality is then written; the field table's L3T and PAR rows
 are therefore not things to port one by one but functionality to write on
 the kernel, and the design names the kernel first. Entered verbatim in
 spec section 2 and the model's section 2.
+(c) slice refresh green on its branch (the lead, 2026-09-15): d6/slice-refresh
+991c006f, merging 79871822 into a30ed131 (a24be8ae). Commit 8e0b2c93: 601
+tracked files copied from the root's l1src and tests/l1 into stg by blob id,
+0 stg files dropped, the .pyc removed, __pycache__/ ignored. Commit 0b2f6315:
+stg lm1/build regenerated in the slice (passes 1/4/0 differences, fixed
+point), all eight equal to the root's blobs (own 5cb4f9a3, parser 649b093a,
+l1trans 7ccb37c0, printTree 64c0c4e1 and the rest). Measured: stg buildCore
+green (8 s, no old chain), stg run_seed "l1trans gen0 seed ok", stg run_gen
+green, run_self_build PASS 8 of 8, run_slice_equal PASS 16 of 16 sources
+and 8 of 8 generated (57's pre-refresh expectation was 17 sources; the
+count on 991c006f is the pin, not the remembered number). Commit 46a1c215:
+pin candidate 0B3D85B36E72A5935CA43D76B71B8CBBB060AF041CBB6FAE805796595810B2A2
+(298308 bytes, stg gen3; gen2 C == gen3 C, CBC779B1...), L1_PIN.txt one line,
+L1_PIN_SOURCE.txt carrying root blob 7ccb37c0. Commit 991c006f: the four
+documents, one pair replaced in each. land_c.sh runs on it (stg gate.ps1
+whole, the root chain plus run_legacy_p0, the pin install, run_gates
+-L2MessageRoot 33 of 33, run_l2trans, run_port_parser), stops at READY TO
+PUSH; the pin hash and main-checkout path are announced to all four
+sessions before the push.
