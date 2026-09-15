@@ -4166,3 +4166,17 @@ legacy_p0, self_build, p0_tree_contract, cmake configure, the pin
 re-installed at build/l1trans/gen2 and gen3, the 33 gates, l2trans,
 port_parser, port_message -LaneCheck, run_mixa, the 7 mixa L2 parity
 runners).
+e9's ONE ROOT re-base, scoped (the coordinator, 2026-09-15): of e9's 78
+scratchpad scripts naming stg, only install_pin.ps1 is a live tool;
+land_seed.sh's subject (the seed row) is closed and its remaining checks
+after ONE ROOT are gate.ps1 whole, the root route, run_legacy_p0 and
+run_self_build, already carried by run_gates and gate.ps1; so
+land_seed.sh and the 76 one-off scripts stay in the scratchpad as
+history, named "not to be rerun" in e9's note, and none is converted.
+install_pin.ps1 enters the repo as a generic tool, l2src/install_pin.ps1
+beside run_self_build.ps1 and the pin files: a -Tree parameter (default
+the script's own tree), the hash from that tree's l2src/L1_PIN.txt, the
+copy from build/pin_<hash>/l1trans.exe into <tree>/build/l1trans/gen2 and
+gen3 with each copy re-hashed, exit 2 on any mismatch; e9's loop over
+its wt0c_* worktrees is a scratchpad wrapper. On claude-0c/oneroot-runners
+off 6bfefa81, run nothing before the lead's "landed".
