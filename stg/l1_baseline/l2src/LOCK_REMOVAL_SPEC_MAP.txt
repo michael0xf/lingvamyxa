@@ -208,6 +208,202 @@ cite this map's owner codes in their target-owner column.
     none. Every entry outside the mailbox's own lock is in the order's scope; the test-side primitives are
     0c's inventory, the vendored copy goes with the host forms.
 
+2.6 RECOUNT (5e, sonnet/lock-census-2, da7d61f1, git grep -c; refutable by the
+    same grep; every number below is the delta from 2.5's c067bed9 baseline,
+    with the reason for each change and the stage that claims each remaining
+    primitive, or "silent" where none does)
+
+Runtime: lmx_message_exec.c, lmx_message_host.c, lmx.h -- UNCHANGED from 2.5,
+  every number identical (grep-verified, not assumed; no stage in this
+  branch, the mixa ingress ticket, or O touches these files):
+  - lmx_message_exec.c: EnterCriticalSection 2, InitializeCriticalSection 2,
+    pthread_mutex_lock 4; CreateEvent 3, SetEvent 3, WaitForSingleObject 3;
+    pthread_cond_ 10; Interlocked 2; __atomic_ 4 (of which __atomic_load_n/
+    __atomic_store_n on m->running/m->success are the same 4, not a
+    separate category -- the "atomic_load/store/fetch" pattern this
+    ticket added matches nothing __atomic_ does not already match).
+    NEW FINDING, not in 2.5's prose: exec.c's 2 EnterCriticalSection/2
+    InitializeCriticalSection are not one lock counted twice -- they are
+    two different locks, one call each. Line 493/522: m->mail (the
+    mailbox's own collection lock, the one the order keeps). Line
+    1237/1297: e->lock (the executor's shared lock, S6 removes it). 2.5's
+    combined "2 Enter... 2 Initialize" phrasing did not distinguish them;
+    this recount does, since the ticket asks each primitive's fate named.
+    - m->mail's Enter/Initialize: ALLOWED, the message collection's own lock.
+    - e->lock's Enter/Initialize: to go, S6 ("the lock deleted... the only
+      lock left is m->mail").
+    - pthread_mutex_lock (4, the non-Windows branch of the same two locks):
+      same split as above by the code path, not separately counted here.
+    - CreateEvent/SetEvent/WaitForSingleObject (3/3/3) and pthread_cond_
+      (10): silent. S3 ("one wake per lane") changes exec_wake_locked's
+      broadcast into a per-readied-Message wake "through each readied
+      Message's own wake primitive (an implementation detail of this
+      runtime, not agreed wording)" -- S3's own text does not say whether
+      the event/condvar primitive itself goes or stays narrowed to one
+      per lane; 19.28.R2.2 11470-11474 permits "native thread, wait/wake
+      and per-mailbox synchronization primitives" explicitly, so these
+      may be exactly that, not something S3 deletes. No stage's text
+      commits either way; not decided here.
+    - Interlocked (2): silent, no stage names the refcount primitives
+      specifically (S3's text names refs/endp_retain/release as going
+      "with" S6 in prose, not by this exact call-site count).
+    - __atomic_ (4, m->running/m->success loads/stores): silent. 2.1(3)
+      names running/success as "single-writer flags... a late read
+      changes nothing," which argues these specific atomics may be the
+      named exception (2.1 "atomic cells whose order does not matter"),
+      not a to-go primitive -- but no stage's own text states this as a
+      decision, so silent, not assumed.
+  - lmx_message_host.c: EnterCriticalSection 2, pthread_mutex_lock 3,
+    CreateEvent 1, SetEvent 2, WaitForSingleObject 1, pthread_cond_ 6, all
+    unchanged. To go: S5 ("that is a lock outside any mailbox, so it goes
+    (X) with the pack" -- the launch gate's pthread_mutex_t gm cited by
+    name in the design's S5 section is this file's own lock) for the
+    lock/Enter pair; the wait/wake primitives here are the same silent
+    case as exec.c's, above.
+  - lmx.h: __atomic_ 1 (the running/success loads for a foreign read),
+    unchanged, silent, same reasoning as exec.c's own atomics above.
+
+mail_lock( and lmx_msg_exec_lock( callers -- UNCHANGED from 2.5:
+  - mail_lock(: lmx_message.lm1 6, lmx_message.lm2 6 (the L1/L2 mirror
+    pair in stg/l1_baseline/l2src -- not the now-deleted top-level lm2/
+    self-hosting tree; a different, unrelated thing sharing a filename
+    suffix, named here so the two are not confused), exec.c 14. ALLOWED,
+    all 26 -- the order's own exception.
+  - lmx_msg_exec_lock(: lmx_message.lm1 60, lmx_message.lm2 60, exec.c 77,
+    exec.h 1. To go, S6 (and the earlier stages -- S2/S4/M/S5 -- that each
+    remove specific call sites before S6 removes what is left; this
+    branch's own sonnet/lock-inventory df360bb0 already classified each
+    of the 65 lmx_message.lm1 sites, per that inventory not repeated here).
+  - lmx_msg_host_lock(: lmx_message.lm1 1, lmx_message.lm2 1, host.c 1
+    (its own definition), host.h 1 (its own prototype) -- 4 in stg, plus
+    5 in the still-present vendored copy (lm1 3 calls, host.c 1
+    definition, host.h 1 prototype) = 9 whole-tree, matching the total
+    below exactly (grep-verified, corrected here after first counting
+    only the three stg call sites and missing the two declarations).
+    To go, same S5 citation as host.c's lock above (the same host lock
+    named there); the vendored copy's 5 go with the mixa ingress ticket,
+    as below.
+
+Tests and harnesses (stg/l1_baseline/l2src) -- UNCHANGED from 2.5:
+  - lmx_message_exec_selftest.c: CreateEvent 29, SetEvent 38,
+    WaitForSingleObject 29, Interlocked 385.
+  - lmx_message_host_selftest.c: pthread_mutex_lock 4, pthread_cond_ 3,
+    Interlocked 1.
+  - tests/cancel_spin_host.c: Interlocked 20.
+  - lmx_msg_exec_lock( in lmx_message_exec_selftest.c: 5; in the model
+    test files under l2src/tests: 19 (unchanged, not re-broken-down by
+    individual test file here, since 2.5's own per-file breakdown -- 10/
+    5/2/2 -- was not independently re-verified this pass and nothing in
+    this branch or the mixa ingress ticket touches those files).
+  All of the above: 0c's own inventory per 2.5's own text ("the test-side
+  primitives are 0c's inventory"), not this map's to-go/silent
+  classification.
+
+mixa_manager -- CHANGED, but not yet on this tip:
+  - mixa_process_win32.lm1: WaitForSingleObject 1 (a process wait, not a
+    lock, per 2.5's own words), unchanged.
+  - tests/mixa_share_native_smoke.lm1: WaitForSingleObject 11, unchanged.
+  - tests/mixa_ingress_host_harness.c: CreateEvent 2, SetEvent 2,
+    WaitForSingleObject 3, Interlocked 4 (2.5's "2-4 events and 4
+    Interlocked" was a loose range across both harnesses combined; this
+    recount gives the exact per-file split, not a new number).
+  - tests/mixa_win32_smoke_harness.c: CreateEvent 0, SetEvent 0,
+    WaitForSingleObject 3, Interlocked 0 -- its own WaitForSingleObject
+    is window/thread coordination unrelated to any Message lock, per this
+    branch's own earlier HOST_INGRESS_V0_INVENTORY.txt finding.
+  - mixa_manager/vendor/lmx_msg_host_ingress_v0: STILL PRESENT on
+    da7d61f1 -- host_lock( 3, EnterCriticalSection 2,
+    InitializeCriticalSection 1, pthread_mutex_lock 3, pthread_cond_ 6,
+    every number identical to 2.5. The deletion (sonnet/mixa-ingress-
+    inventory, 1a9f1ca8, this branch's own author) removed the vendor
+    directory, its harness and its runner, but that branch has not merged
+    into main or into this stage-O branch's own history -- da7d61f1 does
+    not include it. To go: the mixa ingress ticket, 1a9f1ca8, once it
+    lands; not yet reflected in this count, named here so the discrepancy
+    between "should be 0" and "is still 6/3/2/1/3" is not silently
+    smoothed over.
+
+The now-deleted lm2/ self-hosting tree (root lm2/ and its
+stg/l1_baseline/lm2 mirror, both whole) -- CHANGED to 0, this branch:
+  - Every primitive this ticket's patterns match: 0 (grepped directly,
+    both paths do not exist -- `ls lm2 stg/l1_baseline/lm2` both "No such
+    file or directory"). 2.5 did not count lm2/'s own primitives at all
+    (own.lm2's lock-based message-thread runtime was not part of the
+    lock/event/atomic families 2.5 grepped for -- it used its own
+    lm_mutex_*/lm_condition_*/lm_host_thread_* names, covered by this
+    branch's own LOCK_REMOVAL_OWN_INVENTORY.txt and
+    LOCK_REMOVAL_O0_MEASUREMENT.txt, not repeated here). Named as a
+    reason for completeness: stage O (this branch, e88dab64..da7d61f1).
+
+l1src (root and stg/l1_baseline), root lm1/ (non-build, tracked generated
+C) -- UNCHANGED from 2.5, "none": every pattern 0 in both l1src copies and
+in lm1/ (EnterCriticalSection, pthread_mutex_lock, CreateEvent/SetEvent/
+WaitForSingleObject, pthread_cond_, Interlocked, __atomic_, all checked
+directly, not assumed from 2.5's prose).
+
+__sync_: 0 tree-wide, unchanged ("No __sync_ anywhere," 2.5).
+
+Whole tree, once, each pattern (git grep -c, build/ excluded; includes
+every file above plus anything 2.5 did not itemize by name -- Qt app,
+cmake/, third_party/, etc., which match 0 for all of these except as
+already counted):
+  EnterCriticalSection 6, InitializeCriticalSection 4, pthread_mutex_lock
+  14, CreateEvent 39, SetEvent 50, WaitForSingleObject 70, pthread_cond_
+  27, Interlocked 414, __sync_ 0, __atomic_ 6, lmx_msg_exec_lock( 222,
+  mail_lock( 27, lmx_msg_host_lock( 9.
+  Falsify: each whole-tree number equals the sum of every per-file count
+  named above in this section (e.g. EnterCriticalSection 6 = exec.c 2 +
+  host.c 2 + vendored host.c 2; lmx_msg_exec_lock( 222 = lm1 60 + lm2 60 +
+  exec.c 77 + exec.h 1 + selftest 5 + model tests 19; mail_lock( 27 = lm1
+  6 + lm2 6 + exec.c 14 + 1 -- the +1 checked directly and found to be
+  lmx_message.h:344's own prototype declaration, `void lmx_msg_mail_lock
+  (LmxMsg *m);`, not a call site at all and not the vendored copy, which
+  has zero mail_lock( matches, checked directly; named here rather than
+  left as an unexplained gap between the per-file sum and the whole-tree
+  total).
+
+SUMMARY, by class:
+  ALLOWED (the message collection's own lock): m->mail's Enter/
+    Initialize/pthread_mutex_lock pair in exec.c, and mail_lock( 27
+    total across all copies (the vendored copy has none of its own --
+    checked directly). Not to go.
+  TO GO, stage named: e->lock (exec.c's own CRITICAL_SECTION/pthread
+    pair) and lmx_msg_exec_lock( everywhere -- S6, with S2/S4/M/S5
+    removing specific call sites first. The host lock (host.c's own
+    Enter/Initialize/pthread pair and lmx_msg_host_lock( everywhere) --
+    S5. The vendored ingress copy's whole primitive set (host_lock 3,
+    Enter 2, Initialize 1, pthread lock 3, cond 6) -- the mixa ingress
+    ticket, 1a9f1ca8, not yet landed on this tip.
+  TO GO, this branch already (0 today): every primitive of the deleted
+    lm2/ self-hosting tree -- stage O, da7d61f1.
+  SILENT (no stage's own text commits either way): the wait/wake event
+    and condition-variable primitives in exec.c and stg's own host.c
+    (CreateEvent/SetEvent/WaitForSingleObject/pthread_cond_ in both
+    files -- not the vendored copy's, which already has a named fate,
+    below), the Interlocked refcount primitives, and the __atomic_
+    running/success flag loads/stores.
+  SILENT COUNT (distinct primitive-category lines marked silent above,
+  each citing a file or file-pair, not summed by raw call count): 5 --
+  exec.c's events+cond (1 line, the CreateEvent/SetEvent/
+  WaitForSingleObject/pthread_cond_ family together), exec.c's
+  Interlocked (1), exec.c's __atomic_ (1), lmx.h's __atomic_ (1), stg's
+  own host.c's events+cond (1, same 4-primitive grouping as exec.c's;
+  host.c has no Interlocked calls of its own, so that is not a 6th line).
+  The vendored copy's own events/cond/Interlocked (it has none of the
+  latter either) are not counted here -- its whole primitive set already
+  has a named fate, the mixa ingress ticket, not silent. Test-side
+  primitives (executor selftest, host selftest, cancel_spin_host.c) are
+  explicitly 0c's inventory per 2.5's own text, not counted into this
+  silent total either.
+
+    Ruled on the five silent lines (the coordinator, 2026-09-15, from Mikhail's final words on the
+    mailbox and the owner thread): exec.c's event and condition-variable family and stg host.c's event
+    and condition-variable family are "to go", with S3 ("no wake, wait or notify anywhere") and the host
+    forms' stage; exec.c's __atomic_ on m->running and m->success and lmx.h's __atomic_ are allowed, his
+    "atomic ones for which ordering does not matter" (the single-writer flags of 2.1 (3)); exec.c's
+    Interlocked (2, the refcount primitives) is "to go" with S6 unless the design shows each site
+    order-free, named per site. Silent after the ruling: 0.
+
 3. TODAY'S STATE OUTSIDE ANY MESSAGE'S ARENA (structs on c067bed9; the allocation named so the line is
    refutable by one grep)
 

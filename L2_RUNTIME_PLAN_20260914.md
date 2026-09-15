@@ -3103,3 +3103,24 @@ router is itself a Message, not a substitute for parent-owned scheduling; a
 coordinator Message owns its state exclusively and receives requests); the
 core carries no broker, exchange or topic service. Entered in the model's
 section 25.
+b5's census recount (sonnet/lock-census-2 618c70b9 on da7d61f1) taken onto
+main's map by hand as section 2.6 (a cherry-pick conflicting on the map's
+later sections): runtime and test primitives byte-for-byte unchanged from
+2.5 except the deleted lm2/ tree at 0; two facts 2.5 blurred: exec.c's "2
+Enter/2 Initialize" are two locks, m->mail (allowed, 493/522) and e->lock
+(to go, S6, 1237/1297); the vendored ingress copy unchanged on that tip
+until 1a9f1ca8 merges; two arithmetic corrections named (a prototype at
+lmx_message.h:344 is not a call site; two header declarations of
+host_lock). The five silent lines ruled from Mikhail's final words:
+exec.c's and host.c's event and condition-variable families to go with S3
+and the host forms; the __atomic_ loads and stores of running and success
+(exec.c, lmx.h) allowed as his order-free atomics, the single-writer
+flags; exec.c's two Interlocked refcount primitives to go with S6 unless
+shown order-free per site. (b) green and pushed: d6/root-regen 8cd61352 on
+7200294b, the four regenerated root files with their blob ids (5cb4f9a3,
+649b093a, 7ccb37c0, 64c0c4e1) equal to 0c's fixed point, the fixed point
+holding on all eight, the other tools compiling, root run_gen green in 83
+s, only those four paths changed; run 1's red (the absent old-chain
+oracle) shown to predate (b); land_b.sh running (root-regen, 0c's rows and
+hazards merged onto 7200294b; root buildCore, root run_gen, run_self_build
+8 of 8 required, run_slice_equal recorded, the 32 gates).
