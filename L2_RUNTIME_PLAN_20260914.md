@@ -2492,3 +2492,23 @@ stg/l1_baseline as the live tree, its bootstrap rewritten onto the live
 chain, the root copy brought to it. Until his word: b5 leaves the CMake
 targets and the kept generated C alone (the split and the source
 deletions proceed), 0c's row stays red on the stale files.
+b5's second stop on stage O (2026-09-15, nothing touched): parser.lm2, one
+of the kept L2 sources, calls the message-thread API directly in its own
+text, not only through own_abi.lm2's declarations: lm_own_arena_init(...,
+c.lm_lmx_message_thread) four times at 668, the owner_thread comparisons
+against c.lm_lmx_message_thread at 680 (the ownership check gating the
+document's owner destruction), and lm_message_thread_component_get /
+_attach / _remove at 1401, 1417, 1426 (the per-thread P0 registry);
+c.lm_lmx_message_thread is the global the deleted main scaffold populates;
+l1trans.lm2, printTree.lm2, table.lm2 and registry_control.lm2 have none of
+it. Ruled by the coordinator (Mikhail may overrule): parser.lm2 stays as
+unbuilt reference for the L2 port and is not rewritten now (nothing can
+translate or test a rewrite); the three sites are marked with the comment
+that the Message mechanism is temporarily not used and that in the L2 port
+the parsing Message's own arena and state replace the thread's arena and
+the per-thread registry component, undeclared since own_abi.lm2's split;
+the file's header says it does not translate until that port; the split
+and the source deletions proceed, the CMake and generated-C groups stay
+held on the tree question. 0c's strict wake probe (inbox beside admits, up
+to 1024 pairs with a cap line, both variants) is ready and runs in a slot
+after O1's measure.
