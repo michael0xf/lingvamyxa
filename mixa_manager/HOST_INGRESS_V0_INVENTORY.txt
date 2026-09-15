@@ -1,0 +1,151 @@
+Host ingress V0 vendored copy: removal inventory
+==================================================
+Ticket, 2026-09-15 (6f): the lock census found a vendored copy of the host
+ingress V0 in mixa_manager/vendor/lmx_msg_host_ingress_v0 (its own
+l2src/lmx_message_host.c and lmx_message.lm1 with the host lock: 3
+host_lock calls, 2 EnterCriticalSection, 3 pthread_mutex_lock, 6
+pthread_cond_). Under "no locks in the project at all except the message
+collection's own" (2026-09-15, Mikhail), that copy cannot stay. This file
+inventories it: what calls in, what builds it, what today's runtime gives
+instead, and the lock-primitive count against the census. No deletion in
+this commit -- that lands only after the lead's stage on the host forms
+names it.
+
+Pin: mixa_manager/vendor/lmx_msg_host_ingress_v0/MANIFEST.txt pins code
+commit ee4b2d91 / contract commit c6fa2758, five files by blob+SHA256:
+l2src/lmx_message.h, l2src/lmx_message.lm1, l2src/lmx_message_host.c,
+l2src/lmx_message_host.h, LMX_MSG_HOST_INGRESS_V0.txt.
+
+--- (1) What in mixa_manager calls into the vendored copy ---
+
+Every one of the vendored copy's exported names (its two headers'
+prototypes: lmx_message_host.h's 8 non-test functions -- host_attach,
+host_detach, host_is_owner, host_lock, host_unlock, host_is_shutdown,
+host_wake, host_shutdown -- plus host_test_get_nomem, and
+lmx_message.h's 19 API functions -- runtime_new, runtime_delete, create,
+send, stop, end_turn, pump, recv, env_release, fail, state, inbox_n,
+init_copy, set_now, poll, drive, path_n, path_seg, runtime_shutdown,
+host_post, host_drain, host_wait -- 28 names total) was git-grepped as a
+call (`name(`) across mixa_manager excluding the vendor directory itself.
+
+Real code callers -- one file, mixa_manager/tests/mixa_ingress_host_harness.c,
+15 call sites across 11 distinct symbols:
+  lmx_msg_runtime_new       :213
+  lmx_msg_host_is_owner     :218
+  lmx_msg_create            :223, 228
+  lmx_msg_end_turn          :233
+  lmx_msg_host_wait         :242, 277
+  lmx_msg_host_drain        :283, 352
+  lmx_msg_recv              :289
+  lmx_msg_env_release       :303
+  lmx_msg_runtime_shutdown  :325
+  lmx_msg_runtime_delete    :353
+  lmx_msg_host_post         :58, 90
+
+The remaining 17 of the 28 exported names (host_attach, host_detach,
+host_lock, host_unlock, host_is_shutdown, host_wake, host_shutdown,
+host_test_get_nomem, send, stop, pump, fail, state, inbox_n, init_copy,
+set_now, poll, drive, path_n, path_seg) have zero callers anywhere in
+mixa_manager outside the vendor directory -- grepped, confirmed.
+
+One non-code mention: mixa_manager/SPEC_DIGEST.txt:47-51 quotes
+lmx_msg_create/_send/_stop/_end_turn/_pump/_recv/_env_release as prose,
+documenting the LIVE API at stg/l1_baseline/l2src/lmx_message.h (its own
+line 42 says so explicitly) -- not a reference to the vendored pin at
+all, and not compiled code. Excluded from the caller count above; named
+here so the falsifier below accounts for it explicitly rather than the
+raw grep silently including it.
+
+Falsify: raw git grep -c of these 28 names as `name(` across mixa_manager
+(vendor directory included, since the vendored copy's own internals also
+call several of these names on each other) is far larger than 15 (the
+vendored copy's own definitions and internal calls dominate); restricted
+to files OUTSIDE mixa_manager/vendor, the total is 15 call lines (11 in
+the harness, matching this section's table) + 6 prose lines in
+SPEC_DIGEST.txt (create, send, stop, end_turn, pump/recv/env_release on
+one line) = 21 raw name-matches outside vendor; this section's 15 code
+caller lines is that 21 minus the 6 documented-as-prose SPEC_DIGEST.txt
+matches, accounted for above, not hidden.
+
+--- (2) Which mixa_manager tests and runners build it ---
+
+mixa_manager/tests/mixa_ingress_host_harness.c, built by
+mixa_manager/run_ingress_harness.ps1: translates the vendored
+lmx_message.lm1 with the pinned stable l1trans, compiles it and the
+vendored lmx_message_host.c (WITHOUT -DLMX_MSG_HOST_TEST, the production
+build), links both against the harness with -I pointing at the vendor
+directory (run_ingress_harness.ps1:68, `$inc = @("-I", $pinInc)`), verifies
+by nm that no test-only symbols leaked into the production host.o, runs
+the harness, then runs it a second time with --force-join-timeout to
+capture an expected-failure diagnostic path. This is the ONLY runner in
+mixa_manager that builds any file under the vendor directory -- confirmed
+by grepping every mixa_manager/*.ps1 for "vendor" or "lmx_msg_host_ingress_v0"
+(mixa_manager/run_ingress_harness.ps1 is the only match besides this
+ticket's own inventory file and mixa_console_window.txt, a design note
+that only mentions the pin's existence).
+
+mixa_manager/tests/mixa_share_native_smoke.lm1 and
+mixa_manager/tests/mixa_win32_smoke_harness.c, named in the ticket as
+harnesses with events/Interlocked counters from the lock census -- checked
+directly (grepped both files and their runners, run_share_native_smoke.ps1
+and run_win32_smoke_selftest.ps1, for "vendor", "lmx_message", "host_ingress"
+and any bare "lmx_msg_" symbol): zero matches in all four files. Neither
+references the vendored copy, includes either of its headers, or links
+against it. Their own WaitForSingleObject/CreateEvent/Interlocked use
+(already in the spec map's own census, section 2.5: "the ingress and win32
+harnesses 2-4 events and 4 Interlocked") is for harness-internal
+cross-thread coordination (a worker thread's own completion, not a message
+admission) and is unrelated to the vendored ingress copy's host lock. This
+corrects the ticket's framing: of the three named files, only
+mixa_ingress_host_harness.c actually builds or calls into the vendored
+copy; the other two are independent harnesses that happen to share the
+same lock-census paragraph in LOCK_REMOVAL_SPEC_MAP.txt because they also
+use native Win32 primitives, not because they touch this vendored tree.
+
+--- (3) For each caller, what today's runtime gives instead (host_post
+into R0's own mailbox, spec 19.29.6 stage-5 (iii)), or silent ---
+
+lmx_msg_runtime_new       -> exists today, stg/l1_baseline/l2src/lmx_message.lm1:856 (lmx_msg_runtime_new). Same role (creates the runtime and its root R0); today's internals differ (a linked slot list, not the vendored copy's flat rt\tab array), not this file's concern.
+lmx_msg_host_is_owner     -> exists today, called throughout stg/l1_baseline/l2src/lmx_message.lm1 as an extern (c.lmx_msg_host_is_owner(rt)); its own implementation lives in stg/l1_baseline/l2src/lmx_message_host.c, a live sibling of the vendored copy's own host.c, not this file (lmx_message.lm1's own scope).
+lmx_msg_create            -> exists today, stg/l1_baseline/l2src/lmx_message.lm1:1222 (lmx_msg_create), same signature; internally routed through lmx_msg_create_prepare (1083), which uses exec_lock, not any host-side lock at all.
+lmx_msg_end_turn          -> exists today, stg/l1_baseline/l2src/lmx_message.lm1:1724 (lmx_msg_end_turn), same role.
+lmx_msg_host_wait         -> NOT in stg/l1_baseline/l2src/lmx_message.lm1 at all (grepped, zero matches); declared in stg/l1_baseline/l2src/lmx_message.h:291 and implemented in stg/l1_baseline/l2src/lmx_message_host.c:194 -- a live sibling of the vendored copy's own host.c that (per the spec map's census, section 2.5) still carries its own host lock and 6 pthread_cond_ today, itself in the order's scope but as a DIFFERENT file than this ticket covers. SILENT for this file's purposes: whether a foreign-thread poster's blocking wait becomes a per-lane mailbox wait/wake primitive (map 2.1, 11470-11474, "narrow mailbox wait/wake primitives... one per lane") or is removed in favor of the poster itself owning no wait at all (only R0 waits, on its own lane) is a design question for whoever's stage covers lmx_message_host.c, not answered by lmx_message.lm1's own text.
+lmx_msg_host_drain        -> exists today, stg/l1_baseline/l2src/lmx_message.lm1:968 (lmx_msg_host_drain), but RESTRUCTURED: the vendored copy drains its own separate rt\host_head/host_tail queue (guarded by host_lock); today's version instead calls c.lmx_msg_mail_inbox_take_ingress(root, @ n) -- taking ingress items directly off R0's own inbox, admitted there by today's host_post (below) under mail_lock, not a separate host-level queue. This is the clearest direct instance of "R0's own mailbox admission gives it instead": the vendored copy's whole separate ingress-queue mechanism is already gone from today's architecture, replaced by ordinary mailbox admission onto the root Message itself.
+lmx_msg_recv              -> exists today, stg/l1_baseline/l2src/lmx_message.lm1:1943 (lmx_msg_recv), same role.
+lmx_msg_env_release       -> exists today, stg/l1_baseline/l2src/lmx_message.lm1:2028 (lmx_msg_env_release), same role.
+lmx_msg_runtime_shutdown  -> exists today, stg/l1_baseline/l2src/lmx_message.lm1:886 (lmx_msg_runtime_shutdown), same role.
+lmx_msg_runtime_delete    -> exists today, stg/l1_baseline/l2src/lmx_message.lm1:999 (lmx_msg_runtime_delete), same role; today's internals differ (a linked slot walk freeing m\init/m\path per slot, not the vendored copy's flat tab loop), covered by this branch's own section-2 allocation inventory, not repeated here.
+lmx_msg_host_post         -> exists today, stg/l1_baseline/l2src/lmx_message.lm1:905 (lmx_msg_host_post). This is the named replacement itself (spec 19.29.6 stage-5 (iii), "an internal INGRESS envelope that the root's drain forwards between its turns"): the vendored copy pushes a new node onto its own rt\host_head/host_tail (host_lock-guarded, lmx_message.lm1 vendored:184); today's version pushes the same shape of node directly onto root\inbox (mail_lock-guarded, stg/l1_baseline/l2src/lmx_message.lm1:955-957) -- an ordinary admission into R0's own mailbox, not a runtime-level queue of its own. Today's host_post still ALSO takes host_lock (922, per this branch's own section-1 lock inventory, class: to go) around resolving root and pinning it before the mail_lock push -- that host_lock is not yet removed either, but it guards a much smaller critical section (one pointer resolve) than the vendored copy's host_lock, which spans the whole node build.
+
+--- (4) Lock primitive count in the vendored copy against the census ---
+
+Grepped directly against mixa_manager/vendor/lmx_msg_host_ingress_v0/l2src/lmx_message_host.c
+(production file, matching the census's own citation):
+  host_lock( calls              : 3  (vendored lmx_message.lm1:158, 194, 217)
+  EnterCriticalSection           : 2  (lmx_message_host.c:119, 180)
+  pthread_mutex_lock             : 3  (lmx_message_host.c:121, 185, 221)
+  pthread_cond_ (init/destroy/signal/broadcast/timedwait, all uses) : 6  (lmx_message_host.c:41, 71, 92, 165, 188, 238)
+All four numbers match the census in LOCK_REMOVAL_SPEC_MAP.txt section 2.5
+exactly (3 host_lock calls, 2 Enter, 3 pthread lock, 6 cond). No
+discrepancy found.
+
+--- Summary ---
+
+The vendored copy is a frozen, architecturally older snapshot (a flat
+rt\tab array instead of a linked slot list, a separate host_lock-guarded
+rt\host_head/host_tail ingress queue instead of direct admission into
+R0's own mailbox) pinned solely so mixa_manager/tests/mixa_ingress_host_harness.c,
+run by mixa_manager/run_ingress_harness.ps1, does not track live
+stg/l1_baseline/l2src. Of its 28 exported names, 11 are actually called,
+all from that one harness, 15 call sites. Every one of those 11 has a
+same-named, same-role equivalent in today's live lmx_message.lm1 except
+host_wait, which lives in the live lmx_message_host.c (a sibling file,
+itself still carrying its own host lock today, out of this file's scope)
+-- silent, no map question number assigned since this is a different
+file's design question, not lmx_message.lm1's.
+
+No file was edited, moved, or deleted by this ticket. The deletion of the
+vendor directory and the rewrite of run_ingress_harness.ps1 (and, if
+Mikhail's "one arena, arenas attach on consumption" ruling extends to a
+foreign OS thread's post, of the harness itself) are their own commit
+after the lead's stage on the host forms names it, per the ticket.
