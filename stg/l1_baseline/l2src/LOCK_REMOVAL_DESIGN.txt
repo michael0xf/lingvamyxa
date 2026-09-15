@@ -174,34 +174,90 @@ O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced 
     код если он так себя ведет. Переводите его в L1 и помечайте в комментариях что механизм MEssage временно не
     используется. На самом деле пользовательский L2 может синхронизировать что хочет _но мы пишем в своей филососфии
     Message чтобы потом переводить на L3_".
-    O in the (a) format on that answer:
-    Measured facts: b5's inventory 19a95a26. 109 definitions and 432 uses in the named families, plus
-    lm_native_message_thread_* (48 definitions, 344 uses, no external caller). 58 consumer files outside
-    own.lm2/own_abi.lm2. The translator's emission is in lm2/trans_l1_statement.lm2 (123 matches). lm2/ and
-    stg/l1_baseline/lm2/ copies are byte-identical. The L1 baseline's own.lm1.c has no message-thread symbol.
-    O1. The emission stops. trans_l1_statement.lm2 no longer writes lm_message_thread_new/_begin_turn/_end_turn or
-        lm_own_arena_new_zero(thread, lm_message_thread_owner(thread), ...) into translated programs. Programs build
-        without an arena context until the core serves them.
-        - Red first: the translator's historical case set and its fixtures still contain the boilerplate. A grep of
-          the emitted C over the fixtures' outputs is nonzero today, and the fixtures' expected texts pin it.
-        - Green: that grep at 0, every translator fixture's expected text updated in the same commit, the lm2
-          chain's own gates green (buildCore's core build).
-    O2. The runtime moves to L1 without imitations. The lock-based message-thread runtime in own.lm2 is not L2 by
-        his words. What stays is translated into L1 with a comment at each moved unit: "the Message mechanism is
-        temporarily not used here". Its locks and condition variables go (route_mutex, pool mutex and work_ready,
-        state_mutex, stopped_condition, lm_mutex_*/lm_condition_*, lm_native_mutex_*/condition_*). Which parts
-        stay at all is decided by the consumers left after O3.
-        - Stop condition: if a part cannot run without a lock once O3 is done, that is a lock-needing bug. The stage
-          stops and it goes to him.
-    O3. Deletions. The REST providers' runtime_admit_lmx / set_rest_lmx_provider path, parser.lm2's per-thread
-        registry component, the 13 native C tests of the module and the fixtures that only test it, the
-        buildCore.lmx steps building them, CMake's refresh_own_lm1 target (it breaks configuration once own.lm2
-        moves). Each deleted test is named with the property it checked.
+    CORRECTED the same day, Mikhail verbatim: "самосборка подразумевает что код собирает себя сам, у нас нет стадии
+    "до появления ядра". Эта стадия появляется только при миграции на другую платформу и для этого в gitignore есть
+    несколько исключений для сгенерированных Си ядра, иначе у нас всегда есть предыдущий бинарник". The first
+    rewrite (programs building without an arena until the core serves them) is withdrawn.
+    O in the (a) format on both answers:
+    Measured facts (e88dab64 / cf326822 tree, greps named so each is refutable):
+    F1. What the lm2 chain's emitted program needs from the core that l2trans's emission does not give. l2trans
+        (stg/l1_baseline/l2src/l2trans.lm1 14722-14779) already emits the core's entry: lmx_msg_runtime_new,
+        lmx_msg_create(runtime, 0U, 1U, ...), lmx_msg_run_entry_turn(runtime, addr, l2_program_turn, ctx). It does
+        not allocate from a Message's arena: it emits lm_own_new_zero (defined in stg/l1_baseline/l1src/own.lm1:18,
+        a heap allocator), and `grep -c lm_own_arena l2trans.lm1` is 0. The lm2 chain allocates with
+        lm_own_arena_new_zero(thread, lm_message_thread_owner(thread), size), an arena per message thread. L1's
+        own.lm1 already has the arena allocator without a thread (lm_own_arena_init/destroy/new_zero/copy_bytes/
+        absorb, own.lm1 160-230), but LmxMsg owns no LmOwnArena, and the core has no accessor for the turn Message's
+        arena. So the set is not empty. It has one member, the turn Message's arena (this design's A1, brought
+        forward): each Message owns an LmOwnArena in its record, created at create and destroyed at its release,
+        reached from the running turn through the thread's turn identity (T, lmx_turn_msg).
+    F2. The kept generated C (the gitignore exceptions, .gitignore 70-83: lm1/build/{buildCore,finalize,make,own,
+        parser,printTree,l1trans,rest_lmx_http_client,rest_lmx_http_server,trans}.lm1.c and l1src/p0.lm1.h). By grep:
+        lm1/build/trans.lm1.c has 947 lm_message_thread_ and 366 lm_own_arena_ matches; b5 counts 98 boilerplate
+        matches there and 56 each in rest_lmx_http_client.lm1.c and rest_lmx_http_server.lm1.c. own.lm1.c,
+        parser.lm1.c, l1trans.lm1.c and buildCore.lm1.c have 0 lm_message_thread_.
+    F3. The previous binary of the lm2 chain. CMake builds trans.lm0 from the kept lm1/build/trans.lm1.c, linked
+        with parser.lm1 and own.lm1 (CMakeLists 515-526). refresh_trans_lm1 / refresh_own_lm1 / refresh_parser_lm1
+        run trans.lm0 on lm2/trans.lm2, own.lm2 and parser.lm2 (528-560), and runBuildCore.lm0 runs
+        build/lm0/buildCore.lm0 from LM0_TRUSTED_DIR (730-747). L1_PIN.txt's gen2 l1trans (722AC86E...) is the
+        stg/l1_baseline chain's pin (l2trans and l1trans), not the lm2 chain's. Not yet measured: whether trans.lm0
+        links and regenerates trans.lm1.c to a fixed point on e88dab64. oldchain/README.txt records a link failure
+        when the L1-profile own.lm1 meets message-thread callers.
+    O0. Baseline, before any change: build trans.lm0 from the kept trans.lm1.c, regenerate trans.lm1.c,
+        rest_lmx_http_client.lm1.c and rest_lmx_http_server.lm1.c with it, rebuild and regenerate once more. Both
+        outputs must equal the kept files (the fixed point). A red here is a chain bug found before O, fixed
+        red-first (not lock-related), or a contradiction if it needs a decision.
+    O1. The core's turn arena (A1 brought forward; core lane, the lead): LmxMsg owns an LmOwnArena, created in
+        create_prepare, destroyed at release, and reached through an accessor for the current turn's Message
+        (lmx_message.lm1 and lm2 mirrored; per rule (c) new state goes in L1/L2, and C only reads the thread-local
+        turn identity). Red: a test that allocates in two Messages' turns expects distinct arenas and every block
+        freed at each release (two-cycle balance). Today there is no such arena, so it is red by construction and
+        compiles red on the missing accessor.
+    F4. The self-build drivers today. stg/l1_baseline/gate.ps1 runs buildCore.lm0.bat (gate.ps1 102). buildCore.lm0.sh
+        compiles lm1/build/l1trans.lm1.c (its line 44), which is the L1 chain. The lm2 chain (trans.lm2,
+        trans_l1_statement.lm2 → lm1/build/trans.lm1.c) is regenerated only by CMake's trans.lm0 and its refresh_*
+        targets. The gen0 seed comes through the frozen oldchain (gate.ps1 48). So no gate on integration
+        self-builds the lm2 chain today, and O0 establishes and measures that driver first. The reference is
+        Mikhail's old working version (C:\Nyasha_Planet\lingvamyxa_old_worked_version): buildCore.lm0.sh compiles the
+        committed generated C into build/lm0 (the previous binary), those tools translate the lm2 sources into new
+        C that regenerates the committed files, and the self-build is green when the chain built from the
+        regenerated C reproduces it.
+    Rule for every step (Mikhail, verbatim): "работа над ним требовала разделения на шаги с полной самосборкой --
+    чтобы были промежуточные бинарники". Each step ends with a full self-build: the lm0 tools built from the
+    committed generated C, the chain translated, the C regenerated and committed as the gitignore exceptions, and a
+    second self-build reproducing it byte for byte. An intermediate binary exists after every step. No step may
+    leave the chain unable to build itself.
+    Generated C is never edited by hand (Mikhail, verbatim): "сгенерированные Си мы не правили никогда". The
+    lm1/build/*.lm1.c files and the other gitignore exceptions change only by regeneration. Each step's proof that no
+    file was touched by hand is the regeneration check: from the step's commit, regenerate every committed
+    generated file from the same sources with the same previous binary and compare byte for byte. Any difference
+    refutes the commit.
+    O2. The emission switch in self-building steps (b5), each small enough to self-build, each with its own
+        committed generated C and the fixed point as its green:
+        O2.1 Allocation: trans_l1_statement.lm2 and trans_l1_expr.lm2 emit the arena allocator on the turn
+             Message's arena (O1's accessor) instead of lm_own_arena_new_zero(thread, lm_message_thread_owner(...)),
+             in the ~130 sites and their dynamic variants, with the thread still created by the old scaffold so the
+             program still runs. Full self-build, fixed point.
+        O2.2 Entry: the ~500-line main scaffold (thread, runtime, root attach, turn loop, detach, delete) becomes the
+             core's entry (process runtime, R0's entry turn, the program as R0's turn). Full self-build, fixed
+             point.
+        O2.3 The REST client and server's generated C regenerated on the new emission, their ingress left to O3's
+             deletion. Full self-build, fixed point.
+        - Red for O2 as a whole: grep lm_message_thread_ in the committed lm1/build C is nonzero today (F2), and each
+          step reduces it by the sites it switches (counted before and after).
+        - Green: that grep at 0 in lm1/build after O2.3, and the fixed point after every step.
+    O3. Deletions whole (b5): own.lm2's message-thread runtime and own_abi.lm2's part (lm_message_thread_*,
+        lm_native_message_thread_*, lm_host_thread_*, lm_thread_provider*, lm_mutex_*, lm_condition_*,
+        lm_native_mutex_*/condition_*); the REST providers' runtime_admit_lmx / set_rest_lmx_provider path;
+        parser.lm2's per-thread registry component; the 13 native C tests and the 10 fixtures that call the
+        runtime directly; buildCore.lmx's steps building them; CMake's lm_thread_provider target and the
+        refresh_own_lm1 DEPENDS. Each deleted test is named with the property it checked.
         - Green: grep at 0 across the tree for lm_mutex_, lm_condition_, lm_native_mutex_, lm_native_condition_ and
-          lm_message_thread_ (O's proof, the coordinator's ruling), and the lm2 chain's builds green.
-    Owner of the lm2 chain for O: proposed b5 (lingvamyxa-b5), who wrote the inventory and works on the L2 parser
-    port. The coordinator confirms or names another session. The landing is the lead's, with an allowlist of lm2/,
-    stg/l1_baseline/lm2/, tests/, CMakeLists.txt, and nothing in l2src.
+          lm_message_thread_; the chain self-builds twice to the fixed point.
+    Stop conditions: a part that cannot work without a lock, or a contradiction, stops the stage for Mikhail.
+    Owner: b5 for O0, O2 and O3, confirmed by the coordinator; the lead for O1 (the core). Landing: the lead's.
+    O0/O2/O3 allowlist: lm2/, stg/l1_baseline/lm2/, lm1/build/, tests/, CMakeLists.txt. O1's allowlist:
+    stg/l1_baseline/l2src/lmx_message.lm1, lmx_message.lm2 and the new test.
     Inventory, the stage's first line: who builds and uses it, by grep on cf326822.
     - lm2/own.lm2 (and its stg/l1_baseline/lm2 copy): the externals lm_message_thread_* (43: runtime_new/delete,
       pool_new/pump/delete/request_stop, new/start/join/destroy, send_lmx, begin_turn/end_turn, component_*,
