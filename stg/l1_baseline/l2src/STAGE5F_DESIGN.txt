@@ -14,8 +14,26 @@ from inside any turn with nothing touched. Q2 (a) a retained failed orphan is re
 Q3 (a) runtime_delete is R0's maintenance with the drain's authority, stepping its children until the tree settles.
 Q4 the mapped child's closing flag ends its turn on its worker; the worker is joined before the runtime is freed.
 
-SPEC: decision 17 (rules 1 and 3), 19.29.6 stage-5 clarifications, 19.29.8 -- to be quoted from origin/main before
-this design is final (not yet quoted in this draft).
+SPEC (quoted from Lingvamyxa_spec.txt on origin/main bf647d94)
+- 19.29.6, consequence (iii) (12593-12604): "a descendant still running at release time is closed by the chain (its
+  closing flag set, as by any stop) and becomes an orphan: a successful orphan is settled at its end-turn and
+  reclaimed, arena and slot, by the settling lane at the root's next maintenance point ... a failed orphan keeps its
+  handoff-safe arena under the separate parent-loss/orphan-retention timeout of 19.29.8 and self-reclaims when it
+  expires (an orphan is settled only by that policy, never by its supervising root's ordinary settle step ...)".
+- 19.29.6, the children of a stopped Message (12609-12617): "its stop requests their close; a child whose inbox is
+  empty is closed by the maintenance without a turn, and a child on its own context runs its closing turn there; a
+  child with pending input under a host-mapped stopped parent waits until the parent is disposed, when the chain
+  re-roots it under the root Message, whose step runs its closing turn like any child's".
+- 19.29.6 (12617-12621): "An unbound closing Message has no handler and no lane, so its close is end-turn bookkeeping
+  written by the maintaining lane (the host's drive today, the root's maintenance later), not a step, and it leaves the
+  Message stopped and handoff-safe so that its parent's dispose or adopt can settle it".
+- 19.29.8 (13246-13248): "Each closing Message settles only its direct children: successful own histories can be
+  reclaimed; failed arenas are adopted before its own failed arena moves upward."
+- 19.29.8 (13254-13259): "If that parent endpoint is unavailable, retain the handoff-safe failed arena under a
+  separate parent-loss/orphan-retention timeout before self-reclamation. ... Timeout never grants permission to free
+  memory still used by native code. Settling is lifecycle work, not a busy wait or a promise of bounded cleanup for an
+  uninterruptible foreign call. Such an unresolved branch stays unreclaimed."
+- "Decision 17" as a phrase does not occur in the spec text; the rules quoted above are its spec form.
 
 MEASURED (integration 402b2919 unless stated)
 - The acceptance, run by 6f on 402b2919: lmx_model_runtime_close_5f_selftest "45 checks, 4 failures", red twice each
@@ -87,6 +105,42 @@ ACCEPTANCE AND REDS
 - Grep: runtime_shutdown, host_wait, host_shutdown, host_is_shutdown and the lifecycle host branches at 0 (fields on any
   receiver, tripwired), and every runner in the tree that builds those tests run, not only the defaults.
 - run_gates N of N; run_port_message (exec.c's selftest); run_model_scenario36 with the acceptance in its defaults.
+
+RULINGS (6f on 18f9ba54, 2026-09-15): design 1-5 approved as written; every question takes the recommendation.
+- Q1 (a): the UI-bound child is unbound and closed by exec_unbound_close, no handler runs, the pending request goes with
+  the lane's mailbox; the UI child's turn adapter is the R0 loop step's business, after (f).
+- Q2 (a): block on the bind waits, no timeout (19.29.8: a timeout never grants permission to free memory still used by
+  native code; such a branch stays unreclaimed).
+- Q3 (a): R0's mailbox refuses admissions with STOPPED under its own mail lock before request_children_close; a post
+  after runtime_delete returns is the embedder's use of a freed handle, said in runtime_delete's header, guarded by
+  nothing.
+- Q4 (a): runtime_shutdown deleted (decision 12), its two checks migrated.
+- Q5 (a): lmx_msg_r0_lane (holding_turn(R0) || bootstrap thread && holding_any == 0), named once and used by every call
+  of design 5.
+- Q6: confirmed; the lifecycle calls of design 4 are the only movers.
+Added before final (6f): the close request must wake an idle mapped child, or Q2's wait never ends. Read on 402b2919:
+lmx_msg_recv never blocks (lmx_message.lm1 1943-1953: an empty inbox returns LMX_MSG_EMPTY at once), so the idle case
+is a mapped child whose turn has ended, waiting on its context worker for readiness; request_children_close's
+exec_ready must wake that worker so the closing turn runs (or the child is closed). Probe on 402b2919 (proposed to 6f
+in place of the recv-shaped one): C mapped, its turn ends with an empty inbox, its worker idles; runtime_delete must
+wake it and return, under a watchdog. If the wake is missing, the fix is in request_children_close's ready and the
+probe is its red, named in MEASURED. (Not yet measured.)
+Conditions: lm1 and lm2 mirrored in one commit for every lmx_message change; each of the 48 migrated lifecycle sites
+keeps its check label and measured count (the executor selftest's 36 included), and every migrated test's runner runs
+on the landing; both acceptance tests join run_model_scenario36's defaults in the (f) commit; the tripwired grep at 0
+for runtime_shutdown, host_wait, host_shutdown, host_is_shutdown and the lifecycle host branches on any receiver.
+Q2 falsifiers for the (f) commit's note (not the acceptance): a mapped child whose turn never reads its closing flag
+holds runtime_delete (a 3 s watchdog reports "held"); the same probe reading the flag returns.
+Landing: after the chain (slots) and the response-file branch, on its own integration merge with run_gates,
+run_port_message and scenario36 cold.
+Open, not ruled: Q7 below.
+
+Q7. 19.29.6 (iii) says a failed orphan "self-reclaims when it expires (an orphan is settled only by that policy, never
+    by its supervising root's ordinary settle step ...)"; 6f's acceptance Q2 (a) reclaims it at R0's close regardless of
+    its deadline. R0's close is not an ordinary settle step and no parent endpoint can return once the runtime closes,
+    but the spec does not say so. (a) Record a clarification in 19.29.6 (iii) and 19.29.8: at the runtime's close the
+    root's close reclaims its retained failed orphans that have no native users. (b) Leave the spec silent.
+    Recommend (a).
 
 QUESTIONS (each to be measured before it is claimed)
 Q1. A UI-bound child at R0's close (U, with a request pending in the UI lane's mailbox; nothing drains the UI lane
