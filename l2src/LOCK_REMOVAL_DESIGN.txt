@@ -1407,6 +1407,16 @@ S5. The runtime-level lists (L5). Waits on 5.1.
       covers only the five core files. port_slots was green at 3e6fc02a.
       Fix: drop the line; the fixture's root_seq plays no part in the slots checks. First, every receiver of the
       removed names is grepped tree-wide and run_port_msg_slots.ps1 is run locally.
+    - Fix and second landing attempt (approved by the coordinator without a re-measure: one test line, probe
+      unaffected):
+      - The slots selftest's line 59 sets other\next_addr instead, keeping the fixture's unrelated nonzero field.
+        It is the same line that stage 5 (e)'s clock deletion hit.
+      - Receiver-blind grep on the working tree (l2src, mixa_manager outside vendor/, docs excluded): 0 hits for
+        the removed names on any receiver, and 0 plain next_addr increments.
+      - run_port_msg_slots run locally: PASS, 278 checks, 0 failures. Probe on the tree: 0/0/0/0.
+      - Fix d6/lock-s5 1f5b0c82. land_s5.sh's allowlist adds tests/lmx_msg_slots_selftest.lm1.
+      - Merge 30d88a43 on 3e6fc02a (6 M): run_self_build 8 of 8, tag selfbuild/30d88a43 and log d6e00998 on
+        d6/lock-s5-landing-30d88a43; the union base continues.
     - UAF kit for S5's green, rebuilt in scratch (never committed):
       - q_alloc.c: a poisoning quarantine allocator (0xDD, 8192 blocks, 256 MB, free-site frames, eviction and
         atexit checks, double free);
