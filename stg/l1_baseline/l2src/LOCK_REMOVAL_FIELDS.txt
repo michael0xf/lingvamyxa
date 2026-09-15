@@ -105,7 +105,7 @@ LmxMsgRuntime.root | h:212 | the root list | R0 (R0's children, in R0's arena) |
 LmxMsgRuntime.slots | h:213 | every slot | DEL | ruled (map 5.7) | S5
 LmxMsgRuntime.n | h:214 | slot count | DEL | ruled (map 5.7) | S5
 LmxMsgRuntime.transport | h:215 | host transport queue | MBOX (host posts are admissions into R0's mailbox); the queue DEL | proposed | S5/Y3
-LmxMsgRuntime.transport_tail | h:216 | its tail | same | proposed | S5/Y3
+LmxMsgRuntime.transport_tail | h:216 | its tail | MBOX (host posts are admissions into R0's mailbox); the queue DEL | proposed | S5/Y3
 LmxMsgRuntime.host_sync | h:217 | the host lock | DEL | ruled (census 2.6; no lock but the mailbox's) | S6
 LmxMsgRuntime.exec | h:218 | the executor pointer | DEL | ruled (map 5.7) | S5/S6
 LmxMsgRuntime.next_addr | h:219 | address counter | R0 (R0's children's addresses) | ruled (map 5.7) | S5
