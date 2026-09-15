@@ -1,7 +1,7 @@
 # Narrow, manager-owned evidence gate for the mixa_selection L2 port
 # attempt (ticket 20260913-075100). Builds the CURRENT L2 frontend
-# (stg/l1_baseline/l2src/l2trans.lm1) fresh from the pinned, read-only
-# stable L1 translator -- touching nothing under stg/l1_baseline itself,
+# (l2src/l2trans.lm1) fresh from the pinned, read-only
+# stable L1 translator -- touching nothing under l1src or l2src itself,
 # only reading it -- then translates this ticket's own minimal manager-
 # owned reproduction (mixa_selection_l2_probe.h.lm1/.lm2) and records the
 # EXACT diagnostic. This is deliberately NOT a parity test: the real
@@ -14,7 +14,7 @@
 #
 # l2trans.exe itself is NOT a stable, hash-pinned artifact (unlike
 # l1trans.exe): it is rebuilt from l2trans.lm1's own CURRENT source on
-# every run of this script, exactly like stg/l1_baseline/l2src/
+# every run of this script, exactly like l2src/
 # run_l2trans.ps1's own established pattern -- its correctness is only as
 # good as l2trans.lm1's own state at build time, which is under active,
 # frequent development by the core team. This script records l2trans.
@@ -24,7 +24,7 @@ param()
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root

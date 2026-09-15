@@ -13,12 +13,12 @@ include: "<stdlib.h>" "<string.h>"
 # allocation, do not alter the L1 oracle (mixa_selection.h/.lm1
 # themselves are untouched by this ticket). This file is a pure library
 # of leaf functions (no main), so per the accepted L2 style already used
-# by stg/l1_baseline/l2src/tests/unit_ptr_pass.lm2, it is not wrapped in
+# by l2src/tests/unit_ptr_pass.lm2, it is not wrapped in
 # `L2: ... end: L2`.
 #
 # Per ticket 20260913-075100's own measured, reproduced finding
 # (mixa_selection_l2_port.txt), the CURRENT L2 frontend
-# (stg/l1_baseline/l2src/l2trans.lm1) rejects any `@:`/`const: @(...)`
+# (l2src/l2trans.lm1) rejects any `@:`/`const: @(...)`
 # use of a manager-owned custom struct type (MixaSelection, MixaSelRev)
 # with "unknown foreign type" -- a closed, hardcoded type-name allowlist,
 # not a syntax defect in this file. Every function from

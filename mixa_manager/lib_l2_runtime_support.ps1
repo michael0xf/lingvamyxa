@@ -1,11 +1,11 @@
 # The single-source-of-truth pinned L1 hash (lingvamyxa-d6's amendment,
 # ticket following lingvamyxa-e2's review, 20260914-various): both the
-# core lane (21 runners under stg/l1_baseline/l2src) and this lane's 52
+# core lane (the runners under l2src) and this lane's 52
 # parity runners used to each paste the same 64-hex literal separately.
-# Now both read stg/l1_baseline/l2src/L1_PIN.txt, one line, nothing
+# Now both read l2src/L1_PIN.txt, one line, nothing
 # else -- a pin promotion is a one-line change to that file instead of
 # 73 separate edits. $L1Root is each runner's own already-resolved
-# stg\l1_baseline path.
+# repo root.
 function Get-L1Pin {
     param(
         [Parameter(Mandatory=$true)][string]$L1Root
@@ -53,12 +53,12 @@ function Assert-PinnedL1Translator {
 # the header/object generation block copy-pasted WITHOUT the
 # $env:L2_RUNTIME_ROOT line next to it -- silently spelling every
 # runtime #include one path shape away from what the generated .c
-# actually expects, "l2src/..." instead of "stg/l1_baseline/l2src/...",
+# actually expected while the runtime lived in a slice below the root,
 # exactly the failure ticket 20260914-003000 reported for fm_copy):
 #   1. $env:L2_RUNTIME_ROOT, set on the l2trans invocation that
 #      generates the module's own translated .lm1 -- this is what makes
 #      l2trans spell its generated #include lines with the
-#      "stg/l1_baseline/l2src/..." shape in the first place, so it MUST
+#      "l2src/..." shape in the first place, so it MUST
 #      be set before that translation call, not just before compiling
 #      afterward. Callers are responsible for setting it before their
 #      own l2trans invocation; this file only documents that ordering
@@ -67,7 +67,7 @@ function Assert-PinnedL1Translator {
 #   2. The generated L2 runtime headers (18 lmx_* header units,
 #      translated from their real .h.lm1 sources under cwd=$L1Root, the
 #      same cwd reasoning as the module headers themselves -- these
-#      cross-import each other with paths relative to stg/l1_baseline).
+#      cross-import each other with paths relative to the repo root).
 #   3. The generated L2 runtime object set (the same 19 modules plus
 #      the two plain, hand-written C files run_graph_abi.ps1 itself
 #      builds as "message support" objects) -- the real graph/Message
@@ -77,7 +77,7 @@ function Assert-PinnedL1Translator {
 # Returns a hashtable: @{ HeaderRoot = <path>; ObjList = <string> }.
 # HeaderRoot is the -I path resolving the generated runtime headers
 # (plus their own sibling-header and real-lmx.h resolution -- add BOTH
-# "$HeaderRoot" and "$HeaderRoot\stg\l1_baseline" and "$L1Root" as -I
+# "$HeaderRoot" and "$L1Root" as -I
 # flags on the module's own L2-side compile, exactly as the existing
 # runners already do). ObjList is a ready-to-splice, already-quoted
 # string of every runtime object path, for the final L2-side link line.
@@ -90,7 +90,7 @@ function Add-L2RuntimeSupport {
     )
 
     $L2RuntimeHeaderRoot = Join-Path $RunDir "l2rt_headers"
-    $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
+    $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "l2src"
     New-Item -ItemType Directory -Force -Path $L2RuntimeHeaderTree | Out-Null
     $L2RuntimeNames = @('lmx_array_owned','lmx_array_ref_owned','lmx_branch_owned','lmx_chars_owned','lmx_graph_copy_owned','lmx_message_graph_copy','lmx_msg_blocks','lmx_msg_history_owned','lmx_msg_liveness','lmx_msg_mail_chain','lmx_msg_path_storage','lmx_msg_roots_stale','lmx_msg_sched_ready','lmx_msg_slots','lmx_msg_storage','lmx_msg_visit','lmx_owned_ranges','lmx_value_owned')
 
@@ -123,7 +123,7 @@ function Add-L2RuntimeSupport {
             $rtObj = Join-Path $L2RuntimeObjDir "$rtName.o"
             $rtCLog1 = Join-Path $RunDir "l2rtobj_${rtName}_compile_stdout.log"
             $rtCLog2 = Join-Path $RunDir "l2rtobj_${rtName}_compile_stderr.log"
-            $rtCArgs = "-std=c99 -Wall -Wextra -Wpedantic -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$rtSrcC`" -o `"$rtObj`""
+            $rtCArgs = "-std=c99 -Wall -Wextra -Wpedantic -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -I `"$L2RuntimeHeaderRoot`" -I `"$L1Root`" -c `"$rtSrcC`" -o `"$rtObj`""
             $rtCExit = & $InvokeCmd "gcc" $rtCArgs $rtCLog1 $rtCLog2
             if ($rtCExit -ne 0) { Pop-Location; Get-Content $rtCLog2; throw "L2 runtime module $rtName compile failed" }
             $L2RuntimeObjs += $rtObj
@@ -132,7 +132,7 @@ function Add-L2RuntimeSupport {
             $plainObj = Join-Path $L2RuntimeObjDir "$plainName.o"
             $plainCLog1 = Join-Path $RunDir "l2rtobj_${plainName}_compile_stdout.log"
             $plainCLog2 = Join-Path $RunDir "l2rtobj_${plainName}_compile_stderr.log"
-            $plainCArgs = "-std=c99 -Wall -Wextra -Wpedantic -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"l2src\$plainName.c`" -o `"$plainObj`""
+            $plainCArgs = "-std=c99 -Wall -Wextra -Wpedantic -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -I `"$L2RuntimeHeaderRoot`" -I `"$L1Root`" -c `"l2src\$plainName.c`" -o `"$plainObj`""
             $plainCExit = & $InvokeCmd "gcc" $plainCArgs $plainCLog1 $plainCLog2
             if ($plainCExit -ne 0) { Pop-Location; Get-Content $plainCLog2; throw "L2 runtime support $plainName compile failed" }
             $L2RuntimeObjs += $plainObj

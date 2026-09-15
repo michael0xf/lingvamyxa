@@ -25,7 +25,7 @@ include: "mixa_manager/mixa_overlay.h" "<string.h>"
 # indexing via (py*width+px)*4) and the real src-over alpha blend
 # arithmetic preserved exactly. Pure library of leaf functions (no
 # main), matching the accepted L2 style already used by
-# stg/l1_baseline/l2src/tests/unit_ptr_pass.lm2.
+# l2src/tests/unit_ptr_pass.lm2.
 #
 # Per Codex's own ticket: the frontend currently on main does not yet
 # have the integrated support for custom struct pointers/casts/native

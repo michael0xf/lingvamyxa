@@ -1,8 +1,0 @@
-immutable:
-    int: g 11
-
-external:
-    fn: main () int
-        return: g != 11
-    end: main
-end: external

@@ -215,27 +215,18 @@ def main():
     run("mp3_candidate", [candidate, "--unit-root", root, mp3,
                           output / "mp3.c"])
 
-    # Compile the same targeted change in the baseline source mirror.
-    baseline = root / "stg/l1_baseline"
-    baseline_c = output / "baseline_l1trans.c"
-    baseline_exe = output / "baseline_l1trans.exe"
-    run("baseline_translate", [seed, "l1src/l1trans.lm1", baseline_c], cwd=baseline)
-    run("baseline_cc", [cc, "-I", baseline, "-I", baseline / "lm1/build", *flags,
-                        "-o", baseline_exe, baseline_c], cwd=baseline)
-    run("baseline_wide65", [baseline_exe, fixtures / "wide65.lm1",
-                           output / "baseline_wide65.c"], cwd=baseline)
+    # ONE ROOT: the baseline source mirror (stg/l1_baseline) is gone; the root's
+    # own translate above is the only copy.
     assert sha(seed) == seed_hash, "seed compiler changed"
     manifest = {"seed": str(seed), "seed_sha256": seed_hash,
                 "candidate": str(candidate), "candidate_sha256": sha(candidate),
                 "source_sha256": sha(source),
-                "baseline_source_sha256": sha(baseline / "l1src/l1trans.lm1"),
                 "generated_c_sha256": sha(generated),
                 "long_paths_driver_sha256": sha(driver),
                 "runner_sha256": sha(Path(__file__)),
                 "memory_test_sha256": sha(root / "tests/l1/import_capacity_memory.c"),
                 "headers_sha256": {str(p.relative_to(root)): sha(p) for p in
-                    (root / "lm1/build/l1src/p0.lm1.h",
-                     baseline / "lm1/build/l1src/p0.lm1.h")},
+                    (root / "lm1/build/l1src/p0.lm1.h",)},
                 "cc": cc, "cc_sha256": sha(Path(cc)),
                 "checks": len(records),
                 "limitations": [

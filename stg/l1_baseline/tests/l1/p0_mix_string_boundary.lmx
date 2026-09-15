@@ -1,7 +1,0 @@
-root:
-    {meta: "broken { stays in string" after: ok}
-    balanced: "keep {mark: nested} exact"
-    quoted_close: "keep {text: \"}\" tail} exact"
-    unclosed: "keep {unclosed exact"
-    after: survives
-end: root

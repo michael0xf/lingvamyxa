@@ -30,13 +30,13 @@
 #        only on an exact match, else PARITY_FAILURE (exit 1).
 #
 # mixa_backend_win32.h/.lm1 are the parity oracle and are never
-# touched. Nothing under stg/l1_baseline is modified, only read. Every
+# touched. Nothing under l1src or l2src is modified, only read. Every
 # input is built fresh in a unique run directory -- no stale objects.
 param()
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root
@@ -204,20 +204,12 @@ if ($BwExit -ne 0 -and $KnownBarrier) {
         $Verdict = "UNEXPECTED_FAILURE"
         $ExitCode = 1
     } else {
-        # Generated L2 code spells its runtime `#include`s using the same
-        # root-relative path L2_RUNTIME_ROOT gave the predef (Fable's own
-        # run_graph_abi.ps1 shape, ticket 20260913-200800).
-        $L2RuntimeHeaderRoot = Join-Path $RunDir "l2rt_headers"
-        $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
-        New-Item -ItemType Directory -Force -Path $L2RuntimeHeaderTree | Out-Null
-        $L2RuntimeNames = @('lmx_array_owned','lmx_array_ref_owned','lmx_branch_owned','lmx_chars_owned','lmx_graph_copy_owned','lmx_message_graph_copy','lmx_msg_blocks','lmx_msg_history_owned','lmx_msg_liveness','lmx_msg_mail_chain','lmx_msg_path_storage','lmx_msg_roots_stale','lmx_msg_sched_ready','lmx_msg_slots','lmx_msg_storage','lmx_msg_visit','lmx_owned_ranges','lmx_value_owned')
-        foreach ($rtName in $L2RuntimeNames) {
-            $rtOut = Join-Path $L2RuntimeHeaderTree "$rtName.lm1.h"
-            $rtLog1 = Join-Path $RunDir "l2rt_${rtName}_stdout.log"
-            $rtLog2 = Join-Path $RunDir "l2rt_${rtName}_stderr.log"
-            $rtExit = Invoke-Cmd $L1Trans "stg\l1_baseline\l2src\$rtName.h.lm1 `"$rtOut`"" $rtLog1 $rtLog2
-            if ($rtExit -ne 0) { Get-Content $rtLog2; throw "L2 runtime header $rtName translation failed" }
-        }
+        # The generated L2 runtime headers come from the shared helper, as in every other
+        # run_mixa_*_l2_parity runner (ONE ROOT, 6f's ruling on b5's list: one definition,
+        # no hand-kept copy). Its HeaderRoot resolves the generated code's l2src/ includes.
+        $InvokeCmdRef = { param($e, $a, $o, $er) Invoke-Cmd $e $a $o $er }
+        $L2Rt = Add-L2RuntimeSupport -L1Trans $L1Trans -L1Root $L1Root -RunDir $RunDir -InvokeCmd $InvokeCmdRef
+        $L2RuntimeHeaderRoot = $L2Rt.HeaderRoot
         $l2BwO = Join-Path $RunDir "mixa_backend_win32_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2bw_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2bw_compile_stderr.log"

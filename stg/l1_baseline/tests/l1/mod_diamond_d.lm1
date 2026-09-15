@@ -1,3 +1,0 @@
-fn: dd () int
-    return: 4
-end: dd

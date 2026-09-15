@@ -1,6 +1,6 @@
 # Real nine-scenario L1-vs-L2 parity gate for mixa_selection (ticket
 # 20260913-083100, continuing 081200/075100). Builds the CURRENT L2
-# frontend (stg/l1_baseline/l2src/l2trans.lm1) fresh from the pinned,
+# frontend (l2src/l2trans.lm1) fresh from the pinned,
 # read-only stable L1 translator, then:
 #
 #   1. ALWAYS builds and runs the ORACLE-side parity harness (the real
@@ -27,13 +27,13 @@
 #        run -> PARITY_FAILURE (exit 1).
 #
 # mixa_selection.h/mixa_selection.lm1 are the parity oracle and are
-# never touched by this script. Nothing under stg/l1_baseline is
+# never touched by this script. Nothing under l1src or l2src is
 # modified, only read.
 param()
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root

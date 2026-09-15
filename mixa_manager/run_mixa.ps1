@@ -1,6 +1,6 @@
 # Mixa Manager: TextRect + OverlayRect/composite + headless backend + pump + selection + draw + tiles/buttons + Win32 backend selftests.
 # Build root is the repository root (parent of mixa_manager).
-# Translator is the STABLE L1 under stg\l1_baseline, not the live tree.
+# Translator is the pinned L1 at build\l1trans\gen2, not a live rebuild.
 #
 # Profiles:
 #   default on Windows_NT: headless + Win32 (ctors_win32), full suite
@@ -9,18 +9,18 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
-$trans = "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+$trans = "build\l1trans\gen2\l1trans.exe"
 if ($env:MIXA_L1TRANS -and $env:MIXA_L1TRANS.Trim().Length -gt 0) {
     $trans = $env:MIXA_L1TRANS.Trim()
 }
 if (-not (Test-Path -LiteralPath $trans)) {
-    throw "missing stable L1 translator: $trans (produce via stg\l1_baseline\gate.ps1)"
+    throw "missing stable L1 translator: $trans (produce via gate.ps1)"
 }
 
 # Record what produced this run. TWO SEPARATE IDENTITIES, and no conclusion
 # drawn from them - the link between them is not something this script can
 # establish.
-$trackedC = "stg/l1_baseline/lm1/build/l1trans.lm1.c"
+$trackedC = "lm1/build/l1trans.lm1.c"
 "translator: $trans"
 "translator binary sha256: " + (Get-FileHash -LiteralPath $trans -Algorithm SHA256).Hash
 "translator binary mtime:  " + (Get-Item -LiteralPath $trans).LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')

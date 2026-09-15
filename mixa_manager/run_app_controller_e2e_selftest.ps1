@@ -19,7 +19,7 @@ $Reason = ""
 $Compiler = ""
 $ActualCompilerHash = ""
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
-$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+$CompilerHash = Get-L1Pin -L1Root $RepoRoot
 $RunDir = ""
 $LogDir = ""
 $TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_app_controller_e2e_selftest.lm1"
@@ -79,7 +79,7 @@ try {
     }
     New-Item -ItemType Directory -Path $FixtureDir -Force | Out-Null
 
-    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+    $Compiler = Join-Path $RepoRoot "build\l1trans\gen2\l1trans.exe"
     if (-not (Test-Path $Compiler)) { $Reason = "Compiler not found: $Compiler"; throw $Reason }
     $ActualCompilerHash = (Get-FileHash -LiteralPath $Compiler -Algorithm SHA256).Hash
     if ($ActualCompilerHash -ne $CompilerHash) {

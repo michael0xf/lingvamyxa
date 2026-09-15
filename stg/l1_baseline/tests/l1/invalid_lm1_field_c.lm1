@@ -1,5 +1,0 @@
-external:
-    fn: main () int
-        return: foo\C
-    end: main
-end: external

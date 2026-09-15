@@ -19,7 +19,7 @@
 #        (exit 0) only on an exact match, else PARITY_FAILURE (exit 1).
 #
 # The module's own real .lm1/.h.lm1 files are the parity oracle and
-# are never touched. Nothing under stg/l1_baseline is modified, only
+# are never touched. Nothing under l1src or l2src is modified, only
 # read. Every input is built fresh in a unique run directory.
 param(
     [Parameter(Mandatory=$true)][string]$Module
@@ -27,7 +27,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 . (Join-Path $PSScriptRoot "l2_parity_module_table.ps1")
@@ -281,7 +281,7 @@ $OracleTrace = Get-Content -LiteralPath $oracleRunOut -Raw
 # L2_RUNTIME_ROOT must be set before THIS call (the .lm2 -> .lm1
 # translation, l2trans.exe itself), not just before the later .lm1 ->
 # C step -- it's what makes l2trans spell its generated #include lines
-# "stg/l1_baseline/l2src/..." instead of "l2src/...". Getting this
+# the way the runtime headers are laid out ("l2src/..."). Getting this
 # wrong reproduces the exact original bug this ticket's shared helper
 # exists to prevent (see lib_l2_runtime_support.ps1's own header
 # comment) -- caught by lingvamyxa-d6 running event_fifo/cmdline/pump
@@ -295,7 +295,7 @@ $OracleTrace = Get-Content -LiteralPath $oracleRunOut -Raw
 # before translation is an equally valid fix to modeling their own
 # cwd separately, and it is a no-op for any module whose generated
 # code never references an l2src/lmx_* import in the first place.
-$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+$env:L2_RUNTIME_ROOT = "l2src/"
 Push-Location $RepoRoot
 $modSrc = "mixa_manager\mixa_${Module}.lm2"
 $modOut = Join-Path $RunDir "${Module}_l2.lm1"
@@ -342,7 +342,7 @@ if ($ModExit -ne 0 -and $NoMain) {
     $l2ModC = Join-Path $RunDir "${Module}_l2.c"
     $l2ccLog1 = Join-Path $RunDir "l2mod_trans_stdout.log"
     $l2ccLog2 = Join-Path $RunDir "l2mod_trans_stderr.log"
-    if ($Cfg.RuntimeTrio) { $env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/" }
+    if ($Cfg.RuntimeTrio) { $env:L2_RUNTIME_ROOT = "l2src/" }
     $l2ccExit = Invoke-Cmd $L1Trans "`"$modOut`" `"$l2ModC`"" $l2ccLog1 $l2ccLog2
     Pop-Location
     if ($l2ccExit -ne 0) {
@@ -355,7 +355,7 @@ if ($ModExit -ne 0 -and $NoMain) {
         $l2occLog2 = Join-Path $RunDir "l2mod_compile_stderr.log"
         if ($Cfg.RuntimeTrio) {
             $L2Rt = Add-L2RuntimeSupport -L1Trans $L1Trans -L1Root $L1Root -RunDir $RunDir -InvokeCmd $InvokeCmdRef
-            $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`"$ExtraCompileFlags -c `"$l2ModC`" -o `"$l2ModO`"" $l2occLog1 $l2occLog2
+            $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$L1Root`"$ExtraCompileFlags -c `"$l2ModC`" -o `"$l2ModO`"" $l2occLog1 $l2occLog2
         } else {
             $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`"$ExtraCompileFlags -c `"$l2ModC`" -o `"$l2ModO`"" $l2occLog1 $l2occLog2
         }

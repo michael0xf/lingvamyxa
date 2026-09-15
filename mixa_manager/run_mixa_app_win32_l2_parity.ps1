@@ -17,14 +17,14 @@
 #        only on an exact match, else PARITY_FAILURE (exit 1).
 #
 # mixa_app_win32.lm1, mixa_app_win32.h.lm1, and mixa_app.h.lm1 are the
-# parity oracle and are never touched. Nothing under stg/l1_baseline is
+# parity oracle and are never touched. Nothing under l1src or l2src is
 # modified, only read. Every input is built fresh in a unique run
 # directory -- no stale objects.
 param()
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root
@@ -230,7 +230,7 @@ $awSrc = "mixa_manager\mixa_app_win32.lm2"
 $awOut = Join-Path $RunDir "mixa_app_win32_l2.lm1"
 $awStdout = Join-Path $RunDir "aw_stdout.log"
 $awStderr = Join-Path $RunDir "aw_stderr.log"
-$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+$env:L2_RUNTIME_ROOT = "l2src/"
 $AwExit = Invoke-Cmd "`"$l2exe`"" "`"$awSrc`" `"$awOut`"" $awStdout $awStderr
 Pop-Location
 
@@ -268,7 +268,7 @@ if ($AwExit -ne 0 -and $KnownBarrier) {
         $l2AwO = Join-Path $RunDir "mixa_app_win32_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2aw_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2aw_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2AwC`" -o `"$l2AwO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$L1Root`" -c `"$l2AwC`" -o `"$l2AwO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"

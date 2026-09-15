@@ -107,7 +107,7 @@ Astra Extra High написал описание ядра (модель), и **�
 | `CORE_TEAM_PLAN_20260912.md` | Журнал Codex: чекпоинты, границы владения, «модель, которую должен сохранять каждый этап» | Последняя запись 03:15 13.09 — с тех пор ~10 часов работы не отражены; раздел «Model each stage must preserve» и «Non-overlapping stages» по-прежнему верны как правила |
 | `work_chat/CORE_CONTINUATION_20260911.md` | Живое продолжение Codex | Последняя запись 05:00 13.09; устарело |
 | `FABLE_5_1_CORE_HANDOFF_20260912.md` | Роль/ограничения Fable; «Settled constraints to keep together» | Ограничения верны; статусы устарели |
-| `stg/l1_baseline/l2src/FABLE_GRAPH_ABI.txt` | Мои проектные заметки по каждому срезу frontend/graph ABI, включая пять портов runtime-модулей и что показала библиотечная эмиссия | Актуально до `868d85db` на `fable/merge-on-callable` |
+| `l2src/FABLE_GRAPH_ABI.txt` | Мои проектные заметки по каждому срезу frontend/graph ABI, включая пять портов runtime-модулей и что показала библиотечная эмиссия | Актуально до `868d85db` на `fable/merge-on-callable` |
 | `work_chat/TICKET_RULES_EN.md` | Статусы WORKING/BLOCKED/DONE/STAGE DONE; что такое приёмка; пропорциональная верификация | Действует для всех |
 | `work_chat/claude/PROTOCOL.txt`, `ASSIGNMENT.txt`, `INBOX_WATCHERS.md`, `WAKING_CLAUDE.txt`, `OPENCODE_HANDOFF_20260911.md` | Протокол канала Claude, его назначение, его ватчер, как его будить, его бэклог приложения | Действуют; в них Codex назван монитором — теперь это этот чат |
 | `mixa_manager/PORT_OF_CLEARSHELL.txt`, `FIRST_VERSION.txt`, `CODING_RULES.txt`, `STATUS.txt`, `*_l2_port.txt` | Рамка приложения, первая версия, правила кода L1 в приложении, заметки Claude по каждому порту | STATUS устарел (10.09); `*_l2_port.txt` — свежие и точные |
@@ -148,7 +148,7 @@ Astra Extra High написал описание ядра (модель), и **�
   весь core только на codex), `tests/l1/*`, `mixa_manager/tests/*`,
   `mixa_manager/vendor/*`.
 
-### 4.3 Компилятор L2 (`stg/l1_baseline/l2src/l2trans.lm1`)
+### 4.3 Компилятор L2 (`l2src/l2trans.lm1`)
 
 - На **main** — старый. Поэтому каждый порт Claude на main упирается в один и
   тот же барьер: `l2trans error: … unknown foreign type` на первом формальном
@@ -174,11 +174,11 @@ Astra Extra High написал описание ядра (модель), и **�
 
 ### 4.4 Транслятор L1 и «стабильный компилятор»
 
-- Пин: `stg/l1_baseline/build/l1trans/gen2/l1trans.exe`, SHA256
+- Пин: `build/l1trans/gen2/l1trans.exe`, SHA256
   `0B3D85B36E72A5935CA43D76B71B8CBBB060AF041CBB6FAE805796595810B2A2`,
   продвинут 2026-09-15 с `722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466` — обновлением среза, привязка к исходникам в L1_PIN_SOURCE.txt
   по §6.2 (неподвижная точка gen2 C == gen3 C; INTEGRATION_GATE_STATUS §11,
-  §17, §18). Раннеры читают хеш из `stg/l1_baseline/l2src/L1_PIN.txt` —
+  §17, §18). Раннеры читают хеш из `l2src/L1_PIN.txt` —
   единственного места, где он записан. Он **read-only** и
   gitignored (живёт только на этой машине; в чистом clone его надо
   пересобирать через `gate.ps1`/`buildCore`).
@@ -190,7 +190,7 @@ Astra Extra High написал описание ядра (модель), и **�
   slash parsing), `eae23966`, `3aa793b7` (P0 MIX anchors/string bytes),
   `24a3e4c7` (C surface assignment targets). В его worktree gen0 (13:42) и gen1
   (14:11) пересобраны; **gen2 (пин) не менялся**. Полный L1-гейт
-  (`stg/l1_baseline/gate.ps1`: buildCore → gen0 seed → gen1..gen3 fixed point →
+  (`gate.ps1`: buildCore → gen0 seed → gen1..gen3 fixed point →
   все suites на gen0/gen2 → L2 suite) после этих правок в логах **не виден**.
 - В checkout'е **main** лежит **незакоммиченный** дифф `l1src/README.md`,
   `l1src/l1trans.lm1`, `l1src/parser.lm1`, `tests/l1/decl_repeat_ptr.lm1`,
@@ -212,7 +212,7 @@ Astra Extra High написал описание ядра (модель), и **�
 Сохранено в `codex/wip-selfhost-20260913` = `631abc18` (worktree
 `build/codex/core-integration`, файлы датированы 16:29–16:32):
 
-- `stg/l1_baseline/l2src/make_l2trans_lm2.ps1` — **механический** генератор
+- `l2src/make_l2trans_lm2.ps1` — **механический** генератор
   L2-исходника транслятора из `l2trans.lm1`: переименовывает зарезервированный
   формальный `node` → `p0_node` и `fn` → `p0_fn` (24 и 3 функции), переводит
   `c.array: [N]: char x` в `[]: char x N`, `const: @: T x` в `const: @(T x)`,
@@ -221,7 +221,7 @@ Astra Extra High написал описание ядра (модель), и **�
   `L2:` … `end: L2`. Счётчики закреплены asserts — генератор рассчитан на
   **перезапуск после каждой правки `l2trans.lm1`**, а не на ручную правку
   `.lm2`.
-- `stg/l1_baseline/l2src/l2trans.lm2` — его выход, 14 119 строк. Первый
+- `l2src/l2trans.lm2` — его выход, 14 119 строк. Первый
   L2-исходник L2-транслятора.
 - `l2trans.lm1` (+653/−209), `lmx.h`, `lmx_value_owned.*`,
   `lmx_graph_copy_owned.lm1` — поддержка компилятора под этот выход: разбор
@@ -297,7 +297,7 @@ Bootstrap-проблема (измерена для всех пяти): кажд
   мутированный голден обязан падать). Отдельно
   `tests/p0_tree_contract/README.txt` описывает случаи `{}`/фенсов/трейлеров.
 - На codex-ветке Codex начал **порт парсера на L2**: 25 файлов
-  `stg/l1_baseline/l2src/parser_*.lm2` (compact scanner, positions, indent,
+  `l2src/parser_*.lm2` (compact scanner, positions, indent,
   trailer roles, text views, python strings, …) с дифференциальными
   раннерами (`run_candidate_indent.ps1`, `run_candidate_c_scanners.ps1`,
   `*_abi.c` пробы). Это фрагменты, не целый `parser.lm2`.
@@ -427,13 +427,13 @@ main), чтобы не плодить третью линию.
 одном хеше.
 
 ### 6.2 Принять правки L1 Codex и решить промоушен пина
-- В **своём** worktree (не в `stg/l1_baseline` main-checkout'а, где лежит
-  пин) выполнить `stg/l1_baseline/gate.ps1` на слитой ветке: buildCore → seed →
+- В **своём** worktree (не в main-checkout'е, где лежит распределённый
+  пин `build/pin_<hash>/`) выполнить `gate.ps1` на слитой ветке: buildCore → seed →
   gen1..gen3 → неподвижная точка → все suites. Отдельно
   `tests/p0_tree_contract/run_p0_meta.ps1` (паритет парсера с 620) и
   `tests/l1/run_*.ps1`, которые Codex добавил.
 - Если всё зелёное и gen2==gen3 — это кандидат нового стабильного L1.
-  Промоушен: скопировать gen2 в `stg/l1_baseline/build/l1trans/gen2/`, снять
+  Промоушен: скопировать gen2 в `build/l1trans/gen2/`, снять
   SHA256, заменить `65D5…` во всех документах (`grep -rl 65D5A5ED`), сообщить
   Claude (он сверяет хеш перед каждым прогоном).
 - Если не зелёное — это дефект L1 (или регенерированного bootstrap-C), и он
@@ -449,7 +449,7 @@ main), чтобы не плодить третью линию.
 2. Доказать, что «parse predef once» снимает зависание `f04cf1cd` на большом
    входе (замер времени до/после на усечённых префиксах `l2trans.lm2`: 1k,
    3k, 7k, 14k строк).
-3. Прогнать генератор: `powershell -File stg/l1_baseline/l2src/make_l2trans_lm2.ps1`
+3. Прогнать генератор: `powershell -File l2src/make_l2trans_lm2.ps1`
    (asserts счётчиков должны сойтись; при изменении `l2trans.lm1` менять
    ожидания генератора осознанно, в том же коммите).
 4. Цепочка: `l2trans.exe l2trans.lm2 → l2trans_self.lm1` → пин L1 → C → gcc →
@@ -457,7 +457,7 @@ main), чтобы не плодить третью линию.
    и **байтовое сравнение** `l2trans_self.lm1` == `l2trans_self2.lm1`
    (неподвижная точка L2-уровня); затем полный `run_l2trans.ps1` и
    `run_graph_abi.ps1` с `-TranslatorPath` на self-сборку.
-5. Оформить это как раннер `stg/l1_baseline/l2src/run_l2trans_selfhost.ps1`
+5. Оформить это как раннер `l2src/run_l2trans_selfhost.ps1`
    (три стадии, хеши, evidence.json) — по образцу моих `run_port_*.ps1`
    (см. `run_port_owned_ranges.ps1`: PENDING/PASS с закреплённым
    «pending»-отклонением, чтобы раннер падал в обе стороны).
@@ -587,7 +587,7 @@ for him.
    точными путями и критериями; Claude сам предупреждает о пересечениях.
 
 ### 7.4 Границы, которые Claude не переходит
-Не редактирует `stg/l1_baseline/l2src/l2trans.lm1`, `lmx*.lm1/.h`, `l1src/*`,
+Не редактирует `l2src/l2trans.lm1`, `lmx*.lm1/.h`, `l1src/*`,
 главные документы; не ребейзит и не force-push'ит; не заводит веток без
 явной просьбы; не пишет C вместо L1/L2 (`CODING_RULES.txt` §0); не трогает
 пин компилятора; ничего Grok'у. Если он спрашивает о границе — ответить в
@@ -606,11 +606,11 @@ DONE = коммит на main + файлы + команды + exits + счётч
 
 | Команда (из `C:\Nyasha_Planet\lingvamyxa` или указанного worktree) | Что доказывает | Когда | Время |
 | --- | --- | --- | --- |
-| `stg/l1_baseline/l2src/run_graph_abi.ps1` | Мой гейт graph ABI/frontend: selftests 63/70/261, 134 fixtures, 41 негатив, per-fixture assertions | После любой правки `l2trans.lm1`, `lmx*` | ~2 мин |
-| `stg/l1_baseline/l2src/run_l2trans.ps1` | Исторический L2 suite (`l2trans gen2 ok`), splice-drives | На границе интеграции, после frontend-правок | ~5 мин |
-| `stg/l1_baseline/l2src/run_lmx.ps1` | Message runtime, Exec (`l2 lmx gen2 ok`) | После правок `lmx_message*`, runtime | ~5–10 мин |
-| `stg/l1_baseline/l2src/run_port_{msg_storage,msg_slots,msg_path_storage,owned_ranges,msg_blocks}.ps1` | Паритет L2-модуля с L1-оракулом, дважды | После правок модуля или компилятора | ~1 мин каждый |
-| `stg/l1_baseline/gate.ps1` | **Полная самосборка L1** (buildCore → gen0..gen3 → suites) — перезаписывает shared-инструмент | Только при изменении **самого L1** (§6.2); никогда «на всякий случай» | ~4+ мин |
+| `l2src/run_graph_abi.ps1` | Мой гейт graph ABI/frontend: selftests 63/70/261, 134 fixtures, 41 негатив, per-fixture assertions | После любой правки `l2trans.lm1`, `lmx*` | ~2 мин |
+| `l2src/run_l2trans.ps1` | Исторический L2 suite (`l2trans gen2 ok`), splice-drives | На границе интеграции, после frontend-правок | ~5 мин |
+| `l2src/run_lmx.ps1` | Message runtime, Exec (`l2 lmx gen2 ok`) | После правок `lmx_message*`, runtime | ~5–10 мин |
+| `l2src/run_port_{msg_storage,msg_slots,msg_path_storage,owned_ranges,msg_blocks}.ps1` | Паритет L2-модуля с L1-оракулом, дважды | После правок модуля или компилятора | ~1 мин каждый |
+| `gate.ps1` | **Полная самосборка L1** (buildCore → gen0..gen3 → suites) — перезаписывает shared-инструмент | Только при изменении **самого L1** (§6.2); никогда «на всякий случай» | ~4+ мин |
 | `tests/p0_tree_contract/run_p0_meta.ps1` | Паритет парсера с эталоном 620 | После правок `parser.lm1` | ~1 мин |
 | `mixa_manager/run_mixa.ps1` | Полная регрессия приложения (Claude) | Claude, после каждого порта | минуты |
 | `mixa_manager/run_mixa_<module>_l2_parity.ps1` | Паритет L1↔L2 одного модуля приложения | Claude; после §6.1 — все 24 | ~1 мин каждый |
