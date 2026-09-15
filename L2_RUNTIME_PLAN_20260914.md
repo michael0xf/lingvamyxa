@@ -3337,3 +3337,14 @@ runs while success is 0 and ends when user code sets success to 1;
 running=0 stays the parent's stop request seen by user code. Entered in
 spec 19.28.R2.2 and the model's section 31; the lead told to write the
 loop that way in the kernel paragraph and the S3, M and Y notes.
+run_slice_equal's 17 to 16 sources (the lead, from git): the script is
+unchanged between a24be8ae and 991c006f; it counts the root's tracked l1src
+(git ls-files, no exclusions), and refresh commit 8e0b2c93 deleted the
+tracked l1src/__pycache__/port_parser.cpython-311.pyc and ignored
+__pycache__/, so the root's count went from 17 to 16 while stg's stayed 16.
+The old 14 of 17 were three reds: the root-only .pyc, l1trans.lm1 and p0.h;
+now the .pyc is gone and the other two are copied. 57's land_seed.sh takes
+both counts from the landed tree itself (git ls-files -- l1src/ for the
+sources, the script's @('l1src/ map entries for the generated C) and
+requires the exact pass line with them; his install_pin.ps1 refuses any
+source whose SHA256 is not the announced hash and re-hashes each copy.
