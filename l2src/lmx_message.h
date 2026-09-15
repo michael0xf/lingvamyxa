@@ -42,9 +42,6 @@ typedef unsigned char uchar;
  * graph field carries the root of a Message created by the copier in its own
  * arena; recv moves that storage into the handler's arena. */
 #define LMX_MSG_KIND_GRAPH 9
-/* Stage 3d: an internal control envelope in the UI lane's inbox, a mapping
- * request carrying a child's address in `to`; never admitted to a handler. */
-#define LMX_MSG_KIND_MAP 10
 /* Stage 5 (b): an internal envelope in the root Message's inbox, a host post
  * waiting for the root's drain; `to` is its destination and ingress_kind its
  * own kind. recv never hands it out and readiness never counts it; lifecycle
@@ -149,19 +146,8 @@ typedef struct LmxMsg {
     /* Decision 18 (2026-09-14): readiness is this Message's own control flag.
      * lmx_msg_exec_ready sets it (the sender at admission, the closing
      * requester, the bind kick); the lane that takes this Message's turn
-     * clears it. The parent's scheduler step and the UI take read it; nothing
-     * is appended to a parent's cells from another lane. */
+     * clears it. Nothing is appended to a parent's cells from another lane. */
     int ready;
-    /* Stage 3c-2b (decision 18): the parent's scheduler record, an L2
-     * Structure in this Message's own arena (l2src/lmx_sched_record.lm2: the
-     * round-robin cursor and the mapping policy as owned cells), rooted there
-     * and created by the first scheduler step on this Message's lane; 0 until
-     * then. Only that lane reads and writes it. */
-    struct Lmx *sched_rec;
-    /* Stage 3d: a mapping request for this UI-mapped Message is outstanding in
-     * the UI lane's inbox (class 3): set by the writer of its readiness when it
-     * sends one, cleared by the UI lane when it takes the request. */
-    int ui_pending;
     /* Allocation-free retire drain. Linked on LmxMsgExec.retire_head while
      * eligible; not a ready queue. */
     struct LmxMsg *retire_next;
@@ -228,9 +214,6 @@ struct LmxMsgRuntime {
 };
 
 #define LMX_MSG_ORPHAN_RETAIN 30000U
-/* Stage 5 (d2): the create_id reserved for the UI lane, R0's child that
- * runtime_new creates once; any other create with it is refused. */
-#define LMX_MSG_UI_LANE_ID 0xFFFFFFFFU
 
 LmxMsgRuntime *lmx_msg_runtime_new(void);
 void lmx_msg_runtime_delete(LmxMsgRuntime *rt);
@@ -241,9 +224,6 @@ int lmx_msg_create_prepare(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create
                            struct Lmx *source, LmxOwnedRange *src_ranges,
                            LmxOwnedRange *eternal_ranges, LmxOwnedRange *method_ranges,
                            const uchar *init, size_t n, LmxMsgAddr *out);
-/* Stage 5 (d2): the executor's UI lane is the Message runtime_new creates as R0's child. */
-void lmx_msg_exec_set_ui_lane(LmxMsgRuntime *rt, LmxMsg *lane);
-int lmx_msg_exec_has_ui_lane(LmxMsgRuntime *rt);
 /* Create with an explicit used-graph copy. The new Message stays private until
  * the complete copy and path preparation succeed; failure publishes no child. */
 int lmx_msg_create_graph(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id,
@@ -289,7 +269,6 @@ int lmx_msg_host_drain(LmxMsgRuntime *rt);
 int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms);
 
 #define LMX_MSG_AFFINITY_ANY 0
-#define LMX_MSG_AFFINITY_UI 1
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity);
 /* Stage 5 step (a): generated units call these two. The entry adapter refuses
  * outside its own Message's turn; the bootstrap runs that turn. */
@@ -300,23 +279,14 @@ unsigned lmx_msg_root_addr(LmxMsgRuntime *rt);
 int lmx_msg_root_turn(LmxMsgRuntime *rt, LmxMsgTurn turn, void *ctx);
 int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt);
-int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);
 int lmx_msg_exec_stop(LmxMsgRuntime *rt);
 void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt);
 void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v);
-int lmx_msg_sched_step(LmxMsgRuntime *rt, LmxMsgAddr parent);
-/* Stage 3c-2b: the parent's scheduler record, an L2 runtime unit
- * (l2src/lmx_sched_record.lm2, real symbols, linked by every runner that links
- * the executor since 1a410b54). Declared here so the L1 core and the executor
- * call it through c. without a generated header; the unit's own C includes
- * this header, so a drift in these signatures fails its compile. */
-struct Lmx *lmx_sched_record_new(LmxMsg *owner);
-unsigned lmx_sched_record_cursor(struct Lmx *rec);
-int lmx_sched_record_set_cursor(struct Lmx *rec, unsigned child);
-int lmx_sched_record_policy(struct Lmx *rec);
-int lmx_sched_record_set_policy(struct Lmx *rec, int policy);
-/* Stage 5 (e): R0's policy record, l2src/lmx_root_record.lm2 (the same generated
- * unit rule as the scheduler record above). */
+/* Stage 5 (e): R0's policy record, l2src/lmx_root_record.lm2, an L2 runtime unit
+ * (real symbols, linked by every runner that links the executor). Declared here
+ * so the L1 core and the executor call it through c. without a generated header;
+ * the unit's own C includes this header, so a drift in these signatures fails
+ * its compile. */
 struct Lmx *lmx_root_record_new(LmxMsg *owner);
 unsigned lmx_root_record_clock(struct Lmx *rec);
 int lmx_root_record_set_clock(struct Lmx *rec, unsigned now);
@@ -325,7 +295,6 @@ int lmx_root_record_set_clock_test(struct Lmx *rec, int on);
 unsigned lmx_root_record_orphan_retain(struct Lmx *rec);
 int lmx_root_record_set_orphan_retain(struct Lmx *rec, unsigned retain);
 int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
-int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child);
 int lmx_msg_live_query(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_live_handle(LmxMsgRuntime *rt, LmxMsgAddr who, const LmxMsgEnv *env);
 int lmx_msg_live_check(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned threshold);

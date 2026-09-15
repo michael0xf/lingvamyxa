@@ -247,8 +247,7 @@ foreach ($sig in @(
     'fn: msg_send \(@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @\(LmxMsgEnv env\)\) int',
     'fn: msg_end_turn \(@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success\) int',
     'fn: msg_recv \(@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out\) int',
-    'fn: msg_runtime_new \(\) @: LmxMsgRuntime',
-    'fn: msg_exec_take_addr \(@: LmxMsgRuntime rt\) unsigned')) {
+    'fn: msg_runtime_new \(\) @: LmxMsgRuntime')) {
     if ($genText -notmatch $sig) { throw "the public signature is missing or changed: $sig" }
 }
 

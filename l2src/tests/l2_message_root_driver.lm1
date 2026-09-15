@@ -100,8 +100,8 @@ end: __wrap_lmx_msg_set_graph
 sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     check(news = 1 && creates = 1 && deletes = 0 && rt != 0, "runtime deleted once after helper or create failure")
     if: binds != 0
-        # Stage 5 (d1, d2): the entry runs in the Message the generated main creates, R0's last child
-        # (the UI lane is R0's first child since d2), so the program's graph is that child's.
+        # Stage 5 (d1): the entry runs in the Message the generated main creates, R0's last child
+        # (M: the runtime creates no UI lane, so it is also R0's only child), so the program's graph is that child's.
         check(rt\root != 0 && rt\root\last_child != 0 && rt\root\last_child\graph != 0, "bound graph still recorded at teardown")
         @: Lmx leaf c.lmx_branch_child_known(rt\root\last_child\graph, 0U)
         check(leaf != 0 && leaf\node = rt\root\last_child\graph, "callable lexical parent retained")

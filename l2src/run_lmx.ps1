@@ -422,7 +422,7 @@ if ($LASTEXITCODE -ne 0) {
 $forExit = Invoke-LmxTest $forExe 'lmx_generated_for_arrays_collect' $nativeCwd
 }
 
-# L2 loop cancelled through Message control: own-thread map_child and parent-thread sched_step.
+# L2 loop cancelled through Message control: a child mapped onto its own context and a parent's own turn.
 if ($selected.Cancel) {
 $l2out = 'build\l2trans'
 if ($Suite -ne 'Full') { $l2out = Join-Path $out 'l2trans' }

@@ -19,6 +19,11 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # Host-driven: R (created without a parent) has C and D; D is bound
 # and mapped onto its own context, and its turn posts to C from that worker
 # thread, which today's contract already allows off the owner thread.
+#
+# Stage M: R maps D in R's own turn on the host thread (run_entry_turn); no
+# Message steps another. D's turn reports by a reply to R published at its
+# end-turn, after its post and its drain attempt; the host reads D's statuses
+# once that reply is in R's mailbox, in yield rounds with no deadline.
 
 int: checks 0
 int: failures 0
@@ -49,40 +54,34 @@ fn: post (@: LmxMsgRuntime rt; LmxMsgAddr: to; unsigned: id) int
 
 unsigned: g_target 0U
 
+unsigned: g_parent 0U
+
 # D's turn on its own context worker: it takes its input, posts to C from
 # this non-host thread, tries the drain (which must refuse off the root's
-# lane) and ends.
+# lane), records both, and stages one reply to its parent R.
 fn: turn_post (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     @: LmxMsgEnv got
-    int: ok
-    int: st 0
+    @: LmxMsgEnv reply
+    int: st
     if: ctx != 0
         return: 1
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
-    if: got = 0
+    reply: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0 || reply = 0
         return: 1
     if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
         lmx_msg_env_release(got)
     ---
     c.free((cast: (@: void) got))
-    ok: post(rt, g_target, 11U)
-    st: lmx_msg_host_drain(rt)
-    lmx_msg_exec_lock(rt)
-    g_posted: ok
-    g_drain_status: st
-    lmx_msg_exec_unlock(rt)
-    return: lmx_msg_end_turn(rt, who, 1)
-
-# Stage 5 (d): a parent's turn that steps the one child named in its cell.
-# ctx is the test's cell: [0] the child's address, written before the
-# root_turn; [1] the step's status, written here. The same text in every
-# migrated test.
-fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
-    @: unsigned cell
-    if: ctx = 0
-        return: 1
-    cell: (cast: (@: unsigned) ctx)
-    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    g_posted: post(rt, g_target, 11U)
+    g_drain_status: lmx_msg_host_drain(rt)
+    reply\id: 12U
+    reply\kind: c.LMX_MSG_KIND_NUMBER
+    reply\number: 1
+    st: lmx_msg_send(rt, who, g_parent, reply)
+    c.free((cast: (@: void) reply))
+    if: st != c.LMX_MSG_STAGED
+        return: 2
     return: lmx_msg_end_turn(rt, who, 1)
 
 # Stage 5 (d): R's own turn maps its child D; ctx is the test's cell, [0] the
@@ -95,27 +94,17 @@ fn: turn_map_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     cell[1]: (cast: (unsigned) lmx_msg_map_child(rt, who, cell[0]))
     return: lmx_msg_end_turn(rt, who, 1)
 
-# Stage 5 (d): R0's turn steps parent, whose turn maps child. main binds parent
-# only around the step. Returns root_turn's status, else the parent step's,
-# else map_child's.
-[]: unsigned step_cell_parent 2
+# Stage M: parent, one of R0's direct children, maps child in its own turn on
+# the host thread. Returns run_entry_turn's status, else map_child's.
 []: unsigned map_cell_child 2
 
-fn: map_child_in_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
+fn: map_child_in_own_turn (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
     int: st
-    step_cell_parent[0]: parent
-    step_cell_parent[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
     map_cell_child[0]: child
     map_cell_child[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
-    st: lmx_msg_exec_bind(rt, parent, turn_map_child, (cast: (@: void) map_cell_child), c.LMX_MSG_AFFINITY_ANY)
+    st: lmx_msg_run_entry_turn(rt, parent, turn_map_child, (cast: (@: void) map_cell_child))
     if: st != c.LMX_MSG_OK
         return: st
-    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_parent))
-    lmx_msg_exec_unbind(rt, parent)
-    if: st != c.LMX_MSG_OK
-        return: st
-    if: (cast: (int) step_cell_parent[1]) != c.LMX_MSG_OK
-        return: (cast: (int) step_cell_parent[1])
     return: (cast: (int) map_cell_child[1])
 
 fn: main () int
@@ -124,16 +113,17 @@ fn: main () int
     unsigned: r 0U
     unsigned: cc 0U
     unsigned: d 0U
-    unsigned: deadline
-    int: posted 0
     uchar: ini 1
 
+    # Unbuffered: a run the runner kills still shows its reading lines and FAILs.
+    c.setvbuf(c.stdout, 0, c._IONBF, 0U)
     rt: lmx_msg_runtime_new()
     check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
     if: rt = 0 || r = 0U
         return: 2
     check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "C and D created and published")
     g_target: cc
+    g_parent: r
 
     # --- (1) a post from the host thread is an admission into R's mailbox.
     check(post(rt, cc, 10U) != 0, "the host posts an input for C")
@@ -149,27 +139,18 @@ fn: main () int
         return: 2
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: 1
-    check(lmx_msg_exec_bind(rt, d, turn_post, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_host_post(rt, d, env) = c.LMX_MSG_STAGED && lmx_msg_host_drain(rt) = c.LMX_MSG_OK && map_child_in_root(rt, r, d) = c.LMX_MSG_OK, "D bound, given an input and mapped onto its own context")
+    check(lmx_msg_exec_bind(rt, d, turn_post, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_host_post(rt, d, env) = c.LMX_MSG_STAGED && lmx_msg_host_drain(rt) = c.LMX_MSG_OK && map_child_in_own_turn(rt, r, d) = c.LMX_MSG_OK, "D bound, given an input and mapped onto its own context by R's own turn")
     c.free((cast: (@: void) env))
-    deadline: c.GetTickCount() + 5000U
-    while: posted = 0 && c.GetTickCount() < deadline
-        lmx_msg_exec_lock(rt)
-        posted: g_posted
-        lmx_msg_exec_unlock(rt)
-        if: posted = 0
-            c.Sleep(2U)
-        ---
+    c.printf("reading: D's reply in R's mailbox, published by D's end-turn after its post and drain attempt\n")
+    while: lmx_msg_inbox_n(rt, r) < 1
+        c.SwitchToThread()
     ---
-    check(posted != 0, "D's turn posted to C from its worker thread")
+    check(g_posted != 0, "D's turn posted to C from its worker thread")
     check(g_drain_status = c.LMX_MSG_INVALID, "the drain from a thread that is not the root's lane refuses")
     check(lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 1 && lmx_msg_inbox_n(rt, cc) = 1, "the worker's post landed in the root's mailbox too; C still holds only the first")
     check(lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 0 && lmx_msg_inbox_n(rt, cc) = 2, "the root's drain forwards the worker's post: C holds both")
 
-    deadline: c.GetTickCount() + 5000U
-    while: lmx_msg_exec_workers(rt) != 0 && c.GetTickCount() < deadline
-        lmx_msg_drive(rt, 0U, 0U)
-        c.Sleep(2U)
-    ---
+    # exec_stop's own rounds read the worker count until D's worker has left.
     lmx_msg_exec_stop(rt)
     check(lmx_msg_find(rt, r) != 0 && lmx_msg_running_load(lmx_msg_find(rt, r)) != 0, "the root runs on")
     lmx_msg_runtime_delete(rt)
