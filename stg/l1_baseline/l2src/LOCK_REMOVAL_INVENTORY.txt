@@ -1,0 +1,203 @@
+LOCK_REMOVAL_INVENTORY: stg/l1_baseline/l2src/lmx_message_exec.c on integration c067bed9 (d6, 2026-09-15)
+
+Order (Mikhail, 2026-09-15, verbatim, recorded on main 657ce3f9/07ad3679): "Там не должно быть общих блокировок.
+У очереди писем только своя внутренняя блокировка коллекции, всё"; "блокировка только локальная у коллекции
+сообщений может быть, больше блокировокне требуется даже локальных -- их в проекте не длолжно быть больше вообще";
+"значит реализуйте полноценную арену для каждого MEssage, как описано в спеке. Без этого Message не имеет смысла".
+
+Counting unit: every line of lmx_message_exec.c matching `lmx_msg_exec_lock\(|lmx_msg_exec_wake_locked|_locked\(`,
+one inventory line each: 165 = 77 lmx_msg_exec_lock( acquisitions (LOCK) + 24 definitions or prototypes of a
+*_locked helper that runs under a caller's lock (DEF) + 64 calls of such a helper (CALL). Refute the count with
+  grep -cE 'lmx_msg_exec_lock\(|lmx_msg_exec_wake_locked|_locked\(' stg/l1_baseline/l2src/lmx_message_exec.c
+Owner codes and the questions are the coordinator's map, stg/l1_baseline/l2src/LOCK_REMOVAL_SPEC_MAP.txt on main
+56bb505d: M the Message's own arena, P the parent's arena, Q a mailbox admission under its collection lock, T
+thread-local, X goes away, S silent (the question number from the map's section 5). A line may name a second code
+for a second piece of state it touches ("P ...; lookup S 5.1").
+
+Line format: file:line | enclosing function | LOCK/DEF/CALL | reads | writes | lane today | owner.
+
+Totals (grep on the lines below):
+- owner is S alone: 30 lines (3 of them LOCK acquisitions); a line naming an S question anywhere: 50.
+  By question: 5.1 41 lines, 5.2 13, 5.4 1.
+- first owner code: M 25, P 58, Q 5, T 2, X 45 (with S 30: 165).
+
+What the silent lines are (the missing facts, not missing rules):
+- 5.1, 41 lines, of which 35 are one fact: address resolution. msg_at_addr, lmx_msg_self_or_find,
+  msg_find_any_locked and rec_at_addr_locked turn an LmxMsgAddr into a record by walking rt->root and every child
+  list; the lock exists so that no tree changes under the walk. The target has no registry (spec 11455), so each
+  call site needs the capability it already holds instead of the address: the parent's child pointer in the
+  parent's arena, the taking lane's own record, the sender's capability. The other 6 lines under 5.1 are the root list,
+  the retire queue and the slot list (drive_walk_list 857/884 over rt->root, endp_try_retire, flush_retire,
+  retire_n, slot_free's range drop).
+- 5.2, 13 lines: wakes. exec_wake_locked signals every non-UI worker after any turn (run_one 2587), exec_ready routes
+  one wake through the record, refs retained in walks. The target is one wake primitive per lane, paired with its
+  mailbox; the question is whether a reference count survives at all.
+- 5.4, 1 line: deliver_graph's storage move into a recipient that is not the parent.
+X (45 lines) is the prototype's own machinery: the runtime-wide record walk, the reap list and joins (overruled by
+"the executor frees its own memory"), exec_stop/drop_binds (stage 5 (f)), the slot enumeration, test hooks.
+
+exec.c:146 | lmx_msg_test_release_tree | DEF | reads: (prototype of bind_rec_locked) | writes: - | lane today: - | owner: P (2.1 (2) execution mapping)
+exec.c:147 | lmx_msg_test_release_tree | DEF | reads: (prototype of rec_at_addr_locked) | writes: - | lane today: - | owner: S 5.1 (address resolution by a runtime-wide walk)
+exec.c:150 | lmx_msg_test_release_tree | DEF | reads: (prototype of bind_wait_launch_hold_locked) | writes: - | lane today: - | owner: X (3.3 wait state: each thread frees its own)
+exec.c:383 | lmx_msg_emergency_cancel | LOCK | reads: lookup who | writes: m->running=0, m->closing=1 | lane today: parent's lane or host (stop) | owner: M storage, parent as designated writer (2.1 (3)); lookup S 5.1
+exec.c:467 | lmx_msg_mail_lock | CALL | reads: test hook inside mail_lock | writes: - | lane today: any lane taking a mailbox | owner: Q (the message collection's own lock)
+exec.c:857 | drive_walk_list | LOCK | reads: rt->root list or a parent's child list, parent_msg, state | writes: refs retained/released | lane today: host drive (R0 maintenance) | owner: P (the parent's child list, 2.1 (2)); root list S 5.1; refs S 5.2
+exec.c:884 | drive_walk_list | LOCK | reads: rt->root list or a parent's child list, parent_msg, state | writes: refs retained/released | lane today: host drive (R0 maintenance) | owner: P (the parent's child list, 2.1 (2)); root list S 5.1; refs S 5.2
+exec.c:949 | lmx_msg_test_stage | LOCK | reads: lookup from/to, state | writes: refs, src outbox (under mail lock) | lane today: tests | owner: X (test); outbox M
+exec.c:1008 | drop_ranges_locked | DEF | reads: m->ranges records | writes: m->ranges | lane today: settling parent's lane; slot free | owner: P (2.1 (2) settle writes)
+exec.c:1020 | handoff_move_locked | DEF | reads: src/dst blocks, ranges, graph, roots | writes: dst->blocks/ranges, src->graph, src roots | lane today: parent's lane (transfer_adopted) | owner: P (2.1 (2) settle writes)
+exec.c:1073 | lmx_msg_slot_free | CALL | reads: m->ranges at slot free | writes: m->ranges | lane today: any lane dropping the last ref (retire) | owner: S 5.1 (retire queue owner)
+exec.c:1098 | lmx_msg_endp_try_retire | LOCK | reads: e->no_retire, refs, state, mailboxes, parent_msg, first_child | writes: rt->root list, rt->slots, rt->n, path, init; slot freed | lane today: any lane dropping the last reference | owner: S 5.1 (retire queue and slot list owner)
+exec.c:1229 | lmx_msg_exec_lock | LOCK | reads: - | writes: the shared lock itself | lane today: all | owner: X (the order)
+exec.c:1343 | rec_walk_locked | DEF | reads: every record, from rt->root through all child lists | writes: - | lane today: host, R0 close, tests | owner: X (runtime-wide walk; the target walks a parent's own children, P)
+exec.c:1352 | rec_walk_locked | CALL | reads: m->exec_bind per Message in the walk | writes: - | lane today: as rec_walk_locked | owner: X (runtime-wide walk)
+exec.c:1390 | lmx_msg_exec_wake_locked | DEF | reads: every record's wait | writes: wake every non-UI wait | lane today: run_one's end on any worker | owner: S 5.2 (wait signals; one wake for all lanes)
+exec.c:1395 | lmx_msg_exec_wake_locked | CALL | reads: every record's wait | writes: wake every non-UI wait | lane today: as above | owner: S 5.2 (wait signals)
+exec.c:1398 | lmx_msg_exec_wake_addr_locked | DEF | reads: one record's wait | writes: wake that wait | lane today: exec_ready: the sender's or requester's lane | owner: S 5.2 (a lane's own wake primitive)
+exec.c:1404 | lmx_msg_exec_wake_addr_locked | CALL | reads: lookup of addr | writes: - | lane today: as above | owner: S 5.1 (address resolution)
+exec.c:1419 | lmx_msg_exec_flush_retire | LOCK | reads: e->retire_head/tail | writes: e->retire_head/tail | lane today: any lane after release | owner: S 5.1 (retire queue)
+exec.c:1440 | lmx_msg_exec_set_ui_lane | LOCK | reads: - | writes: e->ui_lane | lane today: runtime_new (bootstrap) | owner: P of R0 (3.3 ui_lane)
+exec.c:1451 | lmx_msg_exec_has_ui_lane | LOCK | reads: e->ui_lane | writes: - | lane today: tests | owner: P of R0 (3.3)
+exec.c:1463 | lmx_msg_exec_ui_request_locked | DEF | reads: e->ui_lane, the lane's inbox | writes: a MAP envelope appended | lane today: the readying lane | owner: Q (admission into the UI lane's mailbox)
+exec.c:1491 | ui_request_if_ready_locked | DEF | reads: rec affinity, m->ready, m->ui_pending | writes: m->ui_pending, a MAP request | lane today: the parent's lane (failed UI->ANY rebind) | owner: M (3.1 ui_pending); the request Q
+exec.c:1492 | ui_request_if_ready_locked | CALL | reads: m->exec_bind | writes: - | lane today: as above | owner: P (2.1 (2))
+exec.c:1497 | ui_request_if_ready_locked | CALL | reads: - | writes: a MAP request | lane today: as above | owner: Q
+exec.c:1509 | lmx_msg_exec_take_ui_locked | DEF | reads: the UI lane's inbox, rec held/launching/affinity, m->ready | writes: m->ui_pending, m->ready=0, rec->held/held_by | lane today: R0's turn (the UI lane's take) | owner: Q (inbox); M (2.1 (3) the taking lane clears ready)
+exec.c:1545 | lmx_msg_exec_take_ui_locked | CALL | reads: m->exec_bind | writes: - | lane today: as above | owner: P (2.1 (2))
+exec.c:1550 | lmx_msg_exec_take_ui_locked | CALL | reads: lookup, state, inbox, closing | writes: - | lane today: as above | owner: S 5.1 (address resolution)
+exec.c:1567 | lmx_msg_exec_tab_n_locked | DEF | reads: rt->slots count | writes: - | lane today: tests (D1 enumeration) | owner: X (3.2 slots)
+exec.c:1571 | lmx_msg_exec_tab_addr_locked | DEF | reads: rt->slots at i | writes: - | lane today: tests | owner: X (3.2 slots)
+exec.c:1581 | lmx_msg_exec_test_set_fail_start_kicks | LOCK | reads: - | writes: e->test_fail_start_kicks | lane today: tests | owner: X (3.3 test hooks)
+exec.c:1591 | lmx_msg_exec_test_set_fail_ctx | LOCK | reads: - | writes: e->test_fail_ctx | lane today: tests | owner: X (3.3 test hooks)
+exec.c:1601 | lmx_msg_exec_test_set_fail_adopt_block | LOCK | reads: - | writes: e->test_fail_adopt_block | lane today: tests | owner: X (3.3 test hooks)
+exec.c:1616 | lmx_msg_exec_map_queued | LOCK | reads: lookup, rec affinity, m->ready | writes: - | lane today: tests | owner: M (ready, 2.1 (3)); lookup S 5.1
+exec.c:1618 | lmx_msg_exec_map_queued | CALL | reads: m->exec_bind | writes: - | lane today: tests | owner: P (2.1 (2))
+exec.c:1633 | lmx_msg_exec_retire_n | LOCK | reads: e->retire_head chain | writes: - | lane today: tests | owner: S 5.1 (retire queue)
+exec.c:1651 | lmx_msg_exec_ui_nrequests | LOCK | reads: e->ui_lane inbox (under its mail lock) | writes: - | lane today: tests | owner: Q (the UI lane's mailbox); the outer lock X
+exec.c:1672 | lmx_msg_exec_bind_n | LOCK | reads: every record | writes: - | lane today: tests | owner: X (runtime-wide walk)
+exec.c:1673 | lmx_msg_exec_bind_n | CALL | reads: every record | writes: - | lane today: tests | owner: X (runtime-wide walk)
+exec.c:1685 | lmx_msg_exec_bind_aff | LOCK | reads: lookup, rec->affinity | writes: - | lane today: tests | owner: P (2.1 (2)); lookup S 5.1
+exec.c:1686 | lmx_msg_exec_bind_aff | CALL | reads: lookup addr | writes: - | lane today: tests | owner: S 5.1 (address resolution)
+exec.c:1701 | lmx_msg_exec_bind_has_worker | LOCK | reads: lookup, rec wait worker | writes: - | lane today: tests | owner: P (2.1 (2)); lookup S 5.1
+exec.c:1702 | lmx_msg_exec_bind_has_worker | CALL | reads: lookup addr | writes: - | lane today: tests | owner: S 5.1 (address resolution)
+exec.c:1717 | lmx_msg_exec_test_wait_gen | LOCK | reads: lookup, rec wait gen | writes: - | lane today: tests | owner: X (3.3 wait state)
+exec.c:1718 | lmx_msg_exec_test_wait_gen | CALL | reads: lookup addr | writes: - | lane today: tests | owner: S 5.1 (address resolution)
+exec.c:1733 | lmx_msg_exec_test_worker_handle | LOCK | reads: lookup, rec wait worker | writes: - | lane today: tests | owner: X (3.3 wait state)
+exec.c:1734 | lmx_msg_exec_test_worker_handle | CALL | reads: lookup addr | writes: - | lane today: tests | owner: S 5.1 (address resolution)
+exec.c:1753 | lmx_msg_exec_test_launching | LOCK | reads: lookup, rec->launching | writes: - | lane today: tests | owner: P (2.1 (2))
+exec.c:1754 | lmx_msg_exec_test_launching | CALL | reads: lookup addr | writes: - | lane today: tests | owner: S 5.1 (address resolution)
+exec.c:1794 | bind_rec_locked | DEF | reads: m->exec_bind, in_table | writes: - | lane today: every caller under the lock | owner: P (2.1 (2) execution mapping)
+exec.c:1805 | msg_find_any_locked | DEF | reads: turn self, rt->root, all child lists | writes: - | lane today: every addr-taking call | owner: S 5.1 (address resolution)
+exec.c:1834 | rec_at_addr_locked | DEF | reads: lookup + record | writes: - | lane today: every addr-taking call | owner: S 5.1 (address resolution)
+exec.c:1839 | rec_at_addr_locked | CALL | reads: lookup + record | writes: - | lane today: as above | owner: S 5.1 (address resolution)
+exec.c:1853 | lmx_msg_exec_msg_bound | LOCK | reads: m->exec_bind | writes: - | lane today: child_unlink on the parent's lane | owner: P (2.1 (2))
+exec.c:1855 | lmx_msg_exec_msg_bound | CALL | reads: m->exec_bind | writes: - | lane today: child_unlink on the parent's lane | owner: P (2.1 (2))
+exec.c:1867 | lmx_msg_exec_route_locked | DEF | reads: rec affinity, wait worker | writes: - | lane today: exec_ready on the sender's lane | owner: S 5.2 (routing a wake)
+exec.c:1868 | lmx_msg_exec_route_locked | CALL | reads: m->exec_bind | writes: - | lane today: as above | owner: P (2.1 (2))
+exec.c:1973 | bind_wait_reap_unlink_locked | DEF | reads: e->reap_head | writes: unlink a wait | lane today: host/parent at reap | owner: X (3.3 reap)
+exec.c:1990 | bind_wait_maybe_free_locked | DEF | reads: wait slot/launch_n/reaping/worker | writes: free the wait | lane today: parent's lane at bind/unbind | owner: X (3.3 each thread frees its own wait state)
+exec.c:1994 | bind_wait_maybe_free_locked | CALL | reads: e->reap_head | writes: unlink | lane today: as above | owner: X (3.3)
+exec.c:1998 | bind_wait_launch_hold_locked | DEF | reads: w->launch_n | writes: w->launch_n | lane today: parent's lane at map/bind | owner: X (3.3)
+exec.c:2009 | bind_wait_launch_release | LOCK | reads: w->launch_n, slot, worker | writes: w->launch_n; the wait freed | lane today: parent's lane after launch | owner: X (3.3)
+exec.c:2013 | bind_wait_launch_release | CALL | reads: wait state | writes: free the wait | lane today: parent's lane after launch | owner: X (3.3)
+exec.c:2073 | bind_reap_join_all | LOCK | reads: e->reap_head, w flags | writes: reap list, w flags; joins workers; frees waits | lane today: host or parent's lane at bind/unbind/stop | owner: X (3.3: no join, each thread frees its own)
+exec.c:2094 | bind_reap_join_all | LOCK | reads: e->reap_head, w flags | writes: reap list, w flags; joins workers; frees waits | lane today: host or parent's lane at bind/unbind/stop | owner: X (3.3: no join, each thread frees its own)
+exec.c:2104 | bind_reap_join_all | LOCK | reads: e->reap_head, w flags | writes: reap list, w flags; joins workers; frees waits | lane today: host or parent's lane at bind/unbind/stop | owner: X (3.3: no join, each thread frees its own)
+exec.c:2112 | bind_reap_join_all | LOCK | reads: e->reap_head, w flags | writes: reap list, w flags; joins workers; frees waits | lane today: host or parent's lane at bind/unbind/stop | owner: X (3.3: no join, each thread frees its own)
+exec.c:2127 | bind_reap_join_all | LOCK | reads: e->reap_head, w flags | writes: reap list, w flags; joins workers; frees waits | lane today: host or parent's lane at bind/unbind/stop | owner: X (3.3: no join, each thread frees its own)
+exec.c:2138 | unbind_slot_locked | DEF | reads: rec->wait, rec->msg | writes: rec->wait=0, in_table=0, reap push, ref release | lane today: parent's or settling lane | owner: P (2.1 (2) unmap); reap X
+exec.c:2149 | unbind_slot_locked | CALL | reads: wait state | writes: free the wait | lane today: as above | owner: X (3.3)
+exec.c:2177 | join_bind_worker | LOCK | reads: rec->wait | writes: w->retired/reaping, e->nworkers; joins | lane today: parent's lane (rebind to UI) | owner: X (3.3); nworkers P
+exec.c:2182 | join_bind_worker | CALL | reads: wait state | writes: free the wait | lane today: parent's lane (rebind to UI) | owner: X (3.3)
+exec.c:2185 | bind_kick_needed_locked | DEF | reads: m->state, inbox, closing | writes: - | lane today: parent's lane at bind | owner: P (the binding parent reads the child's own cells, 2.1 11504-11509)
+exec.c:2207 | mapping_authority_locked | DEF | reads: host identity, parent chain, handoff_ready, holding_turn | writes: - | lane today: every bind/unbind | owner: P (parent's-turn arm); X (host arm, stage 5 (f))
+exec.c:2234 | exec_bind_mode | LOCK | reads: lookup, e->unbound_held, e->contexts_live, rec, m state/inbox/closing | writes: rec turn/ctx/affinity/launching/wait/msg/in_table, m->turn/turn_ctx/exec_bind, refs | lane today: parent's lane or host (mapping authority) | owner: P (2.1 (2) the mapping written at bind, 11514); lookup S 5.1; refs S 5.2; wait X
+exec.c:2244 | exec_bind_mode | CALL | reads: as mapping_authority_locked | writes: - | lane today: exec_bind_mode | owner: P (parent's-turn arm); X (host arm)
+exec.c:2248 | exec_bind_mode | CALL | reads: m->exec_bind | writes: - | lane today: exec_bind_mode | owner: P (2.1 (2))
+exec.c:2267 | exec_bind_mode | CALL | reads: m->state, inbox, closing | writes: - | lane today: exec_bind_mode | owner: P (reads the child's cells)
+exec.c:2298 | exec_bind_mode | CALL | reads: w->launch_n | writes: w->launch_n | lane today: exec_bind_mode | owner: X (3.3)
+exec.c:2301 | exec_bind_mode | LOCK | reads: lookup, e->unbound_held, e->contexts_live, rec, m state/inbox/closing | writes: rec turn/ctx/affinity/launching/wait/msg/in_table, m->turn/turn_ctx/exec_bind, refs | lane today: parent's lane or host (mapping authority) | owner: P (2.1 (2) the mapping written at bind, 11514); lookup S 5.1; refs S 5.2; wait X
+exec.c:2302 | exec_bind_mode | CALL | reads: lookup addr | writes: - | lane today: exec_bind_mode after launch | owner: S 5.1 (address resolution)
+exec.c:2309 | exec_bind_mode | CALL | reads: ui_pending, ready | writes: ui_pending, MAP request | lane today: exec_bind_mode failed launch | owner: M (3.1 ui_pending); request Q
+exec.c:2384 | exec_bind_mode | CALL | reads: m->state, inbox, closing | writes: - | lane today: exec_bind_mode | owner: P (reads the child's cells)
+exec.c:2389 | exec_bind_mode | CALL | reads: w->launch_n | writes: w->launch_n | lane today: exec_bind_mode | owner: X (3.3)
+exec.c:2400 | exec_bind_mode | LOCK | reads: lookup, e->unbound_held, e->contexts_live, rec, m state/inbox/closing | writes: rec turn/ctx/affinity/launching/wait/msg/in_table, m->turn/turn_ctx/exec_bind, refs | lane today: parent's lane or host (mapping authority) | owner: P (2.1 (2) the mapping written at bind, 11514); lookup S 5.1; refs S 5.2; wait X
+exec.c:2401 | exec_bind_mode | CALL | reads: lookup addr | writes: - | lane today: exec_bind_mode failed launch | owner: S 5.1 (address resolution)
+exec.c:2404 | exec_bind_mode | CALL | reads: rec | writes: unmap the record | lane today: exec_bind_mode failed launch | owner: P (2.1 (2))
+exec.c:2434 | take_ready | CALL | reads: lookup addr of the UI take | writes: - | lane today: R0's turn (UI take) | owner: S 5.1 (address resolution)
+exec.c:2444 | native_leave_addr | LOCK | reads: lookup, native_users, running | writes: native_users, handoff_ready | lane today: the Message's own lane at run_one's end | owner: M (2.1 (1) native users and handoff-safe marks)
+exec.c:2457 | requeue_if_runnable | LOCK | reads: lookup, state, inbox, closing | writes: ready (via exec_ready) | lane today: the Message's own lane after its turn | owner: M (own ready); lookup S 5.1
+exec.c:2485 | run_one | LOCK | reads: lookup, m->closing, exec_live, running, success, rec | writes: native_users, closing, running, rec held/held_by/last_st | lane today: the Message's own lane | owner: M (2.1 (1) and (3), the taking lane)
+exec.c:2495 | run_one | LOCK | reads: lookup, m->closing, exec_live, running, success, rec | writes: native_users, closing, running, rec held/held_by/last_st | lane today: the Message's own lane | owner: M (2.1 (1) and (3), the taking lane)
+exec.c:2503 | run_one | LOCK | reads: lookup, m->closing, exec_live, running, success, rec | writes: native_users, closing, running, rec held/held_by/last_st | lane today: the Message's own lane | owner: M (2.1 (1) and (3), the taking lane)
+exec.c:2506 | run_one | CALL | reads: m->exec_bind of the turn | writes: rec->held/held_by/last_st | lane today: the Message's own lane (longjmp path) | owner: M (2.1 (3) the taking lane)
+exec.c:2522 | run_one | LOCK | reads: lookup, m->closing, exec_live, running, success, rec | writes: native_users, closing, running, rec held/held_by/last_st | lane today: the Message's own lane | owner: M (2.1 (1) and (3), the taking lane)
+exec.c:2533 | run_one | LOCK | reads: lookup, m->closing, exec_live, running, success, rec | writes: native_users, closing, running, rec held/held_by/last_st | lane today: the Message's own lane | owner: M (2.1 (1) and (3), the taking lane)
+exec.c:2536 | run_one | CALL | reads: m->exec_bind of the turn | writes: rec->held/held_by/last_st | lane today: the Message's own lane (stop path) | owner: M (2.1 (3))
+exec.c:2552 | run_one | LOCK | reads: lookup, m->closing, exec_live, running, success, rec | writes: native_users, closing, running, rec held/held_by/last_st | lane today: the Message's own lane | owner: M (2.1 (1) and (3), the taking lane)
+exec.c:2575 | run_one | LOCK | reads: lookup, m->closing, exec_live, running, success, rec | writes: native_users, closing, running, rec held/held_by/last_st | lane today: the Message's own lane | owner: M (2.1 (1) and (3), the taking lane)
+exec.c:2578 | run_one | CALL | reads: m->exec_bind of the turn | writes: rec->held/held_by/last_st | lane today: the Message's own lane | owner: M (2.1 (3))
+exec.c:2587 | run_one | CALL | reads: every record's wait | writes: wake every waiter | lane today: the Message's own lane after its turn | owner: S 5.2 (one wake for all lanes)
+exec.c:2641 | exec_start_map_kick | LOCK | reads: every record, parent_msg | writes: chs->mapped=1, refs | lane today: host, start_contexts | owner: P (mapped, 2.1 (2)); the runtime-wide walk X; refs S 5.2
+exec.c:2642 | exec_start_map_kick | CALL | reads: every record | writes: - | lane today: host, start_contexts | owner: X (runtime-wide walk)
+exec.c:2675 | exec_start_map_kick | CALL | reads: every record, parent_msg | writes: refs retained | lane today: host, start_contexts | owner: X (runtime-wide walk); refs S 5.2
+exec.c:2706 | exec_start_map_kick | LOCK | reads: every record, parent_msg | writes: chs->mapped=1, refs | lane today: host, start_contexts | owner: P (mapped, 2.1 (2)); the runtime-wide walk X; refs S 5.2
+exec.c:2802 | launch_clear_if_gen | LOCK | reads: lookup, rec wait gen | writes: rec->launching=0 | lane today: parent's lane (launch failure) | owner: P (2.1 (2))
+exec.c:2803 | launch_clear_if_gen | CALL | reads: lookup addr | writes: - | lane today: parent's lane (launch failure) | owner: S 5.1 (address resolution)
+exec.c:2827 | launch_ctx_thread | LOCK | reads: lookup, e->stopping, rec affinity/wait/worker | writes: rec->wait, launching, wait->worker, e->nworkers | lane today: parent's lane (map/bind) | owner: P (2.1 (2) mapping; 3.3 nworkers per parent); stopping X
+exec.c:2837 | launch_ctx_thread | CALL | reads: lookup addr | writes: - | lane today: parent's lane (map/bind) | owner: S 5.1 (address resolution)
+exec.c:2857 | launch_ctx_thread | CALL | reads: w->launch_n | writes: w->launch_n | lane today: parent's lane | owner: X (3.3)
+exec.c:2896 | launch_ctx_thread | LOCK | reads: lookup, e->stopping, rec affinity/wait/worker | writes: rec->wait, launching, wait->worker, e->nworkers | lane today: parent's lane (map/bind) | owner: P (2.1 (2) mapping; 3.3 nworkers per parent); stopping X
+exec.c:2897 | launch_ctx_thread | CALL | reads: lookup addr | writes: - | lane today: parent's lane after CreateThread | owner: S 5.1 (address resolution)
+exec.c:3004 | context_worker | LOCK | reads: e->stopping, own wait retired, own rec, own live_wait_th | writes: - | lane today: the child's own worker thread | owner: M (its own record read on its own lane); stopping X
+exec.c:3039 | context_worker | LOCK | reads: e->stopping, own wait retired, own rec, own live_wait_th | writes: - | lane today: the child's own worker thread | owner: M (its own record read on its own lane); stopping X
+exec.c:3054 | context_worker | LOCK | reads: own addr | writes: TLS turn identity set for live_check | lane today: the child's own worker thread | owner: T (3.4)
+exec.c:3058 | context_worker | LOCK | reads: - | writes: TLS turn identity cleared | lane today: the child's own worker thread | owner: T (3.4)
+exec.c:3096 | context_worker | LOCK | reads: e->stopping, own wait retired, own rec, own live_wait_th | writes: - | lane today: the child's own worker thread | owner: M (its own record read on its own lane); stopping X
+exec.c:3155 | lmx_msg_exec_start_contexts | LOCK | reads: e->contexts_live | writes: e->stopping/stopped/contexts_live | lane today: host | owner: X (runtime-level; per parent P)
+exec.c:3174 | lmx_msg_exec_start_contexts | LOCK | reads: e->contexts_live | writes: e->stopping/stopped/contexts_live | lane today: host | owner: X (runtime-level; per parent P)
+exec.c:3175 | lmx_msg_exec_start_contexts | CALL | reads: every record | writes: - | lane today: host, start_contexts | owner: X (runtime-wide walk)
+exec.c:3202 | lmx_msg_exec_ui_step | LOCK | reads: the UI take | writes: rec held, m->ready=0 | lane today: R0's turn | owner: M (2.1 (3) taking lane); inbox Q
+exec.c:3219 | lmx_msg_exec_last_status | LOCK | reads: lookup, rec->last_st | writes: - | lane today: tests/host | owner: M (written by the taking lane); lookup S 5.1
+exec.c:3220 | lmx_msg_exec_last_status | CALL | reads: lookup addr | writes: - | lane today: tests/host | owner: S 5.1 (address resolution)
+exec.c:3234 | lmx_msg_exec_is_bound | LOCK | reads: lookup | writes: - | lane today: host/parent/drive | owner: P (2.1 (2)); lookup S 5.1
+exec.c:3235 | lmx_msg_exec_is_bound | CALL | reads: lookup addr | writes: - | lane today: host/parent/drive | owner: S 5.1 (address resolution)
+exec.c:3252 | lmx_msg_exec_unbound_close | LOCK | reads: lookup, rec, e->unbound_held | writes: e->unbound_held, TLS, running, handoff_ready | lane today: maintaining lane (drive / R0) | owner: P (19.29.6: the settling lane writes a settled Message's cells); unbound_held X; TLS T
+exec.c:3253 | lmx_msg_exec_unbound_close | CALL | reads: lookup addr | writes: - | lane today: maintaining lane (drive/R0) | owner: S 5.1 (address resolution)
+exec.c:3269 | lmx_msg_exec_unbound_close | LOCK | reads: lookup, rec, e->unbound_held | writes: e->unbound_held, TLS, running, handoff_ready | lane today: maintaining lane (drive / R0) | owner: P (19.29.6: the settling lane writes a settled Message's cells); unbound_held X; TLS T
+exec.c:3340 | lmx_msg_exec_stop | LOCK | reads: e->stopped, every record | writes: stopping/stopped/contexts_live, all records, waits | lane today: host / runtime_delete | owner: X (stage 5 (f), the close is R0's own end-turn)
+exec.c:3347 | lmx_msg_exec_stop | CALL | reads: every record | writes: ready=0, mapped=0 | lane today: host/R0 close (exec_stop) | owner: X (stage 5 (f), the close is R0's own end-turn)
+exec.c:3348 | lmx_msg_exec_stop | CALL | reads: every record's wait | writes: retire, reap push | lane today: host/R0 close | owner: X (3.3)
+exec.c:3356 | lmx_msg_exec_stop | LOCK | reads: e->stopped, every record | writes: stopping/stopped/contexts_live, all records, waits | lane today: host / runtime_delete | owner: X (stage 5 (f), the close is R0's own end-turn)
+exec.c:3363 | lmx_msg_exec_stop | CALL | reads: every record | writes: held/launching/gone/ready/mapped reset | lane today: host/R0 close | owner: X (stage 5 (f))
+exec.c:3385 | lmx_msg_exec_drop_binds | LOCK | reads: every record | writes: unmap all | lane today: runtime_delete | owner: X (delete loop)
+exec.c:3397 | lmx_msg_exec_drop_binds | CALL | reads: every record | writes: - | lane today: runtime_delete (drop_binds) | owner: X (delete loop)
+exec.c:3404 | lmx_msg_exec_drop_binds | CALL | reads: rec | writes: unmap | lane today: runtime_delete | owner: X (delete loop)
+exec.c:3425 | lmx_msg_exec_unbind | LOCK | reads: lookup, mapping authority, rec | writes: unmap, reap | lane today: parent's or settling lane | owner: P (2.1 (2)); reap X
+exec.c:3429 | lmx_msg_exec_unbind | CALL | reads: as mapping_authority_locked | writes: - | lane today: exec_unbind | owner: P (parent's-turn arm); X (host arm)
+exec.c:3433 | lmx_msg_exec_unbind | CALL | reads: lookup addr | writes: - | lane today: exec_unbind | owner: S 5.1 (address resolution)
+exec.c:3444 | lmx_msg_exec_unbind | CALL | reads: rec | writes: unmap, reap push | lane today: parent's or settling lane | owner: P (2.1 (2) unbind at release is the parent's write)
+exec.c:3466 | child_turn_core | LOCK | reads: lookup, m->turn/mapped/parent, rec | writes: rec->held/held_by, m->ready=0 | lane today: parent's turn (sequential mapping) | owner: M (2.1 (3) the taking lane)
+exec.c:3477 | child_turn_core | CALL | reads: m->exec_bind | writes: - | lane today: parent's turn (run_child_turn) | owner: P (2.1 (2))
+exec.c:3522 | lmx_msg_run_entry_turn | LOCK | reads: lookup, rt->root, parent_msg | writes: - | lane today: host bootstrap | owner: P of R0 (its child list); lookup S 5.1
+exec.c:3563 | lmx_msg_map_child | LOCK | reads: lookup p/c, parent_msg, rec affinity/mapped | writes: c->mapped, launch hold | lane today: parent's turn | owner: P (2.1 (2) mapping)
+exec.c:3572 | lmx_msg_map_child | CALL | reads: c->exec_bind | writes: - | lane today: parent's turn (map_child) | owner: P (2.1 (2))
+exec.c:3590 | lmx_msg_map_child | CALL | reads: w->launch_n | writes: w->launch_n | lane today: parent's turn | owner: X (3.3)
+exec.c:3594 | lmx_msg_map_child | LOCK | reads: lookup p/c, parent_msg, rec affinity/mapped | writes: c->mapped, launch hold | lane today: parent's turn | owner: P (2.1 (2) mapping)
+exec.c:3596 | lmx_msg_map_child | CALL | reads: c->exec_bind | writes: - | lane today: parent's turn (launch failure) | owner: P (2.1 (2))
+exec.c:3665 | lmx_msg_exec_adopt_mark | LOCK | reads: lookup p/c, disposed, native_users, success, running, handoff_ready, storage | writes: p blocks/ranges/history, c init/graph/roots/disposed | lane today: parent's lane | owner: P (2.1 (2) settle writes)
+exec.c:3734 | lmx_msg_adopted_n | LOCK | reads: lookup, m->blocks | writes: - | lane today: tests | owner: M (read of its arena bookkeeping); lookup S 5.1
+exec.c:3752 | lmx_msg_adopted_base | LOCK | reads: lookup, m->blocks | writes: - | lane today: tests | owner: M (read of its arena bookkeeping); lookup S 5.1
+exec.c:3769 | drop_adopted_locked | DEF | reads: m->ranges, m->blocks | writes: both dropped | lane today: parent's lane (dispose_mark) or R0's sweep (reclaim_mark) | owner: P (2.1 (2) settle writes)
+exec.c:3771 | drop_adopted_locked | CALL | reads: c->ranges | writes: c->ranges | lane today: parent's lane (dispose/reclaim) | owner: P (2.1 (2) settle writes)
+exec.c:3782 | lmx_msg_transfer_adopted | LOCK | reads: lookup src/dst, states, children disposed | writes: storage move | lane today: the recipient parent's lane | owner: P (2.1 (2) settle writes)
+exec.c:3804 | lmx_msg_transfer_adopted | CALL | reads: src/dst storage | writes: dst blocks/ranges, src graph/roots | lane today: parent's lane | owner: P (2.1 (2) settle writes)
+exec.c:3825 | transfer_graph_locked_api | LOCK | reads: lookup src/dst, states, ranges, dst roots | writes: storage move, dst->roots, src->tracked | lane today: the recipient's lane | owner: P (transfer to the parent); S 5.4 (deliver_graph to a non-parent recipient)
+exec.c:3915 | lmx_msg_exec_dispose_mark | LOCK | reads: lookup p/c, flags | writes: c init freed, storage dropped, disposed | lane today: parent's lane | owner: P (2.1 (2) settle writes)
+exec.c:3928 | lmx_msg_exec_dispose_mark | CALL | reads: c->ranges, blocks | writes: dropped | lane today: parent's lane (dispose_mark) | owner: P (2.1 (2))
+exec.c:3940 | lmx_msg_exec_reclaim_mark | LOCK | reads: m storage | writes: init freed, storage dropped, disposed | lane today: R0's sweep | owner: P of R0 (3.1 orphan/disposed)
+exec.c:3946 | lmx_msg_exec_reclaim_mark | CALL | reads: m->ranges, blocks | writes: dropped | lane today: R0's sweep | owner: P of R0 (3.1 orphan)
+exec.c:3967 | lmx_msg_parent_settle | LOCK | reads: lookup, p->first_child chain, orphan | writes: - | lane today: parent's lane | owner: P (2.1 (2) the child list)
+exec.c:4008 | lmx_msg_set_orphan_until | LOCK | reads: lookup | writes: m->orphan_until | lane today: tests / R0 | owner: P of R0 (3.1)
+exec.c:4040 | lmx_msg_set_orphan_retain | LOCK | reads: rt->root_record | writes: retention policy | lane today: R0's lane | owner: M of R0 (3.2 root_record)
+exec.c:4050 | lmx_msg_orphan_expired | LOCK | reads: lookup, orphan_until, native_users, success, handoff_ready, parent state | writes: - | lane today: R0's sweep | owner: P of R0 (3.1); lookup S 5.1
