@@ -2156,3 +2156,14 @@ emission changed, the chain translated by the lm0 tools from the old C, the
 regenerated C committed as the exceptions and a second self-build
 reproducing it byte for byte; O2/O3 the deletions whole. Given to the lead
 for the rewrite; b5 holds O and writes the scheduler's acceptance.
+Mikhail (2026-09-15, verbatim, on the old working version): "работа над ним
+требовала разделения на шаги с полной самосборкой -- чтобы были
+промежуточные бинарники" (work on it required splitting into steps with a
+full self-build, so that there were intermediate binaries). Rule for stage
+O and for every change of the translator's emission: the work is split into
+steps, each ending with a full self-build (the lm0 tools from the committed
+generated C, the chain translated, the C regenerated and committed as the
+gitignore exceptions, a second self-build reproducing it), so that an
+intermediate binary exists after each step and the previous binary is never
+lost; no step may leave the chain unable to build itself. Given to the
+lead for O's rewrite.
