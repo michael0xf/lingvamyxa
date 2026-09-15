@@ -5847,3 +5847,17 @@ hang's start (16:37:05 today: the nearest at 16:33:01; 08:31:13 at S3's
 landing #3: the nearest at 08:29:10 and 08:33:44), so a coincident
 docs push is not the cause on the evidence; the cause stays open for
 e9's isolation if it recurs.
+S5 relaunch follow-ups (the lead, 2026-09-15): merge 7985e2a2, self-build 8
+of 8, tag selfbuild/7985e2a2, the gates writing (last logs 19:09:30).
+The first watchdog exited at once (msys ps shows no script arguments);
+it now polls the landing's output file for the exit line and fires
+after 15 min without writes under wti/build. The timeout rule is in
+land_base3.sh (a copy, since bash reads the running script as it
+executes): every step under timeout, exit 124 prints TIMEOUT and turns
+the landing red, the header prints the per-step timeouts (self_build
+600 s, gates 1200, port_message 300, port_message_lane 300, l2trans 900,
+port_parser 900, mixa 180, ingress 180, lmx_cancel 180); the archive
+step is bounded by the gates' 1200 s until run_candidate_c_scanners.ps1
+gets its own 120 s, a repo edit left to e9's isolation result;
+landings use land_base3.sh from now. The coordinator's own monitor
+watches the integration tip and the gate logs' mtimes every minute.
