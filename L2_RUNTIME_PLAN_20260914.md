@@ -2391,3 +2391,13 @@ whole deletion. Every group held; trans.lm2's closure (trans_library,
 table_descriptor, trans_schema, trans_l1_registry, trans_l1_namespace,
 trans_l1_expr, trans_l1_statement, trans_l1_top_level,
 trans_l1_l4_registry, trans_text, trans_core, trans_internal_abi) listed.
+0c's step 2 (the 32-gate default set): claude-0c/gates-default-set-32
+ad3fc6b8 on d7f3b569, run_gates.ps1 only, merged over lane_oracle without
+conflict; cold in a fresh worktree "gates GREEN: 32 of 32 in 535s", the
+eleven core gates 213 s (lane_oracle 56 s), the 21 added 322 s (graph_abi
+85 s, entry_turn 12 s, turn_step_child 0 s, the 18 port parity runners
+11-20 s each), each pass line from the gate's own log; the S3 wake oracle
+not among them until the lead's S3 change; falsifier: a deleted runner
+file stops the chain at that gate by name with "not run". Accepted; lands
+through the lead after O1, runner only; every landing chain then runs the
+32 and reports the time.
