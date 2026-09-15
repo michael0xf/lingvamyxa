@@ -3837,3 +3837,19 @@ names the allowlist by status: R (renames) for the l2src tree and the
 gates, D only under stg/l1_baseline, M only in runners, gate.ps1,
 mixa's lib path and the two pin files; landing set as (c) plus the 33
 gates and run_l2trans/run_port_parser on the new paths.
+S3 landing #1 red (the lead, 2026-09-15), merge 5b46f833 unpushed:
+port_message -LaneCheck and plain PASS, run_lmx Message ok, scenario36
+PASS, then the gates RED at lane_oracle after 15 s: CRASH c0000005
+access=0 in reference.exe, turn_hold_until_peer+0x84 <- run_one <-
+context_worker, inside the selftest's map-fair case (exec_selftest.c
+6859-6919). Cause: the test helper reads the global g_fair_peer_done,
+checks it non-zero, then dereferences it again; the main thread writes it
+0 at 6901; with S3 owner A's turn, runnable by design, re-runs every
+round instead of sleeping on a wait, so the window is hit. The pointee
+(any_ctx) outlives the runtime; only the two reads race. Fix, test code
+only (no lock, no wait, no signal, so ours): read the pointer once into a
+local in turn_hold_until_peer; then run_port_message -LaneCheck five
+times cold, then land_s3.sh again. Rule for S3 and every later stage:
+where the owner's round replaces a sleep, test helpers with timing
+assumptions surface as races; each is fixed in the test, never by a wait
+in the core.
