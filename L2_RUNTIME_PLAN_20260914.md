@@ -2218,3 +2218,13 @@ regeneration check (same sources, same previous binary, byte for byte) is
 the proof against a hand edit on every O commit. Allowlists: O0/O2/O3
 lm2/, stg/l1_baseline/lm2/, lm1/build/, tests/, CMakeLists.txt; O1
 lmx_message.lm1/lm2 and its test. b5's scheduler continues until O1 lands.
+Mikhail (2026-09-15, verbatim), the single goal: "Теперь у нас единственная
+цель -- убрать из проекта все локи за пределами почтовых коллекций и
+добиться самосборки. Это пока единственная задача" (now we have a single
+goal: remove from the project every lock outside the mail collections and
+achieve self-build; for now this is the only task). Applied the same
+hour: b5 moves wholly onto the self-build (O0 now, O2 and O3 after the
+lead's O1), the UI-lane scheduler paused at its red acceptance
+(3d341969) until stage M needs it; the lead on O1 and the lock-removal
+stages; 0c on the oracles, the lane and wake gates and the self-build's
+fixed-point gate; nothing else is worked on.
