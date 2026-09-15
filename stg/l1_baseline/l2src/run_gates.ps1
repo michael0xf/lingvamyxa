@@ -1,6 +1,8 @@
 # Core gate chain: the gates run for every core commit, in order, each as its
-# own powershell -File child. A gate's verdict is its exit code. The chain
-# stops at the first non-zero exit and prints one summary block.
+# own powershell -File child. A gate's verdict is its exit code; a gate that
+# names a forbidden line also needs its own result line in the log and no
+# forbidden line. The chain stops at the first red gate and prints one summary
+# block.
 #
 # Run it on a clean tree after the commit: run_msg_send_local and
 # run_msg_family_handoff archive the committed HEAD, the other gates read the
@@ -29,10 +31,12 @@ $pinHash = (Get-FileHash -LiteralPath $pinned).Hash
 $header = "gates HEAD $head dirty=$dirty pin=$($pinHash.Substring(0, 8)) pin_matches_L1_PIN=$($pinHash -eq $pin) logs $LogDir"
 Write-Output $header
 
-# Name, runner, arguments, the runner's own result line.
+# Name, runner, arguments, the runner's own result line, and optionally a
+# forbidden line: a gate with one is red on exit 0 when its own line is missing
+# or the forbidden line appears.
 $gates = @(
-    # -LaneCheck: the decision 18 lane-write oracle is part of the gate.
-    @('port_message', 'run_port_message.ps1', "-TranslatorPath `"$pinned`" -LaneCheck", 'lmx_message parity PASS'),
+    # decision 18 lane oracle with the no-turn tripwire, S0
+    @('lane_oracle', 'run_port_message.ps1', "-TranslatorPath `"$pinned`" -LaneCheck", 'lmx_message parity PASS', 'LANE WRITE FAIL'),
     @('scenario36', 'run_model_scenario36.ps1', '', 'core tests PASS'),
     @('sched_record', 'run_sched_record.ps1', $(if ($SchedRecordSource) { "-SourcePath `"$SchedRecordSource`"" } else { '' }), 'sched record'),
     @('lmx_message', 'run_lmx.ps1', '-Suite Message', 'selected=Message'),
@@ -62,12 +66,25 @@ foreach ($g in $gates) {
     cmd /c "powershell -NoProfile -ExecutionPolicy Bypass -File l2src\$($g[1]) $($g[2]) > `"$log`" 2>&1"
     $code = $LASTEXITCODE
     $seconds = [int]((Get-Date) - $started).TotalSeconds
-    $lines = @(Get-Content -LiteralPath $log | Where-Object { $_.Trim() -and $_ -notmatch $decoration })
+    $raw = @(Get-Content -LiteralPath $log)
+    $lines = @($raw | Where-Object { $_.Trim() -and $_ -notmatch $decoration })
     $own = @($lines | Where-Object { $_ -match [regex]::Escape($g[3]) })
     $verdict = if ($own.Count) { $own[-1].Trim() } elseif ($lines.Count) { $lines[-1].Trim() } else { '(empty log)' }
     $evidenceLines = @($lines | Where-Object { $_ -match '(?i)\bevidence:?\s+\S' })
     $evidence = if ($evidenceLines.Count) { ([regex]::Match($evidenceLines[-1], '(?i)\bevidence:?\s+(.+?)\s*$')).Groups[1].Value } else { '-' }
     $state = if ($code -eq 0) { 'PASS' } else { "FAIL exit=$code" }
+    if ($g.Count -gt 4 -and $g[4]) {
+        # Counted over the raw log: a stderr line rendered as an error record
+        # still carries the text.
+        $forbidden = @($raw | Where-Object { $_ -match [regex]::Escape($g[4]) }).Count
+        if ($code -eq 0 -and $own.Count -eq 0) {
+            $state = "FAIL exit=0 no '$($g[3])' line"
+            $code = 1
+        } elseif ($code -eq 0 -and $forbidden -ne 0) {
+            $state = "FAIL exit=0 '$($g[4])' x$forbidden"
+            $code = 1
+        }
+    }
     if ($evidence -ne '-' -and $verdict.Contains($evidence)) {
         $rows += '{0,-17} {1} {2}s | {3} | log {4}' -f $name, $state, $seconds, $verdict, $log
     } else {
