@@ -290,6 +290,11 @@ Survey method (on d925e600)
   ("<command-line>: error: stray '\' in program"); without it the guard passes and the whole run is
   green (18 stages), so the entry is the only " coverage. Committed guard line: "cmdline guard ok:
   137 arguments, 8855 characters inline, through a response file" (green 318 s).
+  Landed by d6 as merge 458c8875 on dbcc3f88. On the merge, cold from stg\l1_baseline: exit 0 with the
+  137-argument guard line, 18 stage ok lines and "run_port_parser ok". Both escape falsifiers on the
+  merge (untracked copies, one anchor each): without the " escape, "<command-line>: error: stray '\' in
+  program"; without the \ escape, "cc1.exe: fatal error: buildport_parsercmdline_guardempty.c: No such
+  file or directory".
 (c) Cold run per runner
   Complete: 46 of 46 runners cold on d925e600 (every run_*.ps1 but run_gates, whose time is its defaults' sum),
   sequential in a fresh private worktree; the machine rebooted during row 20 and the batch resumed from
