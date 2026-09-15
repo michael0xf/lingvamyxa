@@ -57,7 +57,8 @@ HELD 2026-09-15 under Mikhail's standing rule, a contradiction sent through the 
     - anything new that is executor policy or state (a record, a list, a scheduler cell, a wake owner) is written as
       an L2 runtime unit in its Message's arena on the lmx_sched_record pattern, called through c., and joins
       Build-L2RuntimeUnits and its parity runner as stage 3c did;
-    - what stays in C is the native primitives the plan's Target names (threads, the mailbox's wake, TLS, the setjmp
+    - [struck 2026-09-15 by Mikhail, "а причем тут вообще Си?": there is no native category; the L3 Thread's code is
+      L1 like the rest] what stays in C is the native primitives the plan's Target names (threads, the mailbox's wake, TLS, the setjmp
       turn root);
     - test-build hooks and oracles (the S0 tripwire, S3's wake rule, S2's walk counter) may live in exec.c under
       LMX_MSG_EXEC_TEST as proof tools, not design.
@@ -108,7 +109,7 @@ FIELDS. Every stage names its fields' owners (coordinator, 2026-09-15; map secti
     A Message is {running, success, root}. An L3 Thread is a Message plus its mailbox plus its scheduler and maintenance
     state as Structure data in its own arena. Today's C record is the L3 Thread's; the five types are scaffolding.
     Rule: each stage's note names, for every field it touches, its owner in LMX (the parent's Structure, the L3
-    Thread's Structure, the arena from root, the mailbox, R0's arena, a native primitive) or its deletion. A field with
+    Thread's Structure, the arena from root, the mailbox, R0's arena) or its deletion. A field with
     neither is a contradiction, and the stage stops. The table of every field is LOCK_REMOVAL_FIELDS.txt; its
     "proposed" lines and questions Q1-Q4 wait for the coordinator.
     The record, documented (spec section 2, model section 2, main c7f9d375): LmxMsg { running; success; handoff_safe;
@@ -120,8 +121,10 @@ FIELDS. Every stage names its fields' owners (coordinator, 2026-09-15; map secti
     the hidden through-arguments in intern name order, the graph node. The later port then writes the L2 source whose
     translation is that C. Mikhail's fourth sentence (spec section 2 line 1071, model section 2, main d2546b54),
     verbatim: "Поэтому структура Message как данные остается и на Си -- в точности как стуктура Lmx". So the four-field
-    LmxMsg is a C data type beside Lmx for good, and only what root reaches is written in LMX. (The map's sentence that
-    the C keeps only the native primitives is the coordinator's and is before Mikhail; it is not cited here.)
+    LmxMsg is a C data type beside Lmx for good, and only what root reaches is written in LMX. The map's sentence that
+    the C keeps only the native primitives is struck by Mikhail: the L3 Thread too is written in L1, then moved to L2
+    and the remainder to L3, "а причем тут вообще Си?". There is no native category; the thread handle and thread id
+    are L1 data of the L3 Thread's code like any other.
 
 S0. The proof tool (57): the lane tripwire red on a lane write from a thread with no turn. It is the proof for S2-S5
     and lands first.
