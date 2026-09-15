@@ -602,6 +602,55 @@ $Stages = @(
         # starts_c_prefixed_quote, lm_p0_scan_c_prefixed_quote, lm_p0_
         # scan_c_char, lm_p0_scan_quoted, lm_p0_parse_fields_into --
         # Stage e, not yet ported).
+    },
+    @{
+        Name = "d_event_apply"
+        Units = @("l2src\parser_text_port.lm2", "l2src\parser_scan_port.lm2", "l2src\parser_alloc_port.lm2", "l2src\parser_dump_port.lm2", "l2src\parser_stack_stream_port.lm2")
+        Headers = @("l2src\parser_text_port_l2.h.lm1", "l2src\parser_scan_port_l2.h.lm1", "l2src\parser_alloc_port_l2.h.lm1", "l2src\parser_dump_port_l2.h.lm1", "l2src\parser_stack_stream_port_l2.h.lm1")
+        Funcs = @(
+            "lm_p0_text_equals", "lm_p0_identifier_payload",
+            "lm_p0_is_horizontal_space", "lm_p0_is_line_break", "lm_p0_line_break_width_at",
+            "lm_p0_is_field_space", "lm_p0_is_field_separator", "lm_p0_is_short_form_separator",
+            "lm_p0_is_quoted_token_boundary", "lm_p0_starts_python_string", "lm_p0_is_decimal_digit",
+            "lm_p0_copy_bytes", "lm_p0_text_view_new_cstr", "lm_p0_text_view_delete", "lm_p0_text_from_cstr",
+            "lm_p0_indent_tab_column", "lm_p0_scan_indent_column", "lm_p0_visual_column_between",
+            "lm_p0_count_line_breaks", "lm_p0_position_in_slice", "lm_p0_advance_layout_line",
+            "lm_p0_index_is_line_start", "lm_p0_line_rest_is_horizontal_space", "lm_p0_find_physical_line_end",
+            "lm_p0_scan_layout_prefix", "lm_p0_layout_prefix_is_deeper",
+            "lm_p0_node_kind_class_name", "lm_p0_free_node",
+            "lm_p0_new_structure", "lm_p0_new_frame", "lm_p0_new_node",
+            "lm_p0_dump_append", "lm_p0_dump_append_cstr", "lm_p0_dump_reserve",
+            "lm_p0_dump_append_size", "lm_p0_dump_append_field_count_line",
+            "lm_p0_dump_indent", "lm_p0_dump_text",
+            "lm_p0_dump_frame_new", "lm_p0_dump_push_frame", "lm_p0_dump_push_node",
+            "lm_p0_dump_push_structure", "lm_p0_dump_push_trailer", "lm_p0_dump_stack_delete",
+            "lm_p0_dump_stack_new",
+            "lm_p0_dump_run", "lm_p0_dump_node", "lm_p0_dump_new", "lm_p0_dump_take_data",
+            "lm_p0_dump_delete", "lm_p0_dump_alloc",
+            "lm_p0_stack_free", "lm_p0_stack_free_any", "lm_p0_stack_new", "lm_p0_stack_delete",
+            "lm_p0_pending_delimiter_new", "lm_p0_stream_event_new", "lm_p0_stream_event_new_copy",
+            "lm_p0_stream_event_delete", "lm_p0_stream_event_is_tail_cutter",
+            "lm_p0_pending_delimiter_clear", "lm_p0_pending_delimiter_delete",
+            "lm_p0_pending_mix_new", "lm_p0_pending_mix_free", "lm_p0_pending_mix_free_any",
+            "lm_p0_pending_mix_delete", "lm_p0_disabled_state_new", "lm_p0_disabled_state_delete",
+            "lm_p0_stack_ensure", "lm_p0_stack_truncate_deeper", "lm_p0_stack_top_level",
+            "lm_p0_stack_level_is_trailer_body", "lm_p0_stack_collapse_soft_to_event",
+            "lm_p0_node_keeps_source_child_level", "lm_p0_node_child_structure",
+            "lm_p0_structure_last_colon_frame", "lm_p0_stack_install_node_lineage",
+            "lm_p0_stack_ensure_root_level_alias", "lm_p0_stack_open_implicit_anonymous",
+            "lm_p0_node_trailer_slot", "lm_p0_attach_trailer", "lm_p0_pending_delimiter_set",
+            "lm_p0_stream_resolve_pending_delimiter", "lm_p0_parse_trailer_item",
+            "lm_p0_pending_mix_push", "lm_p0_stream_apply_item_event", "lm_p0_stream_apply_mix_event",
+            "lm_p0_stream_apply_event", "lm_p0_pending_mix_flush", "lm_p0_stream_block_string_level"
+        )
+        # Prior stage's 83 plus Stage d Slice 5 (event application core):
+        # 6 functions -- Stage d complete. Header gains four more
+        # still-oracle-native entries (lm_p0_trailer_role_accepts_target,
+        # lm_p0_validate_dash_fence_line, lm_p0_document_register_lazy_
+        # text, lm_p0_dash_fence_status_after_comment_trim). p0_stream_
+        # apply_item_event's own trailer_role local uses a documented
+        # `int:` stopgap for the foreign int-alias LmP0TrailerRole --
+        # see l2src/tests/repro_foreign_int_alias_local.lm2, sent to d6.
     }
 )
 
