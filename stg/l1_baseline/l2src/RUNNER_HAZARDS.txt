@@ -249,6 +249,10 @@ Survey method (on d925e600)
     because the times in their commit messages overlapped a graph_abi cold run; the message times of
     those six are not the measurement. A first re-time was invalid (the unfixed version never reached
     disk; git rejected a PS 5.1 --source=(...) argument) and is not used.
+    Landed by d6 as merge dbcc3f88 on 1542217d (exactly the 12-file allowlist). On the merge: the
+    history_owned falsifier pair 16 s before -> 2 s after with the same pass line; every runner's exact
+    pass lines (the two-level runners with both their O0 and O2 lines); "gates GREEN: 11 of 11 in 221s"
+    (the IndentStack landing's 11 gates on 402b2919 took 345 s).
   (e), second cold run on 9ad7e6bf: red only at port_slots (26 passed, 5 skipped gates pass when run
     alone). Cause: stage 5 (e) commit 6cb55982 deleted LmxMsgRuntime.clock, and
     tests/lmx_msg_slots_selftest.lm1 L59 still wrote other\clock (a sentinel for the L76 memcmp).
