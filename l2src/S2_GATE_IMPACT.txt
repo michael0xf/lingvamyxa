@@ -1,0 +1,179 @@
+S2_GATE_IMPACT: the gate set (l2src/run_gates.ps1) against stage S2
+Measured by 0c on integration d8f758e6 (M landed), read only (nothing built or run), 2026-09-15.
+
+S2, by the design (LOCK_REMOVAL_DESIGN.txt 189-203 on d6/lock-removal 0efb2732): capabilities instead of address
+lookups inside the runtime, locking unchanged. "Every call site of the spine's C1, C2 and C5 takes the record its
+caller already holds": run_one and the context worker use the take's record (C2); bind, map, unbind, settle and step
+use the parent's child pointer (C1); R0's sweep uses R0's child list (C5). C3 (send) and C4 (the child's liveness
+query) change in S4. Green: the C1/C2/C5 lookup counts at 0 and the inventories' C1/C2/C5 lines gone. The classes
+and their functions are LOCK_REMOVAL_SPINE.txt 27-46 (d6/lock-removal) and b5's LOCK_REMOVAL_S2_LOOKUPS.txt
+(l2src/, 88 sites in 69 functions: C1 27, C2 18, C3 9, C5 3, C4 6, Q 1, X 2, N 22), cited below as SPINE and
+LOOKUPS. Neither names a public signature change: whether an entry point a test calls by address (map_child,
+exec_bind, dispose_child, end_turn, run_entry_turn ...) keeps its address parameter and resolves from the caller's
+record, or is retyped to take the record, is the lead's form. So "asserts" below means the gate calls, or pins the
+text of, a C1/C2/C5 entry point by address, at the line named: the conversion must look at each.
+
+Counts (31 gates: the 30 default rows at d8f758e6 plus l2_message_root, added only with -L2MessageRoot, line 101):
+  asserts an address-taking C1/C2/C5 entry point S2 threads:   10  (lane_oracle, scenario36, lmx_message,
+                                                                    send_local, family_handoff, entry_turn,
+                                                                    c_scanners, port_msg_graph_copy, graph_abi,
+                                                                    l2_message_root)
+  pins a numeric side effect of addresses S2 changes (only):    0  (grepped explicitly; the pins found are listed
+                                                                    below with why S2 leaves each)
+  unaffected:                                                  21
+
+Method: each runner's referenced test files at d8f758e6 (and those of the runners it calls); git grep over them for
+the entry points of each class, named by SPINE and LOOKUPS:
+  C1  lmx_msg_exec_bind, map_child, exec_unbind, exec_unbound_close, dispose_child, adopt_failed, settle_child,
+      parent_settle, emergency_cancel, handoff_supervision, create, create_prepare, create_graph, poll,
+      transfer_adopted
+  C2  lmx_msg_end_turn, recv, fail, complete
+  C5  lmx_msg_run_entry_turn, root_turn, set_orphan_until, orphan_expired
+  and the lookup APIs lmx_msg_find, lmx_msg_self_or_find, msg_find_any_locked, msg_at_addr, rec_at_addr_locked,
+  lmx_msg_dest_from_src. Comment lines were read and dropped (lmx_exec_crash_report.c:18, run_port_msg_blocks.ps1:198,
+  and the M-note comments in send_local 36 and family_handoff 175). The numeric grep (M's lesson: 6f, 2026-09-15)
+  looked for literal addresses passed to find/state/child/path calls, child_at and path_seg indices, rt\n and rt->n
+  slot counts, lookup counters (lookup, LMX_LOOKUP, C1=, turn_other), and fixed counts in the runners' pass lines
+  (pre_allocations, allocations, checks=, frees=, calls, of N).
+  The lookup APIs: the tests use only lmx_msg_find (lmx_message.h:336), the host-side query SPINE files as N
+  (19-25), which S2's green does not drive (the design's red keeps "host" lookups: host=327729). No test calls
+  lmx_msg_self_or_find (lmx_message.h:351); msg_at_addr, rec_at_addr_locked and msg_find_any_locked are not exported.
+
+== Asserts an address-taking C1/C2/C5 entry point (10) ==
+
+lane_oracle   run_port_message.ps1 -LaneCheck
+  builds: lmx_message_exec_selftest.c, tests/lmx_exec_crash_report.c; the runner's own warm-up C program
+  asserts: exec selftest C1 442, C2 270, C5 11 uses, e.g. exec_bind at 160 (s->bind_st = lmx_msg_exec_bind(rt,
+    s->other, ...)), recv at 144, root_turn at 217; lmx_msg_find 109 uses. The runner's warm-up:
+    run_port_message.ps1:336 lmx_msg_create(rt, 0U, 7U, ...), 340 lmx_msg_find(rt, 999U) / lmx_msg_state(rt, 999U).
+  S2's red is measured through this runner (the design: run_port_message's reference.exe with LMX_LOOKUP_COUNT=1).
+  LOOKUPS: every exec.c C1/C2/C5 function this selftest reaches (run_one 7, exec_bind_mode 2, map_child 2 ...).
+
+scenario36    run_model_scenario36.ps1
+  builds (-Tests default): scenario36, delivery, checks_19_29_6, liveness_33, family_close_32, family_release_17,
+    orphan_mapped_17, root_ingress_5b, root_record_5e, turn_arena_o1
+  asserts: C1 86, C2 90, C5 23 uses across the ten, e.g. map_child in a parent's own turn at
+    scenario36_selftest.lm1:185, family_close_32:98, family_release_17:77, orphan_mapped_17:70, root_ingress_5b:94,
+    root_record_5e:101, turn_arena_o1:158; run_entry_turn at scenario36:220, liveness_33:298, family_close_32:109,
+    family_release_17:143, orphan_mapped_17:90, root_ingress_5b:105, root_record_5e:174; root_turn at
+    turn_arena_o1:185; create at delivery:48 and checks_19_29_6:215; recv/end_turn in every turn body.
+  Numeric pins it holds (unchanged by S2, see the pins section): rt\n counts in family_release_17 (19) and
+    orphan_mapped_17 (8).
+  LOOKUPS: lm1 C1 create_prepare, dispose_child, settle_child, adopt_failed; C2 end_turn, recv, complete; exec.c
+    map_child, exec_bind_mode, run_entry_turn (C5).
+
+lmx_message   run_lmx.ps1 -Suite Message (MessageApi + Host + Exec + Production)
+  builds: lmx_message_selftest.lm1, lmx_message_host_selftest.c, lmx_message_exec_selftest.c, the Production units
+  asserts: lmx_message_selftest.lm1 C1 81, C2 119; host selftest create at 109, recv at 118 (by address 1); the exec
+    selftest as under lane_oracle; tests/generated/unit_for_own_arrays.lm1:265 lmx_msg_create(process_runtime, 0U, 1U,
+    ...) and 266 lmx_msg_find. Numeric pins: lmx_message_host_selftest.c:124/127 path_n and path_seg on address 1
+    expected INVALID; the exec selftest's 31 rt\n reads.
+
+send_local    run_msg_send_local.ps1
+  builds: tests/lmx_msg_send_local_selftest.lm1
+  asserts: 27 code-line C1/C2/C5 uses, e.g. end_turn at 48, create at 200; lmx_msg_find 9. The runner pins the result
+    exactly: run_msg_send_local.ps1:113 "send local checks=122 failures=0 owned_frees=1": a conversion that adds or
+    removes checks moves 122.
+
+family_handoff  run_msg_family_handoff.ps1 (default -Scenario Family)
+  builds: tests/lmx_msg_family_handoff_selftest.lm1 (adopt_unrooted only with -Scenario UnrootedAdopt)
+  asserts: 32 code-line uses, e.g. end_turn at 75, create at 265; lmx_msg_find 10; child_at(rt, parent, 0) at 378.
+    The runner pins run_msg_family_handoff.ps1:125 "family handoff checks=67 failures=0 watched_frees=4".
+  LOOKUPS: lm1 handoff_supervision (C1 3, the new parent C3).
+
+entry_turn    run_entry_turn.ps1
+  builds: tests/lmx_entry_turn_selftest.lm1, tests/entry_turn_main.lm2, tests/entry_turn_lib.lm2
+  asserts: 19 code-line C1/C2/C5 uses (create at 85; run_entry_turn among them, 11 matches counting the comment at
+    14); lmx_msg_find 7. The runner pins the generated
+    entry call's argument shape: run_entry_turn.ps1:109 "c\.lmx_msg_run_entry_turn\(process_runtime, process_addr,
+    l2_program_turn, " and :112 the same with l2_library_runtime: a C5 entry point changed to take a record changes
+    the generated text these match. Numeric pins: lmx_entry_turn_selftest.lm1:84 rt\n = 1 with find(rt, 1U) != 0 and
+    find(rt, 2U) = 0; :89 lmx_msg_root_addr(rt) = 1U.
+
+c_scanners    run_candidate_c_scanners.ps1 (calls run_l2trans.ps1)
+  builds: tests/l2_c_scanners_parse_driver.lm1
+  asserts: the driver's lmx_msg_run_entry_turn(owner\owner_rt, owner\addr, c.l2_program_turn, ...) at 150,
+    lmx_msg_create at 657, lmx_msg_find at 658. Through run_l2trans.ps1:1152 it also pins the generated native main's
+    "lmx_msg_run_entry_turn\(process_runtime, process_addr, l2_program_turn, ..." text.
+
+port_msg_graph_copy  run_port_message_graph_copy.ps1
+  builds: tests/lmx_message_graph_copy_selftest.lm1
+  asserts: lmx_msg_create(rt, 0U, 1U, ...) at 111, lmx_msg_create_graph(rt, parent_addr, ...) at 115, 117, 132
+    (C1 create_prepare by the parent's address), lmx_msg_find at 118 and 133.
+
+graph_abi     run_graph_abi.ps1 (calls run_l2trans.ps1, run_lmx.ps1, run_port_msg_path_storage.ps1)
+  builds: lmx_graph_abi, graph_copy, merge, message_graph_copy and pointer_array selftests, tests/unit_*.lm2
+  asserts: through lmx_message_graph_copy_selftest.lm1 (as port_msg_graph_copy: create_graph by parent_addr at 115,
+    117, 132), and run_l2trans.ps1:1152's pin of the generated run_entry_turn(process_runtime, process_addr, ...).
+    tests/unit_msg_adapter.lm2:4 and unit_msg_cursor.lm2:7 only return rt\n (no pinned value).
+
+l2_message_root  run_l2_message_root.ps1 (opt-in, -L2MessageRoot; calls run_l2trans.ps1)
+  builds: tests/l2_message_root_driver.lm1, l2_c_quoted_driver.lm1, l2_c_surface_driver.lm1, the tests/unit_*.lm2 it lists
+  asserts: the driver wraps the runtime's create and find by address: l2_message_root_driver.lm1:80
+    c.__real_lmx_msg_create(rt, parent, id, init, n, out) and :87 c.__real_lmx_msg_find(rt, who); run_l2trans.ps1:1152
+    as under c_scanners.
+
+== Pins a numeric side effect of addresses that S2 changes (0) ==
+
+Grepped explicitly; every pin found names a number S2 does not change by the design (S2 removes lookups at C1/C2/C5
+sites; it allocates, numbers and counts Messages as before, and LOOKUPS finds no rt->slots indexing by address):
+  addresses:    lmx_entry_turn_selftest.lm1:84 find(rt, 1U) / find(rt, 2U) = 0, :89 root_addr = 1U (R0 is address 1);
+                run_port_message.ps1:340 find(rt, 999U) = 0 and state -1 (an unknown address);
+                lmx_message_host_selftest.c:124/127 path_n(g_rt, 1) = -1, path_seg(g_rt, 1, ...) INVALID.
+  child index:  lmx_msg_family_handoff_selftest.lm1:378 child_at(rt, parent, 0); lmx_msg_send_local_selftest.lm1:116
+                child_at(rt, who, 0) = 0U; exec selftest 2984 child_at(rtv, vq, 0).
+  slot counts:  rt\n in the exec selftest (31), family_release_17 (19), orphan_mapped_17 (8), entry_turn (1).
+                lmx_msg_slots_selftest.lm1:53-100 (rt\n: 256 ... 0) sets a test LmxMsgRuntime's slot count for the
+                slots module's own boundary checks (port_slots), not a runtime count.
+  lookup counts: none. No test or runner pins a lookup count; the design's counter reports only with
+                LMX_LOOKUP_COUNT=1 and leaves parity unchanged.
+  pass-line counts: send_local checks=122 (:113) and family_handoff checks=67 (:125) move only if the conversion
+                changes those tests (both gates are "asserts" above). The module runners' fixed numbers are the
+                modules' own and untouched by runtime lookups: roots_stale frees=8 mask=255 (:72), visit frees=3 (:75),
+                port_path_storage calls 19 (:283), port_slots calls 279 (:238), graph_abi's growth fixture roots 70
+                (:384), l2_message_root's exit codes 127/150/155/160. pre_allocations (M's miss) is not in any runner
+                at d8f758e6.
+
+== Unaffected (21) ==
+
+No C1/C2/C5 entry point and no lookup API in the runner or its test files. The 17 port runners link the runtime's
+lmx_message.c, lmx_message_exec.c and lmx_message_host.c through l2units_build.ps1, so a changed signature a support
+object calls would red them at compile time, not at a check; the four L1 module runners (history, roots_stale,
+visit, liveness) build only their module and its owned ranges and do not link the runtime.
+  history              run_lmx_msg_history_owned.ps1   tests/lmx_msg_history_owned_selftest.lm1
+  roots_stale          run_lmx_msg_roots_stale.ps1     tests/lmx_msg_roots_stale_selftest.lm1 (pins frees=8 mask=255)
+  visit                run_msg_visit.ps1               tests/lmx_msg_visit_selftest.lm1 (pins frees=3)
+  liveness             run_msg_liveness.ps1            tests/lmx_msg_liveness_selftest.lm1
+  port_array_owned     run_port_array_owned.ps1        tests/lmx_array_owned_selftest.lm1
+  port_array_ref_owned run_port_array_ref_owned.ps1    tests/lmx_array_ref_owned_selftest.lm1
+  port_branch_owned    run_port_branch_owned.ps1       tests/lmx_graph_abi_selftest.lm1
+  port_chars_owned     run_port_chars_owned.ps1        tests/lmx_chars_owned_selftest.lm1
+  port_graph_copy      run_port_graph_copy_owned.ps1   tests/lmx_graph_copy_selftest.lm1
+  port_merge_owned     run_port_merge_owned.ps1        tests/lmx_merge_selftest.lm1
+  port_msg_blocks      run_port_msg_blocks.ps1         tests/lmx_msg_blocks_selftest.lm1
+  port_history         run_port_msg_history_owned.ps1  tests/lmx_msg_history_owned_selftest.lm1
+  port_liveness        run_port_msg_liveness.ps1       tests/lmx_msg_liveness_selftest.lm1
+  port_mail_chain      run_port_msg_mail_chain.ps1     tests/lmx_msg_mail_chain_selftest.lm1
+  port_path_storage    run_port_msg_path_storage.ps1   tests/lmx_msg_path_storage_selftest.lm1 (pins calls 19)
+  port_roots_stale     run_port_msg_roots_stale.ps1    tests/lmx_msg_roots_stale_selftest.lm1
+  port_slots           run_port_msg_slots.ps1          tests/lmx_msg_slots_selftest.lm1 (pins calls 279)
+  port_storage         run_port_msg_storage.ps1        tests/lmx_msg_storage_selftest.lm1
+  port_visit           run_port_msg_visit.ps1          tests/lmx_msg_visit_selftest.lm1
+  port_owned_ranges    run_port_owned_ranges.ps1       tests/lmx_owned_ranges_selftest.lm1
+  port_value_owned     run_port_value_owned.ps1        tests/lmx_graph_abi_selftest.lm1
+
+== Where S4 (not S2) meets the same gates ==
+
+C3 and C4 entry points (send, send_graph, send_owned, send_cap, deliver_graph, transfer_graph, live_query,
+live_handle, live_check) appear in the exec selftest (57), lmx_message_selftest.lm1 (47), liveness_33 (13),
+checks_19_29_6 (4), scenario36 (4), send_local (3), delivery (3), family_close_32 (3). By the design they change in
+S4, not S2; listed so S4's list starts from them.
+
+Falsify: git grep -n -E 'lmx_msg_(exec_bind|map_child|exec_unbind|dispose_child|adopt_failed|settle_child|
+create|create_graph|end_turn|recv|complete|run_entry_turn|root_turn)|__real_lmx_msg_create' d8f758e6 -- <the
+runner and test files listed for each of the 10 "asserts" gates> has a code-line hit for each; the same grep over
+each of the 21 unaffected gates' runner and test files has none. Measured at d8f758e6, dropping lines that start
+with #, //, /* or *: lane_oracle 667, scenario36 177, lmx_message 866, send_local 18, family_handoff 21, entry_turn
+17, c_scanners 3, port_msg_graph_copy 4, graph_abi 5, l2_message_root 5; each of the 21 unaffected 0. (This pattern
+is narrower than the method's full C1/C2/C5 list, so the rows' counts for send_local (27) and family_handoff (32)
+are larger.)
