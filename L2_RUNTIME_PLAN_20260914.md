@@ -942,9 +942,17 @@ prototype, largest first.
    deadline cell exists, the poll takes its threshold as an argument):
    a new runtime unit lmx_root_record.lm2 with three cells (clock,
    clock_test, orphan_retain) as owned cells in R0's arena rooted there,
-   accessors shaped like lmx_sched_record, created in runtime_new after R0
-   and the UI child (OOM fails the runtime; run_port_msg_path_storage's
-   pre-test pin moves 3 to 4 with the cause named); set_now and
+   accessors shaped like lmx_sched_record, created lazily on R0's lane at
+   the first successful set_now or set_orphan_retain (Q2 (b), corrected
+   2026-09-14 after (a) was measured impossible: an L2 runtime unit's
+   external wrapper opens a library runtime through runtime_new on its
+   first call, so no function of a runtime unit may run on runtime_new's
+   or runtime_delete's path, the rule lmx_sched_record already states for
+   its own open path and the reason the scheduler record is created at the
+   parent's first step; measured as "library open failed ...
+   lmx_root_record_new" in the executor selftest); while the record is 0
+   the readers take today's defaults (the real clock, LMX_MSG_ORPHAN_RETAIN)
+   and run_port_msg_path_storage's pre-test pin stays at 3; set_now and
    set_orphan_retain keep their names and refuse unless R0's lane holds
    (holding_turn(R0), or the host outside any turn while the bootstrap is
    the host), nothing written on refusal; the readers go through the
