@@ -5167,3 +5167,11 @@ section if not 0); falsifier one address lookup put back on a scratch
 commit giving C1 at least 1. The coordinator re-measures the red on
 c8f9cb50 before S2's code starts (after b5's D2 runs) and the green on
 the S2 tip before the landing.
+S2's acceptance recorded in the design at d6/lock-removal 35f620ab as
+defined. Before S2's code (the lead, 2026-09-15): b5's S2 census was
+read at b4e1296d, before M, so the 112 C1 and 1 C2 walks on fc8e9d6e
+are attributed to their call sites in a throwaway scratch build (the
+counter keyed by the caller's return address, frame pointers,
+symbolized with addr2line on reference.exe), one reference build and
+one run after b5's D2 runs; the result becomes S2's site list in the
+design, each site threaded onto its capability or deleted.
