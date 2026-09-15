@@ -2464,3 +2464,31 @@ the defaults; the parent_msg falsifier; run_port_message plain and
 finding folded into S3 in the design at 1f3f4dfd (the wake-all and
 exec_start_map_kick go together), the strict check and an uncapped probe
 with S3's green.
+0c's self-build probe of the live L1 chain (cold on ad3fc6b8, scratch only,
+9 s; proposed runner run_self_build.ps1: B0 the gcc of the committed
+lm1/build/l1trans.lm1.c; pass 1 regenerating the 8 committed generated
+files of buildCore.lm1's map, compared by git blob id; B1 from pass 1, pass
+2; B2 from pass 2, pass 3; the fixed point pass 3 equal to pass 2): the
+current l1src self-builds, fixed point 8 of 8; the committed C is stale:
+against B0 7 of 8 equal, stg/l1_baseline/lm1/build/l1trans.lm1.c differing
+from line 6403 (committed 2026-09-12 in 50067a64, its source changed
+2026-09-13 in 7cc1c473); against B1 4 of 8 (own, parser, l1trans,
+printTree differ). gcc's output is not reproducible here (the same C hashed
+38C54956 and 66B2C2D0 in two runs), so binary hashes certify nothing and
+L1_PIN's meaning is the source of the previous binary. Ruled: the fixed
+point defines the gate, the row red until the stale files are regenerated
+by the translator and committed in the lead's lane, never by hand.
+Contradiction before Mikhail: the repository carries two diverged copies of
+the L1 chain, the root's lm1/build and l1src (l1trans.lm1.c a978175a of
+2026-09-13 from l1src/l1trans.lm1 c35f8991, plus the dead chain's
+trans.lm1.c and REST files) and stg/l1_baseline's (90b22204 of 2026-09-12
+from 1dbf2303), 31 insertions and 72 deletions apart in l1trans.lm1, the
+other seven sources and their C identical; the core, l2src and every gate
+live under stg/l1_baseline, whose buildCore.lm0.bat still needs the old
+chain's binaries (trans.lm0.exe, printTree.lm0.exe, libparser/libown
+.lm0.a) that the lm2 deletion removes. Put to him: which tree is the
+project's self-build root and what stg is; the coordinator proposing
+stg/l1_baseline as the live tree, its bootstrap rewritten onto the live
+chain, the root copy brought to it. Until his word: b5 leaves the CMake
+targets and the kept generated C alone (the split and the source
+deletions proceed), 0c's row stays red on the stale files.
