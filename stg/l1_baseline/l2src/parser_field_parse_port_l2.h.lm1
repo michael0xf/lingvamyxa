@@ -37,6 +37,17 @@ include: "l1src/p0.lm1.h"
 # scan_c_prefixed_quote, lm_p0_scan_c_char, lm_p0_starts_c_surface_
 # atom, lm_p0_scan_c_surface_atom (the last two are Stage e4, not yet
 # ported).
+#
+# Slice e4a (the 11 of e4's 16 functions with no dependency on the
+# uchar-as-scalar-local l2trans gap -- l2src/tests/repro_uchar_local.
+# lm2, reported to d6, commit 52ca8c76) removes five of e3's six
+# stale oracle-native entries (lm_p0_starts_c_prefixed_quote, lm_p0_
+# scan_c_prefixed_quote, lm_p0_scan_c_char, lm_p0_starts_c_surface_
+# atom, lm_p0_scan_c_surface_atom -- all ported for real this slice,
+# same unit). lm_p0_scan_compact_atom_piece's entry stays -- it and
+# its own callees (lm_p0_is_bare_identifier_start/_rest, lm_p0_is_
+# hex_digit, lm_p0_scan_number_token) are e4b, blocked on the uchar
+# gap's fix.
 
 prototype:
     fn: lm_own_new_zero (size_t: size) @: void
@@ -64,9 +75,4 @@ prototype:
     fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: start; @: size_t out_end) int
     fn: lm_p0_consume_brace_mark (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
     fn: lm_p0_skip_brace_mark (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
-    fn: lm_p0_starts_c_prefixed_quote (const: @(char text); size_t: end_index; size_t: start) int
-    fn: lm_p0_scan_c_prefixed_quote (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
-    fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
-    fn: lm_p0_starts_c_surface_atom (const: @(char text); size_t: end_index; size_t: start) int
-    fn: lm_p0_scan_c_surface_atom (const: @(char text); size_t: end_index; size_t: start) size_t
 end: prototype

@@ -411,12 +411,12 @@ fn: p0_find_matching_paren (@: LmP0Document document; const: @(char text); size_
             if: (p0_scan_python_string(document, text, length, @ i, line, base_column) = 0)
                 return: 0
             continue
-        if: lm_p0_starts_c_prefixed_quote(text, length, i)
-            if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, base_column) = 0)
+        if: p0_starts_c_prefixed_quote(text, length, i)
+            if: (p0_scan_c_prefixed_quote(document, text, length, @ i, line, base_column) = 0)
                 return: 0
             continue
         if: ((text[i] = '\'') && (p0_starts_python_string(text, length, i) = 0))
-            if: (lm_p0_scan_c_char(document, text, length, @ i, line, base_column) = 0)
+            if: (p0_scan_c_char(document, text, length, @ i, line, base_column) = 0)
                 return: 0
             continue
         if: ((text[i] = '"') || (text[i] = '`'))
@@ -461,12 +461,12 @@ fn: p0_find_matching_bracket (@: LmP0Document document; const: @(char text); siz
             if: (p0_scan_python_string(document, text, length, @ i, line, base_column) = 0)
                 return: 0
             continue
-        if: lm_p0_starts_c_prefixed_quote(text, length, i)
-            if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, base_column) = 0)
+        if: p0_starts_c_prefixed_quote(text, length, i)
+            if: (p0_scan_c_prefixed_quote(document, text, length, @ i, line, base_column) = 0)
                 return: 0
             continue
         if: ((text[i] = '\'') && (p0_starts_python_string(text, length, i) = 0))
-            if: (lm_p0_scan_c_char(document, text, length, @ i, line, base_column) = 0)
+            if: (p0_scan_c_char(document, text, length, @ i, line, base_column) = 0)
                 return: 0
             continue
         if: ((text[i] = '"') || (text[i] = '`'))
@@ -512,12 +512,12 @@ fn: p0_field_start_looks_explicit_frame (@: LmP0Document document; const: @(char
         if: (p0_find_matching_paren(document, text, length, i, line, column, @ close_index) = 0)
             return: 0
         return: (((close_index + 1U) < length) && (text[(close_index + 1U)] = ':'))
-    if: lm_p0_starts_c_surface_atom(text, length, i)
-        i: lm_p0_scan_c_surface_atom(text, length, i)
+    if: p0_starts_c_surface_atom(text, length, i)
+        i: p0_scan_c_surface_atom(text, length, i)
         head_end: i
     else:
-        if: lm_p0_starts_c_prefixed_quote(text, length, i)
-            if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, column) = 0)
+        if: p0_starts_c_prefixed_quote(text, length, i)
+            if: (p0_scan_c_prefixed_quote(document, text, length, @ i, line, column) = 0)
                 return: 0
             head_end: i
         else:
@@ -527,7 +527,7 @@ fn: p0_field_start_looks_explicit_frame (@: LmP0Document document; const: @(char
                 head_end: i
             else:
                 if: (text[i] = '\'')
-                    if: (lm_p0_scan_c_char(document, text, length, @ i, line, column) = 0)
+                    if: (p0_scan_c_char(document, text, length, @ i, line, column) = 0)
                         return: 0
                     head_end: i
                 else:
@@ -547,3 +547,179 @@ fn: p0_field_start_looks_explicit_frame (@: LmP0Document document; const: @(char
         ---
     return: (((head_end > index) && (i < length)) && ((text[i] = ':') || (text[i] = '(')))
 end: p0_field_start_looks_explicit_frame
+
+# Slice e4a: compact-atom / C-surface scanning, the 10 functions with
+# no dependency on either of two genuine l2trans gaps found writing
+# e4. Ported straight from the oracle, unedited. l1src/parser.lm1:
+# 1804-1848, 1933-1957. e4b (lm_p0_is_bare_identifier_start/_rest,
+# lm_p0_is_hex_digit, lm_p0_scan_number_token, lm_p0_scan_builtin_
+# compact_atom_piece, lm_p0_scan_compact_atom_piece -- l1src/
+# parser.lm1:1712-1802, 1959-2009) waits for both fixes:
+#   1. uchar not recognized as a scalar LOCAL variable's own declared
+#      type (l2src/tests/repro_uchar_local.lm2, commit 52ca8c76) --
+#      blocks is_bare_identifier_start/_rest, is_hex_digit.
+#   2. l2trans's expression flattener has a fixed 255-byte buffer
+#      (l2src/tests/repro_expr_length_limit.lm2, commit af150cd6) --
+#      blocks scan_builtin_compact_atom_piece's own 318-character
+#      9-way ||-chain condition, unrelated to the uchar gap. Moved
+#      out of e4a even though scan_builtin_compact_atom_piece itself
+#      needs no uchar local, since it has no other caller in e4a and
+#      keeping it there would need a stopgap this port avoids when a
+#      clean split is available instead.
+# lm_p0_scan_compact_atom_piece's oracle-native header entry stays in
+# place until both fixes land.
+
+fn: p0_scan_c_quoted_token (const: @(char text); size_t: end_index; size_t: quote_index) size_t
+    size_t: i
+    char: quote
+    if: ((quote_index >= end_index) || ((text[quote_index] != '\'') && (text[quote_index] != '"')))
+        return: quote_index
+    quote: text[quote_index]
+    i: (quote_index + 1U)
+    while: (i < end_index)
+        if: ((text[i] = '\\') && ((i + 1U) < end_index))
+            size_t: line_break_width
+            line_break_width: p0_line_break_width_at(text, end_index, (i + 1U))
+            if: (line_break_width > 0U)
+                i: i + (1U + line_break_width)
+            else:
+                i: i + 2U
+            continue
+        if: (text[i] = quote)
+            return: (i + 1U)
+        if: p0_is_line_break(text[i])
+            return: (quote_index + 1U)
+        i: i + 1U
+    return: (quote_index + 1U)
+end: p0_scan_c_quoted_token
+
+fn: p0_starts_c_prefixed_quote (const: @(char text); size_t: end_index; size_t: start) int
+    return: ((((start + 1U) < end_index) && (text[start] = 'L')) && ((text[(start + 1U)] = '\'') || (text[(start + 1U)] = '"')))
+end: p0_starts_c_prefixed_quote
+
+fn: p0_scan_c_char_token (const: @(char text); size_t: end_index; size_t: start) size_t
+    if: ((start >= end_index) || (text[start] != '\''))
+        return: start
+    return: p0_scan_c_quoted_token(text, end_index, start)
+end: p0_scan_c_char_token
+
+fn: p0_scan_c_prefixed_quote_token (const: @(char text); size_t: end_index; size_t: start) size_t
+    size_t: quoted_end
+    if: (p0_starts_c_prefixed_quote(text, end_index, start) = 0)
+        return: start
+    quoted_end: p0_scan_c_quoted_token(text, end_index, (start + 1U))
+    if: (quoted_end > (start + 2U))
+        return: quoted_end
+    return: (start + 1U)
+end: p0_scan_c_prefixed_quote_token
+
+fn: p0_starts_c_surface_atom (const: @(char text); size_t: end_index; size_t: start) int
+    return: ((((start + 1U) < end_index) && (text[start] = 'c')) && (text[(start + 1U)] = '.'))
+end: p0_starts_c_surface_atom
+
+fn: p0_is_c_surface_top_boundary (char: value) int
+    return: ((((((p0_is_field_space(value) || p0_is_field_separator(value)) || (value = '(')) || (value = ')')) || (value = ':')) || (value = '#')) || (value = '{'))
+end: p0_is_c_surface_top_boundary
+
+fn: p0_scan_c_sizeof_surface_atom (const: @(char text); size_t: end_index; size_t: start) size_t
+    size_t: i
+    size_t: close_index
+    size_t: depth
+    int: raw_safe
+    if: ((((start + 8U) >= end_index) || (c.memcmp((text + start), "c.sizeof", 8U) != 0)) || (text[(start + 8U)] != '('))
+        return: start
+    i: (start + 9U)
+    depth: 1U
+    while: (i < end_index)
+        if: p0_is_line_break(text[i])
+            return: start
+        if: p0_starts_c_prefixed_quote(text, end_index, i)
+            size_t: quoted_end
+            quoted_end: p0_scan_c_prefixed_quote_token(text, end_index, i)
+            if: (quoted_end > (i + 1U))
+                i: quoted_end
+                continue
+            ---
+        if: ((text[i] = '\'') || (text[i] = '"'))
+            size_t: quoted_end
+            quoted_end: p0_scan_c_quoted_token(text, end_index, i)
+            if: (quoted_end > (i + 1U))
+                i: quoted_end
+                continue
+            ---
+        if: (text[i] = '(')
+            depth: depth + 1U
+        else:
+            if: (text[i] = ')')
+                depth: depth - 1U
+                if: (depth = 0U)
+                    break
+                ---
+            ---
+        i: i + 1U
+    if: ((i >= end_index) || (text[i] != ')'))
+        return: start
+    close_index: i
+    raw_safe: 1
+    i: (start + 9U)
+    while: (i < close_index)
+        if: (((text[i] = '\\') || (text[i] = '@')) || ((((i + 1U) < close_index) && (text[i] = 'c')) && (text[(i + 1U)] = '.')))
+            raw_safe: 0
+            break
+        i: i + 1U
+    if: raw_safe
+        return: (close_index + 1U)
+    return: start
+end: p0_scan_c_sizeof_surface_atom
+
+fn: p0_scan_c_surface_atom (const: @(char text); size_t: end_index; size_t: start) size_t
+    size_t: i
+    size_t: sizeof_end
+    size_t: bracket_depth
+    if: (p0_starts_c_surface_atom(text, end_index, start) = 0)
+        return: start
+    sizeof_end: p0_scan_c_sizeof_surface_atom(text, end_index, start)
+    if: (sizeof_end > start)
+        return: sizeof_end
+    i: (start + 2U)
+    bracket_depth: 0U
+    while: (i < end_index)
+        if: p0_is_line_break(text[i])
+            break
+        if: ((bracket_depth = 0U) && p0_is_c_surface_top_boundary(text[i]))
+            break
+        if: (text[i] = '[')
+            bracket_depth: bracket_depth + 1U
+        else:
+            if: ((text[i] = ']') && (bracket_depth > 0U))
+                bracket_depth: bracket_depth - 1U
+            ---
+        i: i + 1U
+    return: i
+end: p0_scan_c_surface_atom
+
+fn: p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    size_t: end_index
+    end_index: p0_scan_c_char_token(text, length, index[0])
+    if: (end_index <= (index[0] + 1U))
+        size_t: diagnostic_line
+        size_t: diagnostic_column
+        p0_position_in_slice(text, length, index[0], line, base_column, @ diagnostic_line, @ diagnostic_column)
+        lm_p0_set_diagnostic(document, 4, diagnostic_line, diagnostic_column, "unterminated C character literal")
+        return: 0
+    index[0]: end_index
+    return: 1
+end: p0_scan_c_char
+
+fn: p0_scan_c_prefixed_quote (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    size_t: end_index
+    end_index: p0_scan_c_prefixed_quote_token(text, length, index[0])
+    if: (end_index <= (index[0] + 1U))
+        size_t: diagnostic_line
+        size_t: diagnostic_column
+        p0_position_in_slice(text, length, index[0], line, base_column, @ diagnostic_line, @ diagnostic_column)
+        lm_p0_set_diagnostic(document, 4, diagnostic_line, diagnostic_column, "unterminated C prefixed literal")
+        return: 0
+    index[0]: end_index
+    return: 1
+end: p0_scan_c_prefixed_quote
