@@ -831,6 +831,15 @@ Y. The mailbox's one synchronization as a Java monitor through the synchronized 
       mailbox's lock is m->mail, a CRITICAL_SECTION or pthread_mutex calloc'd per Message in lmx_msg_slot_new
       (exec.c), taken by the lmx_msg_mail_* functions in exec.c and by lm1's six mail_lock sites. Wakes are the
       bind waits' events and conditions (exec.c), not the mailbox's.
+    - A publication is not one unit to its recipient today (e9's liveness_33 conversion, relayed by the coordinator
+      2026-09-15): lmx_msg_pump (lmx_message.lm1 1893-1907 at 793c267f) pops one transport node under the exec lock,
+      releases the lock, admits the node (admit_one takes its own lock), then locks again for the next. A mapped
+      child's worker can take a turn between two envelopes of one publication: an answer may be consumed before the
+      stop lands, or the child runs its closing turn empty and the later answer is refused GONE (admit_one: dest
+      STOPPED). M's tests state "an input and a stop in one publication" only on a child mapped after both are
+      admitted. To decide at Y and write here: whether one end-turn's admissions to one destination are made under
+      one hold of that mailbox's monitor (the same monitor, no new lock), so a publication is one unit to its
+      recipient, or whether the model makes no such promise.
     Stages:
     Y1. l2trans gains the synchronized receiver: the old chain's emission shape, with the object bound to a sync
         name, lm_synchronized_enter, the block, and the leave as a cleanup on every exit (return, value return,
