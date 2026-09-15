@@ -3011,3 +3011,21 @@ third-party extraction) and the stg-mirror deletions need nothing beyond
 it; (b) runs root run_gen with root lm2 present, unblocked. b5 finishes
 groups (4) and CMake now; 0c has the machine for the goldens and the seed
 red-first; (b) follows.
+b5's stage-O branch finished: sonnet/stage-o da7d61f1 (two commits over
+466d587c): 010271f7 the CMake group (configure green at 15 s with 0 errors;
+the lm2 grep 75 to 0 except LM0_TRUSTED_DIR twice, the live buildCore.lm0
+driver; CMakeLists.txt 791 to 290 lines; trans.lm0 and vcpkgFetch.lm0
+targets removed, every refresh_* and lm2-regeneration custom command, the
+REST provider and adapter sections, the LM2_* registry block; own.lm1,
+parser.lm1, printTree.lm0, make.lm0 and buildCore.lm0 kept as live targets,
+each with 0 lm_message_thread_ matches in its generated C, only their
+dead-chain regeneration paths gone); da7d61f1 group (4): lm1/build/
+trans.lm1.c (947 matches), rest_lmx_http_client.lm1.c (785) and
+rest_lmx_http_server.lm1.c (783) deleted, the only three dead-chain files
+among the ten tracked generated-C exceptions, .gitignore's exceptions 13
+to 10, no hit in either buildCore.lm0.bat or gate.ps1 copy. The whole
+branch e88dab64 to da7d61f1: O0's measurement, the own_abi.lm2 split, the
+parser.lm2 markers, own.lm2 and the trans.lm2 chain, the whole lm2/ tree,
+the REST backends, the remaining 65 tests and fixtures, the CMake group,
+the generated-C group; lands through the lead with or after 0c's seed
+branch, after (b).
