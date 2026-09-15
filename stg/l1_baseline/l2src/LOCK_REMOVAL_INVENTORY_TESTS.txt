@@ -109,5 +109,44 @@ tests are not on c067bed9 and are listed from origin/d6/stage5f-impl ee8b80c9.)
   a thread outside any turn" without a tripwire: e.g. record the host thread at runtime_new and fail when
   turn == 0 on any other thread.
 
-4. Measured fact: does -LaneCheck go red when one lane write is moved to another thread?
-  [measurement pending]
+4. Measured fact: does -LaneCheck go red when one lane write is moved to another thread? No.
+  Where: c067bed9 in a scratch detached worktree, never committed; run_port_message -TranslatorPath
+  <pinned gen2> -LaneCheck, launched as run_gates launches it.
+  Baseline: exit 0 in 57 s, "lmx_message parity PASS", 0 "LANE WRITE FAIL" in any output.
+  Mutation: in child_turn_core the run_child_turn:ready_clear oracle call and m->ready = 0 run on a helper
+  thread created and joined at the same point (CreateThread, WaitForSingleObject). A one-time marker,
+  "LANE MOVE MUTATION", printed in all four selftest stderr outputs (reference.1/.2 and parity.1/.2 stderr),
+  so the moved write ran in both builds on both runs.
+  Result: exit 0 in 55 s, the same parity PASS, 0 "LANE WRITE FAIL" in any output. -LaneCheck stays green on
+  a lane write moved to a thread that holds no turn, as section 3 reads (turn == 0 returns at L177). It
+  needs the tripwire in section 3 before it can prove lane discipline once the lock is gone.
+  Counting note: the chain's automatic verdict first said RED, because it counted the two strings inside the
+  built parity.exe, reference.exe and lmx_message_exec.o. The counts above are over output files only
+  (.c .h .lm1 .lm2 .exe .o excluded), and the baseline's count is 0.
+
+5. Every other lock or wait primitive in tests and runners (Mikhail's rule, 2026-09-15, relayed by d6: the
+   only lock allowed is the message collection's own local lock; no other lock anywhere in the project).
+   Grep on c067bed9 over l2src/tests, *selftest*.c, *_test*.c and *.ps1 for CRITICAL_SECTION, SRWLOCK,
+   pthread_mutex_, pthread_cond_/CONDITION_VARIABLE, CreateMutex, CreateEvent/SetEvent, WaitFor*Object,
+   CreateThread/_beginthread/pthread_create, Interlocked*, and mail-lock names. No runner (.ps1) matches.
+   Columns: file:line | primitive | what it does | allowed / to go / not a lock.
+
+  5a. The allowed lock: the message collection's own
+  lmx_message_exec.c:456 | lmx_msg_mail_lock / lmx_msg_mail_unlock (L472): a per-Message CRITICAL_SECTION or pthread_mutex at m->mail | the Message's mail collection | ALLOWED (production; used 6x in lmx_message.lm1 and .lm2, 14x in exec.c)
+  lmx_message_exec_selftest.c:2296 | lmx_msg_test_mail_locked hook (L2296-2327, drive_close_mail_hook; L7067-7146 and L7242-7289, mail_gate_hook) | a test callback that exec.c calls while the mail lock is held (exec.c L465-468); no lock of its own | ALLOWED: relies only on the collection lock
+
+  5b. To go
+  lmx_message_host_selftest.c:25 | pthread_mutex_t g_go_mu, with pthread_cond_t g_go_cv (L26), used at L60-64, L77-79, L228-236 | the POSIX branch's start gate that releases the producer threads together | TO GO: the Windows branch already gates with a one-shot event (L58, L203, L223); use the same gate or an atomic flag the producers poll
+  exec lock sites in tests | see section 1 | | TO GO (section 1)
+
+  5c. Not locks, listed for 6f's ruling (threads, events and waits, atomics)
+  lmx_message_host_selftest.c:185 | CreateThread / pthread_create (L185, L192: off_owner; L212, L217: producer x N) | the host selftest's producer threads posting from other OS threads | thread, not a lock
+  lmx_message_host_selftest.c:203 | CreateEventA g_go, SetEvent (L223), WaitForSingleObject (L58, L189) | Windows start gate and joins | event and wait, not a lock
+  tests/cancel_spin_host.c:421 | CreateThread x4 (L421, L475, L542, L603), WaitForSingleObject (L51, L53) | cancel helper threads, joined with a 3 s timeout | thread and wait, not a lock
+  tests/lmx_exec_crash_report.c:80 | CreateThread / pthread_create (L80, L101) | the crash-report watchdog thread | thread, not a lock
+  lmx_message_exec_selftest.c | 29 CreateEvent handles (unblock, started, g_cleanup_seen, g_cleanup_go, g_mail_entered, g_mail_go, entered, go, g_rel_entered, g_rel_done), 29 WaitForSingleObject, 5 threads | the executor selftest's staged interleavings | events, waits and threads, not locks
+  Interlocked* calls | lmx_message_exec_selftest.c 409, tests/cancel_spin_host.c 21, lmx_message_host_selftest.c 1 | test counters and flags | atomics, not locks
+
+  Out of scope here, production (to go under the same rule; the other inventories): lmx_message_host.c's
+  host lock h->lock, a CRITICAL_SECTION or pthread_mutex (L31, L119-221), and the exec lock in
+  lmx_message_exec.c.
