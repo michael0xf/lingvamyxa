@@ -179,6 +179,26 @@ O. The lock-based message-thread runtime in lm2/own.lm2 deleted whole, replaced 
     код если он так себя ведет. Переводите его в L1 и помечайте в комментариях что механизм MEssage временно не
     используется. На самом деле пользовательский L2 может синхронизировать что хочет _но мы пишем в своей филососфии
     Message чтобы потом переводить на L3_".
+    DECIDED the same day, Mikhail verbatim, choosing (b) after b5's O0 measurement: "да, вариант б. Сначала
+    добиваемся самосборки а потом уже опять делаем порт в L2 и далее в L3".
+    O0's record (b5, sonnet/stage-o 5ac167af, LOCK_REMOVAL_O0_MEASUREMENT.txt): trans.lm0 does not compile from the
+    committed lm1/build/trans.lm1.c. There are 2011 errors, byte-identical over two runs: 443 symbols redeclared as a
+    plain function and as a closure typedef, and 504 "expected expression" errors in the main scaffold. The lm2
+    chain's committed C is not consistent with today's L1 sources, and the chain has no previous binary in this
+    repository.
+    Stage O under (b), which replaces everything below in this section:
+    - The project's self-build is the live chain: l1trans from its committed C, l2trans in l2src, the l2src core.
+    - O is the deletion, whole, of lm2/own.lm2 and the unbuildable lm2 self-host: own.lm2, own_abi.lm2, trans.lm2's
+      chain, its CMake targets, and its C tests and fixtures, each named. Owner b5, red first by the greps (the five
+      prefixes and the chain's file list nonzero today), green on the live chain's gates.
+    - O2 is void. O1 stays as a core primitive (the turn Message's arena). Switching l2trans's allocations onto it
+      is a stage after the locks are out, not now.
+    - Order under the single goal: S2, M and D in the live chain; the lm2 deletion; the live chain's self-build
+      fixed point as 57's gate (what buildCore.lm0 builds, l1trans regenerating its own C, the pinned gens).
+    - Operating rule adjusted (coordinator, following his order): until the self-build is achieved, new executor
+      policy or state is written in L1 (lmx_message.lm1 with its lm2 mirror, as today), not as new L2 units. The C
+      keeps shrinking, and test hooks stay under the test define.
+    The text below is kept as the record of the corrections that led here; its O1-O3 steps are superseded.
     CORRECTED the same day, Mikhail verbatim: "самосборка подразумевает что код собирает себя сам, у нас нет стадии
     "до появления ядра". Эта стадия появляется только при миграции на другую платформу и для этого в gitignore есть
     несколько исключений для сгенерированных Си ядра, иначе у нас всегда есть предыдущий бинарник". The first
@@ -322,6 +342,63 @@ S5 on 5.1, answered (Mikhail "1 - -да" to the coordinator's wording): there is
     5.6, answered ("давай так"): a capability is the target's mailbox handle; a closing Message's mailbox settles
     into its parent with the rest of its storage; a late send lands in the parent's mailbox and is refused there on
     the parent's lane with a status to the sender; no holder count. S4's C3/C4 no longer wait.
+
+Y. The mailbox's one synchronization as a Java monitor through the synchronized receiver (the target of S3 and S6).
+    Mikhail, verbatim (2026-09-15): "и кстати сделайте синхронизацию в почтовых коллекциях в точности как это
+    делается в Java, причем максимально упрощенно (ресивер synchronized в спеке описан), в старом проекте он был даже
+    до какой-то степени реализован C:\Nyasha_Planet\lingvamyxa_old_worked_version". The coordinator's rule on it:
+    the mailbox's one lock is a Java monitor in its simplest form, entered through the language's synchronized
+    receiver on the mailbox object. wait/notify is the monitor's own condition (one per monitor): notify on
+    admission, wait in take. Nothing else.
+    Facts:
+    - Spec 20.5.7 (origin/main, 15154-15232): "`synchronized` consumes an object/address expression and a statement
+      Structure owned by the `synchronized` receiver. It is a structured synchronization receiver, not a raw
+      lock/unlock pair in source syntax." "The core and standard distribution use it, or other low-level
+      synchronization, only inside the Message mechanism." The first ANSI C projection lowers it to
+      lm_synchronized_enter(lock_handle) ... lm_synchronized_leave(lock_handle). "The runtime hook must implement the
+      selected monitor policy, including Java-style reentrant entry for the same thread when that profile is
+      selected." The translator registers each active monitor as a cleanup entry, and return, break and continue
+      emit the leave before leaving the region. The spec names no wait/notify: that part rests on Mikhail's "в
+      точности как это делается в Java" and the coordinator's rule above.
+    - The old project (C:\Nyasha_Planet\lingvamyxa_old_worked_version): lm2/core.lm2 registers the receiver
+      (synchronized descriptor, ~149). lm2/trans_l1_statement.lm2 emits it: lm_trans_statement_stack_schedule_
+      synchronized binds "void *<sync name> = (void *)(<object>)", emits lm_synchronized_enter and opens the
+      block (11103-11123); the cleanup emits lm_synchronized_leave(<sync name>) on every exit (494-502);
+      lm_trans_statement_emit_synchronized is at 11884. tests/trans_synchronized_cleanup.lm2 checks enter/leave
+      balance across return, a wrapped return, break and continue, where a depth counter must come back to 0. The
+      hooks in lm2/mix/old/Mix.lm2 (6-22) are depth-counter stubs: the emission and cleanup exist, the monitor does
+      not.
+    - Today's live translator: grep synchronized in stg/l1_baseline/l2src is 0 (l2trans has no receiver). The
+      mailbox's lock is m->mail, a CRITICAL_SECTION or pthread_mutex calloc'd per Message in lmx_msg_slot_new
+      (exec.c), taken by the lmx_msg_mail_* functions in exec.c and by lm1's six mail_lock sites. Wakes are the
+      bind waits' events and conditions (exec.c), not the mailbox's.
+    Stages:
+    Y1. l2trans gains the synchronized receiver: the old chain's emission shape, with the object bound to a sync
+        name, lm_synchronized_enter, the block, and the leave as a cleanup on every exit (return, value return,
+        break, continue).
+        - Red: a leaf case in run_l2trans, the old tests/trans_synchronized_cleanup.lm2 ported to today's L2 syntax
+          with the depth-counter hooks. Today l2trans refuses the receiver.
+        - Green: the case translates, compiles and returns its balance (22), with each exit path's leave counted.
+          The historical case pin is updated in L2_MESSAGE_ROOT.txt.
+    Y2. The native monitor hook (C primitive per rule (c)): lm_synchronized_enter/leave with Java-style reentrant
+        entry for the owning thread, and lm_synchronized_wait/notify on the same monitor. Internally one OS mutex
+        and one condition per monitor object: the mail collection's own lock, the only one the project keeps.
+        - Red: a hook test (two threads, a counter under synchronized, reentrant entry from the owner, a waiter
+          woken by notify) that does not link before the hook exists.
+    Y3. The mailbox in L2: inbox and outbox push and take under synchronized on the mailbox object, notify on
+        admission, wait in a take with nothing to take. It replaces m->mail and the lmx_msg_mail_* C functions.
+        A lane's wake is its mailbox's notify, so S3's rule holds by construction.
+        - Red: S3's oracle (57, claude-0c/s3-wake-oracle ee5b2cb0), "LANE WAKE FAIL site=ctx_visit_wake ..." red
+          today. Green: the oracle green with the bind waits' events and conditions gone.
+    Under option (b) (self-build first, the L2 port after), the design's reading: Y1, the synchronized receiver in
+    l2trans, belongs to the L2 port after the self-build. Until then the mailbox is written in L1
+    (lmx_message.lm1 and its lm2 mirror), calling Y2's monitor hook explicitly: enter, leave, wait, notify. Y2 and
+    that L1 mailbox carry the lock removal now. Whether an explicit enter/leave pair in L1 is acceptable until the
+    receiver arrives (spec 20.5.7: "not a raw lock/unlock pair in source syntax", said of the L2 receiver) is the
+    coordinator's ruling to confirm, or a question for Mikhail if it reads as a contradiction.
+    S6's end state follows: the monitor inside each mailbox is the project's only lock (grep for
+    CRITICAL_SECTION, pthread_mutex, pthread_cond, SleepConditionVariable and CreateEvent in the tree finds only
+    the monitor hook).
 
 S4. The family tree and the mapping written only on the owner's lane (L2, L3), then read without the lock.
     Each tree cell and mapping cell has one writer by decision 18's ownership list (1)-(3), Mikhail's own
