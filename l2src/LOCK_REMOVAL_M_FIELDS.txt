@@ -1,0 +1,306 @@
+LOCK_REMOVAL_M_FIELDS: every site of stage M's target (the sequential mapping of
+children onto a parent's thread), the fields each touches, and each field's row
+in LOCK_REMOVAL_FIELDS.txt (sonnet/m-fields, 2026-09-15, doc-only, no machine).
+
+Method: git grep, at integration c063fd00, for run_child_turn, sched_step, the UI
+stepping (lmx_msg_exec_ui_step), AFFINITY_UI and UI_LANE_ID, restricted to l2src's
+implementation files (.c/.h/.lm1/.lm2; tests/ and *_selftest.* excluded -- they are
+callers, not the mechanism) and to mixa_manager outside vendor/ (no hits there: the
+mixa ingress harness only calls lmx_msg_host_post/drain/wait, never these five).
+Categories (kernel / functionality / DEL) and owner codes (MSG, L3T, PAR, MBOX,
+DEL) are LOCK_REMOVAL_FIELDS.txt's own scheme, from the lead's header at 23cda3c0:
+a row whose owner starts with MSG or MBOX is kernel; L3T or PAR is functionality
+written on the kernel; DEL is deleted. Rows quoted below are copied verbatim from
+that file's current tip on origin/d6/lock-removal (31348421).
+
+Mikhail's ruling this ticket rests on (LOCK_REMOVAL_FIELDS.txt line 21-25, plan on
+main): success belongs to root, the main functionality; where the return stands and
+what the scheduler still does with its children are implementation, and children
+stop with their parent. Separately, the plan states M's own rule in exactly these
+terms: "M is an implementation choice the model allows either way" -- the model
+does not forbid a child running on its parent's own thread; M removes today's
+*mandatory* sequential relay (every child forced through sched_step's round-robin
+cursor and run_child_turn), not same-thread execution itself. A site below being
+"removed" means the forced relay's own mechanism (the cursor, the claim, the
+tail-call chain) goes; nothing here claims same-thread execution becomes illegal.
+
+Line format: site | file:line range | fields read | fields written | table row
+
+--- sched_step (the scheduler's own pick-and-run tail call)
+
+site: lmx_msg_sched_step
+file:line range: lmx_message.lm1:2584-2626 (fn: lmx_msg_sched_step)
+description: picks the next ready child from the parent's own scheduler record
+  (round-robin cursor) and, at its tail, calls run_child_turn(rt, addr) directly --
+  this one function IS the sequential mapping: pick, then run, on the calling
+  (parent's) thread, no dispatch to any other thread.
+fields read: LmxMsg.parent (via lmx_msg_exec_holding_turn's identity check, not a
+  direct field read here but the guard this function is gated by); owner\sched_rec
+  (LmxMsg.sched_rec)
+fields written: owner\sched_rec (created via lmx_sched_record_new if absent);
+  the record's own cursor (lmx_sched_record_set_cursor) -- Structure data inside
+  LmxMsg.sched_rec's own arena, not a further LmxMsg field
+tail call: c.lmx_msg_run_child_turn(rt, addr) -- see child_turn_core below
+table rows:
+  LmxMsg.sched_rec | h:160 | the scheduler record, already an L2 Structure in this
+    arena | L3T | ruled (map 5.7: scheduler state as Structure data) | done (3c-2b)
+flag: none -- sched_rec is already L3T/functionality and already "done"; the row
+  does not itself need a change. What changes at M is that nothing calls
+  lmx_msg_sched_step's tail chain any more (the caller loop this function serves,
+  per RUNTIME_L2_PORTS.txt:587 "the host's sequential run_child_turn on the owner
+  thread", is deleted at M, not sched_step's own record-keeping).
+
+site: msg_sched_step (lm2 mirror)
+file:line range: lmx_message.lm2:2681-2724 (fn: msg_sched_step)
+description: byte-for-byte mirror of the above (owner\sched_rec, cursor, tail call
+  c.lmx_msg_run_child_turn(rt, addr) at line 2723).
+fields / table rows: identical to lmx_msg_sched_step above.
+flag: none.
+
+--- run_child_turn (the same-thread turn execution itself)
+
+site: child_turn_core
+file:line range: lmx_message_exec.c:3530-3568 (static int child_turn_core)
+description: the actual same-thread relay. Refuses unless bootstrap or the caller
+  holds the parent's own turn (lmx_msg_exec_holding_turn) -- today's contract that
+  only the parent's own thread, mid-turn, may run a child's turn. Claims the
+  binding (rec->held/held_by), clears readiness, snapshots the turn/ctx, runs it
+  via run_one on the calling thread.
+fields read: LmxMsg.turn, LmxMsg.mapped, LmxMsg.parent (via the holding_turn
+  guard), LmxMsg.turn_ctx; LmxMsgExecBind.held (rec->held)
+fields written: LmxMsgExecBind.held = 1, LmxMsgExecBind.held_by = lmx_tid();
+  LmxMsg.ready = 0 (the exec.c 3557 lane-write label literally names this site:
+  "run_child_turn:ready_clear")
+table rows:
+  LmxMsg.turn | h:169 | the handler function | L3T (the handler is the L3 Thread's
+    own Structure data in its arena) | ruled (coordinator) | A1
+  LmxMsg.turn_ctx | h:170 | the handler's context | L3T | ruled (coordinator) | A1
+  LmxMsg.mapped | h:174 | bound to a worker | DEL (each L3 Thread on its own OS
+    thread) | ruled (stage M) | M
+  LmxMsg.parent | h:120 | the parent's address | L3T (the parent capability) |
+    ruled (coordinator; 19.28.R2.2 "a parent capability (except the root)") | S4
+  LmxMsg.ready | h:154 | readiness flag set by senders | DEL | ruled (Mikhail:
+    "готовность к чему?! Удаляй"...) | S3
+  LmxMsgExecBind.held, .held_by | c:63-64 | a thread's claim on the binding | DEL
+    (one thread per L3 Thread; no claim) | ruled (coordinator, Q4) | M
+flag: none of these fields lack a row. Two are owned by an earlier stage than M
+  (mapped is M itself; ready is S3, held/held_by is M, turn/turn_ctx are A1,
+  parent is S4) -- by the plan's own stage order (21d586d8: "S3, M, D2, S2, S4-S6,
+  Y, A") S3 lands before M, so LmxMsg.ready's clear at line 3557 will already be
+  gone by the time M's own design note is written; not a contradiction, just a
+  cross-stage note for whoever writes that note (it should not re-discover the
+  ready clear as M's own work).
+
+site: lmx_msg_run_child_turn
+file:line range: lmx_message_exec.c:3572-3577 (int lmx_msg_run_child_turn)
+description: the public API -- validates rt/child, calls child_turn_core(rt,
+  child, 0) (bootstrap = 0, so the parent-turn-held guard above applies). This is
+  the exact function sched_step's tail call and the STAGE5_HOST_INVENTORY.txt
+  86-site count (tests only) both name.
+fields read/written: none directly (delegates to child_turn_core).
+table rows: none of its own; see child_turn_core.
+declaration sites (no field touch, prototype only): lmx_message.h:328,
+  lmx_message_exec.h:27.
+flag: none.
+
+--- the UI stepping (lmx_msg_exec_ui_step and its lane)
+
+site: lmx_msg_exec_ui_step
+file:line range: lmx_message_exec.c:3258-3277 (int lmx_msg_exec_ui_step)
+description: R0's UI-lane step -- refuses unless R0 holds its own turn (same
+  parent-turn-held contract as child_turn_core, but for the UI lane specifically);
+  takes one ready UI-affinity Message via take_ready and runs it with run_one, on
+  R0's own thread. Declaration lmx_message.h:303, lmx_message_exec.h:33 (no field
+  touch, prototypes).
+fields read: LmxMsgRuntime.root (rt->root, and rt->root->addr for the holding-turn
+  check)
+fields written: none directly (take_ready/run_one do the actual read/clear, see
+  lmx_msg_exec_take_ui_locked below, which is take_ready's caller's caller through
+  the drain path, not this function's own call graph -- take_ready is a distinct,
+  unlisted-by-name helper this grep did not separately resolve; its own site is
+  lmx_msg_exec_take_ui_locked, listed next, which the take/drain comment at
+  exec.c:3268-3269 explicitly cross-references as "the drain is the host's
+  maintenance between turns")
+table rows:
+  LmxMsgRuntime.root | h:212 | the root list | L3T of R0 (R0's children, in R0's
+    arena) | ruled (map 5.7) | S5
+flag: none.
+
+site: ui_request_if_ready_locked
+file:line range: lmx_message_exec.c:1560-1568 (static void)
+description: called when a Message with UI affinity becomes ready; sets ui_pending
+  and asks the UI lane to admit a request for it.
+fields read: LmxMsgExecBind.affinity (r->affinity); LmxMsg.ready; LmxMsg.ui_pending
+fields written: LmxMsg.ui_pending = 1 (then reset to 0 on request failure)
+table rows:
+  LmxMsgExecBind.affinity | c:62 | mapping affinity | DEL (each L3 Thread on its
+    own OS thread) | ruled (stage M) | M
+  LmxMsg.ready | h:154 | as above | DEL | ruled | S3
+  LmxMsg.ui_pending | h:164 | a UI mapping request outstanding | DEL (the UI lane
+    is a full L3 Thread; the sequential mapping goes) | ruled (stage M, Mikhail
+    "ДА") | M
+flag: none -- all three rows exist, two of them (affinity, ui_pending) explicitly
+  already stage M in the table.
+
+site: lmx_msg_exec_take_ui_locked
+file:line range: lmx_message_exec.c:1578-1632ish (unsigned, caller holds exec lock)
+description: drains the UI lane's own mailbox in admission order, clears
+  ui_pending for each, holds and takes the turn of the first eligible one. This is
+  the UI lane's own version of sched_step's pick step -- the UI lane is itself
+  modeled as R0's child mailbox today, walked sequentially.
+fields read: LmxMsg.ready, LmxMsgExecBind.gone, LmxMsgExecBind.affinity,
+  LmxMsgExecBind.held, LmxMsgExecBind.launching
+fields written: LmxMsg.ui_pending = 0 (lane-write label "take_ui:pending_clear")
+table rows:
+  LmxMsgExecBind.gone | c:67 | unbound | DEL | proposed | M
+  LmxMsgExecBind.launching | c:66 | launch in progress | DEL (the launch gate goes
+    with no wake) | ruled (S3 deletion list: launch_gate_go/refuse) | S3
+  (affinity, ready, ui_pending as above)
+flag: launching is an S3-owned field (deleted at S3, which the stage order places
+  before M) read here; same cross-stage note as child_turn_core's ready clear --
+  by the time M's design note is written this read should already be gone via S3,
+  not something M's own note needs to account for. Not a contradiction, flagged
+  for the note-writer's awareness only.
+
+--- AFFINITY_UI (mapping-time and bind-time affinity decisions)
+
+site: exec_bind_mode
+file:line range: lmx_message_exec.c:2291-2480ish (static int exec_bind_mode)
+description: lmx_msg_exec_bind's core -- the parent's own act of choosing a
+  child's affinity (UI vs ANY) at bind time. On a change to UI it calls
+  join_bind_worker (retiring any worker thread) and returns without launching; on
+  a change to ANY (or an initial ANY bind) it may call launch_ctx_thread, mapping
+  the child onto its own OS thread -- the two paths this whole stage decides
+  between (sequential UI stepping vs. one-thread-per-child).
+fields read: LmxMsgExecBind.held, LmxMsgExecBind.affinity, LmxMsgExec.contexts_live
+  (e->contexts_live -- see flag below)
+fields written: LmxMsgExecBind.turn, .ctx, .gone = 0, .affinity; LmxMsg.turn,
+  .turn_ctx
+table rows:
+  LmxMsgExecBind.turn, .ctx | c:59-60 | the handler and its context | L3T (with
+    LmxMsg.turn) | ruled (coordinator) | A1
+  LmxMsgExecBind.gone | c:67 | DEL | proposed | M
+  LmxMsgExecBind.affinity | c:62 | DEL | ruled (stage M) | M
+  LmxMsgExecBind.held | c:63-64 | DEL | ruled (coordinator, Q4) | M
+  (LmxMsg.turn, .turn_ctx as in child_turn_core)
+flag: e->contexts_live is a field of LmxMsgExec, not of any of the four/six types
+  LOCK_REMOVAL_FIELDS.txt documents (LmxMsg + LmxMsgEnv, LmxMsgCopy, LmxMsgRuntime,
+  LmxMsgBindWait, LmxMsgExecBind, and b5's added LmxMsgCtxPack). See the LmxMsgExec
+  flag below -- this is one instance of it, not a separate issue.
+
+site: lmx_msg_map_child
+file:line range: lmx_message_exec.c:3619-3680ish (int lmx_msg_map_child)
+description: the OTHER mapping path -- launches a non-UI child onto its own OS
+  thread via launch_ctx_thread, refusing UI-affinity children outright. This is
+  today's existing "each child its own thread" path that M's ruling (children stop
+  with their parent; run_child_turn's forced relay goes) would make the norm,
+  though M itself does not mandate that map_child's path replaces run_child_turn's
+  for same-thread children -- see the implementation-choice note above.
+fields read: LmxMsgExecBind.affinity (rb->affinity, refuses if UI), LmxMsg.mapped
+  (c->mapped), LmxMsg.parent_msg (c->parent_msg != p), LmxMsgExecBind.wait
+  (rb->wait), LmxMsgBindWait.gen (cap->gen)
+fields written: LmxMsg.mapped = 1 (then possibly back to 0 on a failed launch)
+table rows:
+  LmxMsgExecBind.affinity | c:62 | DEL | ruled (stage M) | M
+  LmxMsg.mapped | h:174 | DEL (each L3 Thread on its own OS thread) | ruled (stage
+    M) | M
+  LmxMsg.parent_msg | h:145 | pointer to the parent record | L3T (the parent
+    capability) | ruled (coordinator; 19.28.R2.2) | S2/S4
+  LmxMsgExecBind.wait | c:69 | its LmxMsgBindWait | DEL | ruled (map 5.7) | S3
+  LmxMsgBindWait.gen | c:44 | wait generations and launch gate | DEL | ruled (map
+    5.7; S3 launch wake goes) | S3
+flag: wait/gen are S3-owned (same cross-stage note as above: gone by the time M's
+  own note is written, since S3 precedes M in the plan order); not a contradiction.
+
+site: take_this
+file:line range: lmx_message_exec.c:3009-3040ish (static int take_this)
+description: the address-scan step used by a context worker to find its own bound
+  record (through its wait generation); refuses a UI-affinity record.
+fields read: LmxMsgExecBind.in_table, .addr, .affinity
+table rows:
+  LmxMsgExecBind.in_table | c:73 | indexed in the executor's table | DEL (the
+    executor's table goes) | proposed | S5
+  LmxMsgExecBind.addr | c:58 | the bound Message's address | DEL (a capability, S2)
+    | proposed | S2
+  LmxMsgExecBind.affinity | c:62 | DEL | ruled (stage M) | M
+flag: in_table/addr are S5/S2-owned, later or unordered relative to M in the plan;
+  no contradiction, just noting this site's own removal timing depends on those
+  stages' own notes for the parts M does not own.
+
+site: context_worker (both Win32 and pthread variants)
+file:line range: lmx_message_exec.c:3042-3133 (Win32), 3135-3230ish (pthread)
+description: a worker thread's own loop; refuses to continue if its record is
+  UI-affinity or gone.
+fields read: LmxMsgExecBind.affinity, .gone (via mine->rec)
+table rows: (affinity, gone as above)
+flag: none.
+
+site: ctx_visit_first_launchable
+file:line range: lmx_message_exec.c:3204-3211ish (static int)
+description: the walk lmx_msg_exec_map_queued and start_contexts use to find the
+  first bound, non-UI, unmapped record to launch next.
+fields read: LmxMsgExecBind.affinity, .gone; (bind_has_worker checks .wait
+  transitively)
+table rows: (affinity, gone, wait as above)
+flag: none.
+
+--- UI_LANE_ID (the UI lane's own creation and detection)
+
+site: lmx_msg_runtime_new (UI lane creation)
+file:line range: lmx_message.lm1:872-... , the UI-lane create call at 896 (mirror
+  lmx_message.lm2: create call at 948)
+description: at runtime construction, creates R0's UI-lane child with
+  create_id = LMX_MSG_UI_LANE_ID (0xFFFFFFFF), a reserved sentinel address never
+  issued to an ordinary create.
+fields read/written: goes through lmx_msg_create_prepare's normal child-creation
+  path (LmxMsg.addr, .parent, .path*, .committed among others -- not re-listed
+  here, already fully covered by LOCK_REMOVAL_FIELDS.txt's own rows for ordinary
+  creation, none of them M-specific)
+table rows: n/a (creation path, not the sequential-mapping mechanism itself)
+flag: none -- UI_LANE_ID is a create-time sentinel, not a stepping mechanism; it
+  identifies which child the UI-stepping sites above operate on, but creating it
+  is not itself something M removes.
+
+site: lmx_msg_create_prepare (UI_LANE_ID detection)
+file:line range: lmx_message.lm1:1099-... , the check at 1111 (mirror
+  lmx_message.lm2: check at 1171)
+description: `if: create_id = c.LMX_MSG_UI_LANE_ID && c.lmx_msg_exec_has_ui_lane(rt)
+  != 0` -- refuses a second UI-lane creation.
+fields read/written: as above, ordinary creation-path fields only.
+flag: none.
+
+--- The missing type
+
+FLAG (missing rows, not missing owner): LmxMsgExec. Every site above that reads or
+writes e->ui_lane, e->contexts_live, e->stopping, e->unbound_held, or takes/holds
+lmx_msg_exec_lock/unlock touches a field of LmxMsgExec -- the executor's own
+runtime state (defined in lmx_message_exec.c, not shown in this survey's target
+list since it is not one of LmxMsg or the six scaffolding types
+LOCK_REMOVAL_FIELDS.txt documents: LmxMsgEnv, LmxMsgCopy, LmxMsgRuntime,
+LmxMsgBindWait, LmxMsgExecBind, and b5's added LmxMsgCtxPack). LmxMsgExec is a
+seventh, still entirely undocumented type. It is central to exactly this ticket's
+subject (e->ui_lane is the UI lane's own LmxMsg*, read at lmx_msg_exec_ui_step and
+lmx_msg_exec_take_ui_locked and written wherever the lane is created and consulted
+by ui_request_if_ready_locked) and cannot be skipped by M's own design note: the
+note will need to say what becomes of the executor's shared table and its lock (a
+process/runtime-wide structure today, in tension with the project's standing rule
+that the only synchronization anywhere is each L3 Thread's own mailbox) once every
+Message maps to its own OS thread. Recommend a row (or a table) for LmxMsgExec
+before M's design note is written, on the same precedent as b5's LmxMsgCtxPack
+addition for S3.
+
+--- Sites needing a new lock, wait or signal: none found
+
+Every site surveyed above uses only fields already marked DEL or already staged
+for deletion in the same direction M is going (affinity, mapped, held/held_by,
+ui_pending all DEL at stage M itself), or the pre-existing exec_lock (LmxMsgExec's
+own table lock, not introduced by anything M does and not itself in this ticket's
+scope -- see the LmxMsgExec flag above). No site's removal, as read at c063fd00,
+would require adding a lock, a wait, or a signal that does not already exist
+today; if anything, sched_step's and child_turn_core's removal reduces the number
+of places rec->held and rec->affinity are checked under the exec lock. This is the
+one thing the rule asks to be stated plainly when it is true, not just when it
+fails: no contradiction of this kind was found.
+
+--- Falsifier
+git show sonnet/m-fields:stg/l1_baseline/l2src/LOCK_REMOVAL_M_FIELDS.txt | grep -c "run_child_turn"
