@@ -2656,3 +2656,18 @@ measured on the merge run_model_scenario36 PASS, run_port_message
 the defaults, the parent_msg falsifier and plain port_message. Next: 57's
 32-gate set ad3fc6b8 onto c94d3e31, then D1 (trial merge clean), then the
 probe, the root regeneration and the slice refresh with the .pyc removal.
+b5's stage-O branch sonnet/stage-o at 466d587c (groups 1-3 done: a6e3ca43
+the whole of lm2/ and stg/l1_baseline/lm2/, the REST backends group, the C
+tests and fixtures). Found by b5's cold gate run and stopped on:
+stg/l1_baseline/tests/l1/run_smoke.ps1:175 checks the built l1trans.exe
+for staleness by reading lm2/l1trans.lm2 (LastWriteTimeUtc and a content
+hash), the dead chain's L2 source, deleted by group (1); the live
+translator's source is l1src/l1trans.lm1 with lm1/build/l1trans.lm1.c.
+Ruled: l1trans.lm2 does not come back; the check is a runner hazard (the
+wrong target and a timestamp key) and 0c replaces it with a content-hash
+check against the live source and its generated C, red-first, landing with
+or before b5's branch. The cold worktree's gen0/lm0 misses are the seed
+never run there (the oldchain archives exist only in the main checkout)
+and stg's bootstrap need for the old binaries, which (c) removes; so b5
+reports greps and file lists per group and the lead's landing chain
+measures the gates in a warm worktree after (c), the branch landing whole.
