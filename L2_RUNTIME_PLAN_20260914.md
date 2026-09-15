@@ -5438,3 +5438,18 @@ or read one by one; measured with run_lmx -Suite Cancel and Exec,
 run_model_scenario36, port_message plain and -LaneCheck; falsifier: the
 condition inverted on a scratch commit makes the check red again. S4
 then lands with the union base.
+e9's cold gate record on the D2 tip (2026-09-15; checked by the coordinator:
+selfbuild/391b5062 peels to 391b5062, the log branch 4a0af0a7 on origin):
+after_landed_gate.sh 391b5062 exit 0 in a cold worktree (L1_PIN.txt
+0B3D85B3, 0 tracked under the old baseline directory, no build/);
+gate.ps1 "gate: all green" in 296 s, 27 of 27 (buildCore 4 s, run_seed
+3 s, run_gen 67 s, 12 of 12 on gen0 and gen2, l2 run_lmx 35 s and 32 s);
+run_self_build first, PASS 8 of 8 in 14 s; tag selfbuild/391b5062
+pushed at 14:20:31; the log commit claude-0c/selfbuild-log-391b5062
+4a0af0a7 (11 to 12 lines) for the lead to merge. Pins installed with
+the tip's install_pin.ps1 in all three trees (wt0c_oneroot
+fast-forwarded to the lead's 0d9eb00a on claude-0c/s2-gate-impact;
+wt0c_oneroot_gate; wt0c_landed_391b5062 after its gate run); M's record
+tree removed (clean, fc8e9d6e on integration). b5's two guard suites had
+already run during the record (reported above); the record is green
+regardless. The machine is free: the lead's S2 builds.
