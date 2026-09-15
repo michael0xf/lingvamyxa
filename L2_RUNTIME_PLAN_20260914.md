@@ -2617,3 +2617,14 @@ its kick of empty lanes, the launch's wake of a lane with nothing
 (site=launch, hidden by the old cap), and the wake-all; all three go with
 S3 (or M where launch is); S3's green is the probe at 0 lines with the
 oracle in the defaults.
+0c's file survey for the slice-equality row (tracked files on d7f3b569):
+root l1src 17 files, stg/l1_baseline/l1src 16, none only in stg; two
+differ (l1trans.lm1: root c35f8991, stg 1dbf2303; p0.h, a tracked source
+distinct from p0.h.lm1); one only in the root,
+l1src/__pycache__/port_parser.cpython-311.pyc, tracked Python bytecode of a
+manual migration utility. Ruled: the row compares every tracked file with
+no exclusions; the .pyc is a defect and its removal from git with a
+__pycache__/ gitignore line is named in the lead's refresh commit; the
+self-build row on the root base as drafted (B0 root lm1/build/
+l1trans.lm1.c, the eight sources and outputs tracked at the root, no
+shadowing header), both unmeasured until the machine frees.
