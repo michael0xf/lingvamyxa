@@ -16,7 +16,7 @@ param(
     [string]$TranslatorPath,
     [ValidateRange(1, 3600)][int]$TestTimeoutSeconds = 120,
     [string]$MessageSource = 'l2src/lmx_message.lm1',
-    [string[]]$Tests = @('lmx_model_scenario36_selftest', 'lmx_msg_delivery_selftest', 'lmx_model_checks_19_29_6_selftest', 'lmx_model_liveness_33_selftest', 'lmx_model_family_close_32_selftest', 'lmx_model_family_release_17_selftest', 'lmx_model_ui_lane_3d_selftest', 'lmx_model_orphan_mapped_17_selftest', 'lmx_model_root_ingress_5b_selftest', 'lmx_model_root_record_5e_selftest')
+    [string[]]$Tests = @('lmx_model_scenario36_selftest', 'lmx_msg_delivery_selftest', 'lmx_model_checks_19_29_6_selftest', 'lmx_model_liveness_33_selftest', 'lmx_model_family_close_32_selftest', 'lmx_model_family_release_17_selftest', 'lmx_model_ui_lane_3d_selftest', 'lmx_model_orphan_mapped_17_selftest', 'lmx_model_root_ingress_5b_selftest', 'lmx_model_root_record_5e_selftest', 'lmx_model_turn_arena_o1_selftest')
 )
 
 $ErrorActionPreference = 'Stop'
