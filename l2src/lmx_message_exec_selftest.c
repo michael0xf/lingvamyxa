@@ -467,7 +467,7 @@ static void drive_close_mail_hook(LmxMsg *m) {
 }
 static void drive_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
     (void)rt;
-    if (p == 0 || g_drive_drop == 0 || g_drive_drop->parent_msg != p) {
+    if (p == 0 || g_drive_drop == 0 || lmx_msg_parent_load(g_drive_drop) != p) {
         return;
     }
     lmx_msg_test_after_drive_snap = 0;
@@ -3087,7 +3087,7 @@ int main(int argc, char **argv) {
                 ok = 0;
             } else {
                 for (ch = pm->first_child; ch != 0; ch = ch->next_sibling) {
-                    if (ch->parent_msg != pm) {
+                    if (lmx_msg_parent_load(ch) != pm) {
                         ok = 0;
                     }
                     if (ch->addr == tc1) {
@@ -3180,14 +3180,14 @@ int main(int argc, char **argv) {
                 || n_ctx != 1
                 || lmx_msg_child_n(rtv, vp) != 0 || lmx_msg_child_n(rtv, vq) != 1
                 || lmx_msg_child_at(rtv, vq, 0) != vc
-                || vcm->parent_msg == 0 || vcm->parent_msg->addr != vq || vcm->parent_msg != lmx_msg_find(rtv, vq)
+                || lmx_msg_parent_load(vcm) == 0 || lmx_msg_parent_load(vcm)->addr != vq || lmx_msg_parent_load(vcm) != lmx_msg_find(rtv, vq)
                 || path_before != 3 || path_after != 3
                 || addr_before[0] != 1U || addr_before[1] != 1U || addr_before[2] != 1U
                 || addr_after[0] != 1U || addr_after[1] != 2U || addr_after[2] != 1U) {
                 fprintf(stderr, "handoff move st=%d binds=%d pn=%d qn=%d parent=%u addr=%d/%d\n",
                     vst, n_ctx,
                     lmx_msg_child_n(rtv, vp), lmx_msg_child_n(rtv, vq),
-                    (vcm != 0 && vcm->parent_msg != 0) ? (unsigned)vcm->parent_msg->addr : 0U,
+                    (vcm != 0 && lmx_msg_parent_load(vcm) != 0) ? (unsigned)lmx_msg_parent_load(vcm)->addr : 0U,
                     path_after, path_before);
                 return 1;
             }
@@ -5053,7 +5053,7 @@ int main(int argc, char **argv) {
         if (lmx_msg_transfer_adopted(rtt, c, p) != LMX_MSG_OK) {
             fprintf(stderr, "root transfer move ready=%d users=%d run=%u parent=%d blocks=%d ranges=%d\n",
                 child->handoff_ready, child->native_users, (unsigned)lmx_msg_running_load(child),
-                child->parent_msg == parent, child->blocks != 0, child->ranges != 0);
+                lmx_msg_parent_load(child) == parent, child->blocks != 0, child->ranges != 0);
             lmx_msg_runtime_delete(rtt);
             return 1;
         }
@@ -5252,7 +5252,7 @@ int main(int argc, char **argv) {
         if (lmx_msg_deliver_graph(rtd, srca, dsta, root) != LMX_MSG_OK
             || src->blocks != 0 || src->ranges != 0 || src->graph != 0
             || src->roots != 0 || src->tracked != 0
-            || src->parent_msg != old_parent || dst->parent_msg != old_parent
+            || lmx_msg_parent_load(src) != old_parent || lmx_msg_parent_load(dst) != old_parent
             || lmx_owned_ranges_find(dst->ranges, root) == 0
             || lmx_owned_ranges_find(dst->ranges, inner) == 0
             || dst->roots == 0 || dst->roots->p != root
@@ -6948,16 +6948,16 @@ int main(int argc, char **argv) {
             km = lmx_msg_find(rti, kid);
             if (pm == 0 || km == 0
                 || lmx_msg_child_unlink(pm, km) != LMX_MSG_INVALID
-                || pm->first_child != km || km->parent_msg != pm) {
+                || pm->first_child != km || lmx_msg_parent_load(km) != pm) {
                 fprintf(stderr, "exec unlink-contract bound child left its family\n");
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
             if (lmx_msg_exec_unbind(rti, kid) != LMX_MSG_OK
                 || lmx_msg_child_unlink(pm, km) != LMX_MSG_OK
-                || pm->first_child != 0 || km->parent_msg != pm) {
+                || pm->first_child != 0 || lmx_msg_parent_load(km) != pm) {
                 fprintf(stderr, "exec unlink-contract unbound child did not leave first_child=%p owner=%p\n",
-                    (void *)pm->first_child, (void *)km->parent_msg);
+                    (void *)pm->first_child, (void *)lmx_msg_parent_load(km));
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }

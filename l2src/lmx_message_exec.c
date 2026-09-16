@@ -184,7 +184,7 @@ void lmx_msg_test_lane_write(LmxMsgRuntime *rt, LmxMsg *owner, const char *site)
     if (owner->handoff_ready != 0 && lmx_msg_running_load(owner) == 0) {
         return;
     }
-    if (owner->parent_msg == turn) {
+    if (lmx_msg_parent_load(owner) == turn) {
         return;
     }
     fprintf(stderr, "LANE WRITE FAIL site=%s owner=%u turn=%u: a cell written off its owner's lane (decision 18)\n",
@@ -230,7 +230,7 @@ void lmx_msg_test_unbind_refused(LmxMsgRuntime *rt, LmxMsg *m, int st, const cha
     }
     turn = lmx_turn_msg;
     fprintf(stderr, "release_slot: unbind refused site=%s owner=%u turn=%u\n",
-        site, m->parent_msg != 0 ? (unsigned)m->parent_msg->addr : 0U,
+        site, lmx_msg_parent_load(m) != 0 ? (unsigned)lmx_msg_parent_load(m)->addr : 0U,
         turn != 0 ? (unsigned)turn->addr : 0U);
     fflush(stderr);
     abort();
@@ -394,6 +394,34 @@ void lmx_msg_success_store(LmxMsg *m, uint_fast8_t v) {
         return;
     }
     __atomic_store_n(&m->success, v, __ATOMIC_RELAXED);
+}
+
+LmxMsg *lmx_msg_parent_load(LmxMsg *m) {
+    if (m == 0) {
+        return 0;
+    }
+    return __atomic_load_n(&m->parent_msg, __ATOMIC_RELAXED);
+}
+
+void lmx_msg_parent_store(LmxMsg *m, LmxMsg *p) {
+    if (m == 0) {
+        return;
+    }
+    __atomic_store_n(&m->parent_msg, p, __ATOMIC_RELAXED);
+}
+
+unsigned lmx_msg_index_load(LmxMsg *m) {
+    if (m == 0) {
+        return 0U;
+    }
+    return __atomic_load_n(&m->index, __ATOMIC_RELAXED);
+}
+
+void lmx_msg_index_store(LmxMsg *m, unsigned v) {
+    if (m == 0) {
+        return;
+    }
+    __atomic_store_n(&m->index, v, __ATOMIC_RELAXED);
 }
 
 /* S4: running is a control flag, written by whichever lane may cancel who --
@@ -885,7 +913,7 @@ static int drive_walk_list(LmxMsgRuntime *rt, LmxMsg *parent, LmxMsg *head) {
     for (i = 0; i < n && st == LMX_MSG_OK; i++) {
         int ok = 0;
         if (parent != 0) {
-            ok = (tab[i]->parent_msg == parent
+            ok = (lmx_msg_parent_load(tab[i]) == parent
                 && tab[i]->state != LMX_MSG_STATE_RELEASED);
         }
         if (ok != 0) {
@@ -1288,7 +1316,7 @@ static int rec_walk_locked(LmxMsgExec *e, LmxRecVisit visit, void *arg) {
             continue;
         }
         while (m != 0 && m->next_sibling == 0) {
-            m = m->parent_msg;
+            m = lmx_msg_parent_load(m);
         }
         if (m != 0) {
             m = m->next_sibling;
@@ -1426,7 +1454,7 @@ static LmxMsg *msg_find_any_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
             continue;
         }
         while (m != 0 && m->next_sibling == 0) {
-            m = m->parent_msg;
+            m = lmx_msg_parent_load(m);
         }
         if (m != 0) {
             m = m->next_sibling;
@@ -1537,9 +1565,9 @@ static int mapping_authority_locked(LmxMsgRuntime *rt, LmxMsg *m) {
     if (lmx_msg_host_is_owner(rt) != 0 && lmx_msg_exec_holding_any(rt) == 0) {
         return 1;
     }
-    a = m != 0 ? m->parent_msg : 0;
+    a = m != 0 ? lmx_msg_parent_load(m) : 0;
     while (a != 0 && a->handoff_ready != 0 && lmx_msg_running_load(a) == 0) {
-        a = a->parent_msg;
+        a = lmx_msg_parent_load(a);
     }
     return a != 0 && lmx_msg_exec_holding_turn(rt, a->addr) != 0;
 }
@@ -2241,7 +2269,7 @@ int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     if (r == 0) {
         return LMX_MSG_OK;
     }
-    lmx_msg_test_lane_write(rt, m != 0 ? m->parent_msg : 0, "unbind:record");
+    lmx_msg_test_lane_write(rt, m != 0 ? lmx_msg_parent_load(m) : 0, "unbind:record");
     unbind_slot_locked(e, r);
     return LMX_MSG_OK;
 }
@@ -2261,7 +2289,7 @@ int lmx_msg_exec_unbind_msg(LmxMsgRuntime *rt, LmxMsg *m) {
     if (r == 0) {
         return LMX_MSG_OK;
     }
-    lmx_msg_test_lane_write(rt, m->parent_msg, "unbind:record");
+    lmx_msg_test_lane_write(rt, lmx_msg_parent_load(m), "unbind:record");
     unbind_slot_locked(e, r);
     return LMX_MSG_OK;
 }
@@ -2317,7 +2345,7 @@ int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, 
     }
     m = msg_at_addr(rt, addr);
     if (m != 0) {
-        top = m == rt->root || (rt->root != 0 && m->parent_msg == rt->root);
+        top = m == rt->root || (rt->root != 0 && lmx_msg_parent_load(m) == rt->root);
     }
     if (m == 0 || top == 0) {
         return LMX_MSG_INVALID;
@@ -2357,7 +2385,7 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
     p = msg_at_addr(rt, parent);
     /* S2: the child from the parent's own child list. */
     c = child_of_locked(p, child);
-    if (p == 0 || c == 0 || c->parent_msg != p) {
+    if (p == 0 || c == 0 || lmx_msg_parent_load(c) != p) {
         return LMX_MSG_INVALID;
     }
     {
@@ -2418,7 +2446,7 @@ int lmx_msg_exec_adopt_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c) {
 }
 
 static int adopt_mark_pc(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c) {
-    if (p == 0 || c == 0 || c->parent_msg != p || p->disposed != 0 || c->disposed != 0
+    if (p == 0 || c == 0 || lmx_msg_parent_load(c) != p || p->disposed != 0 || c->disposed != 0
         || c->native_users != 0 || lmx_msg_success_load(c) != 0
         || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0) {
         return LMX_MSG_INVALID;
@@ -2522,7 +2550,7 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) 
     dst = lmx_msg_self_or_find(rt, to);
     if (src == 0 || dst == 0 || src == dst
         || (src->blocks == 0 && src->ranges == 0)
-        || src->parent_msg != dst || src->native_users != 0
+        || lmx_msg_parent_load(src) != dst || src->native_users != 0
         || lmx_msg_running_load(src) != 0 || src->handoff_ready == 0
         || dst->disposed != 0
         || dst->state == LMX_MSG_STATE_DEAD || dst->state == LMX_MSG_STATE_RELEASED) {
@@ -2559,7 +2587,7 @@ static int transfer_graph_locked_api(LmxMsgRuntime *rt, LmxMsgAddr from,
     src = lmx_msg_self_or_find(rt, from);
     dst = lmx_msg_self_or_find(rt, to);
     if (src == 0 || dst == 0 || src == dst
-        || (direct_parent_only != 0 && src->parent_msg != dst)
+        || (direct_parent_only != 0 && lmx_msg_parent_load(src) != dst)
         || src->native_users != 0
         || lmx_msg_running_load(src) != 0 || lmx_msg_success_load(src) == 0
         || src->handoff_ready == 0 || src->disposed != 0
@@ -2646,7 +2674,7 @@ int lmx_msg_exec_dispose_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c) {
 }
 
 static int dispose_mark_pc(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c) {
-    if (p == 0 || c == 0 || c->parent_msg != p || p->disposed != 0 || c->native_users != 0
+    if (p == 0 || c == 0 || lmx_msg_parent_load(c) != p || p->disposed != 0 || c->native_users != 0
         || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0 || c->disposed != 0) {
         return LMX_MSG_INVALID;
     }
@@ -2774,7 +2802,7 @@ int lmx_msg_orphan_expired(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now) {
     m = lmx_msg_self_or_find(rt, who);
     if (m != 0 && m->orphan_until != 0U && now >= m->orphan_until
         && m->native_users == 0 && lmx_msg_success_load(m) == 0 && m->handoff_ready != 0) {
-        p = m->parent_msg;
+        p = lmx_msg_parent_load(m);
         if (p == 0 || p->state == LMX_MSG_STATE_DEAD || p->state == LMX_MSG_STATE_RELEASED) {
             exp = 1;
         }
