@@ -1837,6 +1837,12 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       line 84 pairs rt\n = 1 with find(1U) != 0 && find(2U) = 0; the executor selftest pairs on1 = on0 - 1 with
       find(p) != 0. What each pin asserts is "the record was reclaimed", which the tree walk says without a
       runtime-wide counter.
+    - Counting method, so two honest counts are not read later as a contradiction in the code: my numbers are
+      CALL sites (git grep -o of "lmx_msg_endp_retain(" and its siblings), which at 7b3a8668 give 51 / 82 / 16 over
+      l2src and 52 / 82 / 16 over the whole tree; e9's 53 / 84 / 20 come from a pattern that also catches the field
+      reads (->refs, \refs), and both are measured on trees that do not differ here -- 7b3a8668 and baa8ec23 give
+      identical call counts. Neither number is the acceptance: the probe's own refs=342 at 7b3a8668 is, and it is
+      what must reach 0.
     - Acceptance (the coordinator re-measures all three cold): the S6 probe -Part 2.
       - Red, measured by him on the landed tree with 695d54fc's probe: refs=342, runtime_lists=36 at 7b3a8668.
         (The 349 first written here predated S6-1, which removed seven refs lines; corrected on his measurement.)
@@ -1984,6 +1990,18 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       - The refusal status uses the machinery already there: post_dead's relay carries a status envelope to the
         sender, and the refusal itself happens on the parent's lane under the parent's mailbox monitor. No lock,
         wait or signal is added, which is why this is new logic rather than a contradiction.
+      - The kind is a choice of mine, recorded as such rather than dressed as a citation: LMX_MSG_KIND_REJECTED (7)
+        is declared in lmx_message.h and used nowhere in the tree (only the header and the vendor copy), and the
+        spec names no kind for this refusal -- its own "rejected" hits are about source profiles. KIND_DEAD is
+        what post_dead's relay carries for a dead worker, so reusing it would conflate "the worker died" with
+        "your send was refused". If the coordinator or Mikhail prefers another kind, only the fixture's constant
+        and the emitter change.
+      - MEASURED RED on d6/lock-s6-2 at 7b3a8668: the "retire retain" case of lmx_message_selftest.lm1 restated
+        (handle taken before the rollback, send through it, publish, read the sender's inbox), and run_lmx -Suite
+        Message fails at gen2 lmx_message_selftest with exactly one line -- "no refusal status for a send through a
+        settled capability". The .lm1 translated with no parse error and the case's other two checks did not fire,
+        so the red is the missing refusal and not a broken fixture. No pump call was needed: end_turn ends with
+        pump today, so the check converts cleanly when pump goes at Y3.
     - Settle mechanics, since today's records are calloc'd in lmx_msg_slot_new and A1 (records from the arena) is a
       later stage:
       (1) Where a closed child's record and its mailbox live afterwards. release_slot already unbinds the child,
