@@ -7611,3 +7611,9 @@ refs) is counted on the deletion side; the strengthening argument
 recorded ("one fewer" never said whose). Deliberately not yet in the
 row: the nine restated cases, settled_has/settled_n and the
 KIND_REJECTED result, until the two owed tripwires are shown.
+Stage branch d6/lock-s6-2 4997d651: the family-boundary contract
+reads the owner cell (!= pm), not its absence. Design 4997137e: the
+lead corrects his own two-site figure: lm1:688 is a root test, not a
+detachment test, so the parent_msg-as-zero class is one site
+(selftest 6778), agreeing with e9's 83774da4; exec.c:1192 stays on
+the refs deletion's side.
