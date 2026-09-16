@@ -6948,3 +6948,20 @@ only); RULED: landing scripts are project artefacts, the lead commits
 land_base3.sh exactly as it ran S6-1 as l2src/land_base3.sh on
 d6/lock-removal and pushes; e9 takes its shape, per-step timeouts and
 probe assertion from that file, never inferred.
+b5's A pre-read landed on sonnet/a-preread 70c9ba5a
+(l2src/LOCK_REMOVAL_A_PREREAD.txt, off 7b3a8668): 112 allocator calls
+surveyed in the three files, 13 in A1-A3's scope: A1 one (LmxMsg in
+slot_new, exec.c:494 today, the design's 418 drifted); A2 eight
+(LmxOwnedRange at 735/773/820/863, LmxMsgBlock at 2526, five sites
+where the design cites six at 652/690/737/780/3633/3698, named as a
+discrepancy; plus the path/init/roots array growth in lm1); A3 eight
+LmxMsgCopy sites (the design's count, not its name list: ui_request no
+longer exists, the eighth today is lmx_msg_test_stage's calloc).
+Scaffolding outside A's scope named: LmxMsgRuntime/Root/Env/Exec/
+ExecBind/BindWait/CtxPack and two local arrays. Numeric pins: the
+stage's own falsifier is the two-cycle ld --wrap balance
+(lmx_msg_blocks_selftest.lm1's __wrap_free), measured at landing;
+open, flagged not guessed: whether port_msg_blocks' frees=/callbacks=
+pin counts LmxMsgBlock or graph-level blocks (the stage confirms); no
+"block-base" pin by that name exists. The lead updates the A section's
+line citations to 70c9ba5a's before A1's design.
