@@ -8843,3 +8843,19 @@ The engineer's read-only dry run at 108b51f0: 8 paths changed since
 2d8f2b6a, exactly the two l2src/tools files outside the allowlist;
 the widening today is those two A paths, the module deletion's D and
 M paths added when that step lands, from the lead's name-status.
+The lead: the drain ruling and both guards written in both cores and
+verified (end_turn and fail drain only when who = root_addr, else
+push and return OK; host_drain and drive untouched; service_unregister
+returns GONE on every miss so OK means "this call removed it"; the
+UNREGISTER handler and release_slot's self-service path free only on
+OK, else call the new hook lmx_msg_test_unregister_absent, which takes
+the id and never touches the record, aborts under the lane check,
+silent otherwise, never frees; is_live immediately after dest:
+node\dest_msg before the first dereference, with rt\root as the
+service; parity equal per piece, arity five everywhere, forward uses
+clean; the never-refuse-a-refusal guard re-measured with a literal
+-F probe after a false zero from a pattern spelling "_kind" for
+"node\kind"). The gate runs now, before the fixture helper, as
+calibration: whether the core change is sound (no heap corruption at
+live-cascade) and where the first delivery assertion needing an R0
+round breaks.
