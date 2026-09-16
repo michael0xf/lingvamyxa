@@ -107,10 +107,26 @@ function Add-L2RuntimeSupport {
         Pop-Location
     }
 
+    # Stage 3c-2a (L2_RUNTIME_PLAN_20260914.md): L2-native runtime units with
+    # no L1 twin (lmx_root_record.lm2 today) have nothing in $L2RuntimeNames
+    # for l1trans to translate. Built the same way l2src's own runners build
+    # them (run_port_message.ps1:176-179): dot-source l2units_build.ps1 and
+    # call Build-L2RuntimeUnits, which finds every l2src/lmx_*.lm2 marked
+    # "profile: runtime" with no .lm1 twin and translates each through
+    # l2trans.exe, then l1trans, then gcc -c. Runs before the l1trans module
+    # loop below so its objects are ready to merge into $L2RuntimeObjs.
+    . (Join-Path $L1Root "l2src\l2units_build.ps1")
+    Push-Location $L1Root
+    try {
+        $L2RuntimeUnitObjs = @(Build-L2RuntimeUnits -L1Trans $L1Trans -Out (Join-Path $RunDir "l2units") -IncludeDirs @($L2RuntimeHeaderRoot, $L1Root) -CFlags "-std=c99 -Wall -Wextra -Wpedantic -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int")
+    } finally {
+        Pop-Location
+    }
+
     $L2RuntimeObjDir = Join-Path $RunDir "l2rt_objs"
     New-Item -ItemType Directory -Force -Path $L2RuntimeObjDir | Out-Null
     $L2RuntimeModuleNames = $L2RuntimeNames + @('lmx_message')
-    $L2RuntimeObjs = @()
+    $L2RuntimeObjs = @($L2RuntimeUnitObjs)
 
     Push-Location $L1Root
     try {

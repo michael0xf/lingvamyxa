@@ -172,3 +172,68 @@ test on every one of the 19 names, not the ls-tree form specifically,
 since the ticket's own falsifier names ls-tree as the check for gone
 names, which is what matters for the one negative claim this document
 makes).
+
+--- lmx_root_record: why it is not a list entry (this commit,
+    sonnet/mixa-module-list, follow-up ticket)
+
+The follow-up ticket read as "add lmx_root_record to the six lists,
+nothing else." Checked first, before editing: l2src/lmx_root_record.lm1
+does not exist (direct file test) -- only l2src/lmx_root_record.lm2 and
+lmx_root_record.h.lm1 do. Every one of the six lists is consumed by an
+l1trans-only loop (lib_l2_runtime_support.ps1:99-105 for headers,
+:117-122 for modules -- l1trans invoked directly on l2src\<name>.lm1 for
+each entry; the other five files' own list-copies follow the identical
+shape). Adding the bare name as a plain list entry would make that loop
+call l1trans on a file that is not there, throwing "L2 runtime module
+lmx_root_record translation failed" before compile or link -- a THROW
+again, not the "past link" this ticket's own part (2) expects.
+run_port_message.ps1 itself never names lmx_root_record (grep -n
+lmx_root_record on it prints nothing) -- the "support order" the ticket
+pointed at is not literally in that file. Reported to lingvamyxa-6f
+rather than guessed (this session's own stop-on-contradiction rule);
+ruling: (b) -- wire the L2-native build step into lib_l2_runtime_
+support.ps1, not a list entry.
+
+The actual mechanism, found by dot-source search across l2src (grep -rl
+Build-L2RuntimeUnits l2src/*.ps1): l2src/l2units_build.ps1's
+Build-L2RuntimeUnits, already used by run_port_message.ps1:176-179 and
+26 other l2src runners. It discovers L2-native runtime units itself (no
+name list needed) -- every l2src/lmx_*.lm2 whose first line is "profile:
+runtime" and has no sibling .lm1 -- and builds each through the L2
+pipeline: l2trans.lm1->l2trans.exe once, then per unit: header via
+l1trans (if a .h.lm1 exists), .lm2->generated .lm1 via l2trans.exe,
+library/no-escape-poll checks, generated .lm1->.c via l1trans, gcc -c.
+Confirmed directly (Build-L2RuntimeUnits' own discovery predicate, run
+cold against this tree): exactly one unit qualifies today,
+lmx_root_record.lm2 -- matching the ticket's own subject exactly, not a
+broader set.
+
+--- Fix (this commit): lib_l2_runtime_support.ps1 only
+
+Add-L2RuntimeSupport now dot-sources l2src/l2units_build.ps1 and calls
+Build-L2RuntimeUnits (lib_l2_runtime_support.ps1:110-124), before the
+existing l1trans loop over $L2RuntimeModuleNames (unchanged at
+:133-155) -- the returned objects seed $L2RuntimeObjs so they reach the
+final ObjList the caller links against. No copy of Build-L2RuntimeUnits,
+no change to the l1trans loop or to $L2RuntimeNames itself (still 17
+names, the ones with real .lm1 sources -- lmx_root_record is not added
+there, since it has none). Every caller of Add-L2RuntimeSupport
+(app_panel, the run_mixa_l2_parity dispatcher, and the five runners
+with their own extra lists) now gets lmx_root_record's four symbols
+compiled and linked into its generic runtime object set.
+
+Not wired this commit, by the ruling's own scope: the five runners that
+also carry their OWN separate list-copies for their own per-module L2
+runtime staging (run_mixa_app_fmpanel_l2_parity.ps1's coreNames,
+run_mixa_app_path_l2_parity.ps1's runtimeNames, and the two-list pairs
+in run_mixa_composite_glyphs_l2_parity.ps1, run_mixa_selection_l2_
+parity.ps1, run_mixa_tiles_l2_parity.ps1) do not call Build-L2Runtime
+Units on their own account -- their own staging step still has no
+lmx_root_record coverage. A finding for a later ticket that moves these
+five onto lib_l2_runtime_support.ps1 instead of their own copies, not
+fixed here.
+
+--- Falsifier (this commit)
+git show <this commit> --stat prints lib_l2_runtime_support.ps1 and
+this audit file only -- no change to any of the five runners' own list
+files, and no new/changed list-entry string anywhere.
