@@ -2422,17 +2422,20 @@ if ($defineL1 -match '(?m)^\s*l2_t\d+: PROBE_\w+\s*$') { throw "unit_define_actu
 $defineGcc = [IO.File]::ReadAllText((Resolve-L2Path (Join-Path $log "unit_define_actual.gcc.log")))
 if ($defineGcc -match 'int-conversion') { throw "unit_define_actual compiled with an int-conversion warning:`n$defineGcc" }
 
-# app_controller (compiler ticket 2): a call whose emitted text passed the old
-# 256-byte buffers failed l2_cat's check with no diagnostic at all. Twelve
-# field-path actuals must now translate and compile with the call whole; forty
-# pass the translator's text capacity and must be refused at the statement.
+# app_controller (compiler ticket 2): a statement call whose emitted text passed
+# the 256-byte stack buffer failed l2_cat with no diagnostic at all. Its text now
+# has a heap buffer (L2_CALL_TEXT_CAP): twelve long field-path actuals (about 660
+# bytes) must translate and compile whole; eighty (about 4400) are refused at the
+# statement, and a long call inside an expression, whose consumer holds 256
+# bytes, is refused at its statement too -- never the generic fallback.
 $textHeader = "lm1/build/l2src/tests/unit_text_capacity.lm1.h"
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $textHeader) | Out-Null
 & $outputL1trans "l2src/tests/unit_text_capacity.h.lm1" $textHeader
 if ($LASTEXITCODE -ne 0) { throw "unit_text_capacity header translation failed" }
 $textL1 = Invoke-CompileObject "l2src/tests/unit_text_capacity.lm2" "unit_text_capacity"
-if ($textL1 -notmatch 'probe_text_take12[(]l2_p[0-9]+_0.probe_text_capacity_field_00, [^)]*l2_p[0-9]+_0.probe_text_capacity_field_11[)]') { throw "unit_text_capacity did not emit the long call whole" }
+if ($textL1 -notmatch 'probe_text_take12[(]l2_p[0-9]+_0.probe_text_capacity_field_with_a_long_name_00, [^)]*l2_p[0-9]+_0.probe_text_capacity_field_with_a_long_name_11[)]') { throw "unit_text_capacity did not emit the long call whole" }
 Invoke-Negative "l2src/tests/unit_text_capacity_over.lm2" "unit_text_capacity_over" "exceeds the translator's text capacity"
+Invoke-Negative "l2src/tests/unit_text_capacity_expr.lm2" "unit_text_capacity_expr" "exceeds the translator's text capacity"
 # Spec 11.3.1 / 12.2: `@` never names an own Array element's storage; that
 # pointer needs an explicit adapter. 485f15cc's flat-field `@` let
 # `return: @ buf[0]` emit the address of a temporary copy (0c).

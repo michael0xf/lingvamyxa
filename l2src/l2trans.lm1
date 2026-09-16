@@ -1,11 +1,11 @@
 predef: "l1src/parser.lm1"
 include: "<stdio.h>" "<string.h>" "<limits.h>" "<stdlib.h>"
 
-# The translator's text capacity: every text buffer, l2_cat's and l2_tok_text's
-# copies and every text size below use it. It is an implementation limitation to
-# remove (emitted text that grows), not a bound on L2 source; a text that does
-# not fit is reported at its statement (l2_text_at), never silently.
-define: L2_TEXT_CAP 1024U
+# A statement call's text is built in a heap buffer of this capacity
+# (l2_emit_ccall), not in the 256-byte buffers the recursive expression path
+# keeps on the stack; a text that does not fit is reported at its statement
+# (l2_text_at), never silently. The capacity is a limitation to remove.
+define: L2_CALL_TEXT_CAP 4096U
 
 # L2 -> L1 frontend: §1.7 main adapter, plus two-int no-throw methods under §21.8.
 
@@ -252,10 +252,10 @@ int: l2_alloc_kind 0
 @@: char l2_it_hn 0
 @@: size_t l2_it_hnl 0
 @@: int l2_it_hty 0
-c.array: [c.L2_TEXT_CAP]: char l2_tok
+c.array: [256]: char l2_tok
 @: char l2_ccall_into 0
 # The statement l2_emit_body is emitting and whether a text copy for it ran out of
-# L2_TEXT_CAP; l2_translate reports such a failure there while the unit's nodes
+# its buffer; l2_translate reports such a failure there while the unit's nodes
 # are alive.
 @: LmP0Node l2_text_at 0
 int: l2_text_over 0
@@ -278,6 +278,7 @@ prototype:
     fn: l2_prep_addr (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest) int
     fn: l2_check_addr (const: @(LmP0Node node); int: mi; const: @(char path)) int
     fn: l2_cat (@: char dest; const: @(char src)) int
+    fn: l2_cat_cap (@: char dest; size_t: cap; const: @(char src)) int
     fn: l2_tok_temp (int: k; @: char dest) int
     fn: l2_tok_formal (int: mi; int: fi; @: char dest) int
     fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char dest) int
@@ -431,6 +432,7 @@ prototype:
     fn: l2_own_any (int: mi; const: @(LmP0Text t)) int
     fn: l2_path_own (int: mi; const: @(LmP0Text left); const: @(LmP0Text right)) int
     fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
+    fn: l2_emit_ccall_text (const: @(LmP0Node stmt); int: mi; const: @(char ind); @: char buf) int
     fn: l2_slot_decl_ty (const: @(LmP0Node stmt)) int
     fn: l2_slot_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_is_known (const: @(LmP0Text t)) int
@@ -713,7 +715,7 @@ return: 1
 fn: l2_act_at (@: char base; int: i) @: char
     if: base = 0 || i < 0
         return: 0
-return: base + (cast: (size_t) i) * c.L2_TEXT_CAP
+return: base + (cast: (size_t) i) * 256U
 
 fn: l2_release () int
     int: i 0
@@ -2779,10 +2781,10 @@ fn: l2_translate (const: @(char in_path); const: @(char out_path)) int
         status: l2_emit_unit(out_path)
     else:
         status: l2_emit_l1(out_path, body, lit)
-    # A text that did not fit L2_TEXT_CAP is reported at its statement while the
+    # A text that did not fit its buffer is reported at its statement while the
     # document that owns the node is still alive.
     if: status != 0 && l2_diag_n = 0 && l2_text_over != 0 && l2_text_at != 0
-        l2_error(in_path, l2_text_at, "this statement's emitted text exceeds the translator's text capacity (L2_TEXT_CAP)")
+        l2_error(in_path, l2_text_at, "this statement's emitted text exceeds the translator's text capacity")
     lm_p0_document_destroy(document)
     if: status != 0
         if: l2_alloc_err != 0
@@ -6148,7 +6150,7 @@ fn: l2_prefix_deref (const: @(LmP0Text t); int: mi; @: char dest) int
     int: j
     int: ty 0
     int: found 0
-    if: t = 0 || t\data = 0 || dest = 0 || t\length >= c.L2_TEXT_CAP
+    if: t = 0 || t\data = 0 || dest = 0 || t\length >= 256U
         return: 1
     while: lead < t\length && t\data[lead] = 92
         lead: lead + 1U
@@ -6247,7 +6249,7 @@ fn: l2_prefix_deref (const: @(LmP0Text t); int: mi; @: char dest) int
     ---
     if: found = 0 || l2_pointer_depth(ty) < (cast: (int) lead)
         return: 2
-    if: at + t\length - base_end >= c.L2_TEXT_CAP
+    if: at + t\length - base_end >= 256U
         return: 2
     c.memcpy(dest + at, t\data + base_end, t\length - base_end)
     at: at + t\length - base_end
@@ -6386,7 +6388,7 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; const: @(char ind); @: char d
     int: dep 0
     size_t: rb
     size_t: lit
-    c.array: [c.L2_TEXT_CAP]: char load
+    c.array: [256]: char load
     if: t = 0 || t\data = 0 || dest = 0
         return: 1
     n: t\length
@@ -6463,7 +6465,7 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; const: @(char ind); @: char d
                             k: c.sprintf(dest + out_n, "l2_q%d", j)
                         ---
                     ---
-                    if: k < 0 || out_n + (cast: (size_t) k) >= c.L2_TEXT_CAP - 1U
+                    if: k < 0 || out_n + (cast: (size_t) k) >= 255U
                         return: 1
                     out_n: out_n + (cast: (size_t) k)
                     matched: 1
@@ -6473,7 +6475,7 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; const: @(char ind); @: char d
             while: mi >= 0 && matched = 0 && j < l2_m_arity[mi]
                 if: l2_fn(mi, j) != 0 && l2_fn(mi, j)\length = at - first && c.memcmp(l2_fn(mi, j)\data, t\data + first, at - first) = 0
                     k: c.sprintf(dest + out_n, "l2_p%d_%d", mi, j)
-                    if: k < 0 || out_n + (cast: (size_t) k) >= c.L2_TEXT_CAP - 1U
+                    if: k < 0 || out_n + (cast: (size_t) k) >= 255U
                         return: 1
                     out_n: out_n + (cast: (size_t) k)
                     matched: 1
@@ -6483,20 +6485,20 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; const: @(char ind); @: char d
             while: mi >= 0 && matched = 0 && j < l2_m_sn[mi]
                 if: l2_sn[l2_slot_off(mi, j)] != 0 && l2_sn[l2_slot_off(mi, j)]\length = at - first && c.memcmp(l2_sn[l2_slot_off(mi, j)]\data, t\data + first, at - first) = 0
                     k: c.sprintf(dest + out_n, "l2_s%d_%d", mi, j)
-                    if: k < 0 || out_n + (cast: (size_t) k) >= c.L2_TEXT_CAP - 1U
+                    if: k < 0 || out_n + (cast: (size_t) k) >= 255U
                         return: 1
                     out_n: out_n + (cast: (size_t) k)
                     matched: 1
                 j: j + 1
             ---
             if: matched = 0
-                if: out_n + at - first >= c.L2_TEXT_CAP - 1U
+                if: out_n + at - first >= 255U
                     return: 1
                 c.memcpy(dest + out_n, t\data + first, at - first)
                 out_n: out_n + at - first
             ---
         else:
-            if: out_n + 1U >= c.L2_TEXT_CAP - 1U
+            if: out_n + 1U >= 255U
                 return: 1
             dest[out_n]: t\data[at]
             out_n: out_n + 1U
@@ -8268,7 +8270,7 @@ fn: l2_bool_set (const: @(char ind); const: @(char dest); const: @(char rhs)) in
 return: 0
 
 fn: l2_eval_cond (@: LmP0Field field; int: n; int: mi; const: @(char ind); const: @(char dest)) int
-    c.array: [c.L2_TEXT_CAP]: char scratch
+    c.array: [256]: char scratch
     if: dest = 0
         return: 1
     scratch[0]: 0
@@ -8850,7 +8852,7 @@ fn: l2_head_is_call (const: @(LmP0Text t); const: @(LmP0Structure body); unsigne
         return: 1
     if: l2_find_method(t) >= 0
         return: 1
-    if: t\data = 0 || t\length >= c.L2_TEXT_CAP
+    if: t\data = 0 || t\length >= 256U
         return: 0
     if: l2_seg_count(t\data, t\length) < 2
         return: 0
@@ -8868,7 +8870,7 @@ fn: l2_head_method (const: @(LmP0Text t)) int
     r: l2_find_method(t)
     if: r >= 0
         return: r
-    if: t\data = 0 || t\length >= c.L2_TEXT_CAP
+    if: t\data = 0 || t\length >= 256U
         return: 0 - 1
     if: l2_seg_count(t\data, t\length) < 2
         return: 0 - 1
@@ -8917,7 +8919,7 @@ return: 0
 fn: l2_is_path_head (const: @(LmP0Text t)) int
     int: ni 0
     int: res 0
-    if: t = 0 || t\data = 0 || t\length >= c.L2_TEXT_CAP
+    if: t = 0 || t\data = 0 || t\length >= 256U
         return: 0
     if: l2_seg_count(t\data, t\length) < 2
         return: 0
@@ -9809,7 +9811,7 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
     int: raw_j
     int: raw_fld
     size_t: array_index
-    c.array: [c.L2_TEXT_CAP]: char cast_ty
+    c.array: [256]: char cast_ty
     if: node = 0
         return: l2_error(path, node, "unsupported body")
     if: node\kind = c.LM_P0_NODE_ATOM
@@ -9954,7 +9956,7 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         if: call\body = 0
             return: l2_error(path, node, "incompatible entry signature")
         return: l2_check_actual_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
-    if: idx < 0 && call\head != 0 && call\head\data != 0 && call\head\length < c.L2_TEXT_CAP && l2_seg_count(call\head\data, call\head\length) > 1
+    if: idx < 0 && call\head != 0 && call\head\data != 0 && call\head\length < 256U && l2_seg_count(call\head\data, call\head\length) > 1
         # The head is spelled as a path. Say which part of it failed rather
         # than calling the whole statement unsupported.
         if: l2_path_root(call\head\data, call\head\length, @ pni, @ pres) != 0
@@ -10007,7 +10009,7 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
     size_t: cpn 0U
     int: cpni 0
     int: cpres 0
-    c.array: [c.L2_TEXT_CAP]: char cpbuf
+    c.array: [256]: char cpbuf
     int: cpraw
     int: cpraw_j 0
     int: cpraw_fld 0
@@ -10023,7 +10025,7 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
     int: array_count
     if: n <= 0
         return: l2_error(path, at, "unsupported body")
-    cpn: l2_join_path(field, n, cpbuf, c.L2_TEXT_CAP - 1U)
+    cpn: l2_join_path(field, n, cpbuf, 255U)
     if: cpn != 0U
         cpraw: l2_raw_path(cpbuf, cpn, mi, @ cpraw_j, @ cpraw_fld)
         if: cpraw = 0
@@ -10066,7 +10068,7 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
             i: i + 3
             f: l2_next_active(p2\next)
             continue
-        if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM && f\value\as\atom\length + p2\value\as\atom\length + 1U <= c.L2_TEXT_CAP - 1U
+        if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM && f\value\as\atom\length + p2\value\as\atom\length + 1U <= 255U
             c.memcpy(cpbuf, f\value\as\atom\data, f\value\as\atom\length)
             cpbuf[f\value\as\atom\length]: 92
             c.memcpy(cpbuf + f\value\as\atom\length + 1U, p2\value\as\atom\data, p2\value\as\atom\length)
@@ -10135,7 +10137,7 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
     int: raw 1
     int: ix 1
     int: pd 1
-    c.array: [c.L2_TEXT_CAP]: char pdest
+    c.array: [256]: char pdest
     int: lty 0
     @: LmP0Text lnm 0
     @: LmP0Text lsz 0
@@ -10425,7 +10427,7 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= l2_m_arity[mi] && rj < l2_m_arity[mi] + l2_m_sn[mi] && l2_st[l2_slot_off(mi, rj - l2_m_arity[mi])] != 5 && l2_st[l2_slot_off(mi, rj - l2_m_arity[mi])] < 100
             return: l2_error(path, stmt, "unknown foreign field")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && ix != 0 && pd != 0 && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || (l2_own_find(mi, stmt\as\frame\head) < 0 && l2_slot_find(mi, stmt\as\frame\head) < 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_slash_for(mi, stmt\as\frame\head) < 0 && l2_find_method(stmt\as\frame\head) < 0 && l2_param_find(mi, stmt\as\frame\head) < 0 && raw != 0 && l2_is_known(stmt\as\frame\head) = 0 && l2_is_path_head(stmt\as\frame\head) = 0))
-            if: stmt\as\frame\head != 0 && stmt\as\frame\head\data != 0 && stmt\as\frame\head\length < c.L2_TEXT_CAP && l2_seg_count(stmt\as\frame\head\data, stmt\as\frame\head\length) > 1
+            if: stmt\as\frame\head != 0 && stmt\as\frame\head\data != 0 && stmt\as\frame\head\length < 256U && l2_seg_count(stmt\as\frame\head\data, stmt\as\frame\head\length) > 1
                 return: l2_error(path, stmt, "unknown field path root")
             return: l2_error(path, stmt, "unsupported body")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
@@ -10591,7 +10593,21 @@ fn: l2_cat (@: char dest; const: @(char src)) int
         return: 1
     nd: c.strlen(dest)
     ns: c.strlen(src)
-    if: nd + ns >= c.L2_TEXT_CAP - 1U
+    if: nd + ns >= 255U
+        l2_text_over: 1
+        return: 1
+    c.memcpy(dest + nd, src, ns + 1U)
+return: 0
+
+# l2_cat for a buffer of a stated capacity (the statement call text).
+fn: l2_cat_cap (@: char dest; size_t: cap; const: @(char src)) int
+    size_t: nd
+    size_t: ns
+    if: dest = 0 || src = 0 || cap = 0U
+        return: 1
+    nd: c.strlen(dest)
+    ns: c.strlen(src)
+    if: nd + ns >= cap
         l2_text_over: 1
         return: 1
     c.memcpy(dest + nd, src, ns + 1U)
@@ -10721,7 +10737,7 @@ fn: l2_prep_addr (const: @(LmP0Node node); int: mi; const: @(char ind); @: char 
     int: oi
     int: fi
     int: temp
-    c.array: [c.L2_TEXT_CAP]: char nm
+    c.array: [256]: char nm
     if: node = 0 || dest = 0 || ind = 0 || node\as = 0 || node\as\frame = 0 || node\as\frame\body = 0
         return: 1
     # The address of a field: render the field read the way every other field
@@ -10741,14 +10757,14 @@ fn: l2_prep_addr (const: @(LmP0Node node); int: mi; const: @(char ind); @: char 
     t: f\value\as\atom
     idx: -1
     if: l2_loc_find(t) >= 0 || l2_entry_find(t) >= 0
-        if: l2_tok_text(t, nm, c.L2_TEXT_CAP) != 0
+        if: l2_tok_text(t, nm, 256U) != 0
             return: 1
         if: c.sprintf(dest, "@ %s", nm) < 0
             return: 1
         return: 0
     ---
     if: mi >= 0 && l2_ml_find(t) >= 0 && l2_ml_ty[l2_ml_find(t)] = 41
-        if: l2_tok_text(t, nm, c.L2_TEXT_CAP) != 0
+        if: l2_tok_text(t, nm, 256U) != 0
             return: 1
         if: c.sprintf(dest, "@ %s", nm) < 0
             return: 1
@@ -10818,7 +10834,7 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
         g: l2_next_active(f\next)
         # A two-word C type is spelled as written (5e, process_marker 212:71).
         if: f != 0 && f\value != 0 && f\value\kind = c.LM_P0_NODE_ATOM && g != 0 && g\value != 0 && g\value\kind = c.LM_P0_NODE_ATOM && l2_ctype_word(f\value\as\atom) && l2_ctype_word(g\value\as\atom)
-            if: f\value\as\atom\length + g\value\as\atom\length + 2U >= c.L2_TEXT_CAP
+            if: f\value\as\atom\length + g\value\as\atom\length + 2U >= 256U
                 return: 1
             if: c.sprintf(dest, "%.*s %.*s", (cast: (int) f\value\as\atom\length), f\value\as\atom\data, (cast: (int) g\value\as\atom\length), g\value\as\atom\data) < 0
                 return: 1
@@ -10829,7 +10845,7 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
         return: 1
     item: f\value
     if: item != 0 && item\kind = c.LM_P0_NODE_ATOM && (l2_ident(item\as\atom) || l2_text_eq(item\as\atom, "int") || l2_text_eq(item\as\atom, "char") || l2_text_eq(item\as\atom, "size_t") || l2_text_eq(item\as\atom, "unsigned") || l2_text_eq(item\as\atom, "void"))
-        return: l2_tok_text(item\as\atom, dest, c.L2_TEXT_CAP)
+        return: l2_tok_text(item\as\atom, dest, 256U)
     if: item = 0 || item\kind != c.LM_P0_NODE_FRAME || item\as = 0 || item\as\frame = 0
         return: 1
     if: l2_frame_head(item, "const")
@@ -10845,7 +10861,7 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
         inner: l2_next_active(nested\as\frame\body\first_field)
         if: inner = 0 || inner\value = 0 || inner\value\kind != c.LM_P0_NODE_ATOM || (l2_ident(inner\value\as\atom) = 0 && l2_text_eq(inner\value\as\atom, "int") = 0)
             return: 1
-        if: (cast: (size_t) depth) + inner\value\as\atom\length + 10U >= c.L2_TEXT_CAP
+        if: (cast: (size_t) depth) + inner\value\as\atom\length + 10U >= 256U
             return: 1
         c.memcpy(dest, "const: ", 7U)
         i: 0
@@ -10865,7 +10881,7 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
     inner: l2_next_active(item\as\frame\body\first_field)
     if: inner = 0 || inner\value = 0 || inner\value\kind != c.LM_P0_NODE_ATOM || (l2_ident(inner\value\as\atom) = 0 && l2_text_eq(inner\value\as\atom, "int") = 0)
         return: 1
-    if: (cast: (size_t) depth) + inner\value\as\atom\length + 3U >= c.L2_TEXT_CAP
+    if: (cast: (size_t) depth) + inner\value\as\atom\length + 3U >= 256U
         return: 1
     i: 0
     while: i < depth
@@ -11006,11 +11022,11 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     int: actual_i
     int: raw_j
     int: raw_fld
-    c.array: [c.L2_TEXT_CAP]: char s0
-    c.array: [c.L2_TEXT_CAP]: char s1
-    c.array: [c.L2_TEXT_CAP]: char s2
-    c.array: [c.L2_TEXT_CAP]: char s3
-    c.array: [c.L2_TEXT_CAP]: char s4
+    c.array: [256]: char s0
+    c.array: [256]: char s1
+    c.array: [256]: char s2
+    c.array: [256]: char s3
+    c.array: [256]: char s4
     @: char acts 0
     @: char hides 0
     int: nact 0
@@ -11072,7 +11088,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
                 ---
                 return: l2_tok_temp(t, dest)
             ---
-        return: l2_tok_text(node\as\atom, dest, c.L2_TEXT_CAP)
+        return: l2_tok_text(node\as\atom, dest, 256U)
     if: node\kind = c.LM_P0_NODE_FRAME && l2_frame_head(node, "@")
         return: l2_prep_addr(node, mi, ind, dest)
     if: node\kind = c.LM_P0_NODE_STRUCTURE && node\as != 0
@@ -11088,7 +11104,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             return: l2_error(l2_src, node, "expression too long")
         if: l2_cat(s3, ")") != 0
             return: l2_error(l2_src, node, "expression too long")
-        c.memcpy(dest, s3, c.L2_TEXT_CAP)
+        c.memcpy(dest, s3, 256U)
         return: 0
     if: node\kind != c.LM_P0_NODE_FRAME || node\as = 0 || node\as\frame = 0
         return: 1
@@ -11113,7 +11129,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     ---
     idx: l2_find_method(call\head)
     l2_call_sel: 0
-    if: idx < 0 && call\head != 0 && call\head\data != 0 && call\head\length < c.L2_TEXT_CAP && l2_seg_count(call\head\data, call\head\length) > 1 && l2_path_kind(call\head\data, call\head\length, @ l2_call_mi) = 4
+    if: idx < 0 && call\head != 0 && call\head\data != 0 && call\head\length < 256U && l2_seg_count(call\head\data, call\head\length) > 1 && l2_path_kind(call\head\data, call\head\length, @ l2_call_mi) = 4
         # The path selects THIS occurrence of the callable. Its slot 0 holds the
         # shared METHOD descriptor; the enclosing Structure is not the argument
         # and the callable is never inferred from the root.
@@ -11142,7 +11158,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             s1[0]: 0
             if: l2_emit_fields(call\body\first_field, l2_count_active(call\body), mi, ind, s1) != 0
                 return: 1
-            if: c.strlen(s1) + 11U >= c.L2_TEXT_CAP
+            if: c.strlen(s1) + 11U >= 256U
                 return: l2_error(l2_src, node, "expression too long")
             if: c.sprintf(dest, "c.sizeof(%s)", s1) < 0
                 return: 1
@@ -11152,7 +11168,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             a1: l2_next_active(a0\value\as\frame\body\first_field)
             if: a1 = 0 || a1\value = 0 || a1\value\kind != c.LM_P0_NODE_ATOM
                 return: 1
-            if: 9U + a0\value\as\frame\head\length + a1\value\as\atom\length >= c.L2_TEXT_CAP
+            if: 9U + a0\value\as\frame\head\length + a1\value\as\atom\length >= 256U
                 return: 1
             if: c.sprintf(dest, "c.sizeof(%.*s: %.*s)", (cast: (int) a0\value\as\frame\head\length), a0\value\as\frame\head\data, (cast: (int) a1\value\as\atom\length), a1\value\as\atom\data) < 0
                 return: 1
@@ -11161,7 +11177,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         if: a0 = 0 || a0\value = 0 || a0\value\kind != c.LM_P0_NODE_ATOM
             return: 1
         if: (mi >= 0 && l2_ml_find(a0\value\as\atom) >= 0 && l2_ml_ty[l2_ml_find(a0\value\as\atom)] = 22) || (mi < 0 && l2_loc_find(a0\value\as\atom) >= 0 && l2_loc_ty[l2_loc_find(a0\value\as\atom)] = 22)
-            if: l2_tok_text(a0\value\as\atom, s0, c.L2_TEXT_CAP) != 0 || c.sprintf(dest, "c.sizeof(%s)", s0) < 0
+            if: l2_tok_text(a0\value\as\atom, s0, 256U) != 0 || c.sprintf(dest, "c.sizeof(%s)", s0) < 0
                 return: 1
             return: 0
         if: l2_text_eq(a0\value\as\atom, "LmP0Text") || l2_text_eq(a0\value\as\atom, "c.LmP0Text")
@@ -11181,7 +11197,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         k: l2_sizeof_name_bytes(node, a0\value\as\atom\data, 0U, a0\value\as\atom\length, mi, ind, dest)
         if: k != 2
             return: k
-        if: 11U + a0\value\as\atom\length >= c.L2_TEXT_CAP
+        if: 11U + a0\value\as\atom\length >= 256U
             return: l2_error(l2_src, node, "expression too long")
         if: c.sprintf(dest, "c.sizeof(%.*s)", (cast: (int) a0\value\as\atom\length), a0\value\as\atom\data) < 0
             return: 1
@@ -11392,13 +11408,13 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     hides: 0
     l2_alloc_kind: 4
     if: nact > 0
-        if: l2_mul_ok((cast: (size_t) nact), c.L2_TEXT_CAP) = 0
+        if: l2_mul_ok((cast: (size_t) nact), 256U) = 0
             l2_alloc_err: 2
             return: l2_error(l2_src, node, "size overflow")
-        acts: (cast: (@: char) l2_xmalloc((cast: (size_t) nact) * c.L2_TEXT_CAP))
+        acts: (cast: (@: char) l2_xmalloc((cast: (size_t) nact) * 256U))
         if: acts = 0
             return: l2_error(l2_src, node, "out of memory")
-        c.memset((cast: (@: void) acts), 0, (cast: (size_t) nact) * c.L2_TEXT_CAP)
+        c.memset((cast: (@: void) acts), 0, (cast: (size_t) nact) * 256U)
         ---
     while: a0 != 0
         if: t >= nact
@@ -11415,15 +11431,15 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     if: t != nact
         return: l2_prep_drop(acts, hides)
     if: nhid > 0
-        if: l2_mul_ok((cast: (size_t) nhid), c.L2_TEXT_CAP) = 0
+        if: l2_mul_ok((cast: (size_t) nhid), 256U) = 0
             l2_alloc_err: 2
             l2_prep_drop(acts, hides)
             return: l2_error(l2_src, node, "size overflow")
-        hides: (cast: (@: char) l2_xmalloc((cast: (size_t) nhid) * c.L2_TEXT_CAP))
+        hides: (cast: (@: char) l2_xmalloc((cast: (size_t) nhid) * 256U))
         if: hides = 0
             l2_prep_drop(acts, hides)
             return: l2_error(l2_src, node, "out of memory")
-        c.memset((cast: (@: void) hides), 0, (cast: (size_t) nhid) * c.L2_TEXT_CAP)
+        c.memset((cast: (@: void) hides), 0, (cast: (size_t) nhid) * 256U)
         ai: 0
         while: ai < nhid
             if: l2_hidden_from(mi, idx, ai, ind, l2_act_at(hides, ai)) != 0
@@ -11579,7 +11595,7 @@ return: l2_tok_temp(t, dest)
 fn: l2_emit_array_load (int: oi; size_t: index; const: @(char ind); @: char dest) int
     int: t
     const: @(char element) "int"
-    c.array: [c.L2_TEXT_CAP]: char ptr
+    c.array: [256]: char ptr
     if: l2_emit_array_ptr(oi, ind, ptr) != 0
         return: 1
     if: l2_own_ty[oi] = 5
@@ -11618,8 +11634,8 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
     int: have_value 0
     size_t: array_index
     int: array_count
-    c.array: [c.L2_TEXT_CAP]: char buf
-    c.array: [c.L2_TEXT_CAP]: char piece
+    c.array: [256]: char buf
+    c.array: [256]: char piece
     if: dest = 0
         return: 1
     buf[0]: 0
@@ -11683,20 +11699,20 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
             ---
             fld: 2
         if: fld = 1
-            if: l2_tok_text(f\value\as\atom, piece, c.L2_TEXT_CAP) != 0 || l2_cat(buf, piece) != 0
+            if: l2_tok_text(f\value\as\atom, piece, 256U) != 0 || l2_cat(buf, piece) != 0
                 return: l2_error(l2_src, at, "expression too long")
             ao: 0
             after: 0
             have_value: 1
         if: fld = 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_is_brack(f\value\as\atom)
-            if: l2_tok_text(f\value\as\atom, piece, c.L2_TEXT_CAP) != 0 || l2_cat(buf, piece) != 0
+            if: l2_tok_text(f\value\as\atom, piece, 256U) != 0 || l2_cat(buf, piece) != 0
                 return: l2_error(l2_src, at, "expression too long")
             ao: 0
             fld: 2
         if: fld = 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_is_binop(f\value\as\atom)
             if: l2_cat(buf, " ") != 0
                 return: l2_error(l2_src, at, "expression too long")
-            if: l2_tok_text(f\value\as\atom, piece, c.L2_TEXT_CAP) != 0 || l2_cat(buf, piece) != 0
+            if: l2_tok_text(f\value\as\atom, piece, 256U) != 0 || l2_cat(buf, piece) != 0
                 return: l2_error(l2_src, at, "expression too long")
             if: l2_cat(buf, " ") != 0
                 return: l2_error(l2_src, at, "expression too long")
@@ -11715,7 +11731,7 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
             have_value: 1
         f: l2_next_active(f\next)
         i: i + 1
-    c.memcpy(dest, buf, c.L2_TEXT_CAP)
+    c.memcpy(dest, buf, 256U)
 return: 0
 
 fn: l2_eval_and (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
@@ -11724,7 +11740,7 @@ fn: l2_eval_and (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: cha
     int: span
     int: rest
     @: char deep 0
-    c.array: [c.L2_TEXT_CAP]: char rhs
+    c.array: [256]: char rhs
     if: dest = 0 || n <= 0
         return: 1
     if: l2_bump_ind(ind, @ deep) != 0
@@ -11766,7 +11782,7 @@ fn: l2_eval_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
     int: span
     int: rest
     @: char deep 0
-    c.array: [c.L2_TEXT_CAP]: char rhs
+    c.array: [256]: char rhs
     if: dest = 0 || n <= 0
         return: 1
     if: l2_fields_has_call(field, n) = 0
@@ -12389,7 +12405,21 @@ fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
         return: 0
 return: 1
 
+# A call's text is built in a heap buffer of L2_CALL_TEXT_CAP bytes, freed on this
+# one exit (mixa_app_controller: a statement call with many field-path actuals
+# passed the 256-byte stack buffer and failed with no diagnostic).
 fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
+    @: char buf
+    int: rc
+    buf: (cast: (@: char) l2_xmalloc(c.L2_CALL_TEXT_CAP))
+    if: buf = 0
+        return: 1
+    buf[0]: 0
+    rc: l2_emit_ccall_text(stmt, mi, ind, buf)
+    l2_xfree((cast: (@: void) buf))
+return: rc
+
+fn: l2_emit_ccall_text (const: @(LmP0Node stmt); int: mi; const: @(char ind); @: char buf) int
     int: array_own
     size_t: array_index
     int: array_count
@@ -12406,10 +12436,9 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     size_t: root_len
     size_t: suffix_len
     int: first 1
-    c.array: [c.L2_TEXT_CAP]: char buf
-    c.array: [c.L2_TEXT_CAP]: char piece
+    c.array: [256]: char piece
     # The boxed-actual temporary name. l2_tok may be the caller's destination.
-    c.array: [c.L2_TEXT_CAP]: char boxt
+    c.array: [256]: char boxt
     # The value destination of THIS call; a nested C call in an actual
     # takes and clears its own.
     @: char into_buf
@@ -12427,11 +12456,11 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         if: root_len >= stmt\as\frame\head\length
             return: 1
         suffix_len: stmt\as\frame\head\length - root_len
-        if: suffix_len >= c.L2_TEXT_CAP
+        if: suffix_len >= 256U
             return: 1
         c.memcpy(piece, stmt\as\frame\head\data + root_len, suffix_len)
         piece[suffix_len]: 0
-        if: l2_cat(buf, piece) != 0
+        if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
             return: 1
         ---
     if: mi >= 0 && hj >= l2_m_arity[mi] && hf = 5 && hj < l2_m_arity[mi] + l2_m_sn[mi]
@@ -12441,18 +12470,18 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         if: root_len >= stmt\as\frame\head\length
             return: 1
         suffix_len: stmt\as\frame\head\length - root_len
-        if: suffix_len >= c.L2_TEXT_CAP
+        if: suffix_len >= 256U
             return: 1
         c.memcpy(piece, stmt\as\frame\head\data + root_len, suffix_len)
         piece[suffix_len]: 0
-        if: l2_cat(buf, piece) != 0
+        if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
             return: 1
         ---
     if: mi < 0 || hj < 0 || hf != 5 || hj >= l2_m_arity[mi] + l2_m_sn[mi]
-        if: l2_tok_text(stmt\as\frame\head, buf, c.L2_TEXT_CAP) != 0
+        if: l2_tok_text(stmt\as\frame\head, buf, c.L2_CALL_TEXT_CAP) != 0
             return: 1
         ---
-    if: l2_cat(buf, "(") != 0
+    if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, "(") != 0
         return: 1
     # A call with no arguments has no body, or an empty one.
     n: 0
@@ -12463,9 +12492,9 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     i: 0
     while: i < n && f != 0 && f\value != 0
         if: l2_own_index_tail(f, mi, @ array_own, @ array_index, @ p2, @ array_count) = 0
-            if: first = 0 && l2_cat(buf, ", ") != 0
+            if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
                 return: 1
-            if: l2_emit_array_load(array_own, array_index, ind, piece) != 0 || l2_cat(buf, piece) != 0
+            if: l2_emit_array_load(array_own, array_index, ind, piece) != 0 || l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
             first: 0
             i: i + array_count
@@ -12490,18 +12519,18 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             p2: l2_next_active(p1\next)
             if: p2 = 0 || p2\value = 0 || p2\value\kind != c.LM_P0_NODE_ATOM || l2_diag_field(p2\value\as\atom) = 0
                 return: 1
-            if: first = 0 && l2_cat(buf, ", ") != 0
+            if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
                 return: 1
             if: l2_prep(f\value, mi, ind, piece) != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
-            if: l2_cat(buf, "\\") != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, "\\") != 0
                 return: 1
             piece[0]: 0
-            if: l2_tok_text(p2\value\as\atom, piece, c.L2_TEXT_CAP) != 0
+            if: l2_tok_text(p2\value\as\atom, piece, 256U) != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
             first: 0
             i: i + 3
@@ -12509,20 +12538,20 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             continue
         ---
         if: po < 0 && l2_index_tail(f, @ p1, @ p2) = 0
-            if: first = 0 && l2_cat(buf, ", ") != 0
+            if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
                 return: 1
             if: l2_prep(f\value, mi, ind, piece) != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
-            if: l2_cat(buf, "[") != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, "[") != 0
                 return: 1
             piece[0]: 0
             if: l2_prep(p1\value, mi, ind, piece) != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
-            if: l2_cat(buf, "]") != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, "]") != 0
                 return: 1
             first: 0
             i: i + 4
@@ -12530,14 +12559,14 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             continue
         ---
         if: po < 0 && l2_addr_tail(f, mi, @ p1, @ p2) = 0
-            if: first = 0 && l2_cat(buf, ", ") != 0
+            if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
                 return: 1
-            if: l2_cat(buf, "@ ") != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, "@ ") != 0
                 return: 1
             piece[0]: 0
             if: l2_prep(p1\value, mi, ind, piece) != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
             first: 0
             i: i + 2
@@ -12549,9 +12578,9 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             piece[0]: 0
             if: l2_emit_fields(f, span, mi, ind, piece) != 0
                 return: 1
-            if: first = 0 && l2_cat(buf, ", ") != 0
+            if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
             first: 0
             si: 0
@@ -12569,20 +12598,25 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && c.fprintf(l2_out, "%s%s: %s\n", ind, boxt, piece) < 0
             return: 1
         if: po < 0 && l2_ccall_box_int(f\value, mi) != 0
-            c.memcpy(piece, boxt, c.L2_TEXT_CAP)
-        if: first = 0 && l2_cat(buf, ", ") != 0
+            c.memcpy(piece, boxt, 256U)
+        if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
             return: 1
-        if: l2_cat(buf, piece) != 0
+        if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
             return: 1
         first: 0
         i: i + 1
         f: l2_next_active(f\next)
-    if: l2_cat(buf, ")") != 0
+    if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ")") != 0
         return: 1
     if: l2_emit_checkpoint(mi, ind) != 0
         return: 1
     if: into_buf != 0
-        c.memcpy(into_buf, buf, c.L2_TEXT_CAP)
+        # An expression's consumer holds 256 bytes; a longer call text is reported,
+        # not truncated.
+        if: c.strlen(buf) >= 256U
+            l2_text_over: 1
+            return: 1
+        c.memcpy(into_buf, buf, 256U)
         return: 0
     ---
     if: c.fprintf(l2_out, "%s%s\n", ind, buf) < 0
@@ -12606,8 +12640,8 @@ fn: l2_emit_fnptr_call (const: @(LmP0Node stmt); int: mi; const: @(char ind)) in
     @: LmP0Field a
     int: span
     int: first 1
-    c.array: [c.L2_TEXT_CAP]: char buf
-    c.array: [c.L2_TEXT_CAP]: char piece
+    c.array: [256]: char buf
+    c.array: [256]: char piece
     if: stmt = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0
         return: 1
     fr: stmt\as\frame
@@ -13140,8 +13174,8 @@ return: 0
 fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: array_own
     size_t: array_index
-    c.array: [c.L2_TEXT_CAP]: char array_ptr
-    c.array: [c.L2_TEXT_CAP]: char index_tok
+    c.array: [256]: char array_ptr
+    c.array: [256]: char index_tok
     @: LmP0Field field
     @: LmP0Field nxt
     @: LmP0Node stmt
@@ -13169,9 +13203,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: l2_pres 0
     int: l2_pdst 0
     int: l2_pown 0
-    c.array: [c.L2_TEXT_CAP]: char l2_pbuf
-    c.array: [c.L2_TEXT_CAP]: char l2_pnm
-    c.array: [c.L2_TEXT_CAP]: char pdest
+    c.array: [256]: char l2_pbuf
+    c.array: [256]: char l2_pnm
+    c.array: [256]: char pdest
     int: aj 0
     int: aj2 0
     int: am 0
@@ -13511,7 +13545,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             continue
         ---
         if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0
-            l2_pn: l2_join_path(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), l2_pbuf, c.L2_TEXT_CAP - 1U)
+            l2_pn: l2_join_path(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), l2_pbuf, 255U)
         if: l2_pn != 0U && l2_path_root(l2_pbuf, l2_pn, @ l2_pni, @ l2_pres) = 0
             if: l2_emit_path(l2_pbuf, l2_pn, mi, ind, stmt, @ l2_pkind) != 0
                 return: 1
@@ -13535,7 +13569,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 return: l2_error(l2_src, stmt, "a size_t field needs a size_t local")
             if: l2_pown >= 0 && l2_pkind = 1 && l2_own_ty[l2_pown] != 1
                 return: l2_error(l2_src, stmt, "a char field needs a char local")
-            if: l2_pdst >= 0 && l2_tok_text(stmt\as\frame\head, l2_pnm, c.L2_TEXT_CAP) != 0
+            if: l2_pdst >= 0 && l2_tok_text(stmt\as\frame\head, l2_pnm, 256U) != 0
                 return: 1
             if: l2_pown >= 0 && c.sprintf(l2_pnm, "l2_q%d", l2_pown) < 0
                 return: 1
