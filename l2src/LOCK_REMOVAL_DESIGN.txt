@@ -2241,6 +2241,12 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         kept their subject and lost only the refs framing: "mail-oom" (a copy-allocation failure leaves no residue)
         and "outbox-gone" (a destination stopped after the outbox take admits nothing) now assert the inbox, which
         is what they were always about.
+      - STEP TWO MEASURED: run_port_message GREEN on the completed sweep -- "lmx_message parity PASS: executor
+        selftest reports lmx_message_exec ok, reference and generated agree on both runs". That is the holder
+        count entirely gone (refs, its three functions, endp_refs, the field, 46 call sites per core, the C-side
+        pins) with lm1/lm2 parity intact and the settled list carrying the weight instead. run_lmx -Suite Message
+        is running and is NOT claimed here until it returns.
+        Scale, for the record: -531/+102 lines across six files.
       - THE SAME ERROR FOUR TIMES IN ONE SESSION, which is the honest headline of this step. I wrote the rule --
         before removing one side of a pair, grep the PARTNER and count its sites -- after the copy_free imbalance,
         and then broke it three more times: drive_walk_roots (retain removed, release left), send_owned in lm1, and
