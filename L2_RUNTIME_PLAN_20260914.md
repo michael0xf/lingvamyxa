@@ -10101,3 +10101,23 @@ slack, two claude processes) with 2.5 GB free of 15.8, and each chain run needs
 gcc in parallel. The chain is therefore recorded as UNRUN on this tip, not as
 green -- to be re-run the moment the machine has room; until then the three
 runners above are the evidence, and they are the ones that touch what changed.
+
+THE CHAIN RUNS GREEN ON THE MERGED TIP, 2026-09-16 18:09: run_gates.ps1 -L2MessageRoot on
+d6/lock-ad 58ec1235 ends "gates GREEN: 29 of 29 in 595s" -- the entry above that
+recorded the chain as UNRUN (killed twice for machine memory) is superseded; it
+ran once the machine had room, and the merged stage tip is green end to end.
+
+THE WAIT-CLAIM FIX AND ITS CONTROL, measured the same hour (branch
+d6/ad-d-epochs, not yet merged): launch_ctx_thread_rec now sets worker_on while
+the wait record is still private and verifies the publish by reading the cell
+back, so a lane retiring it (bind_wait_retire_locked frees whenever worker_on is
+0 -- exactly the old window) can no longer take a block this path is about to
+use; a mismatch means the record is not ours to touch and the caller re-runs the
+walk. Evidence, same kit, same allocator, same machine, run side by side: the
+FIXED tree 40 of 40 clean and then 80 of 80 clean (120 of 120), and the PARENT
+tree 58ec1235 in the same window failed its FIRST run (SegFault, exit=139,
+run 1:exit=139 no-ok) and then ran so much slower that only 2 runs completed in
+15 minutes -- each of its runs hangs to the 300 s watchdog, i.e. the hang face.
+The control was stopped after that contrast rather than run to 80: 0 of 120
+against a tree that failed on contact is the measurement, and its cost per run is
+itself evidence.
