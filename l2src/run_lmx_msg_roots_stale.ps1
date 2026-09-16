@@ -11,7 +11,7 @@ $runId = (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToSt
 $run = Join-Path $repo "build/codex/msg_roots_stale/$runId"
 $headers = Join-Path $run 'headers'
 New-Item -ItemType Directory -Path (Join-Path $headers 'l2src') -Force | Out-Null
-$headerUnits = @('lmx_msg_blocks','lmx_owned_ranges','lmx_msg_storage','lmx_msg_path_storage','lmx_msg_roots_stale')
+$headerUnits = @('lmx_msg_blocks','lmx_owned_ranges','lmx_msg_storage','lmx_msg_roots_stale')
 $sources = @($PSCommandPath, (Join-Path $PSScriptRoot 'lmx.h'), (Join-Path $PSScriptRoot 'lmx_message.h'),
     (Join-Path $PSScriptRoot 'lmx_owned_ranges.lm1'),
     (Join-Path $PSScriptRoot 'lmx_msg_roots_stale.lm1'),

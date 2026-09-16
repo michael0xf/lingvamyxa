@@ -59,7 +59,7 @@ function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$er
 # ---- Step 0: stage the generated library's complete predef closure. ----
 $CoreHeaderUnits = @(
     "lmx_msg_blocks.h.lm1", "lmx_owned_ranges.h.lm1", "lmx_msg_storage.h.lm1",
-    "lmx_msg_path_storage.h.lm1", "lmx_msg_slots.h.lm1", "lmx_msg_mail_chain.h.lm1",
+    "lmx_msg_mail_chain.h.lm1",
     "lmx_msg_visit.h.lm1", "lmx_msg_liveness.h.lm1",
     "lmx_chars_owned.h.lm1", "lmx_array_owned.h.lm1", "lmx_array_ref_owned.h.lm1",
     "lmx_branch_owned.h.lm1", "lmx_value_owned.h.lm1", "lmx_msg_history_owned.h.lm1",

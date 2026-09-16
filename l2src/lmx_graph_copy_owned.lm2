@@ -19,8 +19,9 @@ include: "<stdlib.h>" "<string.h>" "<stdint.h>"
 # prepared storage released. Arrays keep their own len/data descriptors;
 # Structure len stays the child count.
 #
-# Library unit: no entry. The two ABI operations carry their real names, like
-# lmx_msg_slots: a unit's open path builds its graph with the owned builders
+# Library unit: no entry. The two ABI operations carry their real names, as
+# lmx_msg_slots did before S6-2 deleted it: a unit's open path builds its graph
+# with the owned builders
 # and lmx_msg_create without an init graph, so nothing copies a graph before
 # the wrappers are published. run_port_graph_copy_owned.ps1 links the
 # unmodified selftest WITHOUT the handwritten object.

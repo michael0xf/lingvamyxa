@@ -12,7 +12,6 @@ struct Lmx;
 #include "l2src/lmx_msg_blocks.lm1.h"
 #include "l2src/lmx_owned_ranges.lm1.h"
 #include "l2src/lmx_msg_storage.lm1.h"
-#include "l2src/lmx_msg_path_storage.lm1.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -28,6 +27,8 @@ typedef unsigned char uchar;
 #define LMX_MSG_DUPLICATE 6
 #define LMX_MSG_GONE 7
 #define LMX_MSG_EMPTY 8
+/* S6-2: string address not deliverable yet (lmx_msg_send_address's body today). */
+#define LMX_MSG_UNDELIVERABLE 9
 
 #define LMX_MSG_KIND_NUMBER 0
 #define LMX_MSG_KIND_BYTES 1
@@ -47,6 +48,28 @@ typedef unsigned char uchar;
  * own kind. recv never hands it out and readiness never counts it; lifecycle
  * reads (retire, close) do. */
 #define LMX_MSG_KIND_INGRESS 11
+/* S6-2 (SPEC 19.29.7): a registration letter to the mail service.  A child is
+ * created on its PARENT's lane, so it cannot write the service's live set
+ * itself; it posts this instead, carrying the new record in dest_msg, and the
+ * service registers the address when it drains.  Kinds 0-11 were all taken, so
+ * this is a new constant rather than a reused slot -- recorded as my choice,
+ * the same way LMX_MSG_KIND_REJECTED's use was.
+ * The letter is pushed BEFORE create returns the address, which with the FIFO
+ * transport is what makes a registration precede any send that could have
+ * learned the handle. */
+#define LMX_MSG_KIND_REGISTER 12
+/* S6-2 (SPEC 19.29.7, the removal ruling): an unregister-and-free letter to the
+ * mail service, carrying the record in dest_msg and its id in to.  release_slot
+ * runs on the RELEASING lane -- the parent's dispose, or the Message's own
+ * end-turn -- so it can neither write the service's live set (a cross-lane write)
+ * nor free the record itself (which would leave a live-set entry naming freed
+ * memory until the service next drains).  It posts this instead; the service
+ * removes the entry and calls slot_free, in that order, on its own lane.
+ * The window between the release and that free is closed by what release_slot
+ * already does: the state is RELEASED, written under the mailbox's monitor, and
+ * admit_one refuses a RELEASED destination under that same monitor, so a send
+ * arriving in the window is refused rather than admitted. */
+#define LMX_MSG_KIND_UNREGISTER 13
 /* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data.
  * Implementation-only liveness profile on KIND_PROGRESS. Not language KINDs.
  * Ordinary progress number 1/2 must not match these. */
@@ -58,9 +81,6 @@ typedef unsigned char uchar;
 #define LMX_MSG_STATE_STOPPED 2
 #define LMX_MSG_STATE_DEAD 3
 #define LMX_MSG_STATE_RELEASED 4
-
-/* Initial Mix-path chunk. Growable; not a language-level depth limit. */
-#define LMX_MSG_PATH_CHUNK 4
 
 /* Versioned host-ingress seam. Not a promise that create/send/pump/recv
  * are multi-thread safe. Only lmx_msg_host_post may run off the owner thread. */
@@ -115,6 +135,47 @@ typedef struct LmxMsgCopy {
 typedef struct LmxMsg {
     LmxMsgAddr addr;
     LmxMsgAddr parent;
+    /* S6-2 (SPEC 19.29.7, Mikhail 2026-09-16, thirteenth line): THE C MIRROR OF AN
+     * LMX FIELD, NOT A KERNEL FIELD.  The mail service's reference belongs to the
+     * Message's LMX -- "поле уже LMX, а вот API надо сделать общим" -- and the
+     * kernel record is running, success, handoff_safe, root, index.  Where the
+     * bootstrap C keeps the mirror is an implementation detail; it is here, with
+     * the same status as the other scaffolding fields the plan lists, and it goes
+     * when the record is reduced.  Set from the parent at creation and
+     * reassignable; R0's points at R0, which terminates delegation.  The precedent
+     * for an LMX field is rt->root_record. */
+    struct LmxMsg *service;
+    /* The service's own live set: the records it will admit a letter to, sorted by
+     * address as uintptr_t so membership is a binary search rather than a scan.
+     * Registration at create, removal at release, on the service's own lane.  An
+     * address absent from this set is REFUSED, never dereferenced -- which is what
+     * makes delivery by memory address safe with no count of holders, and is this
+     * stage's replacement for refs: one owner's data on one lane, instead of a
+     * counter on every record written from every lane.  Only the service reads or
+     * writes these; they are 0 on every Message that is not one.
+     * EACH ENTRY IS A PAIR, the record pointer AND its id, and membership requires
+     * BOTH to match: malloc reuses addresses, so a handle that outlived its record
+     * could otherwise name a NEW record at the same address and pass the check.
+     * The id (LmxMsgAddr) is minted monotonically and never reused, which is what
+     * makes the pair decisive; stage AD keeps it for exactly this reason.
+     * The pair is held as TWO PARALLEL ARRAYS rather than an array of structs, and
+     * the reason is a measurement rather than a preference: neither core indexes an
+     * array of structs and follows a field through the subscript anywhere (0 sites
+     * against a control of 18 plain subscripts), so that spelling has no neighbour
+     * to copy and would be verifiable only by a build.  live[i] and live_id[i] are
+     * both forms the cores already use.  They are grown and shifted together and
+     * always have the same length; live_n and live_cap describe both. */
+    struct LmxMsg **live_m;
+    LmxMsgAddr *live_id;
+    int live_n;
+    int live_cap;
+    /* S6-2 (SPEC 19.29.7, Mikhail 2026-09-16): this Message's index at its parent
+     * -- "the whole of what the hierarchical address a.b.c.d... adds at this
+     * level".  The full address is composed by walking the parent links
+     * (lmx_msg_get_address), so no array is stored: the arrays this replaces were
+     * a materialized cache of that walk.  R0's index is 1 and its parent_msg is 0,
+     * which terminates the walk. */
+    unsigned index;
     int state;
     int committed;
     int closing;
@@ -134,9 +195,6 @@ typedef struct LmxMsg {
     LmxMsgAddr exec_reply;
     int exec_live;
     unsigned last_beat;
-    unsigned *path;
-    int path_n;
-    int path_cap;
     unsigned child_seq;
     /* Direct-child list (CONTEXT_V0). Not a process-wide registry. */
     struct LmxMsg *parent_msg;
@@ -154,7 +212,6 @@ typedef struct LmxMsg {
      * this Message's own state; the executor's table only indexes it. */
     struct LmxMsgExecBind *exec_bind;
     int mapped;
-    int refs;
     uint_fast8_t running;
     uint_fast8_t success;
     int tracked;
@@ -174,7 +231,12 @@ typedef struct LmxMsg {
      * still running when its parent was settled. */
     int orphan;
     int disposed;
-    struct LmxMsg *alloc_next;
+    /* S6-2 (SPEC 19.29.7, respecified by Mikhail 2026-09-16): there is no
+     * runtime-wide registry cell here and no owner's list of closed records
+     * either.  A closed Message's slot and arena are freed by the release chain
+     * as 19.29.6 says, so nothing needs to enumerate closed records: they do not
+     * outlive their release.  A capability is the target's id, not a pointer, so
+     * no sender holds this record and none has to be kept alive for one. */
     LmxMsgBlock *blocks;
     LmxOwnedRange *ranges;
     /* Message-owned, non-owning classification metadata for explicitly
@@ -192,8 +254,10 @@ typedef struct LmxMsg {
 
 struct LmxMsgRuntime {
     LmxMsg *root;
-    LmxMsg *slots;
-    int n;
+    /* S6-2 (19.28 Revision 2): the slot list "served only the L1 delete loop and
+     * its address lookup and goes without replacement". The lookup is the family
+     * walk (lmx_msg_find -> find_tree from rt->root), and the delete loop is R0's
+     * own storage -- its settled records and its tree -- walked by teardown. */
     LmxMsgCopy *transport;
     LmxMsgCopy *transport_tail;
     void *host_sync;
@@ -246,16 +310,45 @@ int lmx_msg_drive(LmxMsgRuntime *rt, unsigned now, unsigned threshold);
 int lmx_msg_drive_tree(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_drive_walk_children(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt);
-/* The path is a Message's creation identity (its genesis): the creator's path
- * plus the creator's child sequence number. A supervision handoff does not
- * change it; parent_msg and parent name the supervisor. */
-int lmx_msg_path_n(LmxMsgRuntime *rt, LmxMsgAddr who);
-int lmx_msg_path_seg(LmxMsgRuntime *rt, LmxMsgAddr who, int i, unsigned *out);
+/* S6-2 (SPEC 19.29.7, Mikhail's fourteenth line): the COMMON MAIL API, written
+ * now as scaffolding "because rewriting them later would be expensive".  Every
+ * L3 Thread implements these; the default body is the stub that reads its own
+ * service reference and delegates, and R0 carries the real body today.  A later
+ * stage replaces bodies without touching a caller.
+ *   register / unregister: the service's live set gains or loses a record.
+ *   send_handle: deliver by the target's memory address -- the handle the sender
+ *     already holds -- admitting under that mailbox's own monitor, or refusing
+ *     with KIND_REJECTED when the address is not in the live set.
+ * lmx_msg_service_of returns the service a Message delegates to (itself, when it
+ * is the service). */
+LmxMsg *lmx_msg_service_of(LmxMsg *m);
+int lmx_msg_service_register(LmxMsg *svc, LmxMsg *m, LmxMsgAddr id);
+int lmx_msg_service_unregister(LmxMsg *svc, LmxMsg *m, LmxMsgAddr id);
+/* Membership requires BOTH the pointer and the id: a reused address with a
+ * different id is not the record the sender meant, and is refused. */
+int lmx_msg_service_is_live(LmxMsg *svc, LmxMsg *m, LmxMsgAddr id);
+/* S6-2 (SPEC 19.29.7): compose a Message's hierarchical address by walking the
+ * parent links to the root.  Returns the number of indices, or -1 if the Message
+ * is not reachable or its chain changed between the count and the fill (a
+ * handoff or an orphaning on another lane); the fill never writes past cap.  Fills out[0..n-1] root-first when out is non-zero and cap is
+ * at least n; with a smaller cap (or out == 0) it returns the count and writes
+ * nothing, so a caller can size its buffer first.  Nothing is allocated, so there
+ * is nothing to free -- the shape lmx_msg_poll already uses. */
+int lmx_msg_get_address(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned *out, int cap);
+/* S6-2 (SPEC 19.29.7): the common API's second entry, send by string address
+ * (addr[0..addr_n-1], root-first, the shape lmx_msg_get_address fills).  The
+ * default body delegates to the sender's service.  R0's body today refuses: a
+ * KIND_REJECTED letter to the sender and LMX_MSG_UNDELIVERABLE returned -- the
+ * hop-by-hop chain waits for the stage whose executor runs every holder's round. */
+int lmx_msg_service_send_address(LmxMsgRuntime *rt, LmxMsg *svc, LmxMsgAddr from, const unsigned *addr, int addr_n, const LmxMsgEnv *env);
+int lmx_msg_send_address(LmxMsgRuntime *rt, LmxMsgAddr from, const unsigned *addr, int addr_n, const LmxMsgEnv *env);
 int lmx_msg_child_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 LmxMsgAddr lmx_msg_child_at(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
 /* Decision 17 rule 4: hand the supervision of old_parent's direct child to the
- * live new_parent. Mailbox, arena, turn, record and path stay; parent_msg,
- * parent, scheduler place and liveness window move. */
+ * live new_parent. Mailbox, arena, turn and record stay; parent_msg, parent,
+ * scheduler place and liveness window move, and the index is minted afresh by
+ * new_parent (S6-2, SPEC 19.29.7: "when a Message changes parent its address
+ * changes"), so lmx_msg_get_address reads the new parent's address plus it. */
 int lmx_msg_handoff_supervision(LmxMsgRuntime *rt, LmxMsgAddr old_parent, LmxMsgAddr child, LmxMsgAddr new_parent);
 
 int lmx_msg_runtime_shutdown(LmxMsgRuntime *rt);
@@ -299,11 +392,12 @@ int lmx_msg_set_orphan_retain(LmxMsgRuntime *rt, unsigned retain);
 unsigned lmx_msg_now(LmxMsgRuntime *rt);
 /* S5: the next Message address from the runtime's order-free atomic counter. */
 LmxMsgAddr lmx_msg_addr_take(LmxMsgRuntime *rt);
-int lmx_msg_endp_retain(LmxMsg *m);
-void lmx_msg_endp_release(LmxMsg *m);
+/* S6-2 (SPEC 19.29.7, "there is no count of holders"): endp_retain, endp_release,
+ * endp_try_retire and endp_refs are deleted, and so is LmxMsg.refs itself. The
+ * count answered exactly one question -- "can this record be freed under me?" --
+ * and the settle answers it instead: a closing Message becomes its parent's
+ * storage, and nothing frees a record except R0's teardown. */
 int lmx_msg_child_unlink(LmxMsg *parent, LmxMsg *child);
-int lmx_msg_endp_refs(LmxMsgRuntime *rt, LmxMsgAddr who);
-int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_send_cap(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsg *dest, const LmxMsgEnv *env);
 void lmx_msg_mail_lock(LmxMsg *m);
 void lmx_msg_mail_unlock(LmxMsg *m);

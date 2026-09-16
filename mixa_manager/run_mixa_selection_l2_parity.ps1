@@ -75,8 +75,6 @@ $CoreHeaderUnits = @(
     "lmx_msg_blocks.h.lm1",
     "lmx_owned_ranges.h.lm1",
     "lmx_msg_storage.h.lm1",
-    "lmx_msg_path_storage.h.lm1",
-    "lmx_msg_slots.h.lm1",
     "lmx_msg_mail_chain.h.lm1",
     "lmx_msg_visit.h.lm1",
     "lmx_msg_liveness.h.lm1",

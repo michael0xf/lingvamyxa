@@ -53,7 +53,7 @@ try {
     $revision = (Get-Content -LiteralPath (Join-Path $run 'resolve_core.stdout.txt') -Raw).Trim()
     if ($revision -notmatch '^[0-9a-f]{40}$') { throw 'Expected full commit hash.' }
     $evidence.coreCommit = $revision
-    $coreFiles = @('lmx_message.h', 'lmx_msg_blocks.h.lm1', 'lmx_owned_ranges.h.lm1', 'lmx_msg_storage.h.lm1', 'lmx_msg_path_storage.h.lm1')
+    $coreFiles = @('lmx_message.h', 'lmx_msg_blocks.h.lm1', 'lmx_owned_ranges.h.lm1', 'lmx_msg_storage.h.lm1')
     $paths = @($coreFiles | ForEach-Object { "l2src/$_" })
     $archive = Join-Path $run 'core_headers.zip'
     Invoke-ChainStage 'archive_core' $git (@('archive', '--format=zip', "--output=$archive", $revision, '--') + $paths)
@@ -69,7 +69,7 @@ try {
         $snapshotHashes[$file] = (Get-FileHash -LiteralPath $file).Hash
     }
     $evidence.snapshotSources = $snapshotHashes
-    foreach ($name in @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_mail_chain')) {
+    foreach ($name in @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_mail_chain')) {
         Invoke-ChainStage "header_$name" $compiler @("l2src/$name.h.lm1", (Join-Path $headers "l2src/$name.lm1.h"))
     }
     $module = Join-Path $run 'lmx_msg_mail_chain.c'

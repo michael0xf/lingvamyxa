@@ -81,7 +81,11 @@ fn: main () int
     rt: c.lmx_msg_runtime_new()
     if: rt = 0
         return: 2
-    check(rt\n = 1 && c.lmx_msg_find(rt, 1U) != 0 && c.lmx_msg_find(rt, 2U) = 0, "M: the runtime creates R0 alone, no UI lane: one slot")
+    # S6-2: the runtime keeps no slot count, and the settled list that first stood
+    # in for it is deleted. "R0 alone" is stated as membership: R0 is there, no
+    # second Message is, R0 has no child, and R0's live set holds one record -- R0
+    # itself, registered directly as its own service -- which is what "one slot" meant.
+    check(c.lmx_msg_find(rt, 1U) != 0 && c.lmx_msg_find(rt, 2U) = 0 && rt\root\first_child = 0 && rt\root\live_n = 1, "M: the runtime creates R0 alone, no UI lane")
     check(c.lmx_msg_create(rt, 0U, @ ini, 1U, @ a) = c.LMX_MSG_OK, "A, a parent-0 Message, created")
     am: c.lmx_msg_find(rt, a)
     if: am = 0

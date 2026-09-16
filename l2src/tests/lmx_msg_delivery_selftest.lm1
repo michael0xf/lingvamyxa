@@ -84,7 +84,8 @@ fn: main () int
     # --- a successful sending turn publishes; admission moves the delivery.
     env\id: 2U
     check(lmx_msg_send_graph(rt, p, child, env, original) = c.LMX_MSG_STAGED, "P stages the graph again")
-    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, child) = 1, "P's successful end-turn publishes it into C's inbox")
+    # S6-2 (the drain ruling): P's end-turn pushes; R0's round (the host's pump) admits.
+    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, child) = 1, "P's successful end-turn publishes it into C's inbox")
     check(cm\blocks = c_blocks_before, "admission adds nothing to C's arena yet: the delivery is a Message of its own")
 
     # --- recv transfers the delivery's storage into C's arena.

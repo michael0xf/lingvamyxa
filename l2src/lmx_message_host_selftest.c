@@ -121,10 +121,9 @@ static void *off_owner(void *arg)
     if (lmx_msg_host_drain(g_rt) != LMX_MSG_INVALID) {
         *fail += 1;
     }
-    if (lmx_msg_path_n(g_rt, 1) != -1) {
-        *fail += 1;
-    }
-    if (lmx_msg_path_seg(g_rt, 1, 0, &seg) != LMX_MSG_INVALID) {
+    /* S6-2: the path accessors went with the arrays; get_address is refused off
+     * the owner's lane the same way, and writes nothing. */
+    if (lmx_msg_get_address(g_rt, 1, &seg, 1) != -1) {
         *fail += 1;
     }
     if (lmx_msg_init_copy(g_rt, 1, &env) != LMX_MSG_INVALID) {
