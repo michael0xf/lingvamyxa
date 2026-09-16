@@ -3121,7 +3121,14 @@ int main(int argc, char **argv) {
             LmxMsgEnv oe;
             LmxMsg *ocm;
             volatile LONG oentered = 0;
-            int on0, ost, ocnt = 0, ofp, ofc, on1, opst;
+            /* S6-2: on0/on1 were the runtime counter's. Neither P nor the orphan is
+             * freed here any more -- each settles into R0 -- so the property is
+             * ownership, read off R0's settled list. */
+            LmxMsg *or0m;
+            LmxMsg *osx;
+            int op_settled = 0;
+            int oc_settled = 0;
+            int ost, ocnt = 0, ofp, ofc, opst;
             memset(&oe, 0, sizeof(oe));
             oe.kind = LMX_MSG_KIND_BYTES;
             oe.n = 1;
@@ -3144,17 +3151,21 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "orphan mapped P close st=%d state=%d\n", opst, lmx_msg_state(rto, op));
                 return 1;
             }
-            on0 = rto->n;
             ost = lmx_msg_dispose_child(rto, r0, op);
             ofp = lmx_msg_find(rto, op) != 0;
             ocm = lmx_msg_find(rto, oc);
             ofc = ocm != 0;
-            on1 = rto->n;
+            or0m = lmx_msg_find(rto, r0);
+            for (osx = (or0m != 0) ? or0m->settled : 0; osx != 0; osx = osx->settled_next) {
+                if (osx->addr == op && osx->state == LMX_MSG_STATE_RELEASED) {
+                    op_settled = 1;
+                }
+            }
             ocnt = lmx_msg_exec_bind_n(rto);
-            if (ost != LMX_MSG_OK || ofp != 0 || ofc == 0 || on1 != on0 - 1 || ocnt != 1
+            if (ost != LMX_MSG_OK || ofp != 0 || ofc == 0 || op_settled == 0 || ocnt != 1
                 || ocm->orphan == 0 || lmx_msg_handoff_ready(rto, oc) != 0) {
-                fprintf(stderr, "orphan mapped release st=%d find_p=%d find_c=%d n=%d n0=%d binds=%d orphan=%d ready=%d\n",
-                    ost, ofp, ofc, on1, on0, ocnt, ocm != 0 ? ocm->orphan : -1, lmx_msg_handoff_ready(rto, oc));
+                fprintf(stderr, "orphan mapped release st=%d find_p=%d find_c=%d p_settled=%d binds=%d orphan=%d ready=%d\n",
+                    ost, ofp, ofc, op_settled, ocnt, ocm != 0 ? ocm->orphan : -1, lmx_msg_handoff_ready(rto, oc));
                 return 1;
             }
             if (lmx_msg_complete(rto, oc) != LMX_MSG_OK || lmx_msg_exec_start_contexts(rto) != LMX_MSG_OK) {
@@ -3162,13 +3173,24 @@ int main(int argc, char **argv) {
                 return 1;
             }
             fprintf(stderr, "reading: the orphan settles on its own context and the drive reclaims it\n");
-            while (rto->n != on0 - 2) {
+            /* S6-2: the reclaim settles the orphan into R0 instead of freeing it, so
+             * the counter this loop spun on no longer moves. The wait is on the
+             * property the loop was really after -- the orphan has left the tree --
+             * and the assertion below carries the property, since re-testing the
+             * condition the loop just exited on would assert nothing. */
+            while (lmx_msg_find(rto, oc) != 0) {
                 (void)lmx_msg_drive(rto, 0, 0);
                 SwitchToThread();
             }
-            if (lmx_msg_find(rto, oc) != 0 || lmx_msg_exec_bind_n(rto) != 0) {
-                fprintf(stderr, "orphan mapped reclaim n=%d n0=%d find_c=%d binds=%d\n",
-                    rto->n, on0, lmx_msg_find(rto, oc) != 0, lmx_msg_exec_bind_n(rto));
+            or0m = lmx_msg_find(rto, r0);
+            for (osx = (or0m != 0) ? or0m->settled : 0; osx != 0; osx = osx->settled_next) {
+                if (osx->addr == oc && osx->state == LMX_MSG_STATE_RELEASED) {
+                    oc_settled = 1;
+                }
+            }
+            if (oc_settled == 0 || lmx_msg_exec_bind_n(rto) != 0) {
+                fprintf(stderr, "orphan mapped reclaim c_settled=%d binds=%d\n",
+                    oc_settled, lmx_msg_exec_bind_n(rto));
                 return 1;
             }
             lmx_msg_exec_stop(rto);
