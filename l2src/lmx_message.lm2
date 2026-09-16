@@ -621,8 +621,8 @@ fn: msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @: Lm
         if: d != 0
             return: d
         ---
-        if: src\parent_msg != 0 && src\parent_msg\addr = to && src\parent_msg\state != c.LMX_MSG_STATE_RELEASED
-            return: src\parent_msg
+        if: c.lmx_msg_parent_load(src) != 0 && c.lmx_msg_parent_load(src)\addr = to && c.lmx_msg_parent_load(src)\state != c.LMX_MSG_STATE_RELEASED
+            return: c.lmx_msg_parent_load(src)
         ---
     ---
     return: msg_find(rt, to)
@@ -651,7 +651,7 @@ end: msg_turn_slot
 sub: msg_child_link (@: LmxMsg parent; @: LmxMsg child)
     if: parent = 0 || child = 0
         return
-    child\parent_msg: parent
+    c.lmx_msg_parent_store(child, parent)
     child\next_sibling: 0
     if: parent\first_child = 0
         parent\first_child: child
@@ -665,10 +665,10 @@ end: msg_child_link
 # (every reparenting site wrote both in lockstep). A reader that wants the id reads
 # it from the record parent_msg names; 0 when there is none (R0).
 fn: msg_parent_id (@: LmxMsg m) LmxMsgAddr
-    if: m = 0 || m\parent_msg = 0
+    if: m = 0 || c.lmx_msg_parent_load(m) = 0
         return: 0U
     ---
-    return: m\parent_msg\addr
+    return: c.lmx_msg_parent_load(m)\addr
 end: msg_parent_id
 
 fn: msg_child_chain_remove (@: LmxMsg parent; @: LmxMsg child) int
@@ -736,19 +736,19 @@ fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsg
     q: msg_self_or_find(rt, new_parent)
     # A root has no parent to hand over from: its only new parent would be the
     # World Wide Mix ancestor, a stub until stage 5.
-    if: ch != 0 && ch\parent_msg = 0
+    if: ch != 0 && c.lmx_msg_parent_load(ch) = 0
         return: c.LMX_MSG_INVALID
-    if: p = 0 || ch = 0 || q = 0 || ch\parent_msg != p || q = p || q = ch
+    if: p = 0 || ch = 0 || q = 0 || c.lmx_msg_parent_load(ch) != p || q = p || q = ch
         return: c.LMX_MSG_INVALID
     if: q\state = c.LMX_MSG_STATE_STOPPED || q\state = c.LMX_MSG_STATE_DEAD || q\state = c.LMX_MSG_STATE_RELEASED || q\closing != 0 || q\disposed != 0
         return: c.LMX_MSG_INVALID
     # The new parent inside the child's subtree would cut the family off rt->root.
-    a: q\parent_msg
+    a: c.lmx_msg_parent_load(q)
     while: a != 0
         if: a = ch
             return: c.LMX_MSG_INVALID
         ---
-        a: a\parent_msg
+        a: c.lmx_msg_parent_load(a)
     ---
     if: q\child_seq + 1U = 0U
         return: c.LMX_MSG_NOMEM
@@ -760,7 +760,7 @@ fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsg
     # the new parent exactly as at creation, so it never collides with a sibling
     # there; every descendant's address follows by the walk, with nothing stored.
     q\child_seq: q\child_seq + 1U
-    ch\index: q\child_seq
+    c.lmx_msg_index_store(ch, q\child_seq)
     ch\child_heard_at: c.lmx_msg_now(rt)
     ch\live_query_id: 0U
     ch\live_query_pend_id: 0U
@@ -1282,12 +1282,12 @@ fn: msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; @: LmxMsg p) int
     if: p = 0
         # S5: only R0 is created without a parent; its index is the whole of its
         # address, [1].
-        slot\index: 1U
+        c.lmx_msg_index_store(slot, 1U)
         return: c.LMX_MSG_OK
     if: p\child_seq + 1U = 0U
         return: c.LMX_MSG_NOMEM
     p\child_seq: p\child_seq + 1U
-    slot\index: p\child_seq
+    c.lmx_msg_index_store(slot, p\child_seq)
     return: c.LMX_MSG_OK
 end: msg_assign_path
 
@@ -1531,7 +1531,7 @@ fn: msg_address_of (@: LmxMsg m; @: unsigned out; int: cap) int
     x: m
     while: x != 0
         n: n + 1
-        x: x\parent_msg
+        x: c.lmx_msg_parent_load(x)
     ---
     if: out = 0 || cap < n
         return: n
@@ -1539,9 +1539,9 @@ fn: msg_address_of (@: LmxMsg m; @: unsigned out; int: cap) int
     x: m
     i: n - 1
     while: x != 0 && i >= 0
-        out[i]: x\index
+        out[i]: c.lmx_msg_index_load(x)
         i: i - 1
-        x: x\parent_msg
+        x: c.lmx_msg_parent_load(x)
     ---
     if: x != 0 || i != -1
         return: -1
@@ -1931,11 +1931,11 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     # Stage 3b-9: every family-tree reader holds the exec lock, so the tree
     # changes under it. Unbind stays outside: it joins reaps on the host.
     c.lmx_msg_test_release_tree(rt, m)
-    if: m\parent_msg != 0
-        msg_child_unlink(m\parent_msg, m)
+    if: c.lmx_msg_parent_load(m) != 0
+        msg_child_unlink(c.lmx_msg_parent_load(m), m)
     ---
     # S5: only R0 has no parent, and it is the one root.
-    if: rt != 0 && m\parent_msg = 0
+    if: rt != 0 && c.lmx_msg_parent_load(m) = 0
         if: rt\root = m
             rt\root: 0
         ---
@@ -2038,10 +2038,10 @@ sub: msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
             # child's address. Two such orphans DO share [1,0] -- after about 2^32
             # R0 children -- and a letter to that address falls off, naming no child.
             if: rt\root\child_seq + 1U = 0U
-                g\index: 0U
+                c.lmx_msg_index_store(g, 0U)
             else:
                 rt\root\child_seq: rt\root\child_seq + 1U
-                g\index: rt\root\child_seq
+                c.lmx_msg_index_store(g, rt\root\child_seq)
             ---
             wake: 0
             if: g\state != c.LMX_MSG_STATE_DEAD && g\state != c.LMX_MSG_STATE_RELEASED && g\state != c.LMX_MSG_STATE_STOPPED
@@ -2097,7 +2097,7 @@ fn: msg_settle_child_msg (@: LmxMsgRuntime rt; @: LmxMsg p; @: LmxMsg child) int
     int: ok
     int: failed
     int: st
-    ok: p != 0 && child\parent_msg = p && p\disposed = 0 && child\disposed = 0 && child\native_users = 0 && c.lmx_msg_running_load(child) = 0 && child\handoff_ready != 0
+    ok: p != 0 && c.lmx_msg_parent_load(child) = p && p\disposed = 0 && child\disposed = 0 && child\native_users = 0 && c.lmx_msg_running_load(child) = 0 && child\handoff_ready != 0
     if: ok = 0
         return: c.LMX_MSG_INVALID
     g: msg_first_settled_child(rt, child)
@@ -2745,9 +2745,9 @@ end: msg_fail
 fn: msg_parent_gone (@: LmxMsgRuntime rt; @: LmxMsg child; unsigned: now; unsigned: threshold) int
     @: LmxMsg p
     unsigned: idle
-    if: child = 0 || child\parent_msg = 0
+    if: child = 0 || c.lmx_msg_parent_load(child) = 0
         return: 0
-    p: child\parent_msg
+    p: c.lmx_msg_parent_load(child)
     if: p = 0
         return: 1
     if: p\state = c.LMX_MSG_STATE_DEAD || p\state = c.LMX_MSG_STATE_STOPPED || p\state = c.LMX_MSG_STATE_RELEASED
@@ -2767,7 +2767,7 @@ end: msg_parent_gone
 fn: msg_poll_mark (@: LmxMsgRuntime rt; @: LmxMsg m; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap; int: n) int
     if: m = 0
         return: n
-    if: m\parent_msg != 0 && (m\state = c.LMX_MSG_STATE_RUNNING || (m\state = c.LMX_MSG_STATE_INACTIVE && m\committed != 0))
+    if: c.lmx_msg_parent_load(m) != 0 && (m\state = c.LMX_MSG_STATE_RUNNING || (m\state = c.LMX_MSG_STATE_INACTIVE && m\committed != 0))
         if: msg_parent_gone(rt, m, now, threshold) != 0
             m\closing: 1
             msg_exec_ready(rt, m\addr)
@@ -3131,7 +3131,7 @@ fn: msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     m: msg_turn_slot(rt, who)
     if: m = 0
         m: msg_self_or_find(rt, who)
-        if: m = 0 || m\parent_msg = 0
+        if: m = 0 || c.lmx_msg_parent_load(m) = 0
             return: c.LMX_MSG_INVALID
         ---
         if: m\live_query_id != 0U || m\live_query_pend_id != 0U
@@ -3145,7 +3145,7 @@ fn: msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         parent: msg_parent_id(m)
     ---
     if: m != 0 && qid = 0U
-        if: m\parent_msg = 0
+        if: c.lmx_msg_parent_load(m) = 0
             return: c.LMX_MSG_INVALID
         ---
         if: m\live_query_id != 0U || m\live_query_pend_id != 0U

@@ -88,4 +88,11 @@ int lmx_msg_exec_bind_n(LmxMsgRuntime *rt);
 int lmx_msg_exec_bind_has_worker(LmxMsgRuntime *rt, LmxMsgAddr addr);
 #endif
 
+
+/* AD atomic cells: parent_msg and index (same primitives as running/success). */
+LmxMsg *lmx_msg_parent_load(LmxMsg *m);
+void lmx_msg_parent_store(LmxMsg *m, LmxMsg *p);
+unsigned lmx_msg_index_load(LmxMsg *m);
+void lmx_msg_index_store(LmxMsg *m, unsigned v);
+
 #endif
