@@ -6699,3 +6699,82 @@ the coordinator at that moment (2026-09-15) for e9's archive-hang
 isolation: all sessions told no pushes, fetches, checkouts, worktree
 adds, tags or builds until the one-line lift; local edits and commits
 allowed; this note is committed locally and pushed at the lift.
+ARCHIVE-HANG ISOLATION, first run (e9, in the window, 2026-09-15): stage
+A clean and counted: 200 of 200 bare git archive runs, p50 206 ms, p99
+250 ms, max 255 ms, all 200 zips 1382517 bytes, no hang, no watch
+expired; at the observed rate of about 6.5 hangs per 100 gate runs,
+200 clean runs are evidence against H1 (the bare command alone).
+Stage B (the runner's exact line under EAP Stop via cmd /c powershell)
+ran 200 of 200 clean, p50 427 ms, p99 480 ms, max 519 ms, but is VOID
+and not counted: four ref lines changed during it, b5's local commit
+7af872da on sonnet/s6-2-test-inventory at 21:55:49 (the test inventory
+file, +193 lines) and that worktree's HEAD. Cause: the coordinator's
+freeze message allowed local commits, while the harness compares every
+ref of the shared object store (local branches and worktree HEADs
+included). Corrected terms, sent to b5 and the lead before the rerun:
+until the lift, no git command that writes anything in any worktree of
+the shared store, local commits included; read-only show and log only.
+The coordinator's own docs commit ea7ce73b (21:53) preceded stage A's
+snapshot, so A stands. e9 reruns B from scratch, then C and D, within
+the same 60 min (about 25 min needed; archives take about 206 ms, not
+the planned 1.5 s). This note is committed at the lift.
+Correction to the void's attribution (the lead's disclosure, 2026-09-15):
+two local commits fell inside the first stage B, the lead's bb082d37 in
+his d6/lock-removal worktree at 21:55:23 and b5's 7af872da at 21:55:49,
+both under the coordinator's first terms, which allowed local commits;
+the fault is the terms, not either session. e9's B diff listed only
+b5's four lines, so either bb082d37 preceded refs_before_B, or the
+lead's tree is a separate clone, or the harness's ref enumeration
+misses a detached worktree HEAD; e9 answers which after the rerun, and
+if it is the enumeration, the "no ref moved" verdict on B, C and D
+needs the enumeration widened and the stages rerun. Both sessions
+acknowledged the corrected terms before the rerun's stage B started.
+ISOLATION, rerun (e9): B2 clean 200 of 200; C ran 30 of 30 clean (min
+21.6 s, median 21.9 s, max 22.6 s, the 180 s watch never near) but was
+reported VOID by the harness: two ref lines differed, one
+refs/codex/turn-diffs/checkpoints path gone and another appeared, both
+naming the same object c012ed7a, the new one written 22:05:34 inside
+C's window (22:02:32 to 22:13:33), the old one 21:35:03: an autonomous
+tool's checkpoint ref rotating, no session and no commit; the freeze
+held. e9 reported it as a defect in the oracle (every ref counted as
+session activity) and asked before narrowing. RULED (the coordinator,
+2026-09-15): the void test covers what sessions write (refs/heads,
+refs/tags, refs/remotes, worktree HEADs); refs/codex/turn-diffs
+rotations are excluded from the void but logged with their time
+against the run they fell in, as concurrent git activity in the
+shared store (a real ref write, the first thing to check against any
+hang's window); under that rule C is counted clean, decided after the
+fact and recorded as such; no C rerun; D runs next. The narrowing is
+written into GATE_ARCHIVE_HANG.txt by e9 after the lift.
+ISOLATION COMPLETE (e9, 21:53:40 to 22:19, about 25 of the 60 minutes):
+A 200 of 200, B 200 of 200 (the rerun; the first run void), C 30 of
+30, D 200 of 200 under a real load loop (21 "isolation load" commits
+with alternating checkouts in wt0c_landed_8eeb094f, 22:18:08 to
+22:18:53): 630 counted runs, 0 hangs, 0 non-zero exits, no watch
+expired, every archive byte-identical at 1382517 bytes; nothing
+captured because nothing stalled. Timings: A p50 206 / p99 250 / max
+255 ms; B p50 428 / p99 494 / max 508 ms; C median 21.9 s; D p50 206 /
+p99 277 / max 285 ms, indistinguishable from A. Covariates: A, B, D no
+codex rotation; C one at 22:05:34. The attribution question: option
+(1), refs_before_B of the first run was written 21:55:31, eight
+seconds after the lead's bb082d37, so it sat identically in before and
+after; the lead's tree was enumerated (line 30 of 44 worktree HEADs);
+no counted verdict needs widening; under the first terms neither
+bb082d37 nor 7af872da was forbidden. VERDICT (e9's words kept): "not
+reproduced in 0c's tree", not "the hang is gone": both real hangs were
+in the lead's build/fable/wti, which the isolation never touched; A, B
+and D at 200 clean make H1, H2 and H3 unlikely at the observed rate
+(0.935^200 about 1.5e-6), C's 30 runs carry about 13% chance of
+missing the defect, H4 (the output path) is unread without a capture.
+What protects the chain is the 120 s archive bound on integration
+(3f131768): a recurrence fails the gate in 120 s with a named line and
+evidence.json. NEXT: stage A and B in wti itself (about 3 min, the
+only untested hypothesis on the tree), in a five-minute freeze at the
+lead's next pause between the S6-2 section push and the first S6-2
+build; e9 prepares, the lead names the moment. GIT-FREEZE WINDOW
+LIFTED at 22:21 by the coordinator; e9 writes the narrowing and the
+results into GATE_ARCHIVE_HANG.txt and re-attaches its tree.
+LESSON (coordinator): the freeze's terms must forbid every ref move,
+local commits included, and be acknowledged before the first stage;
+a "diff | grep -v" falsifier still prints hunk headers, use
+diff <(grep -v ...) <(grep -v ...).
