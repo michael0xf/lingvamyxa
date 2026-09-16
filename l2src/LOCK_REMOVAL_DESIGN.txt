@@ -2260,6 +2260,30 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         the selftest -- and NOT tests/unit_slots6.lm2, whose "slots" are l2trans stack slots, 0c's catch),
         run_gates' port_slots row with the gate count 31 -> 30, and 25 runner list sites across 27 files (52 raw
         occurrences, of which 5 are comments and 1 is Test-Path-guarded: counted by role, not by grep hits).
+      - THE REGISTRY GROUP, written: runtime_delete's two rt\slots walks became ONE recursive traversal used
+        twice (R0's tree by first_child/next_sibling plus each record's settled list), in the old order and for the
+        old reason -- drain every mailbox first, since slot_free destroys the monitor; transport teardown under
+        R0's monitor between the passes; then free bottom-up, so every link is read before the record holding it
+        goes. The create site registers nothing; rt\slots, rt
+ and alloc_next are out of both cores and the
+        header. Around it: the module's seven files (unit_slots6.lm2 kept -- its "slots" are l2trans stack slots),
+        run_gates' port_slots row and header note, 23 runner list entries, run_lmx's two variables plus four
+        translate lines plus its support-objects foreach, and the fixtures -- entry_turn's pin, family_release_17's
+        eleven with seven captures and its header rationale, orphan_mapped_17's five with its capture, header and
+        the while-loop wait.
+      - A FIFTH POPULATION, found by the build rather than by any of my greps: lmx_message_exec.c INCLUDES the
+        deleted module's generated header and calls lmx_msg_slots_n / lmx_msg_slots_at through two wrappers. I had
+        grepped the runners for the module NAME and the sources for the registry FIELDS, and neither finds an
+        #include or an exported symbol. So the populations for deleting a module are at least five -- name in
+        runner lists, field references, generated-header includes, exported symbol calls, and prose citing it as a
+        precedent (two .lm2 comments do) -- and a deletion that checks fewer than all of them compiles until it
+        does not. This is the same lesson as the pair-deletion misses in a different dimension: the check has to
+        enumerate the KINDS of reference, not just the occurrences of one kind.
+      - THE GATE COUNT, flagged rather than reconciled: the gates table holds 29 rows after the port_slots row
+        goes, so it held 30 before -- but the stage plan and the S6-1 landing both say "31 gates", and a landing
+        run reported 31/31. Either the table has lost a row since, or that figure counts something beyond these
+        rows. run_gates prints $gates.Count, so its own output is always the table's; the discrepancy is written
+        into the runner's header and left open rather than settled by assertion.
       - THE SAME ERROR FOUR TIMES IN ONE SESSION, which is the honest headline of this step. I wrote the rule --
         before removing one side of a pair, grep the PARTNER and count its sites -- after the copy_free imbalance,
         and then broke it three more times: drive_walk_roots (retain removed, release left), send_owned in lm1, and
