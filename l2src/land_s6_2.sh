@@ -60,6 +60,13 @@ ALLOW="$ALLOW"'|S6_2_MIXA_BASELINE\.txt'
 # input to nothing and a gate to nothing -- it exists so a tripwire can be repeated by someone who was not
 # there. Here on the coordinator's word, like the baseline document, not on mine.
 ALLOW="$ALLOW"'|tripwire_s6_2\.sh'
+# Added 2026-09-16 on the lead's confirmation, after the dry run over 51b73274 flagged all three OUTSIDE.
+# run_entry_turn.ps1 was excluded here BY ARGUMENT, not by oversight: its support list is Test-Path guarded,
+# and I reasoned that it therefore needed no edit. The guard supports "will not break", never "needs no
+# edit" -- it stops a build failure when the module file vanishes and does nothing about the stale name
+# left in $names. The two .lm2 units are comment-only, rewriting a sentence that cites the module as a
+# precedent so it does not read as though lmx_msg_slots still exists.
+ALLOW="$ALLOW"'|run_entry_turn\.ps1|lmx_graph_copy_owned\.lm2|lmx_msg_mail_chain\.lm2'
 ALLOW="$ALLOW"'|run_port_msg_slots\.ps1|run_msg_slots\.ps1|run_gates\.ps1'
 ALLOW="$ALLOW"'|run_port_message\.ps1|run_model_scenario36\.ps1|run_lmx\.ps1|run_graph_abi\.ps1'
 ALLOW="$ALLOW"'|run_port_array_owned\.ps1|run_port_array_ref_owned\.ps1|run_port_branch_owned\.ps1'
