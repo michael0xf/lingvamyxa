@@ -1,0 +1,167 @@
+LOCK_REMOVAL_R0P_PREREAD: inventory for the root's parent stub -- every
+site where R0 is treated as parentless, every host-side timeout/shutdown
+path on R0, and every place R0's own poll of a parent is skipped -- at
+integration 7b3a8668, for the stage after S6-2 (sonnet/r0p-preread,
+2026-09-15, doc-only, no builds).
+
+Spec citations, verified directly against origin/main's Lingvamyxa_
+spec.txt: the liveness paragraph's own sentence "Host/system parent
+anchors roots" (13181-13182), immediately followed by Mikhail's 2026-
+09-15 verbatim words on the root thread's own timeout leaving the OS
+process, and the gloss that the stub "parent of the root L3 Thread" is
+this host/system parent -- "it holds the parent's timeout on the root
+and, on expiry, leaves the OS process; the model's section 19.29.7.1
+records his 2026-09-14 sentence that the root's only parent is the
+virtual grandparent at the OS-process level, a stub until World Wide
+Mix and the transport exist" (13182-13189); the child liveness poll
+section's own "periodically checks its parent" (13178, the abrupt-
+parent fallback: "each non-root Message periodically checks its
+parent. If the parent is absent, DEAD, STOPPED, RELEASED, or sustained-
+nonresponsive while in a handler, the child requests its own orderly
+close", 13176-13180); 19.29.7.1 itself (11512, 11556, 11688, 11859,
+11896, 12505, 12928, 12936, 13186, 13412, 14099 -- the section heading
+at 12936).
+
+--- Counts
+
+9 sites total: 6 where R0 is treated as parentless in production code
+  (lmx_message.lm1 only -- exec.c and host.c have none of their own,
+  see below), 2 host-side shutdown paths (both in lmx_message_host.c,
+  neither timeout-driven), 1 test that directly asserts today's
+  parentless behaviour and inverts under the stub.
+Of the 6 parentless-treatment sites: 4 are R0's own bootstrap/creation
+  and teardown identity (create_prepare's two branches, release_slot,
+  and the general parent-parameter validity checks in child_link/
+  child_unlink/handoff_supervision/dispose_child/adopt_failed, which
+  are out of this ticket's own scope -- see the note on those below)
+  and stay exactly as they are, since the stub does not change who
+  creates or tears down R0, only whether R0 itself has a poll target;
+  2 are the liveness-poll skip itself (poll/poll_mark, live_query) and
+  become the stub's own live traffic once R0 has a real parent address
+  to poll.
+No automatic, timeout-driven process exit exists anywhere in the
+  current tree (grep for "ExitProcess", "exit(" and "process exit"
+  across lmx_message_host.c returns nothing) -- the stub's own "on
+  expiry, leaves the OS process" behaviour is new host-loop logic, not
+  a change to an existing site; noted, not counted as a site to change.
+
+--- R0 treated as parentless (lmx_message.lm1; none of its own in
+    lmx_message_exec.c or lmx_message_host.c)
+
+1086, 1168 (lmx_msg_create_prepare, two branches: `if: parent = 0U`
+  guarding the host-owner-outside-turn authority check, and 1179 `if:
+  parent = 0U && top = 0` deciding this create becomes R0 itself):
+  today, a create with no parent is either R0's own bootstrap (rt\root
+  still 0) or, per S5's landing, refused a second root. Under the stub:
+  unchanged. The stub is R0's own parent from outside the Message
+  model (a host/system construct, not another Message create_prepare
+  would ever build), so R0's own creation identity does not change --
+  only whether R0, once created, has something to poll upward.
+
+1400 (lmx_msg_release_slot, `if: rt != 0 && m\parent = 0U`, S5's own
+  comment "only R0 has no parent, and it is the one root"): the
+  teardown path that clears rt\root when R0 itself is released. Under
+  the stub: unchanged, same reason as create_prepare -- the stub is not
+  a Message R0 could have a real \parent field pointing to; R0's own
+  family-tree parentlessness (parent==0U, the field) is a different
+  fact from "R0 has nothing to poll," which is what the stub answers.
+
+2074 (lmx_msg_parent_gone, `if: child = 0 || child\parent = 0U ->
+  return: 0`): the abrupt-parent-liveness-fallback's own core check,
+  called only from poll_mark below. For a Message with no parent (only
+  R0 today), this returns 0 -- "parent not gone" -- a vacuous pass, not
+  a real answer, since there is nothing to check. Under the stub: this
+  guard is what changes. R0 would have a real parent address (the
+  stub's own), so `child\parent = 0U` would no longer be true for R0,
+  and lmx_msg_parent_gone would run its real body against the stub
+  instead of short-circuiting -- checking the stub's own state/last_beat
+  the same way any child checks a Message parent today. This is the
+  site that turns the vacuous pass into the real check the spec
+  describes.
+
+2092-2105 (lmx_msg_poll_mark, `if: m\parent != 0U && (m\state = ...) ->
+  if: lmx_msg_parent_gone(...)`): the per-Message liveness mark, called
+  on a specific target. Its own guard excludes any Message with
+  parent==0 -- R0 -- from ever being checked at all, even if explicitly
+  targeted (lmx_msg_poll's own `who != 0U` branch calls poll_mark on
+  whatever `who` resolves to, including R0, but this guard then skips
+  it). Under the stub: R0 would satisfy `m\parent != 0U`, so poll_mark
+  would run lmx_msg_parent_gone(rt, R0, ...) for real, the second half
+  of the same change as 2074.
+
+2119-2133 (lmx_msg_poll, the `who = 0U` branch: `if: rt\root != 0 ->
+  n: lmx_msg_poll_kids(rt, rt\root, ...)`, 2130, its own comment "S5:
+  R0 is the one root"): the top-level "poll everyone" entry walks R0's
+  CHILDREN via poll_kids, never calling poll_mark on R0 itself -- R0's
+  own liveness is structurally absent from the general sweep, not just
+  refused if asked for directly. Under the stub: this is the third site
+  that needs a decision, not just a guard removal -- either poll adds
+  an explicit `lmx_msg_poll_mark(rt, rt\root, ...)` call alongside
+  poll_kids so R0 is swept too, or R0's own liveness check runs on a
+  separate cadence the stub owns directly (the spec's own words, "host
+  settings, not language constants," 13190-13191, suggest the latter
+  is at least as likely as folding it into the general sweep). Flagged
+  as an open design question for the stub's own ticket, not answered
+  here.
+
+2419-2456 (lmx_msg_live_query, two branches, both `if: ... m\parent =
+  0U -> return: c.LMX_MSG_INVALID`, 2430-2431 and 2444-2445): the
+  function a Message calls to actively query its own parent's liveness
+  (as opposed to a parent's own poll_mark check on its children). For a
+  parentless Message -- only R0 -- this refuses outright: R0 can never
+  issue a liveness query today, because it has nowhere to send one.
+  Under the stub: R0 would have a real parent address to send
+  LMX_MSG_PROF_LIVE_Q to (the stub), so this guard is what changes --
+  the function would proceed to lmx_msg_send(rt, R0, stub_addr, env)
+  the same way any child queries its parent.
+
+Not counted among the 6 (out of this ticket's own scope, generic
+  parameter validity, not R0-parentless reasoning): lmx_msg_child_link/
+  child_unlink (619, 656, null-parameter checks on any parent/child
+  pair), lmx_msg_handoff_supervision (678), lmx_msg_dispose_child/
+  adopt_failed (1550, 1567) -- each refuses a call whose parent ARGUMENT
+  is the literal address 0, which no real Message ever has as its own
+  address; unrelated to whether R0 itself has a parent.
+
+--- Host-side timeout/shutdown paths on R0 (lmx_message_host.c)
+
+88-95, lmx_msg_host_is_shutdown / 97-108, lmx_msg_host_shutdown / 122-
+  132, lmx_msg_host_wait: shutting_down is one atomic flag (S6-1's own
+  landing, "the host writes it, admissions read it"), set only by an
+  explicit, application-triggered call through lmx_msg_runtime_shutdown
+  (lmx_message.lm1:869-882, require_owner-guarded) -- never by a
+  timeout. This is the model's own ORDERLY shutdown path and is
+  unaffected by the stub: it stays exactly as the application-requested
+  close it already is.
+No site anywhere implements the stub's own "on expiry, leaves the OS
+  process" ABRUPT path -- confirmed absent, not merely unfound (grep
+  for ExitProcess/exit(/process exit across lmx_message_host.c and
+  lmx_message_exec.c returns nothing). This is new host-loop behaviour
+  the stub introduces, layered beside runtime_shutdown's own orderly
+  path, not a replacement for it or a modification of an existing site.
+
+--- Test site that inverts under the stub
+
+l2src/tests/lmx_model_liveness_33_selftest.lm1:372: `check(lmx_msg_
+  live_query(rt, lmx_msg_root_addr(rt)) = c.LMX_MSG_INVALID, "R0 has no
+  parent to poll")` -- today's direct assertion of live_query's own
+  2430/2444 guard. Under the stub this assertion inverts: R0 would have
+  a parent to poll, so the expected result becomes LMX_MSG_STAGED (or
+  whatever live_query returns on success against a real parent), and
+  the check's own label needs the opposite claim. This is the single
+  test found asserting the behaviour the stub's own two production
+  sites (2430-2456) change; no other test in l2src/tests names live_
+  query against R0's own address.
+
+--- Falsifier
+Every file:line above re-checked directly against 7b3a8668 by grep for
+its own named token with the receiver ignored (`parent = 0U`, `\parent
+= 0U`, `lmx_msg_live_query(`, `lmx_msg_parent_gone(`, `lmx_msg_poll_
+mark(`, `shutting_down`), none inferred from a prior document. The
+three spec citations (13181-13182, 13176-13180, 12936) verified
+directly against origin/main's Lingvamyxa_spec.txt, not carried over
+from the ticket's own wording. The absence claim (no automatic process
+exit) is itself falsifiable the same way: grep for ExitProcess/exit(/
+process exit across lmx_message_host.c and lmx_message_exec.c returns
+zero hits, checked directly, not assumed from the file's own general
+shape.
