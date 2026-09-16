@@ -1035,11 +1035,10 @@ fn: msg_host_drain (@: LmxMsgRuntime rt) int
     return: msg_pump(rt)
 end: msg_host_drain
 
-# S6-2: R0's teardown frees R0's STORAGE -- its settled records, recursively, and
-# whatever is still attached to its tree -- and not a runtime-wide registry walk,
-# which 5.1 forbids. The registry could enumerate every record because it was the
-# runtime's; the settled list enumerates what an owner owns, which is the same
-# reachability for teardown and a different claim about who is responsible.
+# S6-2: R0's teardown frees what is still attached to R0's tree, and not a
+# runtime-wide registry walk, which 5.1 forbids. Nothing else needs reaching:
+# a closed Message is freed by its own release chain (19.29.6), so the only
+# records alive at teardown are the ones still on the tree.
 # Two passes, in the order the old walk used and for the same reason: every mailbox
 # is drained first, because slot_free destroys the monitor; the transport teardown
 # runs between them under R0's monitor; only then is anything freed.
@@ -1054,12 +1053,6 @@ sub: msg_teardown_drain (@: LmxMsg m)
     msg_copy_free(inb)
     c.lmx_msg_mail_outbox_take(m, @ outb)
     msg_copy_free(outb)
-    s: m\settled
-    while: s != 0
-        nxt: s\settled_next
-        msg_teardown_drain(s)
-        s: nxt
-    ---
     s: m\first_child
     while: s != 0
         nxt: s\next_sibling
@@ -1068,20 +1061,13 @@ sub: msg_teardown_drain (@: LmxMsg m)
     ---
 end: msg_teardown_drain
 
-# Bottom-up: a record's settled records and children are freed before it, so every
-# link is read before the record holding it is freed.
+# Bottom-up: a record's children are freed before it, so every link is read
+# before the record holding it is freed.
 sub: msg_teardown_free (@: LmxMsg m)
     @: LmxMsg s
     @: LmxMsg nxt
     if: m = 0
         return
-    s: m\settled
-    m\settled: 0
-    while: s != 0
-        nxt: s\settled_next
-        msg_teardown_free(s)
-        s: nxt
-    ---
     s: m\first_child
     m\first_child: 0
     m\last_child: 0
@@ -1452,37 +1438,14 @@ fn: msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
     return: st
 end: msg_stop
 
-# S6-2, SPEC 19.29.7 ("settled into its parent with the rest of its storage"):
-# the owner's list of the records whose storage is now its own. The link cell
-# replaces alloc_next; the head belongs to the owner instead of the runtime.
-# Written only on the owner's lane, which is the lane already running the settle.
-sub: msg_settled_push (@: LmxMsg owner; @: LmxMsg m)
-    if: owner = 0 || m = 0
-        return
-    m\settled_next: owner\settled
-    owner\settled: m
-end: msg_settled_push
+# S6-2 (respecified 2026-09-16): the owner's list of closed records is gone with
+# the settle it enumerated. A closed Message is freed by its own release chain,
+# so no owner has closed records to enumerate.
 
-# The settle is upward and recursive: what a record owned becomes its owner's,
-# each cell rewritten to name the new owner, exactly as storage_move_all carries
-# the blocks. Same lane, same moment, no other writer.
-sub: msg_settled_move (@: LmxMsg owner; @: LmxMsg x)
-    @: LmxMsg m
-    @: LmxMsg nxt
-    if: owner = 0 || x = 0
-        return
-    m: x\settled
-    x\settled: 0
-    while: m != 0
-        nxt: m\settled_next
-        m\parent_msg: owner
-        m\settled_next: owner\settled
-        owner\settled: m
-        m: nxt
-    ---
-end: msg_settled_move
 
 sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
+    @: LmxMsgCopy inb 0
+    @: LmxMsgCopy outb 0
     int: ust
     if: m = 0
         return
@@ -1506,10 +1469,14 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
         ---
         m\next_sibling: 0
     ---
-    # S6-2, SPEC 19.29.7: the mailbox is NOT drained or destroyed here. It settles
-    # into the parent with the rest of the child's storage, queues and monitor
-    # intact, so a capability held by a sender stays a valid handle and a late send
-    # lands in a mailbox the parent owns.
+    # S6-2, SPEC 19.29.7 as respecified 2026-09-16: a closed Message's slot and
+    # arena are freed by the release chain, as 19.29.6 says. The mailbox is drained
+    # and destroyed here with the record: a capability is the target's ID, so no
+    # sender holds a pointer into this storage and nothing has to outlive it.
+    c.lmx_msg_mail_inbox_take(m, @ inb)
+    msg_copy_free(inb)
+    c.lmx_msg_mail_outbox_take(m, @ outb)
+    msg_copy_free(outb)
     if: m\init != 0
         c.free((cast: (@: void) m\init))
     ---
@@ -1523,14 +1490,14 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     m\path_cap: 0
     m\state: c.LMX_MSG_STATE_RELEASED
     m\committed: 0
-    # S6-2: what this record owned becomes its owner's, and then the record
-    # itself does. Done here rather than at the three call sites so no caller can
-    # miss it, and while parent_msg still names the owner (the unlink above takes
-    # the record off the chain and leaves that cell alone, by 19.29.7).
-    if: m\parent_msg != 0
-        msg_settled_move(m\parent_msg, m)
-        msg_settled_push(m\parent_msg, m)
-    ---
+    # The free itself, with no holder count standing between the release and it:
+    # slot_free destroys this record's mailbox monitor and frees the record. The
+    # arena has already moved to the owner before every call site that marks
+    # (adopt_mark, dispose_mark, reclaim_mark), and lmx_msg_blocks_move_all clears
+    # the source owner, so the dispose inside slot_free walks an empty list; the
+    # one site with no mark before it releases an uncommitted INACTIVE child,
+    # which never received blocks in create_prepare.
+    c.lmx_msg_slot_free(m)
 end: msg_release_slot
 
 # Decision 17 with spec 19.29.8: settling a direct child into its parent,
@@ -1900,24 +1867,15 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         msg_request_children_close(rt, who)
     ---
     msg_arena_collect(m)
-    # S6-2: the admission pump runs first, so a late send through a settled
-    # capability is sitting in that mailbox; then this Message answers, in its own
-    # round, for the records it owns; then the second pump carries those refusals to
-    # their senders. The order is forced, not stylistic: before the first pump the
-    # settled mailbox is still empty, and after the last one the answers are posted.
-    msg_pump(rt)
-    msg_drain_settled(rt, m)
     return: msg_pump(rt)
 end: msg_end_turn
 
-# S6-2, SPEC 19.29.7: a capability is the target's mailbox handle, and a closing
-# Message's mailbox settles into its parent with the rest of its storage. So a send
-# arriving through a handle whose target has settled is NOT a silent drop: the
-# handle was valid, and the sender is owed a status. Modelled on msg_post_dead, the
-# same shape of unsolicited notice. Its caller is the OWNER's round
-# (msg_drain_settled), which holds no monitor when it calls: the mailbox take there
-# locks and unlocks that record's mailbox before this takes R0's, so the two are
-# sequential and never nested.
+# S6-2, SPEC 19.29.7 (respecified 2026-09-16): a capability is the target's ID,
+# and "a late send resolves the id and is refused with a status when the target is
+# not found or closed". The refusal is the mail service's act -- the service is R0,
+# which resolves every send in its own drain -- and this is the status it sends
+# back. Modelled on msg_post_dead, the same shape of unsolicited notice. It takes
+# R0's monitor on its own and holds no other when it does.
 fn: msg_post_rejected (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
     @: LmxMsgCopy entry
     @: LmxMsg root
@@ -1942,39 +1900,6 @@ fn: msg_post_rejected (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; un
     return: c.LMX_MSG_OK
 end: msg_post_rejected
 
-# S6-2, SPEC 19.29.7 ("lands in a mailbox the parent owns and is refused there, on
-# the parent's lane"): the refusal is the OWNER's act in its own round, not the
-# admitting lane's. The owner walks the records it now owns -- its settled list
-# enumerates them, so nobody reads parent_msg from a foreign lane -- drains each
-# mailbox and answers every sender. One monitor at a time: the take locks and
-# unlocks that record's mailbox, then msg_post_rejected takes R0's on its own.
-# A refusal is never itself refused: a REJECTED envelope found here is dropped.
-fn: msg_drain_settled (@: LmxMsgRuntime rt; @: LmxMsg owner) int
-    @: LmxMsg s
-    @: LmxMsgCopy chain
-    @: LmxMsgCopy n
-    @: LmxMsgCopy nxt
-    if: rt = 0 || owner = 0
-        return: c.LMX_MSG_OK
-    s: owner\settled
-    while: s != 0
-        chain: 0
-        c.lmx_msg_mail_inbox_take(s, @ chain)
-        n: chain
-        while: n != 0
-            nxt: n\next
-            n\next: 0
-            if: n\kind != c.LMX_MSG_KIND_REJECTED
-                msg_post_rejected(rt, s\addr, n\from, n\correlation)
-            ---
-            msg_copy_free(n)
-            n: nxt
-        ---
-        s: s\settled_next
-    ---
-    return: c.LMX_MSG_OK
-end: msg_drain_settled
-
 fn: msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy entry) int
     @: LmxMsg dest
     @: LmxMsgCopy fresh
@@ -1990,18 +1915,6 @@ fn: msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy entry) int
     if: dest != 0 && dest\owner_rt != rt
         msg_copy_free(entry)
         return: c.LMX_MSG_GONE
-    ---
-    # S6-2, SPEC 19.29.7: a settled destination is no longer GONE. Its mailbox
-    # settled into its owner with the rest of its storage, so the envelope is
-    # admitted into it exactly as into any mailbox, under that mailbox's own
-    # monitor; the refusal is the owner's act in its own round (msg_drain_settled).
-    # None of the live-destination bookkeeping applies -- no state change, no ready,
-    # no done-id, no retain -- because no turn will ever run for this record again.
-    if: dest != 0 && dest\state = c.LMX_MSG_STATE_RELEASED
-        c.lmx_msg_mail_lock(dest)
-        msg_q_push(@ dest\inbox, @ dest\inbox_tail, entry)
-        c.lmx_msg_mail_unlock(dest)
-        return: c.LMX_MSG_OK
     ---
     if: dest = 0 || dest\state = c.LMX_MSG_STATE_DEAD || dest\state = c.LMX_MSG_STATE_STOPPED
         msg_copy_free(entry)

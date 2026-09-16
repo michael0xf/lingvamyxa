@@ -977,26 +977,14 @@ fn: main () int
     # status, which is why this reads the sender's inbox rather than st.
     int: st_cap 0
     int: st_end 0
-    # S6-2: the rolled-back child's storage is its parent's now, and the parent's
-    # settled list is what enumerates it. Asserted here in its own right, before the
-    # refusal is asked for: if this fails, the settle never happened; if it passes
-    # and the refusal still does not arrive, the fault is in the owner's round or in
-    # the delivery. One red that cannot say which of the two it is would be useless.
-    @: LmxMsg pm3
-    @: LmxMsg sx3
-    int: on_settled3 0
-    pm3: lmx_msg_find(rrt3, rp3)
-    if: pm3 != 0
-        sx3: pm3\settled
-        while: sx3 != 0
-            if: sx3\addr = rc3 && sx3\state = c.LMX_MSG_STATE_RELEASED
-                on_settled3: 1
-            ---
-            sx3: sx3\settled_next
-        ---
-    ---
-    if: on_settled3 = 0
-        c.printf("the rolled-back child is not on its parent's settled list\n")
+    # S6-2 (respecified 2026-09-16): the rolled-back child is freed by its own
+    # release chain, so the first half of this case is that it is GONE. Asserted
+    # here in its own right, before the refusal is asked for: if this fails the
+    # release never ran; if it passes and the refusal still does not arrive, the
+    # fault is in the service's resolution. One red that cannot say which of the
+    # two it is would be useless, which is why the halves stay separate.
+    if: lmx_msg_find(rrt3, rc3) != 0
+        c.printf("the rolled-back child is still findable after its release\n")
         fail: fail + 1
     ---
     st_cap: lmx_msg_send_cap(rrt3, rp3, held3, env)
