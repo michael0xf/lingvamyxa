@@ -136,14 +136,20 @@ foreach ($g in $gates) {
     $evidenceLines = @($lines | Where-Object { $_ -match '(?i)\bevidence:?\s+\S' })
     $evidence = if ($evidenceLines.Count) { ([regex]::Match($evidenceLines[-1], '(?i)\bevidence:?\s+(.+?)\s*$')).Groups[1].Value } else { '-' }
     $state = if ($code -eq 0) { 'PASS' } else { "FAIL exit=$code" }
+    # Every row's own line is required, not only that of the row which happens to carry
+    # a forbidden string. Until 2026-09-16 this test sat inside the $g.Count -gt 4 guard
+    # and lane_oracle is the only five-element row, so for the other 29 a runner that
+    # exited 0 having printed nothing was recorded PASS with '(empty log)' as its
+    # verdict -- a check that cannot fail for the rows it was never given.
+    if ($code -eq 0 -and $g[3] -and $own.Count -eq 0) {
+        $state = "FAIL exit=0 no '$($g[3])' line"
+        $code = 1
+    }
     if ($g.Count -gt 4 -and $g[4]) {
         # Counted over the raw log: a stderr line rendered as an error record
         # still carries the text.
         $forbidden = @($raw | Where-Object { $_ -match [regex]::Escape($g[4]) }).Count
-        if ($code -eq 0 -and $own.Count -eq 0) {
-            $state = "FAIL exit=0 no '$($g[3])' line"
-            $code = 1
-        } elseif ($code -eq 0 -and $forbidden -ne 0) {
+        if ($code -eq 0 -and $forbidden -ne 0) {
             $state = "FAIL exit=0 '$($g[4])' x$forbidden"
             $code = 1
         }
