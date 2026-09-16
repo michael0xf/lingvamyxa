@@ -8083,3 +8083,9 @@ cut from 2d8f2b6a touching only the runner (the name-status then
 differs from the 54 by exactly that path), else the runner change is
 cherry-picked onto the tip. run_port_parser is running at 2d8f2b6a,
 healthy (36 of 36 goldens in the first two stages).
+The lead at 2d8f2b6a: run_port_parser GREEN ("run_port_parser ok",
+36 of 36 goldens in every stage a_lex through e_appenders, both
+drivers); with run_l2trans GREEN, run_port_message plain GREEN, the
+two fixture conversions carried (60/0, 19/0) and his probe 0/0, the
+five lines lack exactly one thing: a whole run_gates -L2MessageRoot,
+which waits on e9's runner fix cut from 2d8f2b6a.
