@@ -9703,3 +9703,34 @@ red run used), so the landing's one red is under 1% and sits in the selftest's
 own own_turn helper (lmx_msg_exec_start_contexts refusing), not in the
 candidate; the instrumented build was reverted from the landing worktree and
 the landing is relaunched.
+
+AD: THE LIVE SET'S ID ORDER PUSHED, recorded 2026-09-16 14:38 by the coordinator
+(lingvamyxa-08): d6/lock-ad is 48a3cd40 (parent c2f56d60), both cores in parity,
+run_port_message GREEN on it, and a PAIRED run of the same runner on 48a3cd40
+and on c2f56d60 both PARITY PASS under the same load -- the right control for
+the one heap-corruption red this tree showed in a parity run.
+
+THE FLAKE, TWO SYMPTOMS, ONE CLASS, recorded the same hour: (a) the landing's
+-LaneCheck red was lmx_msg_exec_start_contexts refusing with LMX_MSG_INVALID
+inside the selftest's own_turn helper (the child's "reading:" line is absent in
+the red stderr and present in every green one); (b) one run of the runner's
+parity leg on 48a3cd40 exited -1073740940 (STATUS_HEAP_CORRUPTION) after the
+case "dispose settles a failed branch bottom-up", while its reference leg was
+green. Both are rare and load-dependent: 107 consecutive green direct runs of
+the reference selftest with LMX_LANE_CHECK=1, five green -LaneCheck suite runs
+by 5c on the candidate, and 0 failures in 60+ direct runs of each parity binary.
+A corrupted heap cell would explain (a) as well (rt->host_sync read as 0 makes
+lmx_msg_host_is_owner false), so the two are recorded as one open question: a
+rare corruption in the executor's own run, to be hunted with the repo's kit
+(poisoning quarantine via -Dmalloc, load shapes, the crash-report main) before
+any clean-run count is trusted. Neither symptom is attributable to a candidate:
+(a) predates this stage's changes and (b) did not reproduce on the same tree.
+
+LANDING RELAUNCHED AND PAST ITS FORMER RED, recorded the same hour: the
+engineer's land_l2trans.sh was re-run by the coordinator after the instrumented
+build was reverted from wti: self_build PASS 11s, gates GREEN 29 of 29 in 679s,
+port_message PASS 84s, port_message_lane PASS 64s (the step that was red),
+l2trans gen2 ok 307s with both acceptance headers written during the step; the
+remaining steps (port_parser, mixa, ingress, scenario36, lmx_cancel) follow.
+The flake was not fixed, only measured: the landing can still fail once in ~150
+suite runs by (a) or (b).
