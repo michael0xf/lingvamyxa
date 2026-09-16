@@ -7791,3 +7791,14 @@ the green; MEASURE_S6_2.md's red leg is updated by e9 to 163.
 The acceptance base's final hash after the header note: fable/s6-2-acceptance
 96a754e0 (6b15d8e8 the needle change, 96a754e0 the header stating it);
 red re-confirmed there: refs=163 runtime_lists=36.
+e9: claude-0c/land-s6-2 114c2c64: MEASURE_S6_2.md re-pinned throughout
+to 96a754e0 and 163/36 (every surviving 4189dea0 or 342 marked
+superseded), the falsifier re-measured on 96a754e0 (163 to 164,
+numstat "1 0", restored to 163) rather than converted from the old
+delta, the KNOWN BLOCKER note replaced by the ruling with what was
+deliberately not done (no edit to the selftests' spin cells, no
+deletion of the lead's exec.c:352 comment) and the fact that the
+narrowing preceded the green leg; land_s6_2.sh takes
+ACCEPT_EXPECT=96a754e0 (the old base in a comment), 201 lines, the
+allowlist 16 paths 0 outside at the stage's 95de9bf4. Holding for the
+registry group's name-status and the word to launch.
