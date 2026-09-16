@@ -49,6 +49,10 @@ PS="powershell -NoProfile -ExecutionPolicy Bypass -File"
 ALLOW='^(l2src/(lmx_message\.h|lmx_message\.lm1|lmx_message\.lm2|lmx_message_exec\.c|lmx_message_exec\.h'
 ALLOW="$ALLOW"'|lmx_message_selftest\.lm1|lmx_message_exec_selftest\.c'
 ALLOW="$ALLOW"'|lmx_msg_slots\.h\.lm1|lmx_msg_slots\.lm1|lmx_msg_slots\.lm2|LMX_MSG_SLOTS\.txt'
+# Added (A), not modified: it does not exist at the base and arrives with b5's mixa branch, which the lead
+# merges into the stage. Here on his word, asked for rather than assumed -- an allowlist widened by the
+# script's author is how a landing admits a path nobody meant to land.
+ALLOW="$ALLOW"'|S6_2_MIXA_BASELINE\.txt'
 ALLOW="$ALLOW"'|run_port_msg_slots\.ps1|run_msg_slots\.ps1|run_gates\.ps1'
 ALLOW="$ALLOW"'|run_port_message\.ps1|run_model_scenario36\.ps1|run_lmx\.ps1|run_graph_abi\.ps1'
 ALLOW="$ALLOW"'|run_port_array_owned\.ps1|run_port_array_ref_owned\.ps1|run_port_branch_owned\.ps1'
