@@ -7459,3 +7459,19 @@ interim with the finding recorded (the real fix deduplicates the
 predef'd definitions on the L2 side). Next for b5: :510 and any
 same-shape sites in one commit; the parity trace stop after check 15;
 composite_glyphs' errors diagnosed.
+The lead's amendment (design 419d6659): the admission-time refusal
+withdrawn on the ruling; admit_one stops treating RELEASED as GONE and
+delivers into the settled mailbox under that mailbox's own monitor
+with none of the live-destination bookkeeping (no state change, no
+ready, no done-id, no retain: no turn runs for that record again);
+lmx_msg_drain_settled, the owner's act in its own round, walks the
+owner's settled list, takes each mailbox's queue (inbox_take locking
+and unlocking that one mailbox) and answers every sender through
+post_rejected, which takes R0's monitor on its own afterwards; one
+monitor at a time, never nested, no cross-lane read. Forced
+consequence recorded: end_turn ended with pump(rt), which admits the
+late send, so a drain before it sees an empty settled mailbox and a
+drain after it is unreachable; end_turn becomes pump (admit) then
+drain_settled (answer) then pump (deliver), three steps in that order
+(the pump halves go at Y3 with the transport, leaving the drain in the
+round).
