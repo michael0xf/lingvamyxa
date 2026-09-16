@@ -1549,7 +1549,7 @@ fn: msg_address_of (@: LmxMsg m; @: unsigned out; int: cap) int
     return: n
 end: msg_address_of
 
-fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out; @@: LmxMsg out_msg) int
     @: LmxMsg slot
     @: LmxMsg p 0
     @: uchar initp 0
@@ -1682,17 +1682,26 @@ fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx source; 
         ---
     ---
     \out: slot\addr
+    # AD (2026-09-16): create hands the new record back as the pair the ruling
+    # gives a target -- the id it just wrote through \out, and the record itself
+    # here.  A caller that takes this can name the child without any lookup,
+    # which is what the create-adjacent call sites need: the child's registration
+    # is a LETTER that has not drained yet, so the service's id order cannot
+    # answer for it until R0's round runs. 0 means the caller does not want it.
+    if: out_msg != 0
+        \out_msg: slot
+    ---
     return: c.LMX_MSG_OK
 end: msg_create_prepare
 
-fn: msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
-    return: msg_create_prepare(rt, parent, 0, 0, 0, 0, init, n, out)
+fn: msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; const: @(uchar init); size_t: n; @: LmxMsgAddr out; @@: LmxMsg out_msg) int
+    return: msg_create_prepare(rt, parent, 0, 0, 0, 0, init, n, out, out_msg)
 end: msg_create
 
-fn: msg_create_graph (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+fn: msg_create_graph (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out; @@: LmxMsg out_msg) int
     if: source = 0 || src_ranges = 0
         return: c.LMX_MSG_INVALID
-    return: msg_create_prepare(rt, parent, source, src_ranges, eternal_ranges, method_ranges, init, n, out)
+    return: msg_create_prepare(rt, parent, source, src_ranges, eternal_ranges, method_ranges, init, n, out, out_msg)
 end: msg_create_graph
 
 fn: msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @(LmxMsgEnv env)) int

@@ -300,19 +300,23 @@ struct LmxMsgRuntime {
 LmxMsgRuntime *lmx_msg_runtime_new(void);
 void lmx_msg_runtime_delete(LmxMsgRuntime *rt);
 
-int lmx_msg_create(LmxMsgRuntime *rt, LmxMsgAddr parent, const uchar *init, size_t n, LmxMsgAddr *out);
+/* AD (2026-09-16): create hands the new record back as well as its id -- out_msg
+ * receives the record itself, or 0 may be passed by a caller that wants only the
+ * id (the created child's registration is a letter that has not drained yet, so
+ * the id alone cannot name it until R0's round runs). */
+int lmx_msg_create(LmxMsgRuntime *rt, LmxMsgAddr parent, const uchar *init, size_t n, LmxMsgAddr *out, LmxMsg **out_msg);
 /* Stage 5 (d1): declared because runtime_new, earlier in lmx_message, creates R0 through it. */
 int lmx_msg_create_prepare(LmxMsgRuntime *rt, LmxMsgAddr parent,
                            struct Lmx *source, LmxOwnedRange *src_ranges,
                            LmxOwnedRange *eternal_ranges, LmxOwnedRange *method_ranges,
-                           const uchar *init, size_t n, LmxMsgAddr *out);
+                           const uchar *init, size_t n, LmxMsgAddr *out, LmxMsg **out_msg);
 /* Create with an explicit used-graph copy. The new Message stays private until
  * the complete copy and path preparation succeed; failure publishes no child. */
 int lmx_msg_create_graph(LmxMsgRuntime *rt, LmxMsgAddr parent,
                          struct Lmx *source, LmxOwnedRange *src_ranges,
                          LmxOwnedRange *eternal_ranges,
                          LmxOwnedRange *method_ranges,
-                         const uchar *init, size_t n, LmxMsgAddr *out);
+                         const uchar *init, size_t n, LmxMsgAddr *out, LmxMsg **out_msg);
 int lmx_msg_send(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, const LmxMsgEnv *env);
 int lmx_msg_send_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, const LmxMsgEnv *env, struct Lmx *graph);
 LmxMsg *lmx_msg_delivery_new(struct Lmx *graph, LmxOwnedRange *src_ranges, LmxOwnedRange *eternal_ranges, LmxOwnedRange *method_ranges);
