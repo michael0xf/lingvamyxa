@@ -2398,14 +2398,10 @@ static int lifecycle_authority(LmxMsgRuntime *rt, LmxMsgAddr who) {
  * settled children were settled into it. On refusal nothing has moved. */
 static int adopt_mark_pc(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c);
 
-int lmx_msg_exec_adopt_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
-    int st;
-    if (rt == 0) {
-        return LMX_MSG_INVALID;
-    }
-    st = adopt_mark_pc(rt, lmx_msg_self_or_find(rt, parent), lmx_msg_self_or_find(rt, child));
-    return st;
-}
+/* AD (2026-09-16): the id-taking form is deleted -- it resolved both records by
+ * scanning (lmx_msg_self_or_find), and no caller remained: the caller grep over
+ * the tracked sources names only its declaration, its definition and prose. The
+ * pointer form below is the one lmx_msg_settle_child calls (lm1:1828). */
 
 /* S2: adopt_mark for a caller that holds both records (settle_child). */
 int lmx_msg_exec_adopt_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c) {
@@ -2631,14 +2627,9 @@ int lmx_msg_deliver_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
  * lmx_msg_settle_child after it checked authority. */
 static int dispose_mark_pc(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c);
 
-int lmx_msg_exec_dispose_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
-    int st;
-    if (rt == 0) {
-        return LMX_MSG_INVALID;
-    }
-    st = dispose_mark_pc(rt, lmx_msg_self_or_find(rt, parent), lmx_msg_self_or_find(rt, child));
-    return st;
-}
+/* AD (2026-09-16): the id-taking form is deleted with its adopt_mark sibling --
+ * both records would be resolved by scanning and no caller remained; the
+ * pointer form below is the one lmx_msg_settle_child calls (lm1:1830). */
 
 /* S2: dispose_mark for a caller that holds both records (settle_child). */
 int lmx_msg_exec_dispose_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c) {

@@ -58,8 +58,8 @@ int lmx_msg_exec_is_runnable_msg(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_exec_is_runnable_msg_locked(LmxMsg *m);
 void lmx_msg_exec_ready_msg(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_exec_msg_bound(LmxMsg *m);
-int lmx_msg_exec_adopt_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
-int lmx_msg_exec_dispose_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
+/* AD (2026-09-16): the id-taking adopt_mark/dispose_mark are deleted -- they
+ * resolved both records by scanning and no caller remained (see exec.c). */
 /* S2: the marks by records, for a caller that holds parent and child. */
 int lmx_msg_exec_adopt_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c);
 int lmx_msg_exec_dispose_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c);
