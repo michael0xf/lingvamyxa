@@ -3214,14 +3214,12 @@ int main(int argc, char **argv) {
             return 1;
         }
         held = lmx_msg_find(rtb, c1);
-        n0 = rtb->n;
-        if (held == 0 || lmx_msg_endp_retain(held) == 0) {
-            fprintf(stderr, "held retain\n");
+        if (held == 0) {
+            fprintf(stderr, "held find\n");
             return 1;
         }
         if (lmx_msg_exec_bind(rtb, c1, turn_just_end, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             fprintf(stderr, "held bind\n");
-            lmx_msg_endp_release(held);
             return 1;
         }
         memset(&e, 0, sizeof(e));
@@ -3230,24 +3228,32 @@ int main(int argc, char **argv) {
         e.bytes = &ini;
         if (lmx_msg_send_cap(rtb, p, held, &e) != LMX_MSG_STAGED) {
             fprintf(stderr, "held send_cap\n");
-            lmx_msg_endp_release(held);
             lmx_msg_runtime_delete(rtb);
             return 1;
         }
         if (lmx_msg_end_turn(rtb, p, 0) != LMX_MSG_OK) {
-            lmx_msg_endp_release(held);
             lmx_msg_runtime_delete(rtb);
             return 1;
         }
-        if (lmx_msg_find(rtb, c1) != 0 || rtb->n != n0) {
-            fprintf(stderr, "held cap retired early n=%d\n", rtb->n);
-            lmx_msg_endp_release(held);
-            lmx_msg_runtime_delete(rtb);
-            return 1;
+        /* S6-2 (SPEC 19.29.7, "there is no count of holders"): this case was built
+         * on the count -- a hold kept the slot from retiring, the last release
+         * retired it -- and both halves of that are gone. Nothing is retired early
+         * by a hold, because no hold is taken; nothing retires when it is dropped,
+         * because a closing Message settles into its parent rather than being
+         * freed. What the case is actually about survives and is asserted directly:
+         * the handle taken before the close stays valid afterwards, because the
+         * record is not freed under it -- it is the parent's storage now, on the
+         * parent's settled list, RELEASED and off the tree. */
+        settled_ok = 0;
+        pm2 = lmx_msg_find(rtb, p);
+        for (sx = (pm2 != 0) ? pm2->settled : 0; sx != 0; sx = sx->settled_next) {
+            if (sx->addr == c1 && sx->state == LMX_MSG_STATE_RELEASED) {
+                settled_ok = 1;
+            }
         }
-        lmx_msg_endp_release(held);
-        if (lmx_msg_find(rtb, c1) != 0 || rtb->n != n0 - 1) {
-            fprintf(stderr, "final held-cap did not retire n=%d\n", rtb->n);
+        if (lmx_msg_find(rtb, c1) != 0 || settled_ok == 0 || held->state != LMX_MSG_STATE_RELEASED) {
+            fprintf(stderr, "held cap not settled into its parent settled=%d find=%d\n",
+                settled_ok, lmx_msg_find(rtb, c1) != 0);
             lmx_msg_runtime_delete(rtb);
             return 1;
         }
