@@ -1,0 +1,11 @@
+{
+    "watchPath":  "C:\\Nyasha_Planet\\lingvamyxa\\work_chat\\grok_bot\\outbox",
+    "watchDir":  "C:\\Nyasha_Planet\\lingvamyxa\\build\\grok_bot_outbox_watch",
+    "seenPath":  "C:\\Nyasha_Planet\\lingvamyxa\\build\\grok_bot_outbox_watch\\seen_outbox",
+    "heartbeatSeconds":  30,
+    "quietSeconds":  20,
+    "pollSeconds":  1800,
+    "mutexName":  "GrokBot_Outbox_Watcher_Mutex",
+    "webhookSenderKey":  "",
+    "webhookUrl":  ""
+}
