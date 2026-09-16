@@ -1559,11 +1559,14 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         breaks family_close_32's order: H is asked to close only by G1's close, and "C did not reach its
         grandchild H".
       - The spec (main 0c64590a) names a different owner:
-        - 13170-13172: the parent's close requests the children's close at its end_turn, and poll is only the
+        - "Normal parent close already requests children close" (077ee6fd, today 13195): the parent's close
+          requests the children's close at its end_turn, and poll is only the
           fallback for a parent that died abruptly;
-        - 13174-13183: drive is "Historical prototype only", and its automatic "applying an already-requested
+        - "Historical prototype only" (077ee6fd, today 13200): drive is named exactly that, and its automatic
+          "applying an already-requested
           close to idle empty-inbox participants" must be distributed "to each Message's own mechanism";
-        - 13277-13278: "For a nonexecuting Message, its owning executor applies the close/cleanup path without
+        - "its owning executor applies the close/cleanup path" (077ee6fd, today 13303): "For a nonexecuting
+          Message, its owning executor applies the close/cleanup path without
           starting a new user turn".
         Which executor owns a nonexecuting Message whose parent is STOPPED is not stated.
       - d6's candidate, adding no lock, wait or signal: the owning executor of a nonexecuting Message is its
