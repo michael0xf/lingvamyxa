@@ -107,6 +107,17 @@ typedef struct LmxMsgEnv {
     unsigned id;
     unsigned correlation;
     LmxMsgAddr reply_to;
+    /* AD (2026-09-16): the records the ids above name, as the pair the ruling
+     * gives a target -- the pointer and the id, no count.  A caller that holds
+     * the record (create's result, a letter it received, the letter it answers)
+     * sets these where it has them, and the send path then resolves nothing by
+     * scanning; 0 means "only the id is held here", which today still falls back
+     * to the resolution this stage is deleting.  The id is checked against the
+     * record's own addr before the pointer is used, so a stale handle cannot
+     * name a different record: malloc reuses addresses, ids are never reused. */
+    struct LmxMsg *from_msg;
+    struct LmxMsg *to_msg;
+    struct LmxMsg *reply_to_msg;
     int kind;
     int number;
     const uchar *bytes;

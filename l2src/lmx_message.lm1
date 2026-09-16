@@ -1585,7 +1585,14 @@ fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: 
     if: env\n != 0U && node\bytes = 0
         c.free((cast: (@: void) node))
         return: c.LMX_MSG_NOMEM
-    src: lmx_msg_self_or_find(rt, from)
+    # AD (2026-09-16): the sender as the pair the ruling gives a target. A caller
+    # that holds the record (the turn's own, create's result, the answered
+    # letter) passes it and nothing is resolved; the id is checked against the
+    # record's own addr, because malloc reuses addresses and ids never are.
+    src: env\from_msg
+    if: src = 0 || src\addr != from
+        src: lmx_msg_self_or_find(rt, from)
+    ---
     if: src = 0
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_INVALID
@@ -1595,7 +1602,16 @@ fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: 
     if: src\state = c.LMX_MSG_STATE_STOPPED
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_STOPPED
-    destn: lmx_msg_dest_from_src(src, to, rt)
+    # AD (2026-09-16): the destination as the pair, when the caller holds it --
+    # the record it answers, or create's result. Only 0 falls back to the
+    # resolution by scanning that this stage deletes, and the id is checked
+    # against the record's own addr first.
+    destn: 0
+    if: env\to_msg != 0 && env\to_msg\addr = to
+        destn: env\to_msg
+    else:
+        destn: lmx_msg_dest_from_src(src, to, rt)
+    ---
     # S6-2, SPEC 19.29.7: the carried destination is a handle, not a hold. No count
     # is taken here, so nothing is released when the copy is freed -- the two go
     # together, and removing only the release left the count rising and never
@@ -1633,7 +1649,14 @@ fn: lmx_msg_send_graph (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; c
     node\number: env\number
     node\n: 0U
     node\bytes: 0
-    src: lmx_msg_self_or_find(rt, from)
+    # AD (2026-09-16): the sender as the pair the ruling gives a target. A caller
+    # that holds the record (the turn's own, create's result, the answered
+    # letter) passes it and nothing is resolved; the id is checked against the
+    # record's own addr, because malloc reuses addresses and ids never are.
+    src: env\from_msg
+    if: src = 0 || src\addr != from
+        src: lmx_msg_self_or_find(rt, from)
+    ---
     if: src = 0
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_INVALID
@@ -1647,7 +1670,16 @@ fn: lmx_msg_send_graph (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; c
     if: node\delivered = 0
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_NOMEM
-    destn: lmx_msg_dest_from_src(src, to, rt)
+    # AD (2026-09-16): the destination as the pair, when the caller holds it --
+    # the record it answers, or create's result. Only 0 falls back to the
+    # resolution by scanning that this stage deletes, and the id is checked
+    # against the record's own addr first.
+    destn: 0
+    if: env\to_msg != 0 && env\to_msg\addr = to
+        destn: env\to_msg
+    else:
+        destn: lmx_msg_dest_from_src(src, to, rt)
+    ---
     # S6-2, SPEC 19.29.7: the carried destination is a handle, not a hold. No count
     # is taken here, so nothing is released when the copy is freed -- the two go
     # together, and removing only the release left the count rising and never
@@ -1687,7 +1719,14 @@ fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @
     node\owned: 1
     env\bytes: 0
     env\n: 0U
-    src: lmx_msg_self_or_find(rt, from)
+    # AD (2026-09-16): the sender as the pair the ruling gives a target. A caller
+    # that holds the record (the turn's own, create's result, the answered
+    # letter) passes it and nothing is resolved; the id is checked against the
+    # record's own addr, because malloc reuses addresses and ids never are.
+    src: env\from_msg
+    if: src = 0 || src\addr != from
+        src: lmx_msg_self_or_find(rt, from)
+    ---
     if: src = 0
         env\bytes: node\bytes
         env\n: node\n
@@ -1702,7 +1741,16 @@ fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @
         if: src\state = c.LMX_MSG_STATE_DEAD
             return: c.LMX_MSG_DEAD
         return: c.LMX_MSG_STOPPED
-    destn: lmx_msg_dest_from_src(src, to, rt)
+    # AD (2026-09-16): the destination as the pair, when the caller holds it --
+    # the record it answers, or create's result. Only 0 falls back to the
+    # resolution by scanning that this stage deletes, and the id is checked
+    # against the record's own addr first.
+    destn: 0
+    if: env\to_msg != 0 && env\to_msg\addr = to
+        destn: env\to_msg
+    else:
+        destn: lmx_msg_dest_from_src(src, to, rt)
+    ---
     if: destn != 0
         # S6-2: the carried destination is a handle, not a hold (as above).
         node\dest_msg: destn
@@ -2844,7 +2892,14 @@ fn: lmx_msg_send_address (@: LmxMsgRuntime rt; LmxMsgAddr: from; const: @(unsign
     if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U
         return: c.LMX_MSG_INVALID
     ---
-    src: lmx_msg_self_or_find(rt, from)
+    # AD (2026-09-16): the sender as the pair the ruling gives a target. A caller
+    # that holds the record (the turn's own, create's result, the answered
+    # letter) passes it and nothing is resolved; the id is checked against the
+    # record's own addr, because malloc reuses addresses and ids never are.
+    src: env\from_msg
+    if: src = 0 || src\addr != from
+        src: lmx_msg_self_or_find(rt, from)
+    ---
     if: src = 0
         return: c.LMX_MSG_INVALID
     ---
@@ -3235,7 +3290,14 @@ fn: lmx_msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; con
     if: env\n != 0U && node\bytes = 0
         c.free((cast: (@: void) node))
         return: c.LMX_MSG_NOMEM
-    src: lmx_msg_self_or_find(rt, from)
+    # AD (2026-09-16): the sender as the pair the ruling gives a target. A caller
+    # that holds the record (the turn's own, create's result, the answered
+    # letter) passes it and nothing is resolved; the id is checked against the
+    # record's own addr, because malloc reuses addresses and ids never are.
+    src: env\from_msg
+    if: src = 0 || src\addr != from
+        src: lmx_msg_self_or_find(rt, from)
+    ---
     if: src = 0
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_INVALID
