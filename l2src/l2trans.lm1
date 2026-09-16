@@ -1,6 +1,12 @@
 predef: "l1src/parser.lm1"
 include: "<stdio.h>" "<string.h>" "<limits.h>" "<stdlib.h>"
 
+# A statement call's text is built in a heap buffer of this capacity
+# (l2_emit_ccall), not in the 256-byte buffers the recursive expression path
+# keeps on the stack; a text that does not fit is reported at its statement
+# (l2_text_at), never silently. The capacity is a limitation to remove.
+define: L2_CALL_TEXT_CAP 4096U
+
 # L2 -> L1 frontend: §1.7 main adapter, plus two-int no-throw methods under §21.8.
 
 int: l2_leaf_mode 0
@@ -248,6 +254,11 @@ int: l2_alloc_kind 0
 @@: int l2_it_hty 0
 c.array: [256]: char l2_tok
 @: char l2_ccall_into 0
+# The statement l2_emit_body is emitting and whether a text copy for it ran out of
+# its buffer; l2_translate reports such a failure there while the unit's nodes
+# are alive.
+@: LmP0Node l2_text_at 0
+int: l2_text_over 0
 
 prototype:
     fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
@@ -267,6 +278,7 @@ prototype:
     fn: l2_prep_addr (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest) int
     fn: l2_check_addr (const: @(LmP0Node node); int: mi; const: @(char path)) int
     fn: l2_cat (@: char dest; const: @(char src)) int
+    fn: l2_cat_cap (@: char dest; size_t: cap; const: @(char src)) int
     fn: l2_tok_temp (int: k; @: char dest) int
     fn: l2_tok_formal (int: mi; int: fi; @: char dest) int
     fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char dest) int
@@ -420,6 +432,7 @@ prototype:
     fn: l2_own_any (int: mi; const: @(LmP0Text t)) int
     fn: l2_path_own (int: mi; const: @(LmP0Text left); const: @(LmP0Text right)) int
     fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
+    fn: l2_emit_ccall_text (const: @(LmP0Node stmt); int: mi; const: @(char ind); @: char buf) int
     fn: l2_slot_decl_ty (const: @(LmP0Node stmt)) int
     fn: l2_slot_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_is_known (const: @(LmP0Text t)) int
@@ -467,8 +480,9 @@ prototype:
     fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_cnt_keep (const: @(LmP0Text src)) @: LmP0Text
     fn: l2_cnt_free () int
-    fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted)) @: LmP0Text
+    fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted); int: any) @: LmP0Text
     fn: l2_define_count (const: @(LmP0Text name)) @: LmP0Text
+    fn: l2_define_known (const: @(LmP0Text name)) int
     fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_predef_has_function (const: @(LmP0Text name)) int
     fn: l2_foreign_free () int
@@ -2767,6 +2781,10 @@ fn: l2_translate (const: @(char in_path); const: @(char out_path)) int
         status: l2_emit_unit(out_path)
     else:
         status: l2_emit_l1(out_path, body, lit)
+    # A text that did not fit its buffer is reported at its statement while the
+    # document that owns the node is still alive.
+    if: status != 0 && l2_diag_n = 0 && l2_text_over != 0 && l2_text_at != 0
+        l2_error(in_path, l2_text_at, "this statement's emitted text exceeds the translator's text capacity")
     lm_p0_document_destroy(document)
     if: status != 0
         if: l2_alloc_err != 0
@@ -4232,7 +4250,10 @@ return: 0
 # A top-level `define: NAME <literal>` in a predef'd .h.lm1, or in a .h.lm1 that
 # one predefs (the same single-file predef closure l2_predef_file_has_type
 # follows). The literal is kept, because this document is destroyed here.
-fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted)) @: LmP0Text
+# With any = 0 only an array-count literal is found (l2_define_count); with
+# any = 1 a define of any value is, and the kept text is its name
+# (l2_define_known).
+fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted); int: any) @: LmP0Text
     size_t: n
     @: char path 0
     @: LmP0Document document 0
@@ -4262,14 +4283,17 @@ fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted)) @
                     if: first != 0
                         second: l2_next_active(first\next)
                     ---
-                    if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name) && second != 0 && second\value != 0 && second\value\kind = c.LM_P0_NODE_ATOM && l2_array_count_is(second\value\as\atom) != 0
+                    if: any != 0 && first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name) && second != 0 && second\value != 0
+                        found: l2_cnt_keep(first\value\as\atom)
+                    ---
+                    if: any = 0 && first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name) && second != 0 && second\value != 0 && second\value\kind = c.LM_P0_NODE_ATOM && l2_array_count_is(second\value\as\atom) != 0
                         found: l2_cnt_keep(second\value\as\atom)
                     ---
                 ---
                 if: found = 0 && l2_frame_head(item, "predef") && item\as\frame\body != 0 && l2_count_active(item\as\frame\body) = 1
                     first: l2_next_active(item\as\frame\body\first_field)
                     if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM
-                        found: l2_predef_file_define(name, first\value\as\atom)
+                        found: l2_predef_file_define(name, first\value\as\atom, any)
                     ---
                 ---
                 f: l2_next_active(f\next)
@@ -4306,7 +4330,7 @@ fn: l2_define_count (const: @(LmP0Text name)) @: LmP0Text
     ---
     i: 0
     while: i < l2_pd_n && r = 0
-        r: l2_predef_file_define(name, l2_pd[i])
+        r: l2_predef_file_define(name, l2_pd[i], 0)
         i: i + 1
     ---
 return: r
@@ -10549,6 +10573,7 @@ fn: l2_tok_text (const: @(LmP0Text t); @: char dest; size_t: cap) int
         l2_xfree((cast: (@: void) buf))
         return: rc
     if: t\length + 1U > cap
+        l2_text_over: 1
         return: 1
     c.memcpy(dest, t\data, t\length)
     dest[t\length]: 0
@@ -10569,6 +10594,21 @@ fn: l2_cat (@: char dest; const: @(char src)) int
     nd: c.strlen(dest)
     ns: c.strlen(src)
     if: nd + ns >= 255U
+        l2_text_over: 1
+        return: 1
+    c.memcpy(dest + nd, src, ns + 1U)
+return: 0
+
+# l2_cat for a buffer of a stated capacity (the statement call text).
+fn: l2_cat_cap (@: char dest; size_t: cap; const: @(char src)) int
+    size_t: nd
+    size_t: ns
+    if: dest = 0 || src = 0 || cap = 0U
+        return: 1
+    nd: c.strlen(dest)
+    ns: c.strlen(src)
+    if: nd + ns >= cap
+        l2_text_over: 1
         return: 1
     c.memcpy(dest + nd, src, ns + 1U)
 return: 0
@@ -12275,6 +12315,34 @@ fn: l2_addr_tail (@: LmP0Field f; int: mi; @@: LmP0Field out_name; @@: LmP0Field
     \out_after: p2
 return: 0
 
+# A name defined by define: -- in this unit, or in its predef chain, whatever
+# its value -- is a constant. As a call actual it is passed as itself, the way
+# l1trans passes it; staging it into a typed temporary guesses a type the
+# define does not have (mixa_app_window: a char* define boxed into an int lost
+# its high bits and the callee's strlen faulted).
+fn: l2_define_known (const: @(LmP0Text name)) int
+    int: i 0
+    @: LmP0Field first
+    if: name = 0 || l2_ident(name) = 0
+        return: 0
+    while: i < l2_def_n
+        if: l2_def[i] != 0 && l2_def[i]\as != 0 && l2_def[i]\as\frame != 0 && l2_def[i]\as\frame\body != 0 && l2_count_active(l2_def[i]\as\frame\body) = 2
+            first: l2_next_active(l2_def[i]\as\frame\body\first_field)
+            if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name)
+                return: 1
+            ---
+        ---
+        i: i + 1
+    ---
+    i: 0
+    while: i < l2_pd_n
+        if: l2_predef_file_define(name, l2_pd[i], 1) != 0
+            return: 1
+        ---
+        i: i + 1
+    ---
+return: 0
+
 fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
     int: ei
     int: fi
@@ -12332,9 +12400,26 @@ fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
     # A function as a value is passed as itself, never boxed.
     if: l2_find_method(node\as\atom) >= 0 || l2_predef_has_function(node\as\atom) != 0
         return: 0
+    # So is a constant a define: names (l2_define_known).
+    if: l2_define_known(node\as\atom) != 0
+        return: 0
 return: 1
 
+# A call's text is built in a heap buffer of L2_CALL_TEXT_CAP bytes, freed on this
+# one exit (mixa_app_controller: a statement call with many field-path actuals
+# passed the 256-byte stack buffer and failed with no diagnostic).
 fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
+    @: char buf
+    int: rc
+    buf: (cast: (@: char) l2_xmalloc(c.L2_CALL_TEXT_CAP))
+    if: buf = 0
+        return: 1
+    buf[0]: 0
+    rc: l2_emit_ccall_text(stmt, mi, ind, buf)
+    l2_xfree((cast: (@: void) buf))
+return: rc
+
+fn: l2_emit_ccall_text (const: @(LmP0Node stmt); int: mi; const: @(char ind); @: char buf) int
     int: array_own
     size_t: array_index
     int: array_count
@@ -12351,7 +12436,6 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     size_t: root_len
     size_t: suffix_len
     int: first 1
-    c.array: [256]: char buf
     c.array: [256]: char piece
     # The boxed-actual temporary name. l2_tok may be the caller's destination.
     c.array: [256]: char boxt
@@ -12376,7 +12460,7 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             return: 1
         c.memcpy(piece, stmt\as\frame\head\data + root_len, suffix_len)
         piece[suffix_len]: 0
-        if: l2_cat(buf, piece) != 0
+        if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
             return: 1
         ---
     if: mi >= 0 && hj >= l2_m_arity[mi] && hf = 5 && hj < l2_m_arity[mi] + l2_m_sn[mi]
@@ -12390,14 +12474,14 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             return: 1
         c.memcpy(piece, stmt\as\frame\head\data + root_len, suffix_len)
         piece[suffix_len]: 0
-        if: l2_cat(buf, piece) != 0
+        if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
             return: 1
         ---
     if: mi < 0 || hj < 0 || hf != 5 || hj >= l2_m_arity[mi] + l2_m_sn[mi]
-        if: l2_tok_text(stmt\as\frame\head, buf, 256U) != 0
+        if: l2_tok_text(stmt\as\frame\head, buf, c.L2_CALL_TEXT_CAP) != 0
             return: 1
         ---
-    if: l2_cat(buf, "(") != 0
+    if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, "(") != 0
         return: 1
     # A call with no arguments has no body, or an empty one.
     n: 0
@@ -12408,9 +12492,9 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     i: 0
     while: i < n && f != 0 && f\value != 0
         if: l2_own_index_tail(f, mi, @ array_own, @ array_index, @ p2, @ array_count) = 0
-            if: first = 0 && l2_cat(buf, ", ") != 0
+            if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
                 return: 1
-            if: l2_emit_array_load(array_own, array_index, ind, piece) != 0 || l2_cat(buf, piece) != 0
+            if: l2_emit_array_load(array_own, array_index, ind, piece) != 0 || l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
             first: 0
             i: i + array_count
@@ -12435,18 +12519,18 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             p2: l2_next_active(p1\next)
             if: p2 = 0 || p2\value = 0 || p2\value\kind != c.LM_P0_NODE_ATOM || l2_diag_field(p2\value\as\atom) = 0
                 return: 1
-            if: first = 0 && l2_cat(buf, ", ") != 0
+            if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
                 return: 1
             if: l2_prep(f\value, mi, ind, piece) != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
-            if: l2_cat(buf, "\\") != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, "\\") != 0
                 return: 1
             piece[0]: 0
             if: l2_tok_text(p2\value\as\atom, piece, 256U) != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
             first: 0
             i: i + 3
@@ -12454,20 +12538,20 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             continue
         ---
         if: po < 0 && l2_index_tail(f, @ p1, @ p2) = 0
-            if: first = 0 && l2_cat(buf, ", ") != 0
+            if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
                 return: 1
             if: l2_prep(f\value, mi, ind, piece) != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
-            if: l2_cat(buf, "[") != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, "[") != 0
                 return: 1
             piece[0]: 0
             if: l2_prep(p1\value, mi, ind, piece) != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
-            if: l2_cat(buf, "]") != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, "]") != 0
                 return: 1
             first: 0
             i: i + 4
@@ -12475,14 +12559,14 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             continue
         ---
         if: po < 0 && l2_addr_tail(f, mi, @ p1, @ p2) = 0
-            if: first = 0 && l2_cat(buf, ", ") != 0
+            if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
                 return: 1
-            if: l2_cat(buf, "@ ") != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, "@ ") != 0
                 return: 1
             piece[0]: 0
             if: l2_prep(p1\value, mi, ind, piece) != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
             first: 0
             i: i + 2
@@ -12494,9 +12578,9 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             piece[0]: 0
             if: l2_emit_fields(f, span, mi, ind, piece) != 0
                 return: 1
-            if: first = 0 && l2_cat(buf, ", ") != 0
+            if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
                 return: 1
-            if: l2_cat(buf, piece) != 0
+            if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
                 return: 1
             first: 0
             si: 0
@@ -12515,18 +12599,23 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             return: 1
         if: po < 0 && l2_ccall_box_int(f\value, mi) != 0
             c.memcpy(piece, boxt, 256U)
-        if: first = 0 && l2_cat(buf, ", ") != 0
+        if: first = 0 && l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ", ") != 0
             return: 1
-        if: l2_cat(buf, piece) != 0
+        if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, piece) != 0
             return: 1
         first: 0
         i: i + 1
         f: l2_next_active(f\next)
-    if: l2_cat(buf, ")") != 0
+    if: l2_cat_cap(buf, c.L2_CALL_TEXT_CAP, ")") != 0
         return: 1
     if: l2_emit_checkpoint(mi, ind) != 0
         return: 1
     if: into_buf != 0
+        # An expression's consumer holds 256 bytes; a longer call text is reported,
+        # not truncated.
+        if: c.strlen(buf) >= 256U
+            l2_text_over: 1
+            return: 1
         c.memcpy(into_buf, buf, 256U)
         return: 0
     ---
@@ -13143,6 +13232,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     field: l2_next_active(body\first_field)
     while: field != 0
         stmt: field\value
+        l2_text_at: stmt
+        l2_text_over: 0
         pd: 1
         if: l2_frame_head(stmt, "return") && need_cut != 0 && c.fprintf(l2_out, "%s---\n", ind) < 0
             return: 1

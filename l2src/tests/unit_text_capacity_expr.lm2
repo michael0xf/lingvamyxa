@@ -1,0 +1,13 @@
+predef: "l2src/tests/unit_text_capacity.h.lm1"
+
+# A long call used as an expression is copied into its consumer's 256-byte
+# buffer; past that it is refused at the statement, never truncated and never
+# the generic fallback.
+
+fn: probe_text_expr (@: ProbeTextCtx ctx) int
+    return: probe_text_ret12(ctx\probe_text_capacity_field_with_a_long_name_00, ctx\probe_text_capacity_field_with_a_long_name_01, ctx\probe_text_capacity_field_with_a_long_name_02, ctx\probe_text_capacity_field_with_a_long_name_03, ctx\probe_text_capacity_field_with_a_long_name_04, ctx\probe_text_capacity_field_with_a_long_name_05, ctx\probe_text_capacity_field_with_a_long_name_06, ctx\probe_text_capacity_field_with_a_long_name_07, ctx\probe_text_capacity_field_with_a_long_name_08, ctx\probe_text_capacity_field_with_a_long_name_09, ctx\probe_text_capacity_field_with_a_long_name_10, ctx\probe_text_capacity_field_with_a_long_name_11)
+end: probe_text_expr
+
+fn: main () int
+    return: 0
+end: main
