@@ -6455,3 +6455,21 @@ landed before it reads green (the merge's code equals baa8ec23's: the
 branch is off 11f581e0, the integration tip, so the merge adds
 nothing). Rule from it: scenario36 joins land_base3.sh's fixed base
 from the next landing (the union rule), not a per-stage extra.
+b5's S6-1 review landed on sonnet/s6-1-review b87e9ab1 off baa8ec23
+(checked by the coordinator): lmx_msg_exec_lock( 0 over l2src; both
+locks (the executor's CRITICAL_SECTION/pthread_mutex_t and the host's)
+deleted with their functions; no new lock primitive in the diff; the
+five named atomics and unbound_held on __atomic_ forms as the pre-read
+said. Read past the name match: (1) exec_bind_mode's guard on
+unbound_held is narrower, not relocated, the old blanket refusal of a
+closing Message being the actual bug (spec 12762-12765 and the
+close-path case read directly); (2) the TLS identity borrow gone,
+replaced by lmx_msg_maintenance_close_ok inside end_turn with five
+explicit conditions (host owner, unbound, exists, closing, not live),
+checked against 12766-12771; (3) the transport move orders host_post,
+host_drain and runtime_shutdown under R0's own mailbox monitor, with
+run_port_message.ps1's new falsifiable gate counting the mail_lock/
+unlock balance by name in the five transport-touching functions;
+set_orphan_until fixed as the pre-read recommended; the three test
+rewrites read in full, correct adaptations, not workarounds. No open
+items.
