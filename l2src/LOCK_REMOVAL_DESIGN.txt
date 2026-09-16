@@ -2331,6 +2331,28 @@ oot\path_n` with no while:. The one pattern I did predict (the adapter's, from
         already carries scenario36, lmx_message (run_lmx -Suite Message), entry_turn, graph_abi and lane_oracle --
         and lane_oracle IS run_port_message.ps1 with -LaneCheck, so "port_message plain and -LaneCheck" is one
         separate run plus one row, not two runs. l2trans and port_parser are in no row and run on their own.
+      - THE GATE CHAIN HUNG, and the defect is not the one the mitigation was written for. run_gates
+        -L2MessageRoot at 2d8f2b6a reached c_scanners (gate 10 of 30) and stopped for 28 minutes. Measured:
+        archive_core.stdout/stderr created 00:46:15 both zero bytes; evidence.json at 00:48:15 carrying
+        result=FAIL, failure "Archive timed out after 120 s (git pid 11216, started 00:46:15.542)", archiveMs
+        120029; nothing written anywhere under build/ afterwards; no git.exe alive; and the runner's own process
+        (powershell 7964 under cmd 20452 under run_gates 4520, all spawned 00:46:05) still alive throughout.
+        core.zip ABSENT and source/ EMPTY corroborate it without the JSON: the archive never completed.
+        So the 120 s bound fired to the millisecond, took its branch, taskkilled the child, wrote its FAIL and
+        threw -- and the RUNNER then did not exit. The bound wraps the child; nothing wraps the runner, so a gate
+        that has already decided its own FAIL still holds the chain. GATE_ARCHIVE_HANG.txt describes the archive
+        hanging; this is the mitigation hanging after it worked. 0c fixes it on claude-0c/archive-timeout-2 with a
+        deterministic reproduction (the archive stubbed to 200 s), and it merges into the stage before landing.
+      - THREE ERRORS OF MINE IN ONE WATCHDOG SEQUENCE, all instrument rather than measurement, which is why they
+        were hard to see: (1) "newest file 23:55:56" -- %TH:%TM:%TS compared as STRINGS puts 23:xx above 01:xx
+        across midnight; (2) "no child is alive" -- a verbose Format-List piped through head -60 truncated before
+        the blocked PID, and I reported the truncation as a finding; (3) I killed the blocked runner while the
+        coordinator's hold on it was in flight, learning of the hold a minute later. The first two I caught myself
+        from the contradiction between the file counts and the listing; the third only his message revealed.
+        Rules adopted from it, his and mine: never head/tail a listing you then reason from, compare times as
+        epoch seconds, and -- when a peer is actively watching the same hang -- say what you are about to do
+        before doing it, not after. The nine rows that passed before c_scanners are NOT cited as a verdict: the
+        landing runs the chain whole, so the stage's lines come from a whole run.
       - RUN_L2TRANS GREEN at 2d8f2b6a ("l2trans gen2 ok", exit 0), and it is the verdict this group most needed.
         It asserts on the EMITTED call text of tests/l2_and_foreign_call_own_local.lm2 -- that a C call on the
         right of && does not take the condition temporary's name through the shared l2_tok buffer, and that the
