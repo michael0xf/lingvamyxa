@@ -7495,3 +7495,22 @@ call-actual staging (the special call paths of the per-form prep
 lesson); app_window's parity is the integration check. Nine of the
 thirteen mixa runners now pass or moved past their old red; the
 branch merges after S6-2 lands.
+S6-2, the refusal moved as ruled and the planted red still red, with a
+cause that argues for the settle: two identical one-line failures
+without numbers were about to be reasoned over a third time; the
+fixture was given its numbers (send_cap=3 end_turn=0 recv=8 kind=1):
+send_cap returned NOMEM, nothing was staged, recv was EMPTY, the
+refusal machinery never reached. Cause: send_cap gates staging on
+endp_retain(dest), which returns 0 when refs < 1, and a settled
+record's refs are already 0 (release_slot ends with endp_release,
+try_retire refusing the free because parent_msg is kept), so the
+holder count refuses a capability send to a settled target before
+the owner can answer it: "there is no count of holders" is
+load-bearing, not tidying. The lead's order, accepted: first the
+holder count carried for a capability (send_cap's retain of dest,
+copy_free's release of dest_msg, copy_dup's retain), keeping the red
+attributable; then the window pins (answered by the settle itself);
+then the rest (refs at 54 sites in lm1, 55 in lm2, about 25 in
+exec.c, 5 in the header, 17 and 6 in the two selftests). Method rule
+recorded: every fixture step gets its own captured status in the
+diagnostic before a red is read twice.
