@@ -7701,3 +7701,19 @@ count and aborted only on CR, a check that prints without enforcing
 assertion that cannot fail and a mutation that matches nothing); it
 now enforces. The allowlist flagged the tripwire script as OUTSIDE
 before it was added, the behaviour it exists for.
+b5 on sonnet/mixa-module-list: 4014bec8 retires audio_mp3's scratch
+second-translator mechanism (nine call sites now $L1Trans): THROW to
+PASS, 23.1 s, byte-identical to the oracle; 52bbf529 enters it as row
+11 (Expect=PASS, dated comment): the gate cold twice "11 of 11 as
+expected" (179.7 s, 179.3 s), exit 0; 56fbf75e app_controller's full
+fmpanel predef chain re-attempted, no code landed: the import-table
+error never returned (the earlier finding confirmed directly), but
+gcc redefines struct MixaCell and MixaTextRect (mixa_tiles_l2.h.lm1:16
+and :25 against mixa_core.h:17 and :26): fmpanel's L2 chain and
+console_window's real chain declare the same structs in one
+translation unit, the hazard mixa_tiles_l2.h.lm1's own header names;
+fixing it means one canonical struct source across the combined
+chain, a design call, ticketed as a note for the mixa L2 port design;
+reverted, app_controller stays outside the gate. Design c01fba37 (the
+lead): step two written, every endp_ call and the refs field gone,
+the pair-deletion error caught four times by the survivor grep.
