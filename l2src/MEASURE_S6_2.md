@@ -124,12 +124,20 @@ for the gate:
 
 `port_slots` is the sixth gate the section names, through `tests/lmx_msg_slots_selftest.lm1`, and S6-2
 deletes its runner and its module. On the measuring merge there is nothing to run, so its **absence is the
-check**, three ways, none of which needs the runner:
+check**, three ways, none of which needs the runner.
+
+The third check is the ROW form, and an earlier version of it could not fail (the coordinator caught it,
+2026-09-16): it read `grep -c "port_slots" l2src/run_gates.ps1 # expect 0`, and that grep reads **2** at
+2d8f2b6a, because two header prose lines name `port_slots` -- the note that it was deleted at S6-2 (line 32)
+and the count-reconciliation note (line 45). A check expecting 0 from a grep that cannot reach 0 is
+unfalsifiable, in the one document whose subject is falsifiable measurement. The row form reads 0 at
+2d8f2b6a and moves only when the actual row does. Checks 1 and 2 are sound: both files are genuinely gone
+there.
 
 ```bash
 test ! -e l2src/run_port_msg_slots.ps1 && echo "runner gone: ok"
 test ! -e l2src/lmx_msg_slots.lm1 && echo "module gone: ok"
-grep -c "port_slots" l2src/run_gates.ps1        # expect 0: the row at 94 is removed with it
+grep -c -E "^\s*@\('port_slots'" l2src/run_gates.ps1   # expect 0: the ROW is removed with the module
 ```
 
 lane_oracle and lmx_message repeat the two runner rows above with different arguments; run each form once,
