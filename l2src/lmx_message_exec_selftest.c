@@ -3060,7 +3060,12 @@ int main(int argc, char **argv) {
         {
             LmxMsgRuntime *rtq;
             LmxMsgAddr qr = 0, qp = 0, qc = 0;
-            int qn0;
+            /* S6-2: the branch is settled, not freed, so the slot count this case
+             * was written on is gone. What it meant -- both records left the tree
+             * and became R's storage -- is asserted on the owner's settled list. */
+            LmxMsg *qpm;
+            LmxMsg *qsx;
+            int qsettled = 0;
             int qadopted0;
             int qst;
             rtq = lmx_msg_runtime_new();
@@ -3083,14 +3088,19 @@ int main(int argc, char **argv) {
             (void)own_turn(rtq, qp);
             (void)lmx_msg_exec_unbind(rtq, qc);
             (void)lmx_msg_drive(rtq, 0U, 0U);
-            qn0 = rtq->n;
             qadopted0 = lmx_msg_adopted_n(rtq, qr);
             qst = lmx_msg_dispose_child(rtq, qr, qp);
+            qpm = lmx_msg_find(rtq, qr);
+            for (qsx = (qpm != 0) ? qpm->settled : 0; qsx != 0; qsx = qsx->settled_next) {
+                if ((qsx->addr == qp || qsx->addr == qc) && qsx->state == LMX_MSG_STATE_RELEASED) {
+                    qsettled += 1;
+                }
+            }
             if (qst != LMX_MSG_OK || lmx_msg_find(rtq, qp) != 0 || lmx_msg_find(rtq, qc) != 0
-                || lmx_msg_child_n(rtq, qr) != 0 || rtq->n != qn0 - 2
+                || lmx_msg_child_n(rtq, qr) != 0 || qsettled != 2
                 || lmx_msg_adopted_n(rtq, qr) < qadopted0 + 2) {
-                fprintf(stderr, "settle branch st=%d n=%d n0=%d adopted=%d adopted0=%d\n",
-                    qst, rtq->n, qn0, lmx_msg_adopted_n(rtq, qr), qadopted0);
+                fprintf(stderr, "settle branch st=%d settled=%d adopted=%d adopted0=%d\n",
+                    qst, qsettled, lmx_msg_adopted_n(rtq, qr), qadopted0);
                 return 1;
             }
             lmx_msg_runtime_delete(rtq);
