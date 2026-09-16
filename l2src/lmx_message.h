@@ -115,6 +115,34 @@ typedef struct LmxMsgCopy {
 typedef struct LmxMsg {
     LmxMsgAddr addr;
     LmxMsgAddr parent;
+    /* S6-2 (SPEC 19.29.7, Mikhail 2026-09-16, thirteenth line): THE C MIRROR OF AN
+     * LMX FIELD, NOT A KERNEL FIELD.  The mail service's reference belongs to the
+     * Message's LMX -- "поле уже LMX, а вот API надо сделать общим" -- and the
+     * kernel record is running, success, handoff_safe, root, index.  Where the
+     * bootstrap C keeps the mirror is an implementation detail; it is here, with
+     * the same status as the other scaffolding fields the plan lists, and it goes
+     * when the record is reduced.  Set from the parent at creation and
+     * reassignable; R0's points at R0, which terminates delegation.  The precedent
+     * for an LMX field is rt->root_record. */
+    struct LmxMsg *service;
+    /* The service's own live set: the records it will admit a letter to, sorted by
+     * address as uintptr_t so membership is a binary search rather than a scan.
+     * Registration at create, removal at release, on the service's own lane.  An
+     * address absent from this set is REFUSED, never dereferenced -- which is what
+     * makes delivery by memory address safe with no count of holders, and is this
+     * stage's replacement for refs: one owner's data on one lane, instead of a
+     * counter on every record written from every lane.  Only the service reads or
+     * writes these; they are 0 on every Message that is not one. */
+    struct LmxMsg **live;
+    int live_n;
+    int live_cap;
+    /* S6-2 (SPEC 19.29.7, Mikhail 2026-09-16): this Message's index at its parent
+     * -- "the whole of what the hierarchical address a.b.c.d... adds at this
+     * level".  The full address is composed by walking the parent links
+     * (lmx_msg_get_address), so no array is stored: the arrays this replaces were
+     * a materialized cache of that walk.  R0's index is 1 and its parent_msg is 0,
+     * which terminates the walk. */
+    unsigned index;
     int state;
     int committed;
     int closing;
@@ -255,6 +283,28 @@ int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt);
 /* The path is a Message's creation identity (its genesis): the creator's path
  * plus the creator's child sequence number. A supervision handoff does not
  * change it; parent_msg and parent name the supervisor. */
+/* S6-2 (SPEC 19.29.7, Mikhail's fourteenth line): the COMMON MAIL API, written
+ * now as scaffolding "because rewriting them later would be expensive".  Every
+ * L3 Thread implements these; the default body is the stub that reads its own
+ * service reference and delegates, and R0 carries the real body today.  A later
+ * stage replaces bodies without touching a caller.
+ *   register / unregister: the service's live set gains or loses a record.
+ *   send_handle: deliver by the target's memory address -- the handle the sender
+ *     already holds -- admitting under that mailbox's own monitor, or refusing
+ *     with KIND_REJECTED when the address is not in the live set.
+ * lmx_msg_service_of returns the service a Message delegates to (itself, when it
+ * is the service). */
+LmxMsg *lmx_msg_service_of(LmxMsg *m);
+int lmx_msg_service_register(LmxMsg *svc, LmxMsg *m);
+int lmx_msg_service_unregister(LmxMsg *svc, LmxMsg *m);
+int lmx_msg_service_is_live(LmxMsg *svc, LmxMsg *m);
+/* S6-2 (SPEC 19.29.7): compose a Message's hierarchical address by walking the
+ * parent links to the root.  Returns the number of indices, or -1 if the Message
+ * is not reachable.  Fills out[0..n-1] root-first when out is non-zero and cap is
+ * at least n; with a smaller cap (or out == 0) it returns the count and writes
+ * nothing, so a caller can size its buffer first.  Nothing is allocated, so there
+ * is nothing to free -- the shape lmx_msg_poll already uses. */
+int lmx_msg_get_address(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned *out, int cap);
 int lmx_msg_path_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_path_seg(LmxMsgRuntime *rt, LmxMsgAddr who, int i, unsigned *out);
 int lmx_msg_child_n(LmxMsgRuntime *rt, LmxMsgAddr who);
