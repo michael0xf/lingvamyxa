@@ -8763,3 +8763,11 @@ matched), a mismatch reported as a fault and never freed (the lead's
 second suspect, a defect regardless); then step 3: is_live before any
 dereference of dest_msg in the drain, KIND_REJECTED when absent. No
 push until it builds and the selftest runs.
+The lead: the UAF kit (q_alloc.c, uaf_run.sh) is in his session
+scratchpad, never committed (the coordinator's "l2src carries it" was
+wrong); the kit runs on the translated reference exactly as the gate
+crashed it (evidence 20260916_073807_605); it distinguishes the two
+suspects: a double free is caught at q_free with the first site's
+stack, a stale read reads 0xDD poison and faults downstream. RULED:
+after the location, q_alloc.c and uaf_run.sh are committed under
+l2src as project tooling, as land_base3.sh was.
