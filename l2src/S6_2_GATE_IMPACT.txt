@@ -143,6 +143,31 @@ graph_abi     run_graph_abi.ps1
   So graph_abi is not collateral: it pins the alloc_next walk as a code shape and must lose those two cases
   and those five checks with the list. Support list: run_graph_abi.ps1:116.
 
+== Per-case fate of the refs assertions (b5's inventory, sonnet/s6-2-test-inventory 7af872da, cited) ==
+
+Cited rather than re-derived, because b5 measured it per case; the last paragraph is this file's own check.
+  lmx_message_selftest.lm1 890-937, one scenario ("ref admit", "ref after admit", "recv dest_msg leak",
+    "discard dest_msg leak"): endp_refs at 901, 911, 918 and 935 (the last two inline), retain at 924, release
+    at 934, numeric pins at 912 (r0 != 1 || r1 != 2) and at 918/935 (!= 1). It asserts that a destination's
+    refs goes 1 -> 2 across a send admission, back to 1 after recv, and stays 1 across a held-capability
+    send-and-discard. Fate: deleted outright, not restated - 19.29.7's "there is no count of holders" leaves no
+    successor number to assert, and send/recv/discard's functional correctness is already covered by this
+    file's inbox-count and state checks.
+  lmx_message_exec_selftest.c, four cases: "exec mail-oom" (6017, 6027, 6030) restates as inbox-still-0 plus a
+    liveness check; "exec outbox-gone" (6157, 6172) restates as inbox-0 plus a state check, dropping the refs
+    upper bound; "exec pin-oom" and "exec nself-pin" (6204-6624) are WHOLE-CASE deletions, not restatements.
+  Why those two cannot be restated, checked here at baa8ec23 rather than taken on faith: both drive
+    lmx_msg_test_fail_retain, and that hook lives INSIDE lmx_msg_endp_retain's own body - exec.c:347 opens the
+    function and 348-353 is the #if defined(LMX_MSG_EXEC_TEST) block that decrements the counter and returns 0
+    to simulate a failed retain. Delete endp_retain and the injection point goes with it: there is nothing left
+    to inject into, which is why the cases go whole rather than losing a line each. So S6-2 removes a
+    fault-injection hook as well as an API - a consequence neither this list nor b5's inventory stated in those
+    terms, and one the lead's allowlist needs, since the selftest sets that variable at 407, 6214, 6620, 6625
+    and 6630 too.
+  Not to be confused with it: lmx_msg_test_fail_post_dead (exec.c:332) is a sibling hook, read in
+    lmx_msg_test_post_dead_fail (exec.c:335-345), OUTSIDE endp_retain. S6-2 does not touch it, and deleting it
+    with the family would remove an injection point nothing in this stage requires removing.
+
 == Needs a runner edit when the slots module goes (22 of the 31; red at build, not at a check) ==
 
 Each line below names lmx_msg_slots as a module to translate and link. It is a build input, not an
