@@ -6853,3 +6853,8 @@ verbatim sentences there and in section 2: the mutual poll ("ребенок и
 заглушку 'родитель корневого L3 Thread'", with the root thread's
 timeout leaving the OS process). R0 is a child of the stub under the
 first sentence, so it polls the stub in the general sweep.
+e9's isolation record is on claude-0c/archive-hang 97313476
+(l2src/GATE_ARCHIVE_HANG.txt: the results of A, B, C, D, the narrowed
+void rule with the codex-rotation covariate, and what the run does not
+establish: the lead's wti untested). Next: stages A and B inside wti
+under a short freeze on e9's "ready for wti".
