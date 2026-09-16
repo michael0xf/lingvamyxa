@@ -56,6 +56,13 @@ $Gates = @(
     # mechanism retired (l1trans's old fixed import cap it worked around
     # is gone from the current pin); re-measured cold at PASS, 23.1s.
     @{ Script = "run_mixa_audio_mp3_l2_parity.ps1"; Args = @(); Expect = "PASS"; TimeoutSec = 60 }
+    # 2026-09-16, commit 8e094e98: app_controller's opaque fmpanel
+    # #include gained eight prototype: declarations (declare-then-link,
+    # not full predef -- sidesteps the MixaCell/MixaTextRect conflict).
+    # Moved past every fmpanel call; still UNEXPECTED_FAILURE, now at
+    # mixa_app_controller.lm2:16:5 (frame=mixa_file_close), a different,
+    # out-of-scope gap. Re-measured cold at 15.0s.
+    @{ Script = "run_mixa_app_controller_l2_parity.ps1"; Args = @(); Expect = "UNEXPECTED_FAILURE"; TimeoutSec = 40 }
 )
 
 function Get-Verdict([string]$LogPath) {

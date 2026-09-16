@@ -158,4 +158,24 @@ Run 2 (179.7s wall): OK on all eleven again (audio_mp3 PASS 23.8s,
 same as run 1) -- "mixa parity gates: 11 of 11 as expected (total
 179.3s)"
 
+--- 2026-09-16: app_controller enters the gate (commit 8e094e98), 12 rows
+
+app_controller's opaque fmpanel #include gained eight prototype:
+declarations (declare-then-link, alongside not instead of the real
+#include -- see L2_RUNTIME_MODULE_LIST_AUDIT.txt's own entry for the
+two corrections found while implementing). Moved past every fmpanel
+call; still UNEXPECTED_FAILURE, now at mixa_app_controller.lm2:16:5
+(frame=mixa_file_close), a different, out-of-scope gap. Re-measured
+cold at 15.0s (then 15.7s/16.4s across the two gate runs below). Added
+to run_mixa_parity_gates.ps1's own table with a dated comment naming
+commit 8e094e98, Expect = "UNEXPECTED_FAILURE", TimeoutSec = 40.
+
+Run 1 (198.5s wall): OK on all twelve (the same eleven as above, plus
+app_controller UNEXPECTED_FAILURE 15.7s) -- "mixa parity gates: 12 of
+12 as expected (total 197.9s)"
+
+Run 2 (201.3s wall): OK on all twelve again (app_controller UNEXPECTED_
+FAILURE 16.4s, same as run 1) -- "mixa parity gates: 12 of 12 as
+expected (total 201.0s)"
+
 Both runs exit 0.
