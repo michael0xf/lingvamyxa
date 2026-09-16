@@ -8226,3 +8226,22 @@ or letters; the resolution moves into R0's transport drain (the seed,
 under R0's monitor), admission stays under the target's monitor; the
 refusal is the service's one act. Code follows in that order; e9's
 53ba86bd merges onto the new tip.
+The lead's five lines on dbc3affc (accepted): both tripwires of the
+settle era go as evidence (they proved a mechanism that no longer
+exists; the stage owes two new ones: the resolution removed fails
+exactly the planted 982-987, and a wrap-free watch that the record's
+base is freed once at release); KIND_REJECTED's provenance corrected
+(19.29.7.1's "KIND_REJECTED is not an emitted API" is unrelated; the
+kind is the lead's choice, a count is not a provenance); OPEN point 5,
+ruled with him: the former refs pins across unlocked windows
+(host_post, host_drain, end_turn x3, recv, fail, drive_one, inbox_n,
+orphan_sweep), once answered by "nothing is freed while a parent
+lives", are answered per site by one of three measured facts: the
+site runs on the record's owner's lane (the lane that frees at
+release_slot); the site touches only the mailbox under its monitor,
+which orders against the destroy (the monitor is destroyed after the
+drain on the owner's lane); or the site loses its subject because the
+resolution happens at the service (dest_from_src's foreign walk and
+S2's turn_other walks go). A site fitting none needs a hold, wait or
+signal and stops the stage for Mikhail; no fourth answer is invented.
+The planted red stands as planted; the acceptance is unchanged.
