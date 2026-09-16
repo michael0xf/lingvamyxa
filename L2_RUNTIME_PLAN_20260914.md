@@ -8203,3 +8203,26 @@ own data. For the lead's section: the "service" is R0's address as a
 field every Message carries from merge (the root field of LmxMsg is
 already that address: running, success, handoff_safe, root), and the
 resolution is a letter to R0.
+The lead's respecified S6-2 section (d6/lock-removal dbc3affc, +191
+lines) on Mikhail's three rulings, reviewed and accepted: a capability
+is the id (LmxMsgAddr, monotonic, never reused, no free list, so a
+late send cannot resolve to a reborn record); the tree walks
+(lmx_msg_find and kin) are scans one by one and stay only where they
+serve something else, never the send path; the settled machinery goes
+whole (settled/settled_next, settled_push, drain_settled, end_turn's
+three-step order, admit_one's settled branch, the settled leg of
+runtime_delete's traversal, settled_has/settled_n); release_slot
+drains both mailboxes, destroys the monitor and frees the record,
+19.29.6's chain as written; send_cap and the envelope carry the id;
+the service is R0 with nothing added (the lead's correction to the
+coordinator: LmxMsg carries no root field today, running/success/
+handoff_ready; rt\root\addr over ingress_root names R0 from creation;
+Mikhail's four-field record is the model's shape); the service's
+data: the sorted list of live addresses as R0's own data, ids
+allocated monotonically at create_prepare so registration is an
+append and the lookup a binary search; registration at create_prepare
+(replacing the slot append), removal at release_slot, as R0's own acts
+or letters; the resolution moves into R0's transport drain (the seed,
+under R0's monitor), admission stays under the target's monitor; the
+refusal is the service's one act. Code follows in that order; e9's
+53ba86bd merges onto the new tip.
