@@ -291,7 +291,7 @@ if ($FpExit -ne 0 -and $KnownBarrier) {
         $coreNames = @(
             'lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage',
             'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain',
-            'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness',
+            'lmx_msg_visit', 'lmx_msg_liveness',
             'lmx_msg_history_owned', 'lmx_msg_roots_stale',
             'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned',
             'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned',

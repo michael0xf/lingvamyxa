@@ -1,0 +1,174 @@
+L2_RUNTIME_MODULE_LIST_AUDIT: every module name in lib_l2_runtime_
+support.ps1's own $L2RuntimeNames and in the five runners' own lists
+(mixa_manager/run_mixa_app_fmpanel_l2_parity.ps1, run_mixa_app_path_
+l2_parity.ps1, run_mixa_composite_glyphs_l2_parity.ps1, run_mixa_
+selection_l2_parity.ps1, run_mixa_tiles_l2_parity.ps1), against l2src
+at integration 7b3a8668 (sonnet/mixa-module-list, 2026-09-15).
+
+--- Counts
+
+19 distinct module names checked (the shared 18-name list every file
+  but fmpanel carries, plus fmpanel's own extra 19th name, lmx_merge_
+  owned, which none of the other five files list). 18 exist; 1 is gone.
+
+--- The 18 that exist
+
+lmx_array_owned, lmx_array_ref_owned, lmx_branch_owned, lmx_chars_owned,
+  lmx_graph_copy_owned, lmx_message_graph_copy, lmx_msg_blocks, lmx_msg_
+  history_owned, lmx_msg_liveness, lmx_msg_mail_chain, lmx_msg_path_
+  storage, lmx_msg_roots_stale, lmx_msg_slots, lmx_msg_storage, lmx_msg_
+  visit, lmx_owned_ranges, lmx_value_owned, lmx_merge_owned (fmpanel's
+  own extra) -- each has its own l2src/<name>.lm1 present at 7b3a8668
+  (verified directly, one file test per name, not assumed from the
+  list's own consistency). Each follows this tree's established port-
+  module convention (an l2src/run_port_<name>.ps1 gate translating and
+  linking it against its own oracle; e9's own claude-0c/s6-2-gate-
+  impact c28aa05a and this session's earlier LOCK_REMOVAL_S6_2_TEST_
+  INVENTORY.txt already trace the l2src-side gate for lmx_msg_slots
+  specifically, run_port_msg_slots.ps1 -- not re-derived here for all
+  18, since the ticket's own subject is the mixa_manager side of the
+  list, not a second l2src gate census). lmx_msg_slots itself is still
+  present today: S6-2 deletes it, not yet landed at 7b3a8668, so its
+  own listing here (and in every one of these six files) is correct as
+  of this tip, not stale -- it becomes the NEXT stale name once S6-2
+  lands, a fact for that stage's own future list-cleanup ticket, not
+  this one.
+
+--- The 1 that is gone
+
+lmx_msg_sched_ready: GONE. l2src/lmx_msg_sched_ready.lm1/.lm2/.h.lm1 do
+  not exist at 7b3a8668 (confirmed by direct file test) and have never
+  existed anywhere in this repository's own git history under that
+  path (`git log --all -- l2src/lmx_msg_sched_ready.lm1` returns
+  nothing directly -- the file was deleted before this history's own
+  earliest surviving commit for that exact path name, found instead by
+  content search). Deleted by commit f391fb27, "core stage 3c-2: retire
+  the lmx_msg_sched_ready queue helper" (2026-09-14), part of the S3
+  family (the wake/launch-gate mechanism; stage 3c-2's own commit
+  message cites decision 18, "readiness is the Message's own flag and
+  the parents' ready lists are gone," so the queue helper compiled but
+  nothing called it). That commit's own message names every other list
+  it swept the name out of -- run_graph_abi, run_l2trans, run_model_
+  scenario36, run_port_message, run_sched_record, 18 run_port_*
+  runners, run_port_parser's header list, run_lmx's support build --
+  and does not mention mixa_manager at all: these six files' own copies
+  were simply missed by that sweep, not deleted on a different stage
+  and re-added later. Not S5 (runtime lists), not S6-1 (exec lock), not
+  M's own UI-lane removal (M's UI-lane deletions this session's own
+  earlier LOCK_REMOVAL_S6_LOCK_SITES.txt work found are a different set
+  of names entirely -- lmx_msg_exec_ui_step etc., functions inside
+  lmx_message_exec.c, not a standalone module file).
+
+--- Which name or which own-module failure produces each of the seven
+    runners' own verdict lines (S6_2_MIXA_BASELINE.txt's own seven
+    verdicts, sonnet/s6-2-mixa-lists 4409805c)
+
+run_mixa_app_controller_l2_parity.ps1 (UNEXPECTED_FAILURE): does not
+  call Add-L2RuntimeSupport at all (confirmed: not in the grep -rl list
+  that found the other six) -- its own failure is mixa_app_controller.
+  lm2's own translation ("unsupported body, frame=mixa_app_fmpanel_
+  close"), unrelated to any module list.
+run_mixa_app_panel_l2_parity.ps1 (THROW before any oracle/L2 step):
+  the stale name. lib_l2_runtime_support.ps1's own loop over
+  $L2RuntimeNames reaches lmx_msg_sched_ready and throws translating a
+  header that does not exist.
+run_mixa_app_win32_l2_parity.ps1 (UNEXPECTED_FAILURE): own-module
+  failure, mixa_app_win32.lm2's own translation ("address of an Array
+  element needs an explicit adapter"), unrelated to the module list.
+run_mixa_audio_mp3_l2_parity.ps1 (THROW before any translation step):
+  neither -- fails earlier still, on a missing local build artifact
+  from an unrelated ticket (20260912-084943), before ever reaching a
+  module list of its own.
+run_mixa_backend_ctors_win32_l2_parity.ps1 (EXPECTED_CORE_BARRIER):
+  own-module failure, mixa_backend_ctors_win32.lm2's own translation
+  ("incompatible entry signature"), the runner's own already-documented
+  non-pass state, unrelated to the module list.
+run_mixa_backend_win32_l2_parity.ps1 (EXPECTED_CORE_BARRIER): own-
+  module failure, mixa_backend_win32.lm2's own translation ("unsupported
+  own array declaration"), same already-documented category.
+run_mixa_l2_parity.ps1 -Module app_window (THROW before any translation
+  step): the stale name, identical cause to app_panel's own -- the
+  same shared lib_l2_runtime_support.ps1 loop, same throw.
+
+Two of seven (app_panel, the dispatcher) are the stale name; two
+(app_controller, app_win32) are UNEXPECTED_FAILURE on their own
+module's code; two (backend_ctors_win32, backend_win32) are the
+runners' own already-documented EXPECTED_CORE_BARRIER; one (audio_mp3)
+never reaches a module list at all.
+
+--- Fix (this commit, on this branch): the stale name only
+
+Removed lmx_msg_sched_ready from all nine of its own occurrences across
+the six files (one line changed per occurrence, nothing else on any
+touched line): lib_l2_runtime_support.ps1:95 (1), run_mixa_app_
+fmpanel_l2_parity.ps1:294 (1), run_mixa_app_path_l2_parity.ps1:243 (1),
+run_mixa_composite_glyphs_l2_parity.ps1:65/103 (2), run_mixa_selection_
+l2_parity.ps1:81/123 (2), run_mixa_tiles_l2_parity.ps1:63/95 (2). Every
+other name (including lmx_msg_slots, still current at this tip) is
+untouched.
+
+--- Before/after verdicts (the same seven, re-measured cold after the
+    fix commit, one at a time, none exceeding 3 minutes)
+
+run_mixa_app_controller_l2_parity.ps1: UNEXPECTED_FAILURE ->
+  UNEXPECTED_FAILURE (unchanged; own-module failure, the fix does not
+  touch this runner's own code path; oracle 32 CHK lines PASS both
+  times, same "unsupported body, frame=mixa_app_fmpanel_close").
+run_mixa_app_panel_l2_parity.ps1: THROW (stale name, never reached the
+  oracle/translate steps) -> UNEXPECTED_FAILURE (a DIFFERENT failure,
+  not a pass: oracle now runs, 47 CHK lines PASS, and Add-L2Runtime
+  Support's own header/impl translation loop now completes; the build
+  fails at LINK instead, `undefined reference to lmx_root_record_new/
+  _orphan_retain/_set_clock/_set_clock_test/_clock/_clock_test/
+  _set_orphan_retain' -- lmx_root_record.lm2/.c (R0's own policy-record
+  module, already referenced by lmx_message.lm1/lmx_message_exec.c
+  since stage 5 (e)) is not itself in ANY of these six files' own
+  module lists, so nothing ever compiles or links it in. A finding for
+  the stage, not fixed here: this ticket's own ruling is "the stale
+  name only," and lmx_root_record is not a stale name -- it is a real,
+  still-needed module missing from these lists' own coverage entirely,
+  a gap this session's earlier work never had reason to surface since
+  it never got past the sched_ready throw before now).
+run_mixa_app_win32_l2_parity.ps1: UNEXPECTED_FAILURE -> UNEXPECTED_
+  FAILURE (unchanged, own-module failure; oracle 58 checks, 0 failures
+  both times, same "address of an Array element needs an explicit
+  adapter").
+run_mixa_audio_mp3_l2_parity.ps1: THROW (missing artifact) -> THROW
+  (unchanged; this runner does not use Add-L2RuntimeSupport's list at
+  all, so the fix cannot touch it -- same missing-artifact message
+  both times).
+run_mixa_backend_ctors_win32_l2_parity.ps1: EXPECTED_CORE_BARRIER ->
+  EXPECTED_CORE_BARRIER (unchanged, own-module failure; oracle 7 checks
+  PASS both times, same "incompatible entry signature").
+run_mixa_backend_win32_l2_parity.ps1: EXPECTED_CORE_BARRIER ->
+  EXPECTED_CORE_BARRIER (unchanged, own-module failure; oracle 43 CHK
+  lines PASS both times, same "unsupported own array declaration").
+run_mixa_l2_parity.ps1 -Module app_window: THROW (stale name) ->
+  UNEXPECTED_FAILURE (the same new failure mode as app_panel: oracle
+  now runs (162 checks PASS) and the module's own translation succeeds
+  cleanly; link fails on the same seven undefined lmx_root_record_*
+  references, PLUS a second, distinct link error this module alone
+  hits -- `multiple definition of mixa_rect_open/_release/mixa_cell_
+  at/_at_const/mixa_rect_fill/_put_text/_dump' between mixa_draw.o and
+  mixa_buttons.o, a pre-existing duplicate-symbol issue in this
+  module's own object list, unrelated to lmx_root_record or to this
+  ticket's own fix).
+
+Net: the one stale-name fix turns two THROWs (never reaching a real
+build) into two UNEXPECTED_FAILUREs at link time, both now failing on
+the same newly-exposed cause (lmx_root_record missing from these lists'
+own coverage) -- not a regression from the fix, but the fix un-masking
+a second, pre-existing gap that the stale name had been hiding by
+throwing first. Per the ticket's own words, a runner still red for its
+own reasons is a finding, not a fix: named here, not chased further on
+this branch.
+
+--- Falsifier
+For lmx_msg_sched_ready, the one name marked gone: `git ls-tree
+7b3a8668 l2src/lmx_msg_sched_ready.lm1` prints nothing (checked
+directly). For the 18 marked exists, the same command prints a blob
+line for each (spot-checked; also confirmed by a direct file-existence
+test on every one of the 19 names, not the ls-tree form specifically,
+since the ticket's own falsifier names ls-tree as the check for gone
+names, which is what matters for the one negative claim this document
+makes).
