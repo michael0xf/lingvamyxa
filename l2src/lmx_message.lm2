@@ -701,9 +701,14 @@ fn: msg_child_unlink (@: LmxMsg parent; @: LmxMsg child) int
     # Stage 3b-8: a bound child cannot leave its family; unbind it first.
     if: c.lmx_msg_exec_msg_bound(child) != 0
         return: c.LMX_MSG_INVALID
-    if: msg_child_chain_remove(parent, child) != 0
-        child\parent_msg: 0
-    ---
+    # S6-2, SPEC 19.29.7: parent_msg is the owner cell, so the unlink takes the
+    # child out of the chain and leaves the cell naming the parent whose storage
+    # the child is now part of. A late sender reaching a settled record follows it
+    # to the owner and is refused on that lane. The two callers that move a child
+    # to a NEW owner (handoff_supervision, orphan_children) do not come through
+    # here: each calls child_chain_remove and then child_link, which writes the
+    # cell itself.
+    msg_child_chain_remove(parent, child)
     return: c.LMX_MSG_OK
 end: msg_child_unlink
 
@@ -1446,8 +1451,6 @@ fn: msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
 end: msg_stop
 
 sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
-    @: LmxMsgCopy inb 0
-    @: LmxMsgCopy outb 0
     int: ust
     if: m = 0
         return
@@ -1471,10 +1474,10 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
         ---
         m\next_sibling: 0
     ---
-    c.lmx_msg_mail_inbox_take(m, @ inb)
-    msg_copy_free(inb)
-    c.lmx_msg_mail_outbox_take(m, @ outb)
-    msg_copy_free(outb)
+    # S6-2, SPEC 19.29.7: the mailbox is NOT drained or destroyed here. It settles
+    # into the parent with the rest of the child's storage, queues and monitor
+    # intact, so a capability held by a sender stays a valid handle and a late send
+    # lands in a mailbox the parent owns.
     if: m\init != 0
         c.free((cast: (@: void) m\init))
     ---
