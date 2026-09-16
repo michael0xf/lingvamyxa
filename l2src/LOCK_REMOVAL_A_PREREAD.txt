@@ -1,0 +1,188 @@
+LOCK_REMOVAL_A_PREREAD: every malloc/calloc/realloc/free in lmx_message.
+lm1, lmx_message_exec.c, lmx_message_host.c and their headers, at
+integration 7b3a8668, grouped by the record each site allocates or
+frees, which of A1/A2/A3 takes it and which arena it lands in, for the
+arena stages (sonnet/a-preread, 2026-09-15, doc-only, no builds).
+
+Citations: LOCK_REMOVAL_DESIGN.txt's own "A1-A3. The arena (19.29.2),
+after S6 or interleaved where a stage touches the same record" section
+(d6/lock-removal bb082d37:1958), carrying Mikhail's 5.4 sentence
+verbatim ("У нас нет никаких копий message... При получении Message
+который не L3 Thread присоединяется к арене получателя" -- there are no
+copies of a Message; on receipt a Message that is not an L3 Thread
+joins the recipient's arena) and its own three-way split: A1 the
+control record (LmxMsg) becomes a Structure in its own arena, created
+on the launching parent's lane, the same pattern lmx_sched_record and
+lmx_root_record already follow; A2 the arena's own bookkeeping
+(LmxOwnedRange, LmxMsgBlock) and the Message's own arrays (path, init,
+roots); A3 an admitted copy's arena, per 5.4 -- the envelope copy made
+at admission (LmxMsgCopy) is today's artefact and goes. Spec 19.29.2's
+own phrase, verified directly against origin/main's Lingvamyxa_spec.
+txt: "Every Message, inactive or running, owns one logical arena" and
+Mikhail's own quoted sentence there, "arenas attach on consumption --
+that is the core" (12426-12433). Spec 19.29.6's own phrase, already
+verified in this session's earlier work: "reclaimed, arena and slot"
+(12755) -- a settled Message's record and its arena are reclaimed
+together, the same unit A1's own "Structure in its own arena" targets.
+
+--- Counts
+
+112 allocator calls total across the three files (55 in lmx_message.
+  lm1, 55 in lmx_message_exec.c, 2 in lmx_message_host.c) -- every
+  malloc/calloc/realloc/free, not only the ones A1-A3 names; most of
+  the 112 are free() calls paired with a calloc already counted under
+  the same record below, or scaffolding outside A1-A3's own scope (see
+  the last section).
+A1 (LmxMsg, the control record): 1 site (lmx_msg_slot_new, exec.c).
+A2 (LmxOwnedRange, LmxMsgBlock, the arena's own bookkeeping; path, init,
+  roots, the Message's own arrays): 4 LmxOwnedRange sites + 1 LmxMsgBlock
+  site in exec.c, plus 2 array-growth call sites in lm1 (path, init) and
+  1 in lm1 (roots) -- 8 total.
+A3 (LmxMsgCopy, the admitted-copy envelope): 8 sites, 7 in lm1 + 1 in
+  exec.c -- matches the design doc's own "eight admission sites" count
+  exactly, though not its own list of names: the design doc's eighth
+  name, ui_request, no longer exists anywhere in the tree (M's own
+  UI-lane removal, confirmed by grep, zero hits) -- the eighth site
+  today is lmx_msg_test_stage's own calloc (exec.c:1034), a coincidence
+  of count, not the same function; flagged as drift in the design doc's
+  own citation, not silently corrected without saying so.
+Out of A1-A3's own scope (runtime/executor scaffolding, not part of any
+  Message's own arena, named so they are not mistaken for a missed
+  site): LmxMsgRuntime, LmxMsgRoot, LmxMsgEnv, LmxMsgExec, LmxMsgExecBind,
+  LmxMsgBindWait, LmxMsgCtxPack, and local working arrays (drive_walk_
+  list's snapshot table, transfer_adopted's address buffer) -- listed
+  below with their own sites, not folded into the counts above.
+
+--- A1: the control record
+
+exec.c:493-494, lmx_msg_slot_new (`LmxMsg *m = (LmxMsg *)calloc(1U,
+  sizeof(LmxMsg));`): every Message's own record, today one calloc per
+  create, freed in lmx_msg_slot_free (exec.c, paired with this site,
+  called from lmx_msg_endp_try_retire once the record's storage is
+  fully released). Under A1: becomes a Structure in the Message's own
+  arena, built on the launching parent's lane -- the same pattern
+  lmx_sched_record and lmx_root_record already follow, per the design
+  doc's own words.
+
+--- A2: the arena's own bookkeeping and the Message's own arrays
+
+exec.c:735, lmx_msg_bootstrap_eternal_admit (`entry = (LmxOwnedRange
+  *)calloc(1U, sizeof(*entry));`); exec.c:773, lmx_msg_bootstrap_
+  method_admit (same shape); exec.c:820, lmx_msg_eternal_clone (same);
+  exec.c:863, lmx_msg_method_clone (same): four LmxOwnedRange calloc
+  sites, one per admission/clone path that registers a new owned range
+  into a Message's own bookkeeping list. Under A2: allocated from the
+  Message's own arena instead of the heap, alongside the control record
+  A1 places there.
+
+exec.c:2526, adopt_mark_pc (`prepared = (LmxMsgBlock *)calloc(1U,
+  sizeof(LmxMsgBlock));`): the one LmxMsgBlock calloc site found in
+  these three files -- built during a settle's own adopt-mark step, to
+  carry a transferred block's own record into the parent's bookkeeping.
+  Under A2: same arena treatment as the LmxOwnedRange sites above.
+
+lm1:1056/1066, inside lmx_msg_assign_path (`c.lmx_msg_path_grow(@ slot\
+  path, @ slot\path_cap, ...)`): the Message's own path array, grown by
+  a realloc-shaped call. Its own allocator, lmx_msg_path_grow, is
+  defined in a separate module (l2src/lmx_msg_path_storage.lm1:4),
+  outside this ticket's own three-file scope -- named here because it
+  is called from inside lmx_message.lm1, not because its own body was
+  re-read this pass.
+
+lm1:383, lmx_msg_copy_bytes (`p: (cast: (@: uchar) c.malloc(n))`),
+  called from lmx_msg_create_prepare as `initp: lmx_msg_copy_bytes(init,
+  n)`: the Message's own init-bytes array. Under A2: allocated from the
+  Message's own arena, same as path.
+
+lm1:267, lmx_msg_root_attach (`n: (cast: (@: LmxMsgRoot) c.malloc(c.
+  sizeof(c.LmxMsgRoot)))`, linked onto `m\roots`): the Message's own
+  roots list, one node per registered eternal/shared root. Under A2:
+  allocated from the Message's own arena.
+
+--- A3: the admitted-copy envelope (LmxMsgCopy, eight sites)
+
+lm1:509, lmx_msg_copy_dup; lm1:922, lmx_msg_host_post; lm1:1204, lmx_msg_
+  send; lm1:1258, lmx_msg_send_graph; lm1:1312, lmx_msg_send_owned;
+  lm1:1988, lmx_msg_post_dead; lm1:2694, lmx_msg_send_cap; exec.c:1034,
+  lmx_msg_test_stage -- each `calloc(1U, sizeof(LmxMsgCopy))` (or
+  sizeof(*n) equivalent), building the envelope copy staged at
+  admission. Under A3, per 5.4: this copy goes entirely -- a received
+  Message that is not an L3 Thread joins the recipient's arena directly,
+  no separate copy struct. Each of these eight sites loses its own
+  calloc/free pair; what each function does instead (admit the sender's
+  own graph/bytes straight into the destination, per A3's own design)
+  is Y3/A3's own code change, not answered here.
+
+--- Not in A1-A3's own scope (scaffolding, named so nothing is missed
+    silently)
+
+lm1:845/850/854/861/1041, lmx_msg_runtime_new/lmx_msg_runtime_delete --
+  LmxMsgRuntime, the runtime itself, one per process, not a Message's
+  own record.
+lm1:1371/1377, lmx_msg_stop; lm1:2457/2465, lmx_msg_live_query; lm1:
+  2553/2561, lmx_msg_live_handle -- LmxMsgEnv calloc/free, transient
+  host-side signaling envelopes (progress/liveness queries), not
+  Message storage.
+exec.c:1237/1251/1274, lmx_msg_exec_attach/detach -- LmxMsgExec, the
+  executor's own per-runtime struct.
+exec.c:1677, exec_bind_mode -- LmxMsgExecBind, the bind table's own
+  record (M's own domain).
+exec.c:1963, launch_ctx_thread_rec -- LmxMsgBindWait (S3's own domain).
+exec.c:1969, launch_ctx_thread_rec -- LmxMsgCtxPack, the worker-thread
+  launch package, freed by the worker itself after use.
+exec.c:905/913/926/956, drive_walk_list -- a local snapshot table (LmxMsg
+  **tab), freed within the same function; exec.c:2775/2781/2795/2797/
+  2810, lmx_msg_parent_settle -- a local address buffer (LmxMsgAddr
+  *buf), grown by realloc, freed within the same function. Both are
+  transient working memory for one call, never part of any Message's
+  own persistent arena.
+lmx_message_host.c's own 2 sites (LmxMsgHostSync, the host-sync struct,
+  already S6-1's own DEL target, not re-litigated here).
+
+--- Test pins the deletion shifts
+
+The design doc's own falsifier for A1-A3, cited directly: "Red for each:
+  the balance test's two-cycle live count (ld --wrap) with the record's
+  allocation counted as heap. It is red while any such record comes
+  from malloc, and green once the arena's blocks are the only heap
+  allocations" (bb082d37:1968-1970). The wrap-based pattern this refers
+  to lives in l2src/tests/lmx_msg_blocks_selftest.lm1, which defines
+  __wrap_free (line 17) and reports a frees=%d count (line 205);
+  run_model_scenario36.ps1's own comment (127-130) names this file's
+  pattern directly: a test defining __wrap_NAME is linked with -Wl,
+  --wrap=NAME for each such name found in its own translated C, so a
+  missing hook reds the link rather than passing unnoticed. This is the
+  acceptance mechanism A1-A3's own landing measures against (malloc
+  count for these records goes to 0, arena-block count carries it
+  instead), not a fixed numeric pin to list in advance -- the design
+  doc's own words describe it as measured at landing ("red while... green
+  once"), not as a number already known today.
+Lower confidence, named rather than guessed at: whether any EXISTING
+  test currently pins a literal count tied to these specific 13 sites'
+  own malloc/calloc calls (as opposed to the wrap-based mechanism above,
+  which counts frees generically) was not fully traced this pass --
+  port_msg_blocks' own "frees=(\d+) callbacks=(\d+)" pin (run_port_msg_
+  blocks.ps1, already found in this session's own S6-2 work as counting
+  block frees unrelated to refs/slots) is the closest candidate found,
+  but whether "blocks" there means LmxMsgBlock (A2's own record) or a
+  different, Lmx-graph-level block concept was not resolved with
+  certainty in the time this pass spent -- flagged for the stage's own
+  ticket to confirm before relying on it, not asserted either way here.
+No "block-base" (a specific memory address or offset) pin was found by
+  name anywhere in l2src/tests or the selftest files (grep for block_
+  base/blockBase/\base, zero hits) -- if the ticket's own phrase refers
+  to something else, it was not located this pass.
+
+--- Falsifier
+Every file:line above re-checked directly against 7b3a8668 by grep for
+its own named allocator call, receiver ignored (`calloc(`, `malloc(`,
+`realloc(`, `free(`, each cross-checked against the struct/record name
+cast around it, not assumed from the design doc's own line numbers,
+several of which have drifted since bb082d37 (slot_new's own calloc:
+design doc's "418", this tree's 494; the LmxOwnedRange/LmxMsgBlock
+sites: design doc's "652/690/737/780/3633/3698", this tree's 735/773/
+820/863/2526 -- five sites found, not six, the discrepancy named, not
+silently reconciled). ui_request's absence verified directly (grep
+across lmx_message.lm1, lmx_message_exec.c, lmx_message.h and lmx_
+message_exec.h, zero hits), not assumed from its absence in this
+pass's own search results alone.
