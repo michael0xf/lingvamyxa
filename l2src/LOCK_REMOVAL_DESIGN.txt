@@ -1876,6 +1876,22 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       because the number looks measured. The loop condition at orphan_mapped_17:163 escaped BOTH passes, because
       it is neither a mention-in-prose nor a pin -- and it is the one site that does not even compile once the
       field goes.
+      The rule caught me again within the hour, which is why it is a rule and not an anecdote: I sent both peers
+      "39 reads of ->n" for lmx_message_exec_selftest.c, counting env->n together with rt->n -- the very confusion
+      I had just warned 0c about. Measured with two agreeing patterns: 52 lines contain the STRING '->n' (the
+      superset, swallowing ->next and ->number); 36 contain the FIELD; and of those 36 only 32 have a runtime
+      receiver (rti 16, rtb 8, rto 4, rtq 3, rt 1). The remaining four -- fresh->n, block->n, pb->n, cb->n -- are
+      an envelope's byte count and a block's length, untouched by this stage. Split by role over the 32: 9
+      captures, 1 loop condition (3152), ~10 in an if, ~11 inside an fprintf, 1 in a comment; the if/fprintf halves
+      are PROVISIONAL (truncated lines, confirmed per site while converting) and labelled rather than smoothed.
+      The eleven diagnostics are the population an assertion-only inventory misses for the second time: they PRINT
+      the counter, so they convert with their assertions or they print a field that no longer exists.
+    - A constraint on the ORDER of this file's restatements, found by the compiler rather than by reading: n0 is
+      declared once for the whole exec_selftest_main, not per case. Removing its declaration along with the first
+      restated case broke the build at 3182 ("'n0' undeclared"), because five later cases capture into the same
+      variable. So the six cases cannot be converted one at a time with a tidy-up afterwards -- the shared capture
+      stays until the last of them lands, and until then the file carries a declaration whose only purpose is the
+      unconverted cases. Written here so the leftover reads as deliberate rather than as an oversight.
     - The slot-count pins cannot be restated as find-based "gone", and the reason is written in the fixtures
       themselves: family_release_17 says "'Gone' is measured by the runtime's slot count rt\n, not by
       lmx_msg_find: find walks only what rt->root reaches, so a subtree released from its parent but still
