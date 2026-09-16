@@ -7656,3 +7656,7 @@ times, slot_new's refs = 1, try_retire's guard; then the lm1/lm2
 scatter; what they guarded, "the record cannot be freed under me",
 is what the settle answers since nothing frees a record but R0's
 teardown), then the rest.
+Stage branch d6/lock-s6-2 2e2f492c: l2src/tripwire_s6_2.sh committed
+(85 lines), kept in the tree for later stages; e9 adds it to
+land_s6_2.sh's allowlist as an A path (51). e9's row at 5c75aea9 takes
+the tripwired items.
