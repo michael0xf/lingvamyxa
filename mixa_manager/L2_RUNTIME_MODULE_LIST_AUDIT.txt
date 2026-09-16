@@ -1073,3 +1073,25 @@ runner's own next own-module failure is this unlocalized internal
 l2trans error, not a further missing declaration -- reported as the
 honest answer to "PASS or its next own-module failure", which is
 neither cleanly.
+
+--- Landed: the twenty prototype: declarations from the inventory above
+
+The same twenty blocks the inventory already tested and reverted,
+landed as-is (one duplicate mixa_cmdline_insert block caught and
+removed while re-adding them -- 28 prototype: occurrences, 28 distinct
+fn: names, verified by grep, no duplicates left).
+
+Before: UNEXPECTED_FAILURE at mixa_app_controller.lm2:16:5 (frame=
+mixa_app_fmpanel_close, the pre-8e094e98 state -- already moved to
+:16:5/mixa_file_close after that commit; this section's own "before"
+is relative to before commit 8e094e98, still the starting point this
+whole app_controller thread has tracked throughout). After:
+UNEXPECTED_FAILURE still, now `l2trans error: mixa_manager\mixa_app_
+controller.lm2: translation failed with no located diagnostic` -- no
+line number, l2trans's own generic fallback, exactly as traced in the
+inventory above and now confirmed as the LANDED state, not just a
+test. This is the compiler defect lingvamyxa-6f is tracking as its own
+ticket after S6-2 lands, alongside the app_window int/pointer defect.
+app_controller's own row in run_mixa_parity_gates.ps1 stays Expect=
+"UNEXPECTED_FAILURE" (the verdict name is unchanged) with a dated
+comment recording the new diagnostic text in place of a line number.

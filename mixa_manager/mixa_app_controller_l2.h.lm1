@@ -105,6 +105,73 @@ prototype:
     fn: mixa_app_fmpanel_key (@: MixaAppFmPanel p; int: keycode) int
 end: prototype
 
+# The same "declare then link" shape as the eight fmpanel blocks above,
+# for every remaining call in this file with only a real-header
+# prototype and no L2-visible declaration -- the full inventory (call
+# site, source header, and why each type stays a plain opaque pointer
+# name) is in L2_RUNTIME_MODULE_LIST_AUDIT.txt's own 2026-09-16 class-
+# of-gap note, traced empirically before landing here, not guessed.
+prototype:
+    fn: mixa_file_close (@: MixaFile f) void
+end: prototype
+prototype:
+    fn: mixa_file_open (@@: MixaFile out; const: @(char path_utf8); int: mode) int
+end: prototype
+prototype:
+    fn: mixa_app_path_join (const: @(char a); const: @(char b); const: @(MixaAppPathFaultVTable fault); @@: char out) int
+end: prototype
+prototype:
+    fn: mixa_cmd_dispatch_start (const: @(char command_utf8); const: @(char cwd_utf8); @: MixaFile console_file; @@: MixaCmdDispatch out) int
+end: prototype
+prototype:
+    fn: mixa_cmd_dispatch_poll (@: MixaCmdDispatch d; @: int out_exit_code; @@: char out_new_cwd) int
+end: prototype
+prototype:
+    fn: mixa_cmd_dispatch_running (const: @(MixaCmdDispatch d)) int
+end: prototype
+prototype:
+    fn: mixa_cmd_dispatch_release (@: MixaCmdDispatch d) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_init (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_release (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_insert (@: MixaCmdLine cl; const: @(MixaCmdLineFaultVTable fault); unsigned: codepoint) int
+end: prototype
+prototype:
+    fn: mixa_cmdline_backspace (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_delete_forward (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_move_left (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_move_right (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_move_home (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_move_end (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_extract_to_cursor_utf8 (const: @(MixaCmdLine cl); const: @(MixaCmdLineFaultVTable fault); @@: char out) int
+end: prototype
+prototype:
+    fn: mixa_cmdline_clear (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_help_key_event (@: MixaHelpCtx ctx; const: @(MixaEvent ev)) int
+end: prototype
+prototype:
+    fn: mixa_help_hit (@: MixaHelpCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int
+end: prototype
+
 define: MIXA_APP_CONTROLLER_OK 0
 define: MIXA_APP_CONTROLLER_ERR_ARG 1
 define: MIXA_APP_CONTROLLER_ERR_OPEN 2
