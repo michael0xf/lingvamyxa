@@ -8797,3 +8797,10 @@ round are reshaped (the host outside any turn drives R0's round after
 the send). The detector (an atomic mutating flag) is allowed only if
 quick, as evidence; the change proceeds regardless. q_alloc.c and
 uaf_run.sh go to l2src/tools.
+Stage branch d6/lock-s6-2: 5be66755 ("S6-2 step 3 fix, PARTIAL: the
+three forward uses resolved in both cores -- the build now COMPILES;
+the gate is still red at run time") and 108b51f0 ("l2src/tools: the
+UAF kit (poisoning quarantine allocator and its runner), committed so
+the next agent finds it by grep rather than by luck"): the kit is now
+project tooling under l2src/tools, two new A paths for the landing's
+allowlist. The drain-in-R0's-round change and step 3 follow.
