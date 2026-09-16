@@ -2163,6 +2163,35 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         across unlocked windows (host_post, host_drain, end_turn, recv, fail, drive_one, inbox_n, orphan_sweep)
         follow in the second step, where what they guard -- "the record cannot be freed under me" -- is answered
         by the settle: nothing frees a record any more except R0's teardown.
+      - STEP ONE MEASURED, including an error of mine inside it that the fixtures caught in a single run. With
+        send_cap's retain of dest, copy_free's release of dest_msg and copy_dup's retain removed, both S6-2
+        assertions went green: the settled-list check is silent (the rolled-back child IS on its parent's settled
+        list, state RELEASED) and the refusal diagnostic is absent entirely -- the send through a settled
+        capability comes back to the sender as KIND_REJECTED. That is the mechanism working end to end: deliver at
+        admission into the settled mailbox, answer in the owner's round, carry it back over R0's transport.
+        THE ERROR: I called that set a "subset" without checking how many partners the thing I removed had.
+        copy_free's release did not pair with send_cap's retain alone -- it paired with THREE more, the carried
+        destination retained by send, send_graph and send_owned (lmx_message.lm1:1233, 1288, 1349 and the lm2
+        mirrors). Removing the release and leaving those left the count rising for an ordinary send and never
+        falling, and the fixture said so immediately and precisely: "ref after admit" still PASSED with r1 == 2 (a
+        plain send still retained), while "recv dest_msg leak" and "discard dest_msg leak" fired because the count
+        never came back to 1. A real imbalance I introduced, found one run after introducing it, by assertions
+        written years before this stage.
+        THE COHERENT RULE, taken instead: no carried destination is counted, for ANY send -- not a capability-only
+        exception. That is 19.29.7's sentence applied where it actually holds, and it leaves no rule that is true
+        of one send shape and false of three. Measured after it: lmx_msg_endp_retain( drops 18 -> 15 in lm1 and
+        18 -> 15 in lm2, exactly three each, and no endp_retain(destn) remains in either file.
+        METHOD RULE, agreed with the coordinator and worth more than this stage: before removing one side of a
+        pair, grep the PARTNER and count its sites -- not the call you are looking at. Both halves of a
+        retain/release pairing have to go together or neither does.
+      - The three fixture pins that read the count got their fate here rather than being left for the sweep: the
+        r0/r1 capture and its check, "recv dest_msg leak" and "discard dest_msg leak" pinned the destination's
+        reference count (1 before admission, 2 after, back to 1) as their way of saying "the carried destination
+        does not leak". With no count there is no such number, and leak-freedom is measured where it is observable
+        -- the --wrap free balance runners -- not by a field the stage deletes. What replaces them is the
+        behaviour those numbers stood for, asserted directly: the envelope really arrives (recv returns OK with
+        KIND_BYTES) and the handle stays usable for a capability send with no hold taken on it. Both new checks
+        carry their own captured status in the diagnostic, per the rule below.
       - Also added, and permanent rather than diagnostic scaffolding: the fixture now asserts in its own right that
         the rolled-back child is on its parent's settled list with state RELEASED, before it asks for the refusal.
         That splits a future red in two -- settle never happened, versus the owner's round never answered -- and it
