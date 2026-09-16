@@ -8771,3 +8771,29 @@ suspects: a double free is caught at q_free with the first site's
 stack, a stale read reads 0xDD poison and faults downstream. RULED:
 after the location, q_alloc.c and uaf_run.sh are committed under
 l2src as project tooling, as land_base3.sh was.
+LOCATION RESULT (the lead): NEITHER. The UAF kit built from the
+crashing evidence directory runs 2 of 2 clean ("lmx_message_exec ok"
+both), while the same code crashes deterministically under the real
+allocator at "live-cascade start"; configuration ruled out. The
+pattern (a crash that vanishes when every malloc/realloc/free is
+serialised behind the allocator's lock) is a race's signature, with
+an overflow not excluded (no canary). THE DEFECT, standing regardless
+of the crash: lmx_msg_pump takes R0's monitor, pops a letter, unlocks
+and calls admit_one with no lock (its own S6 (a) comment), and pump
+has four callers at the returns of different Messages' turns (lm1
+985, 2059, 2429, 2587); live-cascade starts worker contexts and drives
+closes and sends concurrently, so service_register and
+service_unregister, which realloc and shift live_m/live_id, can run
+on two lanes at once: the section's "the service's own data on its
+own lane" is false in the code. RULED (the coordinator, from the
+model, no question for Mikhail): (b) only R0's own lane drains R0's
+inbox, the transport, in R0's round; every other lane only pushes
+into it under R0's monitor; delivery, the REGISTER and UNREGISTER
+handlers and the is_live check all run there; (a), holding R0's
+monitor across the live-set write, is the special monitor Mikhail
+refused. Accepted cost: delivery latency is R0's round; pump's four
+callers become pushes; fixtures that send and then recv without an R0
+round are reshaped (the host outside any turn drives R0's round after
+the send). The detector (an atomic mutating flag) is allowed only if
+quick, as evidence; the change proceeds regardless. q_alloc.c and
+uaf_run.sh go to l2src/tools.
