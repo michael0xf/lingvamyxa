@@ -2203,6 +2203,13 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         so the count could not be the oracle even if it survived. Why the restatements are stronger than what they
         replace, and not a weakening being tolerated: the count could say "one fewer" but never WHOSE -- which is
         precisely the blind spot the fixtures' own headers warned about. Ownership answers both at once.
+      - BOTH GATES GREEN on 4997d651, which is the first point at which S6-2's mechanism stands on its own:
+        run_port_message exit 0, "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference
+        and generated agree on both runs" -- so the settled list, the owner's-round refusal, the capability with no
+        holder count and all nine restated cases hold together AND lm1/lm2 still agree; and run_lmx -Suite Message
+        exit 0, which is the suite carrying the planted red. Neither is a checkpoint yet: a green that has never
+        been shown able to fail is exactly the shape this document distrusts, so the two tripwires come before any
+        of it is reported as done.
       - A SECOND POPULATION, found by the gate and then measured rather than left as a remark. The family-boundary
         contract case asserted `km->parent_msg != 0` as its proof that an unbound child "left its family"; S6-2
         keeps parent_msg as the owner cell on purpose, so it fired by design. It now reads `!= pm` -- the cell must
