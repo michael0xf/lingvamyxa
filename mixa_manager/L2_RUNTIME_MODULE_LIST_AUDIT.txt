@@ -691,3 +691,73 @@ draw.o and buttons.o. Whether the rewrite lands on mixa_draw.lm1 or on
 mixa_tiles.lm1 is a real choice for that ticket, not decided here --
 either is a genuine edit to an already-accepted, hand-written oracle
 file, not something to fold into a mixa_manager runner/list change.
+
+--- audio_mp3 and app_controller: an honest ExpectVerdict for the two
+    runners left outside the parity gate (doc only, no code)
+
+audio_mp3's THROW -- first line: run_mixa_audio_mp3_l2_parity.ps1:57,
+`throw "missing candidate L1 translator (ticket 20260912-084943, read-
+only, not modified by this script): $Candidate"`, $Candidate itself
+set at :52 to `build\codex\l1-import-capacity\build\import_capacity\
+run_20260912_084844\l1trans.exe`. What the runner expects to find: a
+hash-pinned (24A1B57B...) CANDIDATE l1trans built by an earlier Codex
+session to remove l1trans's own then-fixed 16-import cap, needed
+because the real mixa_audio_mp3.lm1 predefs 22 files in one unit and
+the STABLE pin of that day (stable65D5) could not translate it at all.
+That candidate is a scratch build artifact under build/ (fully
+gitignored, confirmed: `grep build/ .gitignore` matches both root
+entries, and the directory does not exist in this worktree at all,
+parent included) -- L1_IMPORT_CAPACITY_20260912.md's own words call it
+"Evidence (private, not a stable promotion)", never meant to survive
+across worktrees or sessions.
+
+Whether to build it, skip with its own EXPECTED_ state, or retire: NONE
+of the three as literally posed -- a fourth option, verified directly,
+not guessed: `grep -n "import path table full" l1src/l1trans.lm1`
+returns NOTHING (the error string doesn't exist in the current source
+at all), and the CURRENT pinned l1trans (build\l1trans\gen2\l1trans.
+exe, hash 0B3D85B3..., a DIFFERENT hash than stable65D5A5ED... cited in
+that doc) translates mixa_audio_mp3.lm1 directly with exit 0 and no
+diagnostic (`./build/l1trans/gen2/l1trans.exe mixa_manager/mixa_audio_
+mp3.lm1 <out>.c`, run cold just now). The whole reason this candidate
+exists -- the pinned compiler's own fixed import cap -- is gone from
+the pin currently in use; L1_IMPORT_CAPACITY_20260912.md's own
+"Published bootstrap-C refresh" section says this landed in the
+tracked C bootstrap on 2026-09-12, before this session's own work
+began. Recommendation: retire the CANDIDATE-COMPILER MECHANISM, not
+just this one check -- change the runner's own oracle-side build to
+use $L1Trans like every other module instead of $Candidate (a real
+code edit, not done here, doc only per the ticket); ExpectVerdict then
+becomes whatever this runner's own translate/parity result actually is
+once it can run past this line, not asserted here since it has never
+been observed.
+
+app_controller's UNEXPECTED_FAILURE -- first line, re-confirmed
+unchanged just now: mixa_manager/mixa_app_controller.lm2:14:5,
+l2trans error "unsupported body" (frame=mixa_app_fmpanel_close), fully
+diagnosed in commit 41e13bf8: the module's own accepted header keeps
+MixaAppFmPanel opaque via a plain #include specifically because an
+EARLIER DRAFT that instead predef'd the full mixa_app_fmpanel_l2.h.lm1
+chain hit `l1trans error: ...import_path table full` when translated
+standalone (mixa_app_controller_l2.h.lm1's own comment, lines 37-40).
+ExpectVerdict to record today: UNEXPECTED_FAILURE, same diagnostic,
+unchanged.
+
+The condition that lifts it, connected to the audio_mp3 finding just
+above and verified to the same extent (not fully re-tested, since
+reproducing the earlier draft's own predef chain is itself code): the
+SAME fixed import cap that forced the opaque-header design is gone
+from the current source (same grep, same negative result, same
+"landed 2026-09-12" timing) -- the earlier draft's own reason for
+abandoning the full predef chain may no longer apply. This is NOT
+independently confirmed for app_controller's own specific 7-chain
+combination (fm_copy + console_window_l2 + help_l2 + cmdline_l2 +
+cmdline_dispatch_l2 + app_path_l2 + app_fmpanel_l2) -- doing so means
+writing and translating a test header, which is code, out of this
+ticket's own doc-only scope. The condition to lift the barrier: someone
+re-attempts that full predef chain against the current pin; if it no
+longer hits a table-full error, l2trans's own "unsupported body" gap
+for calling mixa_app_fmpanel_close becomes a separate, still-open
+question (an L2-visible declaration existing is necessary but not
+independently confirmed sufficient here) -- not resolved by this note,
+a next step for whoever picks up either ticket.
