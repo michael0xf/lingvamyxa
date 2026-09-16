@@ -1056,6 +1056,14 @@ same day):
                                                 its last turn and nothing native uses its arena:
                                                 the arena may be attached (19.29.7, 19.29.8) */
         Lmx *root;                           /* the root of its graph; its arena is reached from it */
+        struct { size_t len; unsigned *idx; } addr;
+                                             /* the hierarchical address a.b.c.d..., one field, an
+                                                unbounded count of indices with its length and no
+                                                other fields around it; recomposed from the parent's
+                                                address and the child's index at a parent change;
+                                                delivery is hop by hop through parents' inboxes, every
+                                                L3 Thread a postman for one step deciding by address
+                                                (Mikhail, 2026-09-16, verbatim in 19.29.7) */
     } LmxMsg;
 
 Mikhail, 2026-09-15, verbatim, on the two flags: "success && !running, с выходом выставляется running = 0. Просто running опрашивается при выполнении Lmx* root и я же не знаю как кокнретный планировщик устроен и когда выйдет. Но условия выхода очевидно есть!" (one that
