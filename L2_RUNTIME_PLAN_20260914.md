@@ -7962,3 +7962,11 @@ ticket after S6-2 now has two items: the define:'d char* call-actual
 typed int (app_window) and the silent failure with no located
 diagnostic on app_controller (the trace-silent-l2trans-failures
 method: entry-logging on a -g build).
+b5: 10c46bde (the twenty prototype: blocks for app_controller, one
+duplicate mixa_cmdline_insert caught while re-adding; 28 prototype:
+lines) and ff0b2c24 (the gate row's dated comment on the new first
+failure, l2trans's "translation failed with no located diagnostic";
+TimeoutSec 40 to 60 on a re-measured 22.5 s): the gate cold twice "12
+of 12 as expected" (201.7 s, 202.9 s). app_controller now fails only
+on the compiler's internal error, the coordinator's l2trans ticket.
+b5 holds for S6-2's landing and the merge.
