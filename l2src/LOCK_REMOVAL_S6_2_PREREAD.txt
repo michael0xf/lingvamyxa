@@ -1,0 +1,235 @@
+LOCK_REMOVAL_S6_2_PREREAD: per retain/release site and per reader of
+LmxMsgRuntime's slots/n, what the count protects today and the replacement
+by the spec, at integration 7b3a8668 (S6-1 landed), for S6-2 (refs,
+endp_retain/release, the two InterlockedCompareExchange, LmxMsg.refs;
+slots/n, LmxMsg.alloc_next, the slots port module) (sonnet/s6-2-preread,
+2026-09-15, doc-only, no builds -- e9 has the machine for its own record).
+
+Method: every production call site of lmx_msg_endp_retain/endp_release in
+lmx_message_exec.c and lmx_message.lm1 mapped to its enclosing function
+(lm2 mirrors lm1 function-for-function, not separately walked, per this
+project's own convention); every production reader of rt\slots, rt\n or
+\alloc_next the same. Definitions and test files not counted as sites here
+-- e9's own claude-0c/s6-2-gate-impact 16335e9b (l2src/S6_2_GATE_IMPACT.txt)
+already covers every gate/runner/test file that asserts or links these
+names, by file:line, so the two documents agree on what leaves without
+this one repeating that inventory.
+
+Per Mikhail's standing rule (search the docs before flagging): the
+question this ticket turns on -- can a lane still touch a Message another
+lane is concurrently settling, once there is no refcount pinning it alive
+-- is not new. It is raised and answered in LOCK_REMOVAL_DESIGN.txt (d6/
+lock-removal 9fa7952f), "Ruled (the coordinator, 2026-09-15)" section, on
+spec 19.29.7's own sentence ("there is no count of holders", Lingvamyxa_
+spec.txt 12909, verified directly this pass): "a child's storage is never
+freed while its parent lives (it is settled into the parent's arena, whose
+blocks do not move), so a sender's handle stays valid; a send after the
+close is refused on the parent's lane, with no count; a child's query
+reaches a live parent by the cascade." That is the replacement for every
+site below whose retain only pins storage against a premature free: once
+settle moves a closing child's storage into its parent's arena instead of
+freeing it, a stale reference stays safe to read (the memory does not
+move or vanish), and the count that used to defer that free is no longer
+protecting anything. Sites that WRITE through a retained pointer are
+checked separately below, since "storage persists" alone does not cover
+a write race.
+
+--- Counts
+
+21 functions call lmx_msg_endp_retain/release in production code (5 in
+  lmx_message_exec.c, 16 in lmx_message.lm1); 3 functions read rt\slots/
+  rt\n/\alloc_next (1 in exec.c, 2 in lm1). 24 sites total.
+Replacement found for all 24: 23 by "storage persists in the parent's
+  arena" alone (the retain/release becomes unnecessary, not replaced by
+  anything); 1 (lmx_msg_admit_one) additionally relies on the per-Message
+  mailbox monitor (already the model's own permitted lock, unaffected by
+  S6-2) for the write it performs, not on refs.
+Contradiction (needs a lock, wait, signal or count): 0.
+Designed-but-not-yet-coded, named by the design doc itself, not a
+  contradiction: 1 -- the send-to-a-closed-sibling redirect (see below).
+
+--- lmx_message_exec.c (5 functions)
+
+drive_walk_list (889-968ish, retain 911/918, release 921/924/946/950/954):
+  pins the parent (if any) and every child in a snapshot array (tab[])
+  across the walk, which reads each entry's ->parent_msg and ->state after
+  building the snapshot. Read-only on the retained data. Replacement:
+  storage persists; a child settled by its own parent's lane while this
+  snapshot is being walked is still valid memory to read (possibly stale
+  ->state, which the walk already checks against RELEASED). This is the
+  design doc's own named example of "another lane still holds through
+  refs" (LOCK_REMOVAL_DESIGN.txt 1248-1250) -- the exact question the
+  coordinator's ruling above answers.
+
+lmx_msg_drive_walk_roots (977-994ish, retain 978, release 990): pins R0
+  across the unlock/relock window before driving it. Read-only (state,
+  root identity) plus the drive_tree call, which is its own already-
+  guarded site. Same replacement as drive_walk_list; R0 specifically is
+  never disposed while the runtime lives, so this pin was already the
+  most conservative case of the same pattern.
+
+lmx_msg_test_stage (1037-1069ish, retain 1048/1053, release 1055/1068):
+  a test-only staging helper, pins src and dest while building a copy
+  node from their fields. Read-only. Same replacement; also test-only,
+  not a production hazard either way.
+
+unbind_slot_locked (release only, 1582): releases a bind record's own
+  previously-retained Message (`old`) as part of unbinding -- a cleanup
+  release paired with a retain elsewhere (exec_bind_mode's own site,
+  below, or map_child's). Not a new pin; goes with its own pair.
+
+exec_bind_mode (1688, retain only in this excerpt -- paired release is on
+  the bind-teardown path elsewhere): retains the Message being bound so
+  its record survives across the bind-table update. Read/write on the
+  bind record itself (M's own already-single-lane bind table, mapping_
+  authority_locked), not general storage; same replacement for the
+  Message's own storage surviving, unrelated to the bind table's own
+  already-established single-writer guard.
+
+--- lmx_message.lm1 (16 functions)
+
+lmx_msg_copy_free (494, release only): releases a copy node's own
+  dest_msg pin when the node is freed. Paired with copy_dup's retain
+  below; read-only use of dest_msg between dup and free.
+
+lmx_msg_copy_dup (526, retain only): pins a copy's destination while
+  duplicating the envelope. Read-only. Same replacement.
+
+lmx_msg_host_post (916/924/929/947/951): pins R0 (the ingress root)
+  across the admission build, released on every early-return failure
+  path and after the successful queue push. Same replacement as drive_
+  walk_roots -- R0 specifically.
+
+lmx_msg_host_drain (968/974): pins R0 across the relay-queue build, same
+  as host_post.
+
+lmx_msg_send / lmx_msg_send_graph / lmx_msg_send_owned (1231-1244,
+  1286-1299, 1344-1363): pin the resolved destination and the source
+  across state/owner_rt checks and the envelope build -- this is the
+  design doc's own named case (LOCK_REMOVAL_DESIGN.txt 1531-1536): "a
+  sender resolves and pins a sibling destination on another lane." Under
+  5.6/19.29.7's ruling, both sides now hold the target's mailbox handle
+  instead of a pin; a send that arrives after the target has closed is
+  redirected to the parent's mailbox and refused there, on the parent's
+  lane. This specific replacement is new BEHAVIOUR, not just a deletion
+  -- the design doc says so directly: "That redirect-and-refuse is new
+  behaviour and needs its own red-first check." Named here as the one
+  designed-but-not-yet-coded item, not a contradiction: the coordinator's
+  ruling already established it needs no lock, wait or signal, only new
+  logic and a new test.
+
+lmx_msg_release_slot (1423, release only): releases a pin release_slot
+  itself is not the one taking (paired with a retain further up its own
+  caller chain, or a leftover single-sided release documented at its own
+  call site); release_slot is the function that unlinks a Message from
+  the family tree and slots list -- its own root-list unlink already
+  went in S5, and its rt\slots/rt\n write is the third slots/n site,
+  covered below with create_prepare and runtime_delete.
+
+lmx_msg_orphan_sweep (1626/1637): pins an orphan candidate while checking
+  its expiry and reclaim eligibility. Read-only. Same replacement --
+  reclaim itself happens at this one site (spec 19.29.6, "reclaimed,
+  arena and slot... at the root's next maintenance point", verified
+  directly at Lingvamyxa_spec.txt:12755), so the pin was guarding this
+  same site's own read against a concurrent second reclaimer; storage
+  persistence removes the need since there is exactly one reclaim site
+  already (no second reclaimer to race).
+
+lmx_msg_end_turn (1698-1770, three retain/release pairs): pins each
+  child in turn while walking the committed/tracked lists at end-turn,
+  reading heard_at/disposed-adjacent fields. Read-only. Same replacement.
+
+lmx_msg_admit_one (1831-1862): pins the destination while pushing a copy
+  into its inbox -- the one write among these sites. The write itself is
+  already ordered under the destination's own mailbox monitor (lmx_msg_
+  mail_lock/unlock on the destination), the one lock the model keeps, not
+  under refs; refs here only kept the destination's memory alive long
+  enough to reach that lock. Under storage persistence the memory does
+  not need protecting either, so the mailbox monitor alone (already in
+  place, unaffected by S6-2) covers the write.
+
+lmx_msg_recv (1927-1962): pins the caller's own record while taking its
+  own inbox under its own mailbox monitor. Self, not cross-lane; same
+  replacement, and the actual mutation is the existing mailbox monitor's,
+  as with admit_one.
+
+lmx_msg_fail (2022-2067): pins a Message across its own state teardown
+  and the post_dead relay to watchers. Read/write on the failing
+  Message's own fields, which is itself the disposing lane's own act
+  (S4's own established authority for this site); the retain here
+  guarded against a second, unrelated concurrent free, not against
+  another writer. Same replacement.
+
+lmx_msg_drive_one (2171-2198): pins a candidate across its own inbox-
+  empty check and drive_tree call, released on every branch. Read-only.
+  Same replacement, same chain as drive_walk_list/roots (all reached only
+  through lmx_msg_drive's own require_owner+!holding_any guard).
+
+lmx_msg_inbox_n (2269/2272): pins the looked-up Message while reading its
+  inbox count (itself a MAIL-only, Y-owned count). Read-only. Same
+  replacement.
+
+lmx_msg_send_cap (2723-2735): pins destn and src, identical shape to
+  lmx_msg_send. Same replacement and same designed-but-not-yet-coded
+  redirect-and-refuse behaviour noted under send above.
+
+--- Readers of slots/n (3 functions)
+
+lmx_msg_create_prepare (lm1, appends: slot\alloc_next: rt\slots at 1175,
+  rt\slots: slot at 1176, rt\n: rt\n + 1 at 1177-ish): the creating
+  Message's own lane, or the host bootstrapping R0 (S4's already-ruled
+  guard on this function). Replacement: spec 19.28's own phrase, "the
+  slot list served only the L1 delete loop and its address lookup and
+  goes without replacement" (Lingvamyxa_spec.txt:11635, verified
+  directly) -- once refs goes, create_prepare's own append to this list
+  has nothing left to serve, since runtime_delete (below) is the list's
+  only other reader and it goes with the list.
+
+lmx_msg_endp_try_retire (exec.c, unlinks: walks rt\slots/\alloc_next to
+  remove the freed slot, decrements rt\n at 1203-1218): whichever lane
+  drops the Message's last reference today. Once refs itself is gone,
+  this function's own unlink of the freed slot from the list has no
+  list left to unlink from -- goes with refs, not separately.
+
+lmx_msg_runtime_delete (lm1, walks and frees: 1007-1037, "the L1 delete
+  loop" of spec 19.28's own phrase): the host, at teardown, the one
+  reader of the full list for its own final free pass. Replacement:
+  spec 19.28 says this walk itself goes without replacement -- once
+  every Message's storage settles into its parent's arena at close
+  (5.6's own ruling) rather than living in a runtime-wide list waiting
+  for a final sweep, runtime_delete's own teardown reaches every live
+  Message through the family tree from R0 down (the same tree drive_
+  walk_roots already walks), with nothing left over for a separate
+  slots-list pass to catch -- this is exactly what "the design doc's
+  first wording ('runtime_delete walks R0's tree') contradicted 5.1"
+  and was corrected to "there is no walk at deletion, since the close is
+  R0's own closing end-turn" (LOCK_REMOVAL_DESIGN.txt:1512-1513, read
+  directly).
+
+--- Contradiction check
+
+None of the 24 sites needs a lock, wait, signal or a count as its
+replacement -- every one resolves to "storage persists in the parent's
+arena, so the pin/list entry was guarding a premature free that no
+longer happens," except admit_one/recv's own writes, which are already
+under the per-Message mailbox monitor the model keeps regardless of
+S6-2. The one item that is new work, not a contradiction: send/send_
+graph/send_owned/send_cap's own redirect-to-the-parent's-mailbox-and-
+refuse behaviour is designed (5.6, this document's own citation above)
+but not yet coded at 7b3a8668 -- it needs its own red-first check per
+the design doc's own words, quoted above, not a lock.
+
+--- Falsifier
+Every site's file:line above re-checked directly against 7b3a8668 by
+grep for lmx_msg_endp_retain(/lmx_msg_endp_release( (lmx_message_exec.c,
+lmx_message.lm1) and for rt\slots/rt\n/\alloc_next (PowerShell regex,
+word-boundary guarded -- a bare Bash grep on a backslash field pattern
+silently under-matches here, per e9's own S6_2_GATE_IMPACT.txt method
+note, confirmed independently this pass when a first attempt at the
+rt\n pattern over-matched instead on "...Runtime rt" and "!= rt" without
+a boundary check, caught by inspecting the actual matched lines before
+trusting the count). The three spec citations (19.29.7 "there is no
+count of holders" at 12909, 19.28 "the slot list served only the L1
+delete loop" at 11635, 19.29.6 "reclaimed, arena and slot" at 12755)
+verified directly against origin/main's Lingvamyxa_spec.txt, matching
+e9's own S6_2_GATE_IMPACT.txt citations exactly.
