@@ -7919,3 +7919,18 @@ explain the count, which the row check does not count). With the
 probe's three legs above, the S6-2 acceptance is measured in full on
 2d8f2b6a: red 163/36, green 0/0 plus six gates, falsifier 0 to 1. The
 landing launches on the lead's five lines naming 2d8f2b6a.
+The lead at 2d8f2b6a, his own readings: run_port_message plain GREEN,
+run_l2trans GREEN ("l2trans gen2 ok", the check that proves the
+wrapper re-point kept what tests/l2_and_foreign_call_own_local.lm2
+pins, not only its signatures), probe -Part 2 on his measuring merge
+fa94d553 0/0 with the LmxMsgRuntime fields 0, S6-1 and S6-2 GREEN; the
+two fixture conversions carry from 51b73274 (family_release_17 60/0,
+orphan_mapped_17 19/0; 2d8f2b6a touched neither, by --name-only). Not
+carried by his rule (a green does not carry across a commit touching
+a file the gate compiles): scenario36, entry_turn, run_lmx -Suite
+Message and graph_abi, measured at 51b73274, are re-run at 2d8f2b6a
+as run_gates -L2MessageRoot (the landing's own switch, the row set
+and the count 30 the landing sees), then run_port_parser (in no row);
+five lines on those two; nothing pushed since 2d8f2b6a. Recorded as
+two readings, not one: the coordinator's six gates on the measuring
+merge with the acceptance base, the lead's run_gates on the stage tip.
