@@ -533,3 +533,21 @@ audit traces throughout); the fifth (composite_glyphs) is unchanged,
 its own pre-existing failure sitting upstream of where this fix could
 reach it -- consistent with this audit's own repeated finding that a
 masking failure hides what's underneath until removed.
+
+--- Fix: every remaining `@ xslot[0]` site in mixa_app_win32.lm2
+
+Swept the whole file (`grep -n "@ [a-zA-Z_][a-zA-Z0-9_]*\[" mixa_manager
+/mixa_app_win32.lm2`) for the same shape :463 and :510 already showed.
+Exactly one remained: :510, `mixa_app_entry_to_text(out, @ tslot[0])`
+inside mixa_app_entry_create -- tslot is `[]: (@: char) tslot 1`, the
+same size-1 own-array shape as dslot/lslot, and mixa_app_entry_to_text's
+own signature (`@@: char text_out`) matches tslot's own bare-name
+decay exactly, the same adapter :463's own fix already established.
+Changed to `mixa_app_entry_to_text(out, tslot)`.
+
+Before: UNEXPECTED_FAILURE at :510:37 (only remaining site after the
+prior commit's :463 fix). After: PASS -- full translation, build, and
+run; L2 trace byte-identical to the oracle's own 58-check trace.
+Falsifier met: the verdict names no `@ ` on an own-array element
+anywhere (grep confirms zero remaining occurrences of the shape in the
+file).
