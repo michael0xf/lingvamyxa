@@ -2022,6 +2022,15 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           unlink removes it from the chain, but the cell keeps naming its owner) or carries the owner in a cell of
           its own. Recorded here before the code chooses, because it changes the mechanism the coordinator
           approved: the sender's handle is the record, and the record must be able to say who owns it now.
+          RULED (the coordinator, on this finding): parent_msg is the owner cell -- no second cell. On the settle
+          path child_unlink clears only the chain links (the first_child/next_sibling place), never parent_msg, so
+          a RELEASED record names the parent whose storage it is now part of, and each upward settle rewrites it to
+          the new owner under the record's own mailbox monitor, which is the monitor the admission takes, so that
+          read is ordered without any other synchronization. State RELEASED plus parent_msg is one relation --
+          "whose storage am I part of" -- and not a second meaning of the field: the live-family readers
+          (parent_gone, poll_mark, live_query) run on running Messages and never meet a RELEASED record on a chain.
+          Any site that reads parent_msg = 0 as "released" converts to reading the state, and those sites are named
+          in the stage's five lines rather than left to the diff.
       (2) Who frees them and when, corrected by the coordinator before any code and checked against the text: a
           parent's own close does NOT free its settled children's records and mailboxes. They are settled upward
           with the rest of its storage, recursively -- storage_move_all carries them and each mailbox's owner cell
