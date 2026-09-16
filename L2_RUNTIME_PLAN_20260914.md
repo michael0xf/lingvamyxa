@@ -8435,3 +8435,22 @@ six mixa_manager files with the nine lmx_msg_path_storage occurrences
 removed (8 insertions, 9 deletions), not run; the lead merges it into
 the stage with the module's deletion; sonnet/mixa-module-list holds
 for the merge to main after the landing.
+The lead's section on the postman footing: d6/lock-removal 3a3d252a
+(+174/-11; rulings five to eight verified by phrase count; LmxMsg.index,
+lmx_msg_get_address walking the parent links to R0, lmx_msg_send_to
+with the sender keeping the address and checking nothing, each holder
+deciding alone (equal: admit under its own monitor; own address a
+prefix: down to the child whose index follows; else up; no such child
+or nothing above R0: KIND_REJECTED on that hop's lane); the three
+earlier mechanisms marked history; the code order: the index field
+and get_address, send_to and the envelope with the destination
+address alone, the postman step with the refusal, the arrays and the
+module with its 33 support lines across 27 consumer runners, the
+fixtures). His claim that b5's branch misses a seventh mixa file
+(run_mixa_backend_win32_l2_parity.ps1:213) checked by the coordinator
+on every pushed tree: 0 occurrences at 7b3a8668, main, the stage and
+both of b5's branches; git grep at 7b3a8668 lists exactly the six
+files; the name entered that file at ab8a95fb and left at e93bc49d
+(ONE ROOT 2/3): his reading came from a tree older than ONE ROOT (the
+older-tree trap he named on his own citation earlier). b5's branch is
+complete at six.
