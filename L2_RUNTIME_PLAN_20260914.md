@@ -8454,3 +8454,19 @@ files; the name entered that file at ab8a95fb and left at e93bc49d
 (ONE ROOT 2/3): his reading came from a tree older than ONE ROOT (the
 older-tree trap he named on his own citation earlier). b5's branch is
 complete at six.
+
+MIKHAIL, 2026-09-16, verbatim (ninth line): в общем смотри, вот этот алгоритм мы будем потом переписывать на Messge: C:\Nyasha_Planet\lingvamyxa\include_languages\com.mtk.map\com\mtk\map\ Так как пока это сложно -- оставьте пока getAddress и второй описнный механизм доставки, но сделайте его дополнением к почтовому сервису ссылка на который передаётся от root. Так как алгоритм выше вы вряд ли сразу легко перепишите на event-driven Entered in spec
+19.29.7 and the model. RULED for S6-2's code: the send API lives on
+the mail service, whose reference every Message receives from the
+root at creation (R0 fills the role today; rt\root\addr names it);
+lmx_msg_get_address and the hop-by-hop delivery (the letter to the
+parent, each holder deciding by comparing addresses, KIND_REJECTED
+where the chain ends) are the service's delivery mechanism today, an
+addition to the service, not a replacement; no sorted list is built;
+the future replacement is the map algorithm of
+include_languages/com.mtk.map (67 Java files: Array, HTable,
+HashArray, IntTable, Cursor and kin) rewritten onto Message, a later
+stage. So the lead's section keeps its mechanism and adds one
+sentence: send_to is the service's operation, reached through the
+reference from root, and the postman chain is how the service
+delivers today.
