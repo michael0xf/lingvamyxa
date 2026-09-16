@@ -9428,3 +9428,21 @@ translates with the call whole; unit_text_capacity_over (forty, about 1500
 bytes) fails at 8:5 with that message.  Both were red before the patch
 (generic fallback).  gcc warnings identical to the unpatched build (18, same
 texts).  run_l2trans and the chain wait for the S6-2 landing chain to finish.
+
+S6-2 LAUNCHED (recorded 09:44): the coordinator's word at 09:41 after both
+acceptance reports; the engineer's check mode at 09:44:07 "files: M 58, A 5,
+D 14" / "check only: allowlist matched every path; acceptance base 96a754e0;
+nothing merged, nothing run", exit 0; launch 09:44:16 "from land-s6-2
+720db0be; MEAS absent; outer timeout 21600 s": land_s6_2.sh 7b3a8668
+claude-0c/archive-timeout-3 3d4eb0be 29 "S6-2: refs and the runtime slot
+registry are gone; R0 is the mail service; a Message's address is its index
+at its parent".  Steps under their own bounds: self_build 600 s, gates 1200 s
+(29 of 29), port_message plain and -LaneCheck 300 s each, l2trans 900 s,
+port_parser 900 s, mixa 180 s, ingress 180 s, scenario36 600 s, lmx_cancel
+180 s; the push only if every step is green and integration is still
+7b3a8668.  Tags: no script creates selfbuild tags (git grep over *.ps1 and
+*.sh at 3d4eb0be finds none); S6-1 carried annotated selfbuild/e6b94f04 (the
+merge) and selfbuild/7b3a8668 (SELF-BUILD OK); the engineer tags the pushed
+merge and the pushed HEAD (once if they are the same commit), after checking
+the self_build marker line.  Status file for Mikhail: last_step_claude.txt
+in the root (main e7ab014b), refreshed at each landing.
