@@ -9033,3 +9033,36 @@ line 103 and goes with step 5.  The six gates were not run on this tip; they
 run on the tip the lead names as building.  The script is the coordinator's
 measure_tip.sh (merge, pin, probe, six gates each after a pin re-install,
 falsifier, row check), every step under a timeout.
+
+S6-2 STAGE, lead's report 2026-09-16 08:29 (recorded as received):
+(1) CORRECTION by the lead: b9a148f2 and 1763827c were called GREEN on
+run_port_message only; nothing else in the chain ran on them, so the
+drain ruling's cost in the L1 model selftests was not measured until
+step 5's chain.  (2) Step 5 is committed locally as 3e1cec49 (not
+pushed): b5's 18f5701d merged (all six files conflicted with dfc10d08's
+slots removal; resolution +8 -9, the branch's own size); 7 module paths
+deleted; 33 support lines across 27 runners (the coordinator's earlier
+inventory read 34 lines across 28 files; the difference is measured on
+the tip by a tree grep for lmx_msg_path_storage, expected 0 files);
+run_gates.ps1 now has 28 literal rows, so a landing with
+-L2MessageRoot reports 29/29; 29 fixture calls moved onto
+lmx_msg_get_address; one addition: handoff mints a new index at the new
+parent (spec 19.29.7: when a Message changes parent its address
+changes), the handoff case asserting [1,1,1] -> [1,2,1].  The lead's
+probe -Part 2 on its measuring merge 37a0ccf3 (3e1cec49 + 96a754e0):
+refs=0 runtime_lists=0, S6-2 GREEN; falsifier refs=1 RED; restored.
+(3) The full chain on 3e1cec49 is RED at scenario36: verbatim
+"lmx_model_scenario36_selftest.exe timed out after 120 seconds", stdout
+ending "FAIL publication commits A and admits P's input in FIFO order"
+/ "reading: A's reply in P's mailbox, published by A's end-turn after
+its collection".  The lead's reading: P's end_turn (not R0) only
+pushes under the drain ruling, so A's inbox is still 0 at the check
+(lmx_model_scenario36_selftest.lm1:326) and the yield loop at :338
+never runs R0's round -- the ruled cost, the helper round before each
+affected read (YIELD_UNTIL_R0 / r0_round; pump where an INGRESS must
+stay pending) not yet applied in the L1 selftests.  (4) The lead's plan:
+apply the ruled helper rounds; each gate on its own until green; then
+the chain cold; then the push and the five lines with the hash.  The
+coordinator asked the lead to push 3e1cec49 at once, marked not
+building, so the engineer can widen land_s6_2.sh's allowlist and dry-run
+to 0 outside before the final tip arrives.
