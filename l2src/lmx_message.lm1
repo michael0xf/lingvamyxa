@@ -14,6 +14,7 @@ prototype:
     fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
     fn: lmx_msg_root_release (@: LmxMsg m; @: void p) int
     fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
+    fn: lmx_msg_drain_settled (@: LmxMsgRuntime rt; @: LmxMsg owner) int
     fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
     fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     fn: lmx_msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
@@ -490,10 +491,9 @@ sub: lmx_msg_copy_free (@: LmxMsgCopy node)
             lmx_msg_delivery_dispose(node\delivered)
             node\delivered: 0
         ---
-        if: node\dest_msg != 0
-            c.lmx_msg_endp_release(node\dest_msg)
-            node\dest_msg: 0
-        ---
+        # S6-2: the carried destination is a handle, not a hold -- nothing to
+        # release, because nothing was counted when it was taken.
+        node\dest_msg: 0
         c.free((cast: (@: void) node))
         node: next
     ---
@@ -522,16 +522,9 @@ fn: lmx_msg_copy_dup (const: @(LmxMsgCopy src)) @: LmxMsgCopy
     if: src\n != 0U && n\bytes = 0
         c.free((cast: (@: void) n))
         return: 0
-    if: src\dest_msg != 0
-        if: c.lmx_msg_endp_retain(src\dest_msg) = 0
-            if: n\bytes != 0
-                c.free((cast: (@: void) n\bytes))
-            ---
-            c.free((cast: (@: void) n))
-            return: 0
-        ---
-        n\dest_msg: src\dest_msg
-    ---
+    # S6-2: the copy carries the same handle. No count is taken, so a duplication
+    # can no longer fail for want of one.
+    n\dest_msg: src\dest_msg
 return: n
 
 sub: lmx_msg_q_push (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @: LmxMsgCopy node)
@@ -1833,7 +1826,77 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         lmx_msg_request_children_close(rt, who)
     ---
     lmx_msg_arena_collect(m)
+    # S6-2: the admission pump runs first, so a late send through a settled
+    # capability is sitting in that mailbox; then this Message answers, in its own
+    # round, for the records it owns; then the second pump carries those refusals to
+    # their senders. The order is forced, not stylistic: before the first pump the
+    # settled mailbox is still empty, and after the last one the answers are posted.
+    lmx_msg_pump(rt)
+    lmx_msg_drain_settled(rt, m)
 return: lmx_msg_pump(rt)
+
+# S6-2, SPEC 19.29.7: a capability is the target's mailbox handle, and a closing
+# Message's mailbox settles into its parent with the rest of its storage. So a send
+# arriving through a handle whose target has settled is NOT a silent drop: the
+# handle was valid, and the sender is owed a status. Modelled on post_dead, which
+# is the same shape of unsolicited notice. Its caller is the OWNER's round
+# (drain_settled below), which holds no monitor when it calls: the mailbox take
+# there locks and unlocks that record's mailbox before this takes R0's, so the two
+# are sequential and never nested.
+fn: lmx_msg_post_rejected (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
+    @: LmxMsgCopy node
+    @: LmxMsg root
+    if: rt = 0 || to = 0U || to = from
+        return: c.LMX_MSG_OK
+    if: lmx_msg_self_or_find(rt, to) = 0
+        return: c.LMX_MSG_GONE
+    ---
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\from: from
+    node\to: to
+    node\kind: c.LMX_MSG_KIND_REJECTED
+    node\id: correlation
+    node\correlation: correlation
+    node\number: (cast: (int) from)
+    root: lmx_msg_ingress_root(rt)
+    c.lmx_msg_mail_lock(root)
+    lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, node)
+    c.lmx_msg_mail_unlock(root)
+return: c.LMX_MSG_OK
+
+# S6-2, SPEC 19.29.7 ("lands in a mailbox the parent owns and is refused there, on
+# the parent's lane"): the refusal is the OWNER's act in its own round, not the
+# admitting lane's. The owner walks the records it now owns -- its settled list
+# enumerates them, so nobody reads parent_msg from a foreign lane -- drains each
+# mailbox and answers every sender. One monitor at a time: inbox_take locks and
+# unlocks that record's mailbox, then post_rejected takes R0's on its own.
+# A refusal is never itself refused: a REJECTED envelope found here is dropped.
+fn: lmx_msg_drain_settled (@: LmxMsgRuntime rt; @: LmxMsg owner) int
+    @: LmxMsg s
+    @: LmxMsgCopy chain
+    @: LmxMsgCopy n
+    @: LmxMsgCopy nxt
+    if: rt = 0 || owner = 0
+        return: c.LMX_MSG_OK
+    s: owner\settled
+    while: s != 0
+        chain: 0
+        c.lmx_msg_mail_inbox_take(s, @ chain)
+        n: chain
+        while: n != 0
+            nxt: n\next
+            n\next: 0
+            if: n\kind != c.LMX_MSG_KIND_REJECTED
+                lmx_msg_post_rejected(rt, s\addr, n\from, n\correlation)
+            ---
+            lmx_msg_copy_free(n)
+            n: nxt
+        ---
+        s: s\settled_next
+    ---
+return: c.LMX_MSG_OK
 
 fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     @: LmxMsg dest
@@ -1851,7 +1914,19 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_GONE
     ---
-    if: dest = 0 || dest\state = c.LMX_MSG_STATE_DEAD || dest\state = c.LMX_MSG_STATE_STOPPED || dest\state = c.LMX_MSG_STATE_RELEASED
+    # S6-2, SPEC 19.29.7: a settled destination is no longer GONE. Its mailbox
+    # settled into its owner with the rest of its storage, so the envelope is
+    # admitted into it exactly as into any mailbox, under that mailbox's own
+    # monitor; the refusal is the owner's act in its own round (drain_settled).
+    # None of the live-destination bookkeeping applies -- no state change, no ready,
+    # no done-id, no retain -- because no turn will ever run for this record again.
+    if: dest != 0 && dest\state = c.LMX_MSG_STATE_RELEASED
+        c.lmx_msg_mail_lock(dest)
+        lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, node)
+        c.lmx_msg_mail_unlock(dest)
+        return: c.LMX_MSG_OK
+    ---
+    if: dest = 0 || dest\state = c.LMX_MSG_STATE_DEAD || dest\state = c.LMX_MSG_STATE_STOPPED
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_GONE
     if: dest\state = c.LMX_MSG_STATE_INACTIVE && dest\committed = 0
@@ -2761,10 +2836,12 @@ fn: lmx_msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; con
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_INVALID
     ---
-    if: c.lmx_msg_endp_retain(dest) = 0
-        lmx_msg_copy_free(node)
-        return: c.LMX_MSG_NOMEM
-    ---
+    # S6-2, SPEC 19.29.7 ("there is no count of holders"): a capability is the
+    # target's mailbox handle, and holding one is not counted. The retain that used
+    # to gate this staging refused every send to a SETTLED target -- endp_retain
+    # returns 0 below refs 1, and a settled record's refs are already 0 -- so a valid
+    # handle was refused by the count before the mechanism could answer it. Measured:
+    # the planted red failed with send_cap=NOMEM, nothing staged at all.
     node\dest_msg: dest
     if: c.lmx_msg_endp_retain(src) = 0
         lmx_msg_copy_free(node)

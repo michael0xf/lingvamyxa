@@ -294,7 +294,7 @@ if ($endBody -notmatch 'c\.lmx_msg_after_outbox_xfer\(') { throw 'msg_end_turn d
 # 11551 -- and under no runtime-wide lock. Each site takes that monitor and
 # releases it in its own body. Falsified by dropping one unlock line from any of
 # them: the counts stop matching and this throws.
-foreach ($u in @('msg_host_drain', 'msg_pump', 'msg_post_dead', 'msg_end_turn', 'msg_runtime_delete')) {
+foreach ($u in @('msg_host_drain', 'msg_pump', 'msg_post_dead', 'msg_post_rejected', 'msg_end_turn', 'msg_runtime_delete')) {
     $b = MethodBody $u
     $takes = ([regex]::Matches($b, 'c\.lmx_msg_mail_lock\(')).Count
     $frees = ([regex]::Matches($b, 'c\.lmx_msg_mail_unlock\(')).Count

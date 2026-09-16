@@ -979,11 +979,38 @@ fn: main () int
     # The send goes through the handle kept from before the rollback. Its own
     # return is not the refusal: staging succeeds and the refusal comes back as a
     # status, which is why this reads the sender's inbox rather than st.
-    st: lmx_msg_send_cap(rrt3, rp3, held3, env)
-    st: lmx_msg_end_turn(rrt3, rp3, 1)
+    int: st_cap 0
+    int: st_end 0
+    # S6-2: the rolled-back child's storage is its parent's now, and the parent's
+    # settled list is what enumerates it. Asserted here in its own right, before the
+    # refusal is asked for: if this fails, the settle never happened; if it passes
+    # and the refusal still does not arrive, the fault is in the owner's round or in
+    # the delivery. One red that cannot say which of the two it is would be useless.
+    @: LmxMsg pm3
+    @: LmxMsg sx3
+    int: on_settled3 0
+    pm3: lmx_msg_find(rrt3, rp3)
+    if: pm3 != 0
+        sx3: pm3\settled
+        while: sx3 != 0
+            if: sx3\addr = rc3 && sx3\state = c.LMX_MSG_STATE_RELEASED
+                on_settled3: 1
+            ---
+            sx3: sx3\settled_next
+        ---
+    ---
+    if: on_settled3 = 0
+        c.printf("the rolled-back child is not on its parent's settled list\n")
+        fail: fail + 1
+    ---
+    st_cap: lmx_msg_send_cap(rrt3, rp3, held3, env)
+    st_end: lmx_msg_end_turn(rrt3, rp3, 1)
     st: lmx_msg_recv(rrt3, rp3, got)
     if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_REJECTED
-        c.printf("no refusal status for a send through a settled capability\n")
+        # A red that does not say what it measured cannot be diagnosed: the three
+        # statuses are captured separately so this names the step that failed
+        # (staging, the round, or the delivery) instead of only its consequence.
+        c.printf("no refusal status for a send through a settled capability: send_cap=%d end_turn=%d recv=%d kind=%d\n", st_cap, st_end, st, got\kind)
         fail: fail + 1
     else:
         lmx_msg_env_release(got)
