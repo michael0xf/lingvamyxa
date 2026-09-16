@@ -6598,3 +6598,29 @@ reentrancy), A (the arena stages). Now: e9's cold gate record on
 7b3a8668, then the git-freeze window for the archive-hang isolation;
 b5's S6-2 pre-read at 7b3a8668; the lead's S6-2 section on 16335e9b's
 gate list and the pre-read.
+S6-1 LANDED, the lead's five lines (2026-09-15): union base on the merge
+e6b94f04, each line the runner's own: gates GREEN 31 of 31 in 506 s;
+run_port_message parity PASS 44 s and -LaneCheck parity PASS 43 s, 103
+methods, no LANE FAIL line; l2trans gen2 ok 276 s; run_port_parser ok
+272 s; mixa backend table ok; mixa ingress fail_keep_runtime ok;
+lmx_cancel selected=Cancel ok; self-build PASS 8 of 8 in 7 s, tag
+selfbuild/e6b94f04, landing branch d6/lock-s6-landing-e6b94f04.
+scenario36 on the landed tree, run separately (EXTRA knows only
+lmx_cancel): core tests PASS, ten fixtures, two agreeing runs, the
+production runtime: scenario36 51/0, delivery 27/0, checks_19_29_6
+32/0, liveness_33 76/0, family_close_32 26/0, family_release_17 58/0,
+orphan_mapped_17 19/0, root_ingress_5b 11/0, root_record_5e 22/0,
+turn_arena_o1 24/0. family_handoff (the fixture that turned the first
+attempt red): five cold runs, every one "O2 family handoff checks=67
+failures=0 watched_frees=4", plus PASS inside the local gates and
+inside the landing's gates. The acceptance's three legs: red 695d54fc,
+green baa8ec23 (the probe 0/0/0/0), falsifier one hold put back giving
+exec_lock_calls=2 and S6-1 RED. The design's S6-1 section is
+re-cited by phrase (219ad031; 9fa7952f records the landing).
+CITATION RULE, two additions from the lead's pass (2026-09-15): the
+quoted phrase must fit one physical line of the hard-wrapped spec
+("nothing else steps it" spans two lines and cannot be grepped), and
+it must be checked unique at the cited commit ("requests its own
+orderly close" occurs three times, 11528, 13180 and 13237: cite the
+section and add a second phrase from the same sentence). The line
+number stays as "today" only.
