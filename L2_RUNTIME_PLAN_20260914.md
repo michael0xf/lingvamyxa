@@ -6993,3 +6993,16 @@ none over two minutes. The landing's rule for them is "same verdict"
 (the lesson from ONE ROOT), and their red is a mixa_manager finding:
 b5 next inventories the shared lib's module list against the modules
 existing at 7b3a8668 and the stage that deleted each missing one.
+e9: land_s6_2.sh on claude-0c/land-s6-2 e365b565 (l2src/land_s6_2.sh,
+190 lines, bash -n clean), from land_base3.sh 42dfeaec (sha256
+verified against the S6-1 run; its nine timeouts and marker regexes
+inherited; L= replaced by LAND_S6_2_LOGS, else TMPDIR); the probe on a
+measuring merge with 4189dea0 asserted three ways ("S6-2 GREEN", the
+literal "refs=0 runtime_lists=0", exit 0); lmx_cancel restored as a
+step (marker 'selected=Cancel ok', T_CANCEL=180) and scenario36
+explicit, since the union base never shrinks; the gate count
+parameter is 30 for S6-2 (port_slots' row deleted). Allowlist: 43
+paths from bb082d37's bullet, dry-run 0 unmatched; widens to the
+lead's 56 (005e3896's test-side bullet added, the six mixa files
+included), which the lead sends verbatim; not launched before the
+stage tip and the coordinator's word.
