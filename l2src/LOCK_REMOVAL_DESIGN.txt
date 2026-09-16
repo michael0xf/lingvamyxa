@@ -1962,7 +1962,89 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         list, acceptance and landing, right after S6-2 and before R0P) takes the scalar LmxMsgAddr -- 436 sites in
         l2src, including every create/bind/find/dispose/map signature in the header -- to Mikhail's one-field
         address. Mikhail is told it lands in two steps.
-      - THE MECHANISM, in the order the code takes it:
+      - THE SETTLED SHAPE (Mikhail's last lines plus a "да", spec ce5b5561 and then 9d6e07de; at ce5b5561 section
+        2's record carried LmxMsg *service, which I verified at 1, and the THIRTEENTH LINE removed it again -- it
+        is an LMX field, not a kernel field, as the bullet below records). This is the MAIN PATH and the footing
+        the code is written on; the string-address chain below is demoted, not withdrawn -- it becomes the
+        service's SECOND ENTRY. Sixth mechanism in three hours; the five earlier ones are kept below, each marked.
+        * THE SERVICE REFERENCE IS AN LMX FIELD, NOT A KERNEL FIELD, and this corrects what I wrote here twenty
+          minutes ago before it was pushed. I had it as LmxMsg.service, a record field beside running. Mikhail's
+          thirteenth line removed it from the kernel record (spec 9d6e07de; verified by me with a control, since
+          the falsifier asserts an ABSENCE: grep -c "LmxMsg \*service;" prints 0 while the same probe finds
+          "uint_fast8_t handoff_safe;" and "unsigned index;" at 1 each, so the zero is a real absence and not a
+          hollow one). The record is running, success, handoff_safe, root and index. Verbatim: "То есть почтовый
+          сервис это не дополнительное поле рядом c running, а поле уже LMX, а вот API надо сделать общим --
+          чтобы любой L3 Thread мог выступать в этой роли."
+          So the reference is a field of the Message's LMX -- its graph -- born with the Message, set from its
+          parent at creation, reassignable, never a global. The precedent is already in the tree and is cited
+          rather than invented: rt\root_record is "R0's policy record ... Structure data in R0's arena ... written
+          only on R0's lane" (lmx_message.h:215-221). The service reference is that same shape, one level down:
+          the Message's own Structure data in its own arena.
+          WHERE THE BOOTSTRAP C KEEPS THE MIRROR IS MINE TO DECIDE and is marked as such -- the C mirror of an LMX
+          field, NOT a kernel field, the same status the plan gives its scaffolding fields. It is recorded here so
+          that a later reader converting the kernel record does not mistake the mirror for a fifth kernel field,
+          which is precisely the confusion the thirteenth line was correcting.
+        * THE COMMON MAIL API IS WRITTEN NOW, AS SCAFFOLDING (Mikhail's fourteenth line, spec b7165191; verified:
+          grep -c "delegates to it" prints 1, with "The settled shape" at 1 as the control). "the common mail API
+          and getAddress are made at once, as scaffolding, because rewriting them later would be expensive, and
+          today's body for any L3 Thread used as the service is a stub: it looks at its own mail-service field and
+          delegates to it". Verbatim: "общее почтовое API и getAddress это пока просто заготовки, но надо их
+          сделать сразу потому что потом переписывать будет дорого. Сейчас должна быть заглушка -- L3 Thread в
+          роли почтового сервиса (если его используют так) просто смотрит свое поле почтового сервиса и делегирует
+          ему."
+          THE SHAPE IN CODE: every L3 Thread implements the same five operations -- register, unregister, send by
+          handle, send by string address, get_address. The DEFAULT body is the stub: read this Message's own
+          mail-service field and delegate the call to it. R0's body is the real one today: the live set, the
+          membership check, and the admission under the target's own monitor or KIND_REJECTED to the sender. A
+          call on any Message therefore reaches R0 by delegation along the service fields, and a later stage
+          replaces bodies without touching a single caller.
+          WHY THIS IS WORTH WRITING BEFORE IT IS NEEDED, which is not this project's usual posture and is Mikhail's
+          own reason rather than mine: the callers are what would be expensive to rewrite, not the bodies. Fixing
+          the interface now costs one indirection per call and buys a body swap later with no caller churn. I note
+          it because I argued the opposite way about the route two hours ago and was rightly overruled -- the
+          difference is that the route was an optimization nobody asked for, and this is an interface boundary
+          placed before the code hardens around its absence.
+        * A LETTER CARRIES NO ADDRESS FIELD. The sender hands the service the target's MEMORY ADDRESS -- the
+          handle it already holds, which is send_cap's dest exactly as today -- and the service admits the letter
+          into that target's inbox under that mailbox's own monitor, or refuses with KIND_REJECTED to the sender.
+          Verbatim: "поле адреса в письме нет, адрес вычисляется динамически по индексам как в том алгоритме --
+          есть getAddress, а доставку сейчас по адресу памяти делает почтовый сервис, только ссылка на него не
+          глобальная где-то лежит, а приходит от родителя".
+        * WHAT MAKES DELIVERY BY MEMORY ADDRESS SAFE WITH NO COUNT OF HOLDERS, which is the whole reason this
+          shape can exist in a stage whose purpose is deleting refs: the service keeps its own set of live
+          records -- its own data on its own lane -- with registration at create and removal at release, as R0's
+          own acts where the act already runs on R0's lane and otherwise as letters to R0. Because those letters
+          are admissions under R0's monitor in causal order, a registration precedes any send that could have
+          learned the handle. Membership answers in bounded time. An unknown address is REFUSED, NEVER
+          DEREFERENCED -- and that sentence is the replacement for refs: the question refs answered was "may this
+          pointer still be dereferenced", answered by a counter on the record written from every lane that held
+          one; the live set answers the same question with one owner's data on one lane, no per-record counter and
+          no cross-lane write.
+        * PROVENANCE, stated exactly because it slipped twice tonight in this file: the live set is the
+          COORDINATOR'S formulation, which Mikhail ratified with "да" -- the spec says so in those terms ("and, to
+          the coordinator's statement of the live set, 'да'"). The sorted array with binary search is his proposal
+          for "bounded time" now, with com.mtk.map on Message later; it is not Mikhail's own wording and is not
+          cited as such.
+        * THE SORTED LIST IS NOT THE ONE RULING FIVE FORBADE, and the distinction is the domain rather than a
+          reversal. Ruling five removed a sorted list of STRING ADDRESSES used as a RESOLUTION step -- "every send
+          resolves there" -- because delivery needs no resolution. This is a set of LIVE RECORD POINTERS used as a
+          SAFETY CHECK before a dereference. Different contents, different question, different moment. A reader
+          who sees only "sorted list is back" will mis-read the history, which is why this bullet exists.
+        * WHERE IT LIVES IN TODAY'S CODE: the transport under R0's monitor, which is already the service's seed --
+          the pump's drain resolves the handle against the live set instead of trusting it (lm1:1006, 1831, 2063
+          push under R0's monitor; the drain at 1936-1937; admit_one then admits under the destination's own
+          monitor). One monitor at a time, as before.
+        * WHAT STANDS FROM THE WORK ALREADY WRITTEN: refs and the runtime slot registry stay deleted (the live set
+          is R0's own data, not a runtime-wide locked list, which is the distinction S5 drew); release_slot frees
+          by the chain (ab2db782); LmxMsg.index and lmx_msg_get_address stay, since the address is computed
+          dynamically from the indices whenever a string address is needed; path, path_n, path_cap and the
+          path_storage module still go; b5's 18f5701d merges with them; the planted red is still the refusal's
+          falsifier, now going green by the service's refusal of an unregistered handle.
+        * CODE ORDER, as the coordinator gave it: the service field and the live set with registration and
+          removal; the send through the service with the check and the refusal; get_address and the chain as the
+          addition; the arrays and the module; the fixtures.
+      - THE STRING-ADDRESS CHAIN [DEMOTED TO THE SERVICE'S SECOND ENTRY by the settled shape above, not withdrawn:
+        send by string address is an addition to the service, not its main path], in the order the code takes it:
         * LmxMsg.index (unsigned): the record's index at its parent, written where assign_path writes the array's
           last element today, and rewritten on a parent change. path, path_n and path_cap go with the arrays.
         * lmx_msg_get_address: walk parent_msg up to R0, collecting indices, and return the address as a string of
