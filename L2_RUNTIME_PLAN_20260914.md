@@ -7074,3 +7074,20 @@ absent from all six lists, so nothing compiles or links it. A finding,
 not chased on that branch. Next for b5: add lmx_root_record to the
 lists, re-measure the seven, then diagnose the two own-module
 translation failures.
+e9: l2src/MEASURE_S6_2.md on claude-0c/land-s6-2 242b3e86 (157 lines,
+four bash blocks, 11 steps each with marker and timeout): the red leg
+measured on a detached 4189dea0 tree (refs=342 runtime_lists=36,
+S6-2 RED, exit 1; stop and re-derive if 342 differs); the green leg as
+expectations on fable/s6-2-measure = stage tip merged with 4189dea0
+(the "| refs=0 runtime_lists=0" line and "S6-2 GREEN" and exit 0,
+never the exit alone; then port_message plain and -LaneCheck, run_lmx
+-Suite Message, scenario36, the section's gates by name with
+run_gates.ps1's markers; the pin re-installed before each runner);
+port_slots' check is its absence (runner gone, module gone, grep -c
+port_slots run_gates.ps1 = 0; the chain then prints 30 of 30); the
+falsifier leg proven on the red tree (one line moved 342 to 343,
+numstat one added line, checkout restored 342). Coordinator's one
+change: the falsifier restores one original retain line from 7b3a8668
+at one site, not a comment, so what is put back is what the stage
+deleted (the probe counts either). The allowlist dry run over the
+pushed tip 6e2ea936 accepts all eight paths, 0 unmatched.
