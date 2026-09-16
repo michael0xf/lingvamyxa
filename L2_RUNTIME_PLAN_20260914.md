@@ -7571,3 +7571,9 @@ RULED: accepted; b5 writes the runner now (no landing script changes
 mid-S6-2; it joins the union base from the R0P landing on, e9 adds
 the step to that script); a change of an ExpectVerdict is a
 documented decision in the table's comment, never a silent edit.
+Stage branch d6/lock-s6-2 e8d78076: the executor selftest's remaining
+counter pins restated on the settled list (after 2e70fbd8's
+held-capability case); the lead's five lines with the gate's verdict
+and the two tripwires follow, then the window pins, the remaining
+refs sites, the header, the lm1 fixtures, the module and the runner
+lines, then the tip.
