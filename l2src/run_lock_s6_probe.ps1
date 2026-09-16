@@ -19,7 +19,9 @@
 #                    "->stopped", "->no_retire" or "->unbound_held" without "__atomic_".
 #   S6-2
 #   refs             lines naming "lmx_msg_endp_retain(", "lmx_msg_endp_release(", "lmx_msg_endp_refs(",
-#                    "->refs", "\refs" or "InterlockedCompareExchange" in the same files, plus a "refs;" field in
+#                    "->refs" or "\refs" in the same files (the base's two InterlockedCompareExchange loops on &m->refs
+#                    match "->refs"; the bare ICE needle was dropped 2026-09-16: it counted 178 selftest spin-cell
+#                    lines at the base, never a holder count), plus a "refs;" field in
 #                    the body of struct LmxMsg (lmx_message.h).
 #   runtime_lists    "slots;" and " n;" fields in the body of struct LmxMsgRuntime (lmx_message.h), plus lines
 #                    naming "->slots", "\slots", "->alloc_next" or "\alloc_next" in the same files.
