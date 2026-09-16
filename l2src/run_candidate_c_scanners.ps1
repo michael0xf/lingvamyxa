@@ -17,6 +17,28 @@ if((Get-FileHash $l1trans).Hash -ne $pin) {throw 'Stable compiler pin mismatch'}
 $run=Join-Path $repo ('build/codex/candidate_c_scanners/'+(Get-Date -Format 'yyyyMMdd_HHmmss_fff'))
 $sourceRoot=Join-Path $run 'source'
 New-Item -ItemType Directory -Path $sourceRoot -Force | Out-Null
+# One bound for the whole runner, not for one child of it. 2026-09-16: the archive
+# bound below fired at 120029 ms, taskkilled its child, wrote result=FAIL and threw --
+# and this runner still did not exit for 28 minutes, holding the gate chain with
+# nothing of its own alive. The bound covered the child; nothing covered the runner.
+# The watchdog is a detached process holding a HANDLE on this one, so it can never
+# kill a reused pid, and it exits by itself the moment this runner exits -- there is
+# no disarm, because the hang to be covered happens after the last finally can run.
+# Kill() terminates with exit code -1, and run_gates scores any nonzero code FAIL, so
+# a bounded kill records this gate red; an exit that merely happened could read green.
+function Start-RunnerBound([int]$Seconds) {
+    $watch='$p=[System.Diagnostics.Process]::GetProcessById('+$PID+');$null=$p.Handle;if(-not $p.WaitForExit('+($Seconds*1000)+')){$p.Kill()}'
+    Start-Process -FilePath 'powershell' -WindowStyle Hidden -PassThru -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',$watch)
+}
+# 600 s is not a round number picked for comfort: this gate finished in 22, 22 and 28
+# seconds in the three most recent complete chains (build/gates/20260915_212132,
+# _211217, _190756, whose whole 31-row chains spanned 455-493 s), so the bound is over
+# twenty times the measured run and cannot redden a healthy gate on a loaded machine --
+# while still ending a hang in ten minutes rather than the twenty-eight of 2026-09-16.
+# LMX_C_SCANNERS_BOUND_S exists so the tripwire can prove this bound fires without
+# waiting out the real one; unset, the gate keeps its own bound.
+$stepBoundSeconds=if($env:LMX_C_SCANNERS_BOUND_S){[int]$env:LMX_C_SCANNERS_BOUND_S}else{600}
+$null=Start-RunnerBound $stepBoundSeconds
 function Get-TreeRuntimeObjects {
     # A private scope: run_l2trans's variables ($out, $cflags, ...) stay inside.
     . (Join-Path $PSScriptRoot 'run_l2trans.ps1') -BuildOnly -OutputDirectory 'build/c_scanners_runtime' -TranslatorPath $l1trans
@@ -61,6 +83,13 @@ if(-not $archive.WaitForExit(120000)){
     # cmd /c: under EAP Stop, taskkill's stderr (a process already gone) would throw here instead.
     cmd /c "taskkill /PID $($archive.Id) /T /F >nul 2>&1"
     [ordered]@{result='FAIL';failure=$timeoutLine;archiveMs=$archiveMs;archiveStdout=$archiveOut;archiveStderr=$archiveErr} | ConvertTo-Json | Set-Content "$run/evidence.json" -Encoding utf8
+    # This is exactly where 2026-09-16's hold sat: the bound had fired, the child was
+    # killed, evidence said FAIL -- and the process was still alive 28 minutes later.
+    # Print the verdict text ourselves, because the error rendering may never reach the
+    # log if the exit is what hangs, then arm a short bound so this runner dies with a
+    # nonzero code within seconds of its own throw instead of holding the chain.
+    Write-Output $timeoutLine
+    $null=Start-RunnerBound 20
     throw ($timeoutLine+'; evidence '+$run)
 }
 $archive.WaitForExit()
