@@ -6979,3 +6979,17 @@ relay kind if no refusal kind exists. b5 prepares the six
 mixa_manager build-list edits on sonnet/s6-2-mixa-lists and the cold
 baselines of the thirteen runners those lists feed (S6_2_MIXA_BASELINE.txt);
 the lead merges the branch into the stage.
+b5: sonnet/s6-2-mixa-lists 4409805c off 7b3a8668: the six mixa_manager
+build-list edits (lmx_msg_slots removed, 9 deletions, nothing else),
+not run, for the lead to merge into d6/lock-s6-2; plus
+l2src/S6_2_MIXA_BASELINE.txt: the seven runners calling
+Add-L2RuntimeSupport measured cold at 7b3a8668 (unedited), all seven
+already off the pass line today and none because of lmx_msg_slots: 2
+UNEXPECTED_FAILURE in their own modules' translation, 2 THROW on the
+shared lib's existing lmx_msg_sched_ready failure (a module of the
+deleted sequential mapping, S5/M), 1 THROW on a missing local build
+artifact from an earlier ticket, 2 EXPECTED_CORE_BARRIER (documented);
+none over two minutes. The landing's rule for them is "same verdict"
+(the lesson from ONE ROOT), and their red is a mixa_manager finding:
+b5 next inventories the shared lib's module list against the modules
+existing at 7b3a8668 and the stage that deleted each missing one.
