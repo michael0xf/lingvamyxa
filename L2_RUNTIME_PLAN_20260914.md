@@ -8175,3 +8175,22 @@ the tripwire injects a second row to end the chain in both runs). The
 30-row marker listing at 7b3a8668 does not carry (27 runners changed
 since); the full chain runs at the branch tip for the listing. The
 branch waits for the lead's reworked stage to merge into.
+
+MIKHAIL, 2026-09-16, on the coordinator's answer to "how do you solve the
+freed-memory problem" (verbatim): "родитель отвечает отправителю отказом со статусом (kind REJECTED) из своего списк" -- а если родителя уже нет? And: я же вам писал что всё надо свести к Message. Какая вообще проблема не заводить специальный монитор, а завести почтовый сервис который будет хранить сортированный список адресов и давать за конечное время (только не перебором по одному) вхождение?!!!!  Тот же самый R0. Даже если запланирована потом миграция на какую-то другую моель полуения-отправки , она все равно будет в рамках MEssage
+Entered in spec 19.29.7 and the model. RULED from it, for the S6-2
+rework: the resolution of a send's target is a MAIL SERVICE, which is
+R0 itself (a Message): R0 keeps a sorted list of addresses as its own
+data on its own lane (a Message's own data, not a runtime-wide shared
+list, so no lock; registrations and removals reach it as letters at
+create and release, or as R0's own acts), answers membership in
+bounded time (a sorted array with binary search or an ordered map,
+never a scan), admits the letter into the target's inbox under the
+target's mailbox monitor when present, and refuses with a status
+(KIND_REJECTED) when the address is absent, which covers a target
+whose parent chain is already gone; no special monitor beyond each
+mailbox's; the parent-hop routing of the coordinator's earlier answer
+is withdrawn. Today's transport relay under R0's monitor is the seed
+of this service and grows the sorted list; at Y3 the queue goes and
+the service stays a Message. The lead's rewritten S6-2 section is
+written on this footing.

@@ -12906,7 +12906,15 @@ removed 2026-09-15 wording that kept a closed Message's mailbox alive in its
 parent for late senders: "У вас проблема без id найти Message?"); a closed
 Message's slot and arena are freed by the release chain as 19.29.6 says, a
 late send resolves the id and is refused with a status when the target is
-not found or closed, and there is no count of holders. The delivered storage must be independently
+not found or closed, and there is no count of holders. The resolution is a
+mail service, itself a Message, R0: it keeps a sorted list of addresses as
+its own data on its own lane and answers membership in bounded time, never
+by scanning one by one; every send resolves there and is refused with a
+status when the address is absent, whether the target or its whole parent
+chain is gone; a later migration to another send/receive model stays within
+Message (Mikhail, 2026-09-16, verbatim: "я же вам писал что всё надо свести к Message. Какая вообще проблема не заводить специальный монитор, а завести почтовый сервис который будет хранить сортированный список адресов и давать за конечное время (только не перебором по одному) вхождение?!!!!  Тот же самый R0. Даже если запланирована потом миграция на какую-то другую моель полуения-отправки , она все равно будет в рамках MEssage"; and on a parent
+already gone: ""родитель отвечает отправителю отказом со статусом (kind REJECTED) из своего списк" -- а если родителя уже нет?", answered by the service: an absent address is
+refused by the service, not by any parent). The delivered storage must be independently
 transferable: a running sender cannot also keep using it through mutable aliases.
 An explicit copy, merge, materialization or transport/codec contract may allocate
 fresh state; this is not a runtime choice to clone ordinary delivery. Activation preserves
