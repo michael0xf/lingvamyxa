@@ -9143,3 +9143,33 @@ cached-field read from rt\root\path_n to rt\root\live_n, and graph_abi's
 assertions on them are on the emitted text (the named field read reaching
 C as itself), so the coverage is kept; the host selftest's off-lane
 refusal moved from path_n/path_seg to get_address with the same -1.
+
+STAGE AD RESTATED, 2026-09-16 09:20 (coordinator, on b5's pre-read
+78bae3d8 and a read of the red tip): the plan's AD text was written before
+the settled shape and never restated after it.  (0) The "436 LmxMsgAddr
+sites" figure does not reproduce under any unit (629-656 occurrences,
+555-583 lines in l2src across 7b3a8668..3e1cec49; 216-600 for code-only
+subsets); it was recorded without its grep and is replaced by b5's
+per-unit counts (1763827c: .h 69, .lm1 67, .lm2 60, selftests and
+runners 357 lines).  (a) THE HANDLE IS THE PAIR: wherever a Message is
+named as a target, the signature carries the record pointer and its id;
+nothing resolves an id by scanning, so lmx_msg_find, find_tree,
+dest_from_src and self_or_find's find fallback are deleted.  Today (and
+at 7b3a8668, so pre-existing, not an S6-2 regression) every send derives
+the destination pointer by a depth-first scan of R0's whole tree on the
+sender's lane (dest_from_src: the sender's subtree, its parent, then
+find over R0's tree), which spec 19.29.7 excludes ("answers membership
+in bounded time, never by scanning one by one; every send resolves
+there") and which reads other Messages' family links across lanes.
+Baseline at 3e1cec49: lm1 and lm2 each self_or_find 37, find 3,
+dest_from_src 3, find_tree 3; exec.c self_or_find 15; exec_selftest.c
+find 102.  (b) LmxMsg.parent (the parent's id) is retired as a
+duplicate of parent_msg; from and reply_to become pairs so a reply is
+delivered by memory address, exec_from/exec_reply following.  (c) The
+cross-lane readers that remain (get_address's walk, handoff's cycle
+check) read atomic link and index cells, and R0 frees a released record
+only after a grace (every lane past a quiescent point since the unlink)
+-- the item recorded at the 3e1cec49 review.  b5's next ticket: the
+impact list for (a), every call classified HOLDS-POINTER or ID-ONLY with
+its lane, totals equal to the baseline.  AD's code starts after S6-2
+lands; its acceptance names the counts to 0 with a positive control.
