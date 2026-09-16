@@ -6509,3 +6509,10 @@ merge landed. Rule from it (coordinator): before every landing the
 lead runs locally the gates whose fixtures the stage's section names
 as touched, and e9's gate impact list is made for every stage (S6-2
 next), not only for M and S2.
+Ticket to e9 (the coordinator, 2026-09-15), doc-only: the gate impact
+list for S6-2, l2src/S6_2_GATE_IMPACT.txt on claude-0c/s6-2-gate-impact
+off baa8ec23: per gate, unaffected, asserting refs/retain/release/the
+slots API/rt\n (the line named), or pinning a numeric side effect
+(owned_frees, watched_frees, slot counts, check counts), and the
+fixtures reading handoff_ready right after a stop without a spin (the
+idiom S6-1's landing hit); counts at the top.
