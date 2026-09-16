@@ -8503,3 +8503,30 @@ records (registration at create, removal at release, R0's own acts on
 its lane or letters to it; membership in bounded time), refusing an
 unknown address rather than dereferencing it. Awaiting his yes or a
 correction; the lead is not moved until then.
+
+MIKHAIL, 2026-09-16, verbatim (twelfth line): "то есть "приходит от родителя" значит порождается вместе с Message как его переназначемое поле. 'Если вы имели в виду
+именно это --' -- да". THE SETTLED SHAPE for S6-2, entered in the
+spec (section 2 record: `LmxMsg *service`; 19.29.7) and the model: (1)
+the record carries `service`, the mail service reference, born with
+the Message, set from its parent at creation, reassignable, never a
+global (R0 fills the role today); (2) a letter carries no address
+field: the sender hands the service the target's memory address (the
+handle it holds); the service checks its own live set and admits the
+letter into the target's inbox under that mailbox's monitor, or
+refuses with KIND_REJECTED to the sender; (3) the live set is the
+service's own data on its own lane: registration at create and
+removal at release as R0's own acts where the act runs on R0's lane,
+else letters to R0 (admissions under R0's monitor, in causal order, so
+a registration precedes any send that could learn the handle);
+membership in bounded time (a sorted array of record addresses with
+binary search today; the com.mtk.map algorithm on Message later); (4)
+getAddress computes a.b.c.d dynamically from `index` up the parent
+links whenever a string address is needed; the hop-by-hop chain by
+string address is an addition to the service (a second entry, send by
+string address), not the main path; (5) refs and the runtime slot
+registry stay deleted (the live set is a Message's own data, not a
+runtime-wide locked list), release frees by the chain, path/path_n/
+path_cap and the path_storage module go, the planted red is the
+refusal's falsifier (the service's refusal). The lead's section is
+rewritten to this settled shape; the three earlier mechanisms remain
+history in it.

@@ -1056,6 +1056,10 @@ same day):
                                                 its last turn and nothing native uses its arena:
                                                 the arena may be attached (19.29.7, 19.29.8) */
         Lmx *root;                           /* the root of its graph; its arena is reached from it */
+        LmxMsg *service;                     /* the mail service, born with the Message and set from
+                                                its parent, reassignable, never a global (Mikhail,
+                                                2026-09-16); a send hands it the target's memory
+                                                address and it admits or refuses by its live set */
         unsigned index;                      /* its index at its parent: the whole of what the
                                                 hierarchical address a.b.c.d... adds at this level;
                                                 the full address is composed by walking the parent
@@ -12950,9 +12954,22 @@ The shape for now, until the map algorithm of include_languages/com.mtk.map
 Message: every Message receives from the root, at its creation, the reference
 to the mail service; getAddress and the hop-by-hop delivery below are an
 addition to that service, its delivery mechanism today, since the map
-algorithm is not easily rewritten as event-driven at once; the service, once
-it has the map, delivers directly by the memory address of the target, since
-addresses do not move (Mikhail, 2026-09-16, verbatim: "Почтовый сервис будет доставлять сразу по адресу в памяти так как адреса не двигаются"; and: "в общем смотри, вот этот алгоритм мы будем потом переписывать на Messge: C:\Nyasha_Planet\lingvamyxa\include_languages\com.mtk.map\com\mtk\map\ Так как пока это сложно -- оставьте пока getAddress и второй описнный механизм доставки, но сделайте его дополнением к почтовому сервису ссылка на который передаётся от root. Так как алгоритм выше вы вряд ли сразу легко перепишите на event-driven").
+algorithm is not easily rewritten as event-driven at once; the service delivers
+directly by the memory address of the target, since addresses do not move.
+The settled shape (Mikhail, 2026-09-16): a letter carries no address field;
+the sender hands the service the target's memory address, the handle it
+holds, and the service admits the letter into the target's inbox under that
+mailbox's monitor; getAddress computes a.b.c.d dynamically from the indices
+up the chain whenever a string address is needed; the hop-by-hop chain by
+string address is an addition to the service, not its main path; the
+service's reference is a reassignable field of the Message record, born with
+the Message and set from its parent, never a global; and the service keeps
+its own set of live records (registration at create and removal at release,
+its own acts on its own lane or letters to it, membership in bounded time),
+refusing an unknown address with a status rather than dereferencing it,
+which is what makes delivery by memory address safe with no count of
+holders (verbatim: "то есть поле адреса в письме нет, адрес вычисляется динамически по индексам как в том алгоритме -- есть getAddress, а доставку сейчас по адресу памяти делает почтовый сервис, только сслка на него не глобальная где-то лежит, а приходит от родителя"; "то есть "приходит от родителя" значит порождается вместе с Message как его переназначемое поле."; and, to the coordinator's
+statement of the live set, "да"). The earlier sentence (Mikhail, 2026-09-16, verbatim: "Почтовый сервис будет доставлять сразу по адресу в памяти так как адреса не двигаются"; and: "в общем смотри, вот этот алгоритм мы будем потом переписывать на Messge: C:\Nyasha_Planet\lingvamyxa\include_languages\com.mtk.map\com\mtk\map\ Так как пока это сложно -- оставьте пока getAddress и второй описнный механизм доставки, но сделайте его дополнением к почтовому сервису ссылка на который передаётся от root. Так как алгоритм выше вы вряд ли сразу легко перепишите на event-driven").
 No route is computed and nothing is checked before a send: the sender
 obtains the destination's address once, anywhere in its code, and keeps it;
 the letter is given to the sender's parent, and each Message that holds the
