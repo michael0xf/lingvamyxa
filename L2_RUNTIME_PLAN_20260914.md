@@ -8938,3 +8938,25 @@ reasons: 5928/6081/7513 (standalone delays), 7141 (a delay asserting
 g_ingress_root_turns still 0), the four mail-gate cases. Counts so
 far: YIELD_UNTIL_R0 19, r0_round 7, blocking waits restructured 0,
 left alone 8. The gate reruns.
+Rerun (the lead): the spawn falsifier met ("spawn child done" absent);
+the mapped and isolated context waits, own_turn, send-copy OOM and the
+mail-gate case left without a drain pass; the failure is "exec
+admit-gate enter" (a failure message, not a marker). What it tested:
+with the mail_gate_hook armed on destination d, A's turn sends to d,
+the admission into d takes d's lock on A's worker, the hook parks A
+holding it, and the host checks B is not blocked; under (b) admission
+runs only on R0's lane (send/send_graph/send_owned/send_cap take one
+lock, their own or R0's transport, and none on the destination;
+admit_one takes the destination's and nothing else; pump is reached
+only from host_drain, drive and the root-guarded end_turn/fail), so A's
+turn only pushes, d's lock is never taken on a sender, the hook never
+fires and the 2 s wait times out; a drain patch would park the host
+itself. Scope: one case (the other hook case, "exec mail-gate", gates
+a sender's own lock and passes). RULED (a): restate admit-gate to the
+property (b) guarantees, stronger than the old: the test holds d's
+monitor directly across A's and B's sends and turns, asserts both
+sends returned STAGED and both turns ended (no sender took d's
+monitor), then releases, runs R0's round and asserts both letters in
+d's inbox; the parking hook dropped from this case; the reason in the
+case's header; counted as "restated: 1 (admit-gate, contention removed
+by design)". Option (b), R0's round on another thread, not pursued.
