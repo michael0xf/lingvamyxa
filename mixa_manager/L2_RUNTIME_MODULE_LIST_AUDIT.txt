@@ -417,3 +417,53 @@ mixa_app_win32.lm2:510:37 (`mixa_app_entry_to_text(out, @ tslot[0])`,
 tslot declared `[]: (@: char) tslot 1`, the same shape as dslot) -- the
 identical bare-name adapter fix would apply there too, but the ticket
 named one site; a further finding, not fixed in this commit.
+
+--- Port design note: app_controller's opaque fmpanel header -- what an
+    L2 declaration would need, and why the earlier predef draft
+    overflowed the import path table (no code, per the ticket)
+
+mixa_app_controller_l2.h.lm1's own header comment (lines 5-59, written
+at the port's own commit 12aa8b44) already records this in full; this
+note restates it against the specific symbol part 3's diagnosis named,
+mixa_app_fmpanel_close, and traces the actual overflow.
+
+What an L2 declaration for mixa_app_fmpanel_close would need: not just
+a bare `prototype: fn: mixa_app_fmpanel_close (@: MixaAppFmPanel p)
+void end: prototype` block (the "declare then link" form already used
+for mixa_cell_at in mixa_tiles_l2.h.lm1 and mixa_tile_fill_button in
+mixa_buttons_l2.h.lm1) -- that form only works when the parameter type
+can stay a plain opaque name. Here it cannot: MixaAppFmPanel embeds
+MixaHighlight BY VALUE (mixa_app_fmpanel_l2.h.lm1:105, `MixaHighlight:
+focus`, confirmed by that file's own comment lines 13-35), and a
+by-value embedded field needs the translator to know its real layout
+to compute MixaAppFmPanel's own size/offsets -- an opaque forward name
+cannot supply that (this is the SAME distinction mixa_app_controller_l2
+.h.lm1's own comment already draws for the OTHER, safely-opaque fields:
+"a DEREFERENCED struct field needs L1-known layout -- true for the
+by-value-embedding case... but NOT true for plain pointer-field
+dereference"). So the declaration mixa_app_fmpanel_close needs is the
+FULL chain: predef mixa_app_fmpanel_l2.h.lm1 itself (giving
+MixaAppFmPanel's own real, field-accurate struct plus the function's
+own prototype).
+
+Why that overflows: mixa_app_fmpanel_l2.h.lm1 is not a leaf -- it
+predefs three further chains of its own (mixa_file_manager.h.lm1,
+mixa_selection_walk.h.lm1, mixa_highlight_l2.h.lm1), each potentially
+carrying more. The earlier draft of mixa_app_controller_l2.h.lm1 tried
+predefing this full closure alongside the controller's OTHER by-value-
+adjacent needs (fm_copy + console_window_l2 + help_l2 + cmdline_l2 +
+cmdline_dispatch_l2 + app_path_l2 + app_fmpanel_l2) and hit `l1trans
+error: mixa_manager/mixa_app_fmpanel_l2.h.lm1:0:0: import path table
+full` -- reproduced directly by that draft's own author (mixa_app_
+controller_l2.h.lm1:37-40), overflowing the pinned stable65D5 l1trans's
+16-file cap by a wide margin, not by one file. The accepted header
+avoids this by keeping MixaAppFmPanel (and every other struct this
+controller only ever touches through a pointer field) genuinely opaque,
+reached via the real, plain `#include "mixa_manager/mixa_app_fmpanel.h"`
+instead -- correct for l1trans (which resolves `\` dereference through
+gcc, never needing L1-level field knowledge for a pointer field, per
+that header's own comment lines 27-34) but insufficient for l2trans,
+whose own unsupported-body guard needs an L2-recognized callable frame
+for mixa_app_fmpanel_close specifically, which a plain #include never
+supplies. That gap -- l2trans needing what l1trans does not -- is the
+open question a real fix would have to resolve, not addressed here.
