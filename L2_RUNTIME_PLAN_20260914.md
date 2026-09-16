@@ -6671,3 +6671,25 @@ S6-2 section as that check. Method note kept: backslash field
 patterns (rt\slots, rt\n, \alloc_next) are grepped in PowerShell with
 word boundaries, the matched lines inspected before the count is
 trusted.
+e9's cold record of 7b3a8668 (S6-1 landed tip), green: self-build PASS
+fixed point 8 of 8 in 9 s; gate.ps1 exit 0 in 301 s, 27 steps, 0 FAIL,
+"gate: all green", on a cold tree (no build/ before, 0 tracked changes
+after); pins re-installed and sha256-verified in e9's five trees at
+0B3D85B3. Recorded precisely: gate.ps1 (buildCore, run_seed, run_gen,
+the gen0 and gen2 suites, l2 run_lmx per generation; e9's prior cold
+records 298/324/296/291/304 s) is not run_gates.ps1 (the landing's 31
+gates, 506 s); the two are not compared. Duplicate tag, reported by
+e9: the lead's land_base3.sh had tagged the merge selfbuild/e6b94f04,
+and e9's after_landed_gate.sh then pushed selfbuild/7b3a8668 (the log
+commit, itself self-built cold) plus claude-0c/selfbuild-log-7b3a8668;
+the lead ruled leave both, the branch is not merged, nothing deleted
+from shared history; e9's tag_selfbuild.sh now asks "is this
+SELF-BUILD tagged" (parent tagged and the tip's diff confined to
+l2src/SELF_BUILD_LOG.txt) instead of "is this commit tagged", proven
+by a --check run creating nothing on that case. The isolation is ready
+(scratchpad isolate_archive_hang.ps1, A and B -N 200 -WatchSeconds 60,
+C -N 30 -WatchSeconds 180, D -N 200 -WatchSeconds 60, trees
+wt0c_landed_7b3a8668 and wt0c_landed_8eeb094f as D's -LoadTree; the
+first hang ends the isolation, a moved ref voids the stage, 60 min hard
+stop); the window opens once the lead's merge of integration into main
+is on origin.
