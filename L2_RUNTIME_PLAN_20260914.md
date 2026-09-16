@@ -7690,3 +7690,14 @@ location (the land_base3.sh wart not copied forward). Coordinator's
 falsifier corrected by the lead: git ls-tree without -r lists the
 directory entry, so "ls-tree <ref> l2src | grep tripwire" cannot
 pass; the working form is git ls-tree -r <ref> -- l2src/tripwire_s6_2.sh.
+e9: land_s6_2.sh at claude-0c/land-s6-2 9017c645 (051cc1d0 the 51st
+path and the reusable mutation shape in MEASURE_S6_2.md; 9017c645
+removing six non-ASCII bytes the first carried): the dry run over
+7b3a8668...2e2f492c accepts l2src/tripwire_s6_2.sh as an A, 14 paths,
+0 outside, the three decoys still refused; bash -n clean on both
+scripts. Recorded from it: e9's hygiene gate printed the non-ASCII
+count and aborted only on CR, a check that prints without enforcing
+(decorative, the shape of a gate, cannot fail; the same family as an
+assertion that cannot fail and a mutation that matches nothing); it
+now enforces. The allowlist flagged the tripwire script as OUTSIDE
+before it was added, the behaviour it exists for.
