@@ -1,0 +1,90 @@
+include: "<stddef.h>"
+
+struct: ProbeTextCtx
+    int: probe_text_capacity_field_with_a_long_name_00
+    int: probe_text_capacity_field_with_a_long_name_01
+    int: probe_text_capacity_field_with_a_long_name_02
+    int: probe_text_capacity_field_with_a_long_name_03
+    int: probe_text_capacity_field_with_a_long_name_04
+    int: probe_text_capacity_field_with_a_long_name_05
+    int: probe_text_capacity_field_with_a_long_name_06
+    int: probe_text_capacity_field_with_a_long_name_07
+    int: probe_text_capacity_field_with_a_long_name_08
+    int: probe_text_capacity_field_with_a_long_name_09
+    int: probe_text_capacity_field_with_a_long_name_10
+    int: probe_text_capacity_field_with_a_long_name_11
+    int: probe_text_capacity_field_with_a_long_name_12
+    int: probe_text_capacity_field_with_a_long_name_13
+    int: probe_text_capacity_field_with_a_long_name_14
+    int: probe_text_capacity_field_with_a_long_name_15
+    int: probe_text_capacity_field_with_a_long_name_16
+    int: probe_text_capacity_field_with_a_long_name_17
+    int: probe_text_capacity_field_with_a_long_name_18
+    int: probe_text_capacity_field_with_a_long_name_19
+    int: probe_text_capacity_field_with_a_long_name_20
+    int: probe_text_capacity_field_with_a_long_name_21
+    int: probe_text_capacity_field_with_a_long_name_22
+    int: probe_text_capacity_field_with_a_long_name_23
+    int: probe_text_capacity_field_with_a_long_name_24
+    int: probe_text_capacity_field_with_a_long_name_25
+    int: probe_text_capacity_field_with_a_long_name_26
+    int: probe_text_capacity_field_with_a_long_name_27
+    int: probe_text_capacity_field_with_a_long_name_28
+    int: probe_text_capacity_field_with_a_long_name_29
+    int: probe_text_capacity_field_with_a_long_name_30
+    int: probe_text_capacity_field_with_a_long_name_31
+    int: probe_text_capacity_field_with_a_long_name_32
+    int: probe_text_capacity_field_with_a_long_name_33
+    int: probe_text_capacity_field_with_a_long_name_34
+    int: probe_text_capacity_field_with_a_long_name_35
+    int: probe_text_capacity_field_with_a_long_name_36
+    int: probe_text_capacity_field_with_a_long_name_37
+    int: probe_text_capacity_field_with_a_long_name_38
+    int: probe_text_capacity_field_with_a_long_name_39
+    int: probe_text_capacity_field_with_a_long_name_40
+    int: probe_text_capacity_field_with_a_long_name_41
+    int: probe_text_capacity_field_with_a_long_name_42
+    int: probe_text_capacity_field_with_a_long_name_43
+    int: probe_text_capacity_field_with_a_long_name_44
+    int: probe_text_capacity_field_with_a_long_name_45
+    int: probe_text_capacity_field_with_a_long_name_46
+    int: probe_text_capacity_field_with_a_long_name_47
+    int: probe_text_capacity_field_with_a_long_name_48
+    int: probe_text_capacity_field_with_a_long_name_49
+    int: probe_text_capacity_field_with_a_long_name_50
+    int: probe_text_capacity_field_with_a_long_name_51
+    int: probe_text_capacity_field_with_a_long_name_52
+    int: probe_text_capacity_field_with_a_long_name_53
+    int: probe_text_capacity_field_with_a_long_name_54
+    int: probe_text_capacity_field_with_a_long_name_55
+    int: probe_text_capacity_field_with_a_long_name_56
+    int: probe_text_capacity_field_with_a_long_name_57
+    int: probe_text_capacity_field_with_a_long_name_58
+    int: probe_text_capacity_field_with_a_long_name_59
+    int: probe_text_capacity_field_with_a_long_name_60
+    int: probe_text_capacity_field_with_a_long_name_61
+    int: probe_text_capacity_field_with_a_long_name_62
+    int: probe_text_capacity_field_with_a_long_name_63
+    int: probe_text_capacity_field_with_a_long_name_64
+    int: probe_text_capacity_field_with_a_long_name_65
+    int: probe_text_capacity_field_with_a_long_name_66
+    int: probe_text_capacity_field_with_a_long_name_67
+    int: probe_text_capacity_field_with_a_long_name_68
+    int: probe_text_capacity_field_with_a_long_name_69
+    int: probe_text_capacity_field_with_a_long_name_70
+    int: probe_text_capacity_field_with_a_long_name_71
+    int: probe_text_capacity_field_with_a_long_name_72
+    int: probe_text_capacity_field_with_a_long_name_73
+    int: probe_text_capacity_field_with_a_long_name_74
+    int: probe_text_capacity_field_with_a_long_name_75
+    int: probe_text_capacity_field_with_a_long_name_76
+    int: probe_text_capacity_field_with_a_long_name_77
+    int: probe_text_capacity_field_with_a_long_name_78
+    int: probe_text_capacity_field_with_a_long_name_79
+end: ProbeTextCtx
+
+prototype:
+    sub: probe_text_take12 (int: a00; int: a01; int: a02; int: a03; int: a04; int: a05; int: a06; int: a07; int: a08; int: a09; int: a10; int: a11)
+    sub: probe_text_take80 (int: a00; int: a01; int: a02; int: a03; int: a04; int: a05; int: a06; int: a07; int: a08; int: a09; int: a10; int: a11; int: a12; int: a13; int: a14; int: a15; int: a16; int: a17; int: a18; int: a19; int: a20; int: a21; int: a22; int: a23; int: a24; int: a25; int: a26; int: a27; int: a28; int: a29; int: a30; int: a31; int: a32; int: a33; int: a34; int: a35; int: a36; int: a37; int: a38; int: a39; int: a40; int: a41; int: a42; int: a43; int: a44; int: a45; int: a46; int: a47; int: a48; int: a49; int: a50; int: a51; int: a52; int: a53; int: a54; int: a55; int: a56; int: a57; int: a58; int: a59; int: a60; int: a61; int: a62; int: a63; int: a64; int: a65; int: a66; int: a67; int: a68; int: a69; int: a70; int: a71; int: a72; int: a73; int: a74; int: a75; int: a76; int: a77; int: a78; int: a79)
+    fn: probe_text_ret12 (int: a00; int: a01; int: a02; int: a03; int: a04; int: a05; int: a06; int: a07; int: a08; int: a09; int: a10; int: a11) int
+end: prototype

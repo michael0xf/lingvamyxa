@@ -2407,6 +2407,35 @@ $fnptrL1 = Invoke-CompileObject "l2src\tests\unit_fnptr_prototype_value.lm2" "un
 if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, lm_own_delete_plain\)') { throw "unit_fnptr_prototype_value did not pass the prototype function as itself" }
 if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, p0_probe_delete_item\)') { throw "unit_fnptr_prototype_value did not pass the L2 callable as itself" }
 if ($fnptrL1 -match '(?m)^\s*l2_t\d+: (lm_own_delete_plain|p0_probe_delete_item)\s*$') { throw "unit_fnptr_prototype_value boxed a function into a temporary" }
+# mixa_app_window (b5's diagnosis on sonnet/mixa-module-list): a define:'d
+# constant is a call actual passed as itself -- one from the predef chain in an
+# if condition, one of this unit in a return -- never staged into an int
+# temporary, where a char* define lost its high bits.
+$defineHeader = "lm1\build\l2src\tests\unit_define_actual.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $defineHeader) | Out-Null
+& $outputL1trans "l2src\tests\unit_define_actual.h.lm1" $defineHeader
+if ($LASTEXITCODE -ne 0) { throw "unit_define_actual header translation failed" }
+$defineL1 = Invoke-CompileObject "l2src\tests\unit_define_actual.lm2" "unit_define_actual"
+if ($defineL1 -notmatch 'probe_define_take\(l2_p\d+_0, 0U, PROBE_DEFINE_LABEL, PROBE_DEFINE_FG\)') { throw "unit_define_actual did not pass the predef defines as themselves" }
+if ($defineL1 -notmatch 'probe_define_take\(l2_p\d+_0, 1U, PROBE_UNIT_LABEL, 7U\)') { throw "unit_define_actual did not pass the unit define as itself" }
+if ($defineL1 -match '(?m)^\s*l2_t\d+: PROBE_\w+\s*$') { throw "unit_define_actual boxed a define into a temporary" }
+$defineGcc = [IO.File]::ReadAllText((Resolve-L2Path (Join-Path $log "unit_define_actual.gcc.log")))
+if ($defineGcc -match 'int-conversion') { throw "unit_define_actual compiled with an int-conversion warning:`n$defineGcc" }
+
+# app_controller (compiler ticket 2): a statement call whose emitted text passed
+# the 256-byte stack buffer failed l2_cat with no diagnostic at all. Its text now
+# has a heap buffer (L2_CALL_TEXT_CAP): twelve long field-path actuals (about 660
+# bytes) must translate and compile whole; eighty (about 4400) are refused at the
+# statement, and a long call inside an expression, whose consumer holds 256
+# bytes, is refused at its statement too -- never the generic fallback.
+$textHeader = "lm1/build/l2src/tests/unit_text_capacity.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $textHeader) | Out-Null
+& $outputL1trans "l2src/tests/unit_text_capacity.h.lm1" $textHeader
+if ($LASTEXITCODE -ne 0) { throw "unit_text_capacity header translation failed" }
+$textL1 = Invoke-CompileObject "l2src/tests/unit_text_capacity.lm2" "unit_text_capacity"
+if ($textL1 -notmatch 'probe_text_take12[(]l2_p[0-9]+_0.probe_text_capacity_field_with_a_long_name_00, [^)]*l2_p[0-9]+_0.probe_text_capacity_field_with_a_long_name_11[)]') { throw "unit_text_capacity did not emit the long call whole" }
+Invoke-Negative "l2src/tests/unit_text_capacity_over.lm2" "unit_text_capacity_over" "exceeds the translator's text capacity"
+Invoke-Negative "l2src/tests/unit_text_capacity_expr.lm2" "unit_text_capacity_expr" "exceeds the translator's text capacity"
 # Spec 11.3.1 / 12.2: `@` never names an own Array element's storage; that
 # pointer needs an explicit adapter. 485f15cc's flat-field `@` let
 # `return: @ buf[0]` emit the address of a temporary copy (0c).
