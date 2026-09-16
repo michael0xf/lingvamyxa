@@ -637,3 +637,57 @@ Before: UNEXPECTED_FAILURE (compile, 10 errors, same line numbers as
 the earlier before/after cycle recorded above). After: PASS -- full
 translation, build, and run; L2 trace byte-identical to the oracle's
 own trace across all four scenarios.
+
+--- Merge preview: the landing's two mixa steps, run cold at this tip
+
+run_mixa.ps1                | SUCCESS (exit 0), every suite line "ok"
+                             (core, overlay, backend, pump, selection,
+                             draw, pointer, tiles, buttons, win32
+                             backend, backend table, process seam,
+                             ingress host harness incl. its own
+                             expected-failure diagnostics) -- 105
+                             output lines, zero real fail/error/
+                             exception (the four case-insensitive
+                             matches are GDI_ERROR sentinel text and
+                             two explicitly-expected diagnostic lines,
+                             both themselves marked "ok").
+run_ingress_harness.ps1     | exit 0, all 26 output lines "ok" (pin
+                             verification, nm check, the full ingress
+                             evidence sequence, the same two expected-
+                             failure diagnostics as above, both ok).
+
+Neither red. Nothing to report as a merge blocker from this tip.
+
+--- Design note: retiring L2LinkAllowMultipleDefinition (no code)
+
+Duplicated definitions (confirmed earlier in this audit by inspecting
+both generated .c files directly): mixa_rect_open, mixa_rect_release,
+mixa_cell_at, mixa_cell_at_const, mixa_rect_fill, mixa_rect_put_text,
+mixa_rect_dump -- all seven live in mixa_text_rect.lm1, none in draw.lm1
+or buttons.lm1 themselves.
+
+Through which two chains: mixa_draw.lm1 predefs mixa_text_rect.lm1
+directly (a FULL-BODY predef, not header-only); mixa_buttons.lm1
+predefs mixa_tiles.lm1, which itself predefs mixa_text_rect.lm1, also
+full-body. l1trans's own predef convention embeds the complete body of
+a predef'd MODULE (not a .h.lm1 header unit) into every translation
+unit that predefs it -- by design, and correct when only one such unit
+is ever linked into a given executable. app_window's own L2Deps links
+both draw.o and buttons.o into the same executable, so both embedded
+copies collide.
+
+The one-definition shape that removes the flag: either candidate needs
+the SAME two changes, no way around touching real, accepted .lm1 files
+(not a dispatcher-only change like this session's own list-migration
+work) -- (a) one of the two chains (draw's own direct predef, or
+tiles's own predef reached via buttons) is rewritten from a full-body
+`predef:` to a header-only "declare then link" prototype block, the
+exact convention mixa_tiles_l2.h.lm1 already uses for mixa_cell_at on
+the L2 side (`prototype: fn: mixa_cell_at (...) ... end: prototype`);
+(b) the dispatcher then adds mixa_text_rect as ITS OWN explicit L2Dep
+for app_window (a single Build-RealDep call, one compiled object), so
+exactly one copy of the seven functions is linked, shared by both
+draw.o and buttons.o. Whether the rewrite lands on mixa_draw.lm1 or on
+mixa_tiles.lm1 is a real choice for that ticket, not decided here --
+either is a genuine edit to an already-accepted, hand-written oracle
+file, not something to fold into a mixa_manager runner/list change.
