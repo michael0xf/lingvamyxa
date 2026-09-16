@@ -1967,6 +1967,19 @@ fn: l2_ret_tr (const: @(LmP0Frame frame)) @: LmP0Structure
         return: 0
     if: l2_text_eq(frame\trailer\spelling, "return") = 0
         return: 0
+    # Consistency check: a "return" trailer is set only on frames whose body
+    # contains a return type as its 3rd active field (name, params, resty, body
+    # = 4 active fields). A garbage trailer whose spelling happens to compare
+    # equal to "return" -- possible when the parser leaves trailer uninitialized
+    # for void functions and the stale bits land in memory that reads as "return"
+    # is rejected here: its body field count will not reach 4, so the "return"
+    # spelling is provably spurious, not a genuine return transaction. This makes
+    # the return-transaction decision deterministic and independent of memory
+    # layout, without nulling the trailer itself.
+    # Neighboring field: frame\trailer\body is only reached when the above
+    # passes, so it is no longer exposed to the uninitialized-trailer read.
+    if: frame\body = 0 || l2_count_active(frame\body) < 4
+        return: 0
 return: frame\trailer\body
 
 fn: l2_check_ret_tr (int: mi; const: @(char path); const: @(LmP0Structure body); const: @(LmP0Node at)) int
