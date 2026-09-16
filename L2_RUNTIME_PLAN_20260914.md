@@ -9207,3 +9207,17 @@ checked by the coordinator at the refs):
   7b3a8668...archive-timeout-3, and the one cold chain runs on it.  The
   coordinator's --write-tree falsifier did not exist in git 2.37 and was
   corrected before use.
+AD (c)'s spec basis (search done before design): section 19.29 on closing,
+"The flag/control storage must outlive possible observers/writers even when
+the Message's arena is freed" (main c5ab1db4), read with 19.29.7's "a closed
+Message's slot and arena are freed by the release chain".  So a record may be
+freed only when no observer can still read it: with (a), a late sender's pair
+is compared by value against the service's live set and never dereferenced,
+so senders are not observers; the observers left are the walkers (get_address,
+handoff's cycle check) and foreign readers of running.  Two shapes to decide
+with the lead at AD's design, both lock-free: an epoch grace (each lane
+publishes the epoch it entered its turn at in its own atomic cell; R0 frees a
+record unlinked at epoch E once every busy lane shows an epoch after E), or
+Message-shaped (a running child is re-linked by a letter it applies in its own
+round, and the settled ancestor is freed only after that child's
+acknowledgement, so a walker's own chain never names a freeable record).
