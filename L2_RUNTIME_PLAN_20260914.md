@@ -9734,3 +9734,25 @@ l2trans gen2 ok 307s with both acceptance headers written during the step; the
 remaining steps (port_parser, mixa, ingress, scenario36, lmx_cancel) follow.
 The flake was not fixed, only measured: the landing can still fail once in ~150
 suite runs by (a) or (b).
+
+L2TRANS LANDED AND MERGED, recorded 2026-09-16 14:45 by the coordinator (lingvamyxa-08): the
+engineer's land_l2trans.sh run on the coordinator's word exited 0 with every step
+green -- self_build PASS (fixed point 8 of 8, committed generated C equal to it),
+gates GREEN 29 of 29 in 679 s, port_message PASS 84 s, port_message_lane PASS
+64 s (the step that was red on the first attempt), l2trans gen2 ok in 307 s with
+both acceptance headers written during the step, port_parser, mixa, ingress,
+scenario36 ("core tests PASS", 11 selftests) and lmx_cancel all exit 0 -- and
+pushed integration/main-absorbs-core d3bde8b5..36518364, "landed: 36518364".
+The coordinator merged it into main as 402ccb4a (no conflicts; main now carries
+the two translator fixes: a define:'d call actual is passed as itself, and a
+statement call's text has its own heap buffer with its overflow reported at the
+statement). The flake did not fire on this run.
+
+FOLLOW-UPS OPENED BY THE LANDING (each names its branch or its ticket):
+- the self-build tag and the log line for the new fixed point: the landing's
+  self_build step verified the fixed point but the annotated tag and the
+  l2src/SELF_BUILD_LOG.txt row are the coordinator's next step;
+- 5c's link-list branch sonnet/app_controller-link-fix 886a47da is to be re-cut
+  off the new integration head and its app_controller row re-verified (ticket 4);
+- the row-bounds branch claude-0c/gate-row-bounds 6c8034b4 is to be re-cut off
+  the new integration head.
