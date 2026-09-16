@@ -136,6 +136,21 @@ lane_oracle   run_port_message.ps1 -TranslatorPath <pin> -LaneCheck
     file, verify +0 -1 before building, restore in a trap. The same scar exists in this project's history
     from the other direction -- a sed mutation that matched nothing and was reported as a passing falsifier.
 
+  Step two is done and verified independently at the pushed tip 95de9bf4 (2026-09-16): the holder count is
+    gone -- lmx_msg_endp_retain(, endp_release(, endp_refs(, ->refs and \refs all read 0 across tracked
+    l2src *.c *.h *.lm1 *.lm2, the refs; field is out of struct LmxMsg, and both (LONG *)&m->refs
+    compare-exchange loops (exec.c 366 and 392 at the base) are deleted. Both gates green on that tip.
+    The two whole-case deletions this list predicted from the fail_retain finding are confirmed done and
+    cut by verified line span: "dest pin OOM rolls back" (exec pin-oom) and "non-self recv retain fail
+    still pops" (exec nself-pin). The two cases that only READ the count kept their subject and lost the
+    refs framing, as predicted.
+    NOTE for whoever measures the acceptance: the probe cannot report this as green. -Part 2 reads
+    refs=178 at that same tip, because its needle counts bare InterlockedCompareExchange across all of
+    l2src -- 172 of the exec selftest's own spin cells, 5 in cancel_spin_host.c, and 1 comment in
+    exec.c:352 recording the removal. That is a defect in the criterion, not in the stage, and it is with
+    the coordinator for a ruling; the fix is a narrower needle, never editing the selftest's spin cells or
+    deleting the comment to make a grep happy.
+
   The parent_msg-as-zero class, final (the lead's own second correction, verified here at 7b3a8668):
     lmx_message.lm1:688 is NOT a member and must not be converted. It sits in lmx_msg_handoff_supervision
     (opened at 673) under the comment "A root has no parent to hand over from", so ch\parent_msg = 0 there
