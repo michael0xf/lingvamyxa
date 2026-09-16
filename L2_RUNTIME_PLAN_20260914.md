@@ -10150,3 +10150,16 @@ drained") -- those need the pair from create's out_msg or a drain, not a lookup;
 then the definitions of find and find_tree go; then (d)(3), the epoch grace, for
 the record lifetime itself. The probe's six counters must all read 0 with its
 positive control before the stage lands.
+
+ALL WORK HALTED BY MIKHAIL'S ORDER, 2026-09-16 18:43. His words: "останавливайте к чертям всю
+работу". Everything stopped at this point, nothing in flight:
+- the coordinator (lingvamyxa-08) stopped both grok_bot watchers (inbox and
+  outbox) and every background run of its own; no gcc, no kit, no chain is
+  running; 5c (lingvamyxa-5c) was told to halt and not start anything new.
+- State at the stop, all pushed: main 6807d281 (this journal); the stage branch
+  d6/lock-ad 492a8afb -- the wait-claim flake fix (chain GREEN 29 of 29 in 558s
+  with the unfiltered verdict line, the kit 120 of 120 clean on the fix tree
+  against a parent that failed its first control run, 40 of 40 clean on the
+  merge) merged with grok/ad-find-lookup 52d674ae (probe find=172); design
+  d6/lock-removal dec501c4; AD's remaining work listed in the entry above.
+No further action until Mikhail says otherwise.
