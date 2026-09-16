@@ -7236,3 +7236,23 @@ dispatcher's duplicate symbols and app_win32's one adapter site, each
 its own commit with the runner's before/after, and records
 app_controller's fmpanel opacity as a port design note; then the five
 own-list runners onto the lib.
+e9's 16e28cf7: membership cannot replace the slot pins (family_release_17
+29-33 rejects find as the measure: a released-but-retained subtree
+would read as gone, the state decision 17 forbids); the replacement in
+shape is the watched free of exact block bases through ld --wrap free
+(turn_arena_o1's g_watch/__wrap_free, run_model_scenario36.ps1:127-135
+linking --wrap per __wrap_NAME); the unit of "what must change" is
+field reads: 17 pins, 8 captures, 1 loop condition, 2 rationale texts;
+open: whether a released child's arena bases are reachable to the test
+before release (lmx_msg_adopted_base exists for adopted blocks; the
+lead reads the allocation path). COORDINATOR'S TIMING RULING, sent to
+both: under the stage's stated assumption the record is not freed by
+the chain, so the restatement is two-part: at release, ownership and
+state (the parent's data, RELEASED, off the child list); for "never
+retained", a watched free of the record's base (the handle the test
+holds) exactly once by runtime_delete for R0's children and at the
+parent's release for deeper ones; if Mikhail rules that slots are
+freed by the chain, only the expected moment moves (the fallback
+frees the record at release, keeping the mailbox object as the
+capability). Arena blocks moved by storage_move_all are the owner's,
+watched at the owner's close if at all.
