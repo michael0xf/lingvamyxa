@@ -7021,3 +7021,11 @@ for a send through a settled capability", the .lm1 translated without
 parse error and the case's other checks silent, so the red is the
 missing refusal, not a broken fixture. Coordinator read the diff (20
 insertions, 16 deletions, one file) and accepted it.
+Allowlist count corrected by the lead: 43 paths in the section's
+bullet (e9's count was right), 49 with the six mixa_manager files, 50
+with l2src/S6_2_MIXA_BASELINE.txt arriving through b5's merge (an A);
+his "56" double-counted files written with and without the l2src/
+prefix in his own prose. The 49 are sent to e9 verbatim, each checked
+to exist at 7b3a8668. Two of e9's findings recorded as landing
+savers: the gate count is 30 (port_slots' row deleted by the stage),
+and lmx_cancel stays a step beside scenario36.
