@@ -199,3 +199,41 @@ stripped from BOTH files before diffing -
   diff <(grep -v codex/turn-diffs refs_before_C.txt) <(grep -v codex/turn-diffs refs_after_C.txt)
 prints nothing; piping one diff through grep -v does not, because it leaves the hunk header 47c47 and the ---
 separator behind and so demonstrates nothing.
+
+=== The tree where it actually hung: wti, stages A and B (2026-09-15, second freeze window) ===
+
+The gap the section above names as outstanding was closed the same evening: the lead lent his landing worktree
+C:/Nyasha_Planet/lingvamyxa/build/fable/wti at a3c8d970 - the tree both recorded hangs happened in, and one
+that has really run gates, port_parser and the scanners, not a fresh checkout. Terms (the coordinator's, with
+the lead and b5 frozen in the same minute): archive only, no build and no checkout in wti, the tree
+byte-identical at both ends, HEAD and git status --porcelain recorded before and after, 200 iterations each.
+One harness change was needed first and is worth keeping: the isolation wrote its archives into
+<tree>/build/codex/archive_hang, which would have created files inside the lent tree, so it now takes -ZipDir
+and the wti run wrote to 0c's scratchpad. That was proven before the run, not asserted: one iteration against
+wt0c_s62, a tree with no build/codex at all, left build/codex absent and 0 tracked changes. "build/ is
+probably ignored" is not a good enough reason to write into someone else's worktree.
+
+  stage  runs     elapsed in wti                   same stage in 0c's tree          codex covariate
+  A      200/200  p50 208 / p99 254 / max 280 ms   p50 206 / p99 250 / max 255 ms   no rotation
+  B      200/200  p50 428 / p99 477 / max 481 ms   p50 428 / p99 494 / max 508 ms   no rotation
+0 hangs, 0 non-zero exits, no 60 s watch expired, all 200 archives per stage byte-identical (1401231 bytes at
+a3c8d970). No session ref moved in either stage, so neither needed the coordinator's one-rerun allowance for
+this window. wti before and after: HEAD a3c8d970 unchanged, git status --porcelain empty, and
+build/codex/archive_hang still absent.
+
+The substantive result is the comparison, not the count: wti archives at the same speed and the same spread as
+a tree that never hung (208 against 206 ms). The tree where both hangs happened is not observably sicker at
+this operation, which makes a tree-local explanation - its object store, packs or worktree metadata - less
+attractive and points at the runner's surroundings during a landing instead.
+
+What it still does not license, for the same reason as before. Stage C, the runner in situ, was deliberately
+NOT authorised in wti: the terms were archive only. Both real hangs were inside run_candidate_c_scanners.ps1,
+so what remains untested in that tree is the very path that failed - a bare git archive in wti is not the thing
+that hung, it is the step the runner was inside when it hung. Totals across both trees: 1030 counted runs, 0
+hangs, and therefore no capture of any kind to read. The verdict stays "not reproduced", and the protection is
+still the 120 s bound: a recurrence fails that gate in 120 s with a named line and evidence.json instead of
+holding the chain for hours.
+
+Logs: scratchpad/archive_hang/wtiA and wtiB, same files as the stages above. Falsify: git -C
+C:/Nyasha_Planet/lingvamyxa/build/fable/wti status --porcelain prints nothing and rev-parse --short HEAD prints
+a3c8d970; diff refs_before_A.txt refs_after_A.txt and the same for B print nothing.
