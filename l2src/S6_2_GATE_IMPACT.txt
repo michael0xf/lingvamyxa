@@ -99,6 +99,20 @@ lane_oracle   run_port_message.ps1 -TranslatorPath <pin> -LaneCheck
     The diagnostics that print the counter are a real population an assertion-only pass misses -- they
     change with the assertions or print a field that no longer exists -- and the measured figure at the
     base is 7 fprintf lines naming it.
+  A SECOND population, which no grep for the counter would have found (the lead, from the gate, 2026-09-15):
+    sites that read parent_msg AS ZERO to mean "released". S6-2 keeps parent_msg deliberately, as the owner
+    cell, so such a site fires by design. Measured here at 7b3a8668, and it is a set of ONE, not a class
+    with unknown members: lmx_message_exec_selftest.c:6778, the family-boundary contract case, asserting
+    `km->parent_msg != 0` as its proof that an unbound child left its family; zero such readers in the L1
+    fixtures. It is converted to `km->parent_msg != pm` -- the cell must still name the OWNER -- which is a
+    stronger claim than "it is zero". Recorded with its count so the next reader does not go looking for
+    more: git grep -n -E 'parent_msg (==|!=) *0' 7b3a8668 -- l2src/lmx_message_exec_selftest.c l2src/tests
+    prints one line, and the L1 spelling prints none.
+  Why the restatements are stronger than what they replace, and not a weakening being tolerated (the lead's
+    point, and it is the best argument in this file): the slot count could say "one fewer" but never WHOSE.
+    That is exactly why the fixtures using it had to carry a header warning that find cannot tell a
+    retained record from a freed one. Ownership answers both questions at once -- which record, and whose
+    it now is -- so a converted assertion says more than the count it replaces.
     Corrections recorded rather than quietly replaced. An earlier version of this row stated a peer's
     "39 reads, 12 conditions, 10 captures" as measured fact; I had not reproduced it, an hour after
     correcting my own falsifier for counting fprintf text.
