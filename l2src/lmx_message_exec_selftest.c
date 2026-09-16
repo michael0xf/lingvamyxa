@@ -592,6 +592,27 @@ static int turn_send_to_held(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return lmx_msg_end_turn(rt, who, 1);
 }
 
+/* S6-2 (pump's guard, ruled 2026-09-16): a mapped child's turn calls lmx_msg_pump.
+ * Only R0's lane drains the transport, so the call must be refused and leave R0's
+ * transport as it found it. The head is read before and after the call; the host
+ * is waiting without draining, so nothing else moves it in between. */
+static int g_offlane_pump_st = -99;
+static void *g_offlane_tr_before;
+static void *g_offlane_tr_after;
+
+static int turn_pump_off_lane(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    LmxMsgEnv e;
+    memset(&e, 0, sizeof(e));
+    (void)lmx_msg_recv(rt, who, &e);
+    lmx_msg_env_release(&e);
+    g_offlane_tr_before = (void *)rt->transport;
+    g_offlane_pump_st = lmx_msg_pump(rt);
+    g_offlane_tr_after = (void *)rt->transport;
+    InterlockedIncrement(&c->done);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
 static int turn_recv_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
     LmxMsgEnv got;
@@ -6212,6 +6233,70 @@ int main(int argc, char **argv) {
             }
             lmx_msg_env_release(&got);
             fprintf(stderr, "exec wait: send by string address is refused by R0's body with KIND_REJECTED and UNDELIVERABLE\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* S6-2 (pump's guard): see turn_pump_off_lane. P's end-turn pushes one
+             * letter to Q onto R0's transport with no drain, so the transport is
+             * non-empty when A's mapped turn calls pump. */
+            LmxMsgAddr p = 0, a = 0, q = 0;
+            LmxMsgEnv pe;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&pe, 0, sizeof(pe));
+            g_offlane_pump_st = -99;
+            g_offlane_tr_before = 0;
+            g_offlane_tr_after = 0;
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &q) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_pump_off_lane, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec pump-guard create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            pe.kind = LMX_MSG_KIND_NUMBER;
+            pe.number = 3;
+            pe.id = 61U;
+            if (lmx_msg_send(rti, p, q, &pe) != LMX_MSG_STAGED
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec pump-guard stage\n");
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(5);
+            }
+            if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
+                || g_offlane_pump_st != LMX_MSG_INVALID
+                || g_offlane_tr_before == 0
+                || g_offlane_tr_after != g_offlane_tr_before
+                || lmx_msg_inbox_n(rti, q) != 0) {
+                fprintf(stderr, "exec pump-guard done=%ld st=%d before=%p after=%p inbox_q=%d\n",
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0), g_offlane_pump_st,
+                    g_offlane_tr_before, g_offlane_tr_after, lmx_msg_inbox_n(rti, q));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            r0_round(rti);
+            if (lmx_msg_inbox_n(rti, q) != 1) {
+                fprintf(stderr, "exec pump-guard R0 round inbox_q=%d\n", lmx_msg_inbox_n(rti, q));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: a mapped child's pump is refused and leaves R0's transport untouched; R0's round delivers\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

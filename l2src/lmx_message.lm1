@@ -1750,8 +1750,9 @@ sub: lmx_msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
             g\orphan: 1
             lmx_msg_child_link(rt\root, g)
             # An orphaning cannot fail, so an exhausted counter gives index 0, which
-            # no minted index ever equals: never a collision, only an address that
-            # names no child.
+            # no minted index ever equals, so it never collides with a live minted
+            # child's address. Two such orphans DO share [1,0] -- after about 2^32
+            # R0 children -- and a letter to that address falls off, naming no child.
             if: rt\root\child_seq + 1U = 0U
                 g\index: 0U
             else:
@@ -2239,10 +2240,13 @@ fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
     @: LmxMsgCopy n
     @: LmxMsg root
     int: st
+    # S6-2 (the drain ruling): only R0's lane drains the transport, and admit_one
+    # writes R0's live set, so pump requires the owner -- the host, which runs R0's
+    # turns. The fallback that let any lane holding a turn pump served "every
+    # end_turn drains", which the ruling ended; kept, a mapped child's turn calling
+    # pump would write the live set off R0's lane.
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        if: c.lmx_msg_exec_holding_any(rt) = 0
-            return: c.LMX_MSG_INVALID
-        ---
+        return: c.LMX_MSG_INVALID
     ---
     # S6 (a): the take is under R0's mailbox monitor and is left before admit_one
     # takes MAIL on the destination, so the two mailboxes are held in sequence.
