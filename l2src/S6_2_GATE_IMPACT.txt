@@ -3,9 +3,11 @@ Measured by 0c at baa8ec23 (S6-1's tip, "S6-1 (a3): the executor lock is gone"),
 built or run, 2026-09-15.
 
 S6-2 removes the Message record's reference count and the runtime's slot list:
-  refs      LmxMsg.refs, lmx_msg_endp_retain / lmx_msg_endp_release, and the two InterlockedCompareExchange
-            that carry the count inside them (lmx_message.h, lmx_message.lm1:\refs, lmx_message.lm2:\refs,
-            lmx_message_exec.c)
+  refs      LmxMsg.refs, lmx_msg_endp_retain / lmx_msg_endp_release, the accessor lmx_msg_endp_refs that
+            reads the count, and the two InterlockedCompareExchange that carry it inside them
+            (lmx_message.h, lmx_message.lm1:\refs, lmx_message.lm2:\refs, lmx_message_exec.c).
+            The whole family at baa8ec23, tree-wide in l2src: endp_release 84, endp_retain 53, endp_refs 20,
+            endp_try_retire 9 (the last core-side only, in no test file).
   slots/n   LmxMsgRuntime's slot array and count (rt\slots, rt\n), LmxMsg.alloc_next, and the slots port
             module lmx_msg_slots.lm1/.lm2 with its runner run_port_msg_slots.ps1
 This file is the gate side: which gate builds which of those, and what each asserts.
@@ -49,8 +51,14 @@ Citation (section and quoted phrase, never a bare line)
 
 Method
   Each gate's runner and the test files it builds, at baa8ec23; git grep over those for the removed names:
-  endp_retain, endp_release, lmx_msg_slots, slots_n, slots_at, run_port_msg_slots, and, as literals because
-  they carry the L1 field-follow backslash, \refs, rt\n, rt\slots and \alloc_next. Field greps were run
+  endp_retain, endp_release, endp_refs, lmx_msg_slots, slots_n, slots_at, run_port_msg_slots, and, as
+  literals because they carry the L1 field-follow backslash, \refs, rt\n, rt\slots and \alloc_next.
+  endp_refs was MISSING from the first version of this list (b5 caught it, 2026-09-15, while building
+  sonnet/s6-2-test-inventory against 16335e9b): the first pattern set named the two mutators and not the
+  accessor, so the two gates that assert refs were understated by 15 lines. Corrected here, and the lesson
+  is the pattern itself: grep a removed symbol's whole family (lmx_msg_endp_*), not the names the ticket
+  happens to list. No gate's verdict changed - both were already "asserts" - but the edit is larger.
+  Field greps were run
   through PowerShell: a backslash pattern through the Bash tool silently matches nothing here, which would
   have reported every rt\n row as clean.
   Then a second sweep the first pass did not cover: every runner that names lmx_msg_slots as a SUPPORT
@@ -69,10 +77,14 @@ Method
 
 lane_oracle   run_port_message.ps1 -TranslatorPath <pin> -LaneCheck
   builds: lmx_message_exec_selftest.c (L1 reference and L2 port), tests/lmx_exec_crash_report.c
-  asserts: lmx_message_exec_selftest.c reads rt\n 31 times and calls the refs API 6 times --
+  asserts: lmx_message_exec_selftest.c reads rt\n 31 times and calls the refs API 17 times --
     endp_retain at 3172 (if (held == 0 || lmx_msg_endp_retain(held) == 0)), endp_release at 3178, 3187,
-    3192, 3198 and 3202; the rt\n reads include the orphan-release block at 3128 (on1 = rto->n) checked at
-    3130 against on0 - 1.
+    3192, 3198 and 3202, and the accessor endp_refs 11 times at 6017, 6027, 6030, 6157, 6172, 6204, 6215,
+    6217, 6619, 6622 and 6624, across four cases and none of them inside the 3172-3202 block: they read the
+    count before and after an operation and assert it is unchanged (refs0 = lmx_msg_endp_refs(rti, d), then
+    ... != refs0), which is a different edit from deleting a retain/release pair - the property "the count
+    did not move" has to be restated, not dropped. The rt\n reads include the orphan-release block at 3128
+    (on1 = rto->n) checked at 3130 against on0 - 1.
   So the conversion must touch this file twice: the retain/release block around 3172-3202 goes with refs,
   and every rt\n read goes with the slot count. Support list: run_port_message.ps1:154 (see below).
 
@@ -90,9 +102,9 @@ scenario36    run_model_scenario36.ps1
 
 lmx_message   run_lmx.ps1 -Suite Message (MessageApi + Host + Exec + Production)
   builds: lmx_message_selftest.lm1, lmx_message_host_selftest.c, lmx_message_exec_selftest.c
-  asserts: lmx_message_selftest.lm1 calls the refs API 4 times -- endp_retain at 924
-    (if: c.lmx_msg_endp_retain(rdest) = 0) and 964, endp_release at 934 and 982; plus the exec selftest's
-    31 rt\n reads and 6 endp_ lines as under lane_oracle.
+  asserts: lmx_message_selftest.lm1 calls the refs API 8 times -- endp_retain at 924
+    (if: c.lmx_msg_endp_retain(rdest) = 0) and 964, endp_release at 934 and 982, and the accessor endp_refs
+    4 times; plus the exec selftest's 31 rt\n reads and 17 endp_ lines as under lane_oracle.
   Build side: run_lmx.ps1 translates the slots module by name and unguarded -- 125 lmx_msg_slots.h.lm1,
     127 lmx_msg_slots.lm1, each with its own throw at 126 and 128. Those four lines go with the module.
 
@@ -264,9 +276,10 @@ Falsify
     git grep -c -E 'endp_retain|endp_release|lmx_msg_slots|slots_n|slots_at' baa8ec23 -- <files>
     git grep -c -F 'rt\n' baa8ec23 -- <files>        (likewise 'rt\slots', '\alloc_next', '\refs')
   Counts are matching lines per pattern, measured at baa8ec23:
-    lane_oracle   lmx_message_exec_selftest.c: rt\n 31, endp_retain 1, endp_release 5
+    lane_oracle   lmx_message_exec_selftest.c: rt\n 31, endp_retain 1, endp_release 5, endp_refs 11
     scenario36    family_release_17 rt\n 19, orphan_mapped_17 rt\n 8
-    lmx_message   the same exec selftest, plus lmx_message_selftest.lm1 endp_retain 2, endp_release 2
+    lmx_message   the same exec selftest, plus lmx_message_selftest.lm1 endp_retain 2, endp_release 2,
+                  endp_refs 4
     entry_turn    lmx_entry_turn_selftest.lm1 rt\n 1
     port_slots    lmx_msg_slots_selftest.lm1 rt\n 6, rt\slots 4, \alloc_next 4; runner \slots 1 (133),
                   \alloc_next 1 (134)
