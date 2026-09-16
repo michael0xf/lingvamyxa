@@ -8593,3 +8593,10 @@ failing stops the stage for Mikhail. A send whose handle R0 has not
 registered is refused, possible only for a handle that never went
 through mail. The registration letter's shape (a pointer field in the
 envelope) is the lead's, recorded as his.
+Stage branch d6/lock-s6-2 2b0ddad7 ("S6-2 step 2, PARTIAL AND NOT
+BUILDING: the mail service reference, the live set, and the common
+mail API's first bodies"); design 3504b3bc carries the causal-order
+claim with its evidence named by file and line before the first
+build. Steps 3 to 5 (the send through the service, get_address and
+the chain, the arrays and the module, the fixtures) follow; no
+measurement until the lead names a building tip.
