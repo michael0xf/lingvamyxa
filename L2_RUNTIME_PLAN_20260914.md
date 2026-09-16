@@ -7399,3 +7399,18 @@ as the lead's to confirm per site, and the fprintf population
 measured at 7 (not the eyeballed 11). The 1cbf01a2 figure (a peer's
 count published unreproduced) is superseded. e9 holds: land_s6_2.sh
 at 96f35613, R0P_GATE_IMPACT at 05d96cb0.
+Restatement progress in lmx_message_exec_selftest.c (the lead, design
+7c85a784, each case a run of run_port_message that got further): (1)
+2855 the rolled-back child PASSES (on its parent's settled list,
+RELEASED, unbound, off the tree); (2) the failed-branch dispose PASSES
+(both records on R's settled list, RELEASED, adoption unchanged in
+direction); (3) the mapped orphan: the capture goes, the release
+assertion becomes "P on R0's settled list", and `while (rto->n != on0
+- 2)` becomes `while (lmx_msg_find(rto, oc) != 0)`, a wait; RULE
+recorded from it: a loop condition and the assertion after it cannot
+convert to the same predicate, or the assertion after the loop is the
+condition the loop just exited on and passes vacuously; the assertion
+now carries the real property (the orphan on R0's settled list,
+RELEASED, no binds). Remaining at e0b38ffb: 29 counter sites with a
+runtime receiver in five cases (the held-capability pair 3220/3227,
+the ctx rollback 3338, the exec-maintain group 7120-7443).
