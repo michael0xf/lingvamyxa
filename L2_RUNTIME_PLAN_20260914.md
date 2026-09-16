@@ -9446,3 +9446,32 @@ merge) and selfbuild/7b3a8668 (SELF-BUILD OK); the engineer tags the pushed
 merge and the pushed HEAD (once if they are the same commit), after checking
 the self_build marker line.  Status file for Mikhail: last_step_claude.txt
 in the root (main e7ab014b), refreshed at each landing.
+
+S6-2 LANDING IN PROGRESS (the engineer's message 2, recorded 09:57):
+"09:44:26 acceptance: S6-2 GREEN, refs=0 runtime_lists=0, exit 0 on the
+measuring merge with 96a754e0"; "09:44:26 merged: 07cd6901 on 7b3a8668";
+"09:44:37 self_build: exit=0 seconds=10 :: self-build PASS: fixed point 8 of 8
+(pass 3 == pass 2), committed generated C 8 of 8 equal to the fixed point" (the
+marker matched once in self_build.log); gates running since 09:44:38.
+self_build committed nothing ("tracked changes under l1src and lm1/build: 0"),
+so unless a later step commits, the pushed HEAD is the merge 07cd6901 and it
+gets one annotated tag, selfbuild/07cd6901.  Logs:
+C:\Users\mtkra\AppData\Local\Temp\land_s6_2_logs\3d4eb0be; the coordinator's
+watch alarms when no log there is written for 25 minutes.
+
+COMPILER TICKET 2 -- THE COMMITTED PATCH IS WITHDRAWN (0cf2475d, RUNNER PENDING,
+never run): a whole-tree comparison of the unpatched (d17eefc3) and patched
+translators over 941 tracked .lm2 units found 938 identical, the two new
+fixtures changed as intended, and unit_paren_long.lm2 going from its expected
+"expression too long" to exit 0 -- run_l2trans's Invoke-Negative at line 3566
+would go red.  A depth probe then showed the real cost: nested parentheses at
+depth 50/180/300/400/600/1000 give the unpatched translator a located
+"expression too long" up to 600 and a crash only at 1000, while the patched one
+crashes (exit 127) from depth 300 on: raising every recursive text buffer
+from 256 to 1024 bytes quartered the nesting depth the 2 MB stack survives.
+Rework: keep 256-byte buffers in the recursive expression path; give only the
+statement call text in l2_emit_ccall a heap buffer of its own capacity (freed on
+one exit through an inner function), with a capacity-taking concatenation for
+it; keep the located overflow report (the flag and l2_text_at).  Red first
+again, and the depth probe plus the whole-tree comparison are part of its
+evidence.
