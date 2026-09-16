@@ -7770,3 +7770,21 @@ never a field), so nine prototype: declarations in the existing
 and sidestep the conflict. RULED: implement it (b5's next ticket);
 app_controller enters the parity gate with the verdict its run then
 produces.
+S6-2 ACCEPTANCE CRITERION NARROWED, by name (e9's finding, the
+coordinator's ruling, 2026-09-16, before the green leg was measured):
+the probe's refs needle set carried a bare "InterlockedCompareExchange"
+that counted 178 lines at the base which are not a holder count (172
+in lmx_message_exec_selftest.c, its own spin cells g_cpu_stop,
+g_mail_gate_armed, m->done; 5 in tests/cancel_spin_host.c, ctx->done;
+1 in exec.c), so -Part 2 could never reach refs=0; the base's two ICE
+loops on &m->refs (exec.c 366, 392) already match the "->refs" needle,
+so the bare needle added nothing but the spin cells. Ruled: the bare
+needle is dropped; the refs count is endp_retain(, endp_release(,
+endp_refs(, ->refs, \refs and the refs; field. Measured by the
+coordinator with the narrowed probe: at the base refs=163
+runtime_lists=36 (was 342/36); at the lead's 95de9bf4 merged with the
+base refs=0 runtime_lists=32 (the holder count is gone, the registry
+remains). The acceptance base is now fable/s6-2-acceptance 6b15d8e8
+(7b3a8668 plus the probe at 695d54fc plus the two narrowing commits);
+the falsifier's arithmetic is 163 to 164 on the red tree and 0 to 1 on
+the green; MEASURE_S6_2.md's red leg is updated by e9 to 163.
