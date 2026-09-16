@@ -7872,3 +7872,16 @@ lmx_message_exec.h:59, tests/unit_msg_cursor.lm2:4); ruled: the probe
 counts comment text by its header, agreed at design time, and these
 needles measure the mechanism, so the comments are reworded to name
 the registry without spelling the field; then the tip reads 0/0.
+S6-2 PROBE LEGS MEASURED BY THE COORDINATOR (2026-09-16, grep only, in
+build/fable/exec-3a with the pin at 0B3D85B3): RED on the acceptance
+base 96a754e0: refs=163 runtime_lists=36, S6-2 RED. GREEN on the
+measuring merge fable/s6-2-measure-2d8f2b6a (the stage's 2d8f2b6a,
+"the three registry comments name the thing without spelling the
+field", merged with 96a754e0): exec_lock_calls=0 exec_lock_decl=0
+host_lock=0 exec_fields=0 | refs=0 runtime_lists=0, S6-2 GREEN.
+FALSIFIER on that merge: the base's lmx_message.lm1:1237 ("if:
+c.lmx_msg_endp_retain(src) = 0") appended, numstat "1 0", the probe
+refs=1 S6-2 RED, restored to dirty=0 and refs=0. The gate half of the
+green leg (port_message plain and -LaneCheck, run_lmx -Suite Message,
+scenario36, entry_turn, graph_abi) runs cold on the same merge once
+the lead's five lines name 2d8f2b6a as the tip; then "launch" to e9.
