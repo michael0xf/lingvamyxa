@@ -9567,3 +9567,23 @@ conflicts; 8 paths over integration).  The engineer builds land_l2trans.sh
 before "launch"; b5 checks app_window and app_controller end to end on a scratch
 merge of main ec481911 with 5ba818b7.  The engineer's row bounds follow that
 landing.
+
+BOTH TRANSLATOR FIXES VERIFIED END TO END by b5, recorded 10:31: local scratch
+0a1f6850 = main ec481911 + fable/l2trans-text-cap 5ba818b7 (merge base d3bde8b5,
+0 conflicts, never pushed).  Before (ec481911 alone): app_controller
+"translation failed with no located diagnostic", UNEXPECTED_FAILURE.  After:
+app_window PARITY_FAILURE -> PASS (162/162, traces byte-identical);
+app_controller translates and compiles clean and now stops at link with 14
+undefined references to real dependency modules the runner's L2-side link list
+lacks (mixa_app_loop open/step/running/close; mixa_fm count, cur_dir, name,
+is_selected, select, refresh, copy_here_action; mixa_dir remove; mixa_selection
+deselect, walk), first verbatim "mixa_app_controller_l2.o:mixa_app_controller_l2.c:
+(.text+0x545): undefined reference to 'mixa_app_loop_close'" -- a mixa runner
+link-list gap, not a translator defect; the other ten rows unchanged.  Evidence:
+C:\Nyasha_Planet\wtb5_ec48 and C:\Nyasha_Planet\wtb5_tcscratch
+(run_20260916_102541_654_dbf9dc4b, run_20260916_102937_781_59fb5004,
+r20260916_102704_119_c41e2ac1).  b5's ticket: the L2-side link list in
+run_mixa_app_controller_l2_parity.ps1 matched to the oracle side's, tested on the
+scratch, pushed to sonnet/mixa-module-list only.  The engineer's translator
+landing script: claude-0c/land-l2trans 1b0d184e (parent d3bde8b5, allowlist the
+candidate's 8 paths, bash -n ok).
