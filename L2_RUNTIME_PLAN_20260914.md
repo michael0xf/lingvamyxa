@@ -8089,3 +8089,26 @@ drivers); with run_l2trans GREEN, run_port_message plain GREEN, the
 two fixture conversions carried (60/0, 19/0) and his probe 0/0, the
 five lines lack exactly one thing: a whole run_gates -L2MessageRoot,
 which waits on e9's runner fix cut from 2d8f2b6a.
+e9's reproduction (in progress): the minimal reproduction (lines 51-65
+extracted verbatim, a 200 s stub, a 10 s bound, invoked as run_gates
+invokes) does NOT hang (wall 10719 ms, exit 1, 675 ms from throw to
+exit), so the kill/redirect/throw sequence alone is not the mechanism
+and something before line 51 is required; the full-fidelity
+reproduction (the real runner at 2d8f2b6a with two lines changed, the
+stub and a 15 s bound, the harness watching for the throw's text then
+a 60 s post-throw clock, capturing the tree and per-thread WaitReason
+on a hang) is running; run_l2trans's raw Process block is eliminated
+(-BuildOnly returns at :231). FINDING confirmed by the coordinator in
+run_gates.ps1's scoring block: for four-element rows PASS is exit code
+0 alone (the marker only selects the verdict line; the "no marker
+line" and forbidden-line checks run only for the five-element
+lane_oracle row), so 29 of 30 gates would record a silent PASS for a
+runner exiting 0 without its marker: the decorative-check family
+gate-wide. RULED: e9's branch claude-0c/archive-timeout-2 off
+2d8f2b6a carries two paths: the c_scanners runner's whole-step bound
+guaranteeing exit AND a nonzero code (tripwire: the stubbed
+reproduction ends under 130 s, exit 1, the row FAIL), and run_gates
+requiring the marker line for every row (tripwire: a scratch row
+exiting 0 without its marker reads FAIL), measured on the tip so all
+30 markers still match (strictly stricter); the lead merges both, the
+allowlist grows by two, then run_gates whole.
