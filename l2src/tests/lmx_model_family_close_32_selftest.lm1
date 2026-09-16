@@ -185,17 +185,21 @@ fn: main () int
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: 7
     env\reply_to: p
-    check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P gives C an input")
+    # S6-2 (the drain ruling): a non-R0 end-turn only pushes; wherever this selftest
+    # reads a delivery, the host (R0's lane) runs R0's round, lmx_msg_pump, first.
+    check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_pump(rt) = c.LMX_MSG_OK, "P gives C an input")
     pst: map_in_own_turn(rt, p, c1)
     check(pst = c.LMX_MSG_OK, "P's own turn maps C onto its own context; G1, G2 and H stay unmapped")
     c.printf("reading: C's reply in P's mailbox, published by C's end-turn\n")
     while: lmx_msg_inbox_n(rt, p) < 1
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(effects = 1 && lmx_msg_inbox_n(rt, p) = 1, "C's ordinary turn had an effect and published a reply")
 
     # --- P stops C: staged with P's outgoing work, published at P's end-turn.
     pst: lmx_msg_run_entry_turn(rt, p, turn_p_stop_c, 0)
+    lmx_msg_pump(rt)
     check(g_p_stop_st = c.LMX_MSG_STAGED && g_closing_before_publication = 0, "stop is staged like any envelope; nothing happens before publication")
     check(pst = c.LMX_MSG_OK, "P publishes the stop")
     check(lmx_msg_inbox_n(rt, p) = 1, "C's earlier reply is still P's to read: the stop rolls nothing back")
@@ -204,6 +208,7 @@ fn: main () int
     # its loop and requests the same orderly close of its direct children.
     c.printf("reading: C STOPPED, set by C's end-turn on its worker\n")
     while: lmx_msg_state(rt, c1) != c.LMX_MSG_STATE_STOPPED
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(g_c_closing_turn != 0 && g_c_state_at_entry = c.LMX_MSG_STATE_RUNNING && g_c_inbox_at_entry = 0, "admission set C's closing flag only: C's closing turn started RUNNING, not STOPPED, and the stop was not handler-visible work")
@@ -237,6 +242,7 @@ fn: main () int
     env\id: 2U
     g_env: env
     pst: lmx_msg_run_entry_turn(rt, p, turn_p_send_after_stop, 0)
+    lmx_msg_pump(rt)
     check(pst = c.LMX_MSG_OK && g_send_st = c.LMX_MSG_STAGED && lmx_msg_inbox_n(rt, c1) = 0, "a send to the stopped C is not admitted")
     g_reply: got
     pst: lmx_msg_run_entry_turn(rt, p, turn_p_read_reply, 0)
