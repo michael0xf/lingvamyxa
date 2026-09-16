@@ -8692,3 +8692,15 @@ under its monitor, so the cost is memory, never safety. The arrays'
 free-partner is in slot_free beside done_from/done_id. Remaining: the
 poster, release_slot posting, the KIND_UNREGISTER handler, the sweep,
 both cores; then the first build.
+The lead's measured status (06:34): all four removal pieces present in
+both cores (post_unregister, release_slot posting instead of freeing,
+the KIND_UNREGISTER handler, the teardown sweep from runtime_delete,
+each 1/1; KIND_UNREGISTER 2/2; every service_* call site passes three
+arguments, swept since l1trans links by name); a gap found and closed:
+the header declared lmx_msg_get_address and neither core defined it
+(the internal helper existed, the public wrapper did not), both
+wrappers now written, resolving the Message as path_n does; the
+service step complete, no build yet; the hour went to six edits per
+core plus the C side. Next: the step committed as partial, the first
+build, its first error line verbatim if red, then step 3 (the send
+through the service with the check and the refusal).
