@@ -9984,3 +9984,36 @@ and took 371 s while another hunt ran, and the two failures landed on EVEN runs
 machine idle, a second 40-run pass was 40 of 40 clean; under contention the same
 binary failed. So the trigger is contention plus the piped-stderr shape, which is
 why 107 sequential and 96 parallel direct runs never reproduced it.
+
+THE FLAKE'S ROOT CAUSE, 2026-09-16 16:42 by the coordinator (lingvamyxa-08) -- one defect, three
+faces, in one function.  The UAF kit's third run crashed with exit=139 and the
+repo's own crash report gave the stack; symbolized with addr2line at image base
+0x140000000:
+
+    launch_ctx_thread_rec        l2src/lmx_message_exec.c:1901   <- the fault
+    launch_ctx_thread            l2src/lmx_message_exec.c:1848
+    lmx_msg_exec_start_contexts  l2src/lmx_message_exec.c:2053
+    exec_selftest_main           l2src/lmx_message_exec_selftest.c:7195
+
+The crash code is c0000005 with access=0, and line 1901 is
+
+    r->wait->worker_on = 1;
+
+so r->wait is ZERO at that point although the lines just above allocate it and
+refuse NOMEM if the allocation failed.  The record r was taken from the exec
+table by the host lane (msg_find_any_locked then bind_rec_locked) and is CHANGED
+BY ANOTHER LANE between the check and the use: a worker's unbind/release retires
+the wait record (bind_wait_retire_locked) while the host still holds the record
+pointer.  The same race explains the other two faces of the same function: the
+refusal face is r == 0 (the address the walk called launchable no longer
+resolves to a record) returning LMX_MSG_INVALID, and the hang face is a worker
+launched for a record that then vanished, leaving the test's wait unanswered
+forever.  All three were seen in the dispose-in-turn case.
+
+This is precisely the class stage AD exists to remove -- a lane reading and
+acting on state another lane mutates -- so the fix is not a local guard but the
+stage's own rules (owner-lane writes, atomic cells, and the pair instead of a
+lookup).  Its consequence for the tests: the q_alloc kit stops being a hunt and
+becomes the regression detector to run AFTER AD's (d) and (a) land.  And it
+gives the stage a concrete first target: every reader of r->wait and r->msg from
+a lane other than the record's own.
