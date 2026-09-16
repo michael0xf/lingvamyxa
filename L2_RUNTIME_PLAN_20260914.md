@@ -8553,3 +8553,20 @@ parent) and delegate the call to it; R0's body is the real service
 today (the live set, the check, the admission or the refusal); so a
 call on any Message reaches R0 by delegation through the service
 fields, and a later stage replaces bodies without touching callers.
+The lead's section on the settled shape: d6/lock-removal 74d9bb19
+(the eleventh, thirteenth and fourteenth lines in it; positive
+controls on every absence claim: "LmxMsg *service;" 0 with
+"uint_fast8_t handoff_safe;" and "unsigned index;" at 1 each; the
+service reference an LMX field with its C mirror marked, precedent
+rt\root_record; his sched_rec precedent retracted before it reached
+the design, the field removed at 793c267f). His framing, accepted in
+his words: the service's live set is the true replacement for refs,
+answering the same question ("may this pointer be dereferenced") with
+one owner's data on one lane instead of a counter on the record
+written from every lane. Coding in the order: the service reference
+and the live set with registration and removal; the send through the
+service with the check and the refusal; get_address and the chain as
+the addition (the index field and the parent walk already written in
+his worktree); the arrays and the module with 18f5701d merged; the
+fixtures. d6/lock-s6-2 stays at ab2db782 until a building tip is
+named.
