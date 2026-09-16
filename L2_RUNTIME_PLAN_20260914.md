@@ -9094,3 +9094,43 @@ allowlist): the mutation that can fail is removing an entry the diff
 needs (l2src/tools/uaf_run.sh), the dry run naming exactly that path
 OUTSIDE with count 1, then 0 after the restore.  No check for unused
 entries.  The engineer holds until ls-remote shows a push of the stage.
+
+S6-2 COORDINATOR REVIEW of the pushed red tip 3e1cec49, 2026-09-16 08:55.
+Light legs on the measuring merge e3e727f8 (3e1cec49 + 96a754e0): probe
+-Part 2 "refs=0 runtime_lists=0" GREEN; falsifier refs=1 RED, restored;
+run_gates.ps1 28 literal rows (29/29 with -L2MessageRoot); the module
+name lmx_msg_path_storage in 0 code files (the one comment in
+run_gates.ps1 records the deletion); the doc mentions in dated history
+files stay, as at the slots deletion.  The engineer's replacement checks
+for the re-cut (the every-row guard 0/1/0 and Start-RunnerBound 0/3/0 at
+2d8f2b6a/53ba86bd/3e1cec49) replace the coordinator's 'marker' count,
+which read 1 at both commits and could not fail.
+RULED, both cores, fixed in the building tip (no lock needed, so ours by
+Mikhail's standing rule, not a question to him):
+(1) orphan_children re-roots a running child under R0 (child_link to
+rt\root, parent := R0) without minting its index at R0, while handoff
+mints ch\index from the new parent's child_seq; the spec phrase "when a
+Message changes parent its address changes" (main 2e3db6e7) covers both;
+without it an orphan's composed address can equal a live R0 child's
+([1,2,1,1] orphaned to [1,1] = A's).  Fix: mint at R0; correct the
+orphan comment's "genesis (path, ...) stays"; a model-selftest case
+asserting the orphan's address differs from every live R0 child's.
+Falsifier at 3e1cec49: three index writes per core (lm1 721/1096/1101,
+lm2 754/1223/1228), none in orphan_children (lm1 1723-1748, lm2
+1842-1867).
+(2) address_of counts in one pass and fills in a second with no bound on
+the write index (lm1 1292, lm2 1411); a handoff or orphaning on another
+lane between the passes (spec: a handed-over child keeps "its own arena,
+mailbox and turn", so it may be running) lengthens the chain and writes
+out[-1].  Fix: no write outside out[0..cap-1]; a detected change re-counts
+or returns -1; "writes nothing when cap < n" kept.
+RECORDED, home stage AD (pre-existing at 7b3a8668, not this tip):
+parent_msg is read across lanes with no atomic cell (the new walk, and
+handoff_supervision's cycle check over q's ancestors), and a walker can
+load an ancestor just before the settling lane re-links the child and
+R0's round frees the ancestor.  The fix needs no lock: atomic link and
+index cells for cross-lane readers, and a free grace (R0 frees a released
+record only after every lane has passed a quiescent point since its
+unlink); address_of's premise "parent_msg is written only by child_link,
+a parent is never freed before its children" is corrected to name the
+two cross-lane writers.
