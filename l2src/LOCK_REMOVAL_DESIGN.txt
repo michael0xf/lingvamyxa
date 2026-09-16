@@ -1722,6 +1722,12 @@ S6. The lock deleted (L4, L7, L8 and what remains).
             lane now asserts release_slot's result after end_turn returns. Coverage lost: the interleaving claim,
             replaced by the rule itself. Not taken to Mikhail: it tested the removed mechanism and asks the model
             nothing.
+        - Falsifier, the acceptance's third leg, measured on d6/lock-s6 at baa8ec23: from zero lock lines, one
+          lock/unlock pair put back around a census site (lmx_message.lm1:1650) gave "exec_lock_calls=2
+          exec_lock_decl=0 host_lock=0 exec_fields=0", "S6-1 RED", probe exit 1; the file was restored from git in
+          a finally and the tree measured clean again (zero lock lines, tracked dirty zero). Done as a working-tree
+          mutation rather than a scratch commit -- same effect, nothing left to discard. Two earlier attempts of
+          mine failed for reasons of my own making and are recorded in the memory rule, not here.
         - Measured on that tree: S6 probe -Part 1 GREEN -- exec_lock_calls=0, exec_lock_decl=0, host_lock=0,
           exec_fields=0 (S6-2 still red as expected, refs=342, runtime_lists=36); run_port_message parity PASS with
           103 methods; run_lmx -Suite Message ok; run_model_scenario36 PASS over all ten fixtures, two agreeing
