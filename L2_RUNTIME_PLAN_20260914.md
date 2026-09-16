@@ -8831,3 +8831,11 @@ EMPTY and worker contexts that end R0's round themselves untouched;
 the calibrated count by case in the five lines; the detector skipped;
 the section states the crash's cause as the leading reading, not
 proven.
+lingvamyxa-12 is the gate engineer continuing (Opus 5, the same
+scratchpad 6d55a058 with its files, the three branches at their
+hashes, the standing hold and the queued edits held exactly; the
+worktree wt0c_landed_8eeb094f holds 3f131768, named for what it was
+cut for; nothing in flight). Told: the two tool files are new A paths,
+and the drain moves into R0's round, so the chain on the building tip
+is the first measurement of the reshaped fixtures under the marker
+rule.
