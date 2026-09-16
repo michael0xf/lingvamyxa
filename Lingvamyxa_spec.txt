@@ -1056,10 +1056,6 @@ same day):
                                                 its last turn and nothing native uses its arena:
                                                 the arena may be attached (19.29.7, 19.29.8) */
         Lmx *root;                           /* the root of its graph; its arena is reached from it */
-        LmxMsg *service;                     /* the mail service, born with the Message and set from
-                                                its parent, reassignable, never a global (Mikhail,
-                                                2026-09-16); a send hands it the target's memory
-                                                address and it admits or refuses by its live set */
         unsigned index;                      /* its index at its parent: the whole of what the
                                                 hierarchical address a.b.c.d... adds at this level;
                                                 the full address is composed by walking the parent
@@ -12962,8 +12958,10 @@ holds, and the service admits the letter into the target's inbox under that
 mailbox's monitor; getAddress computes a.b.c.d dynamically from the indices
 up the chain whenever a string address is needed; the hop-by-hop chain by
 string address is an addition to the service, not its main path; the
-service's reference is a reassignable field of the Message record, born with
-the Message and set from its parent, never a global; and the service keeps
+service's reference is not a field of the kernel record beside running but a
+field of the Message's LMX, born with the Message and set from its parent,
+reassignable, never a global, and the service's API is common, so that any L3
+Thread can take the role (Mikhail, 2026-09-16, verbatim: "То есть почтовый сервис это не дополнительное поле рядом c running, а поле уже LMX, а вот API надо сделать общим -- чтобы любой L3 Thread мог выступать в этой роли"); and the service keeps
 its own set of live records (registration at create and removal at release,
 its own acts on its own lane or letters to it, membership in bounded time),
 refusing an unknown address with a status rather than dereferencing it,

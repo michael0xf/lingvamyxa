@@ -8530,3 +8530,16 @@ path_cap and the path_storage module go, the planted red is the
 refusal's falsifier (the service's refusal). The lead's section is
 rewritten to this settled shape; the three earlier mechanisms remain
 history in it.
+
+MIKHAIL, 2026-09-16, verbatim (thirteenth line): "То есть почтовый сервис это не дополнительное поле рядом c running, а поле уже LMX, а вот API надо сделать общим -- чтобы любой L3 Thread мог выступать в этой роли" Entered in
+the spec (the `service` C field removed from section 2's kernel
+record; 19.29.7 states the reference as a field of the Message's LMX,
+set from the parent, reassignable, and the service API as common so
+any L3 Thread can take the role) and the model. For the lead: the
+kernel record stays running, success, handoff_safe, root plus index;
+the service reference lives in the Message's LMX (its graph), and in
+today's bootstrap C its mirror location is an implementation detail
+marked as the C mirror of an LMX field, not a kernel field; the
+service API (register, unregister, send by handle, send by string
+address) is one common interface that R0 implements today and any L3
+Thread may implement.
