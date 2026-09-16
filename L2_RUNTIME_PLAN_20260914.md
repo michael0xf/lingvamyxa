@@ -10076,3 +10076,15 @@ find=200, and the analysis of which of them name a REGISTERED record at that
 point already exists (grok_bot's first answer, its YES/NO column). Those that do
 may resolve through the live set's id order; those that do not need the pair from
 create's out or a drain. That migration is the next ticket.
+
+THE FLAKE IN THE CHAIN, recorded 2026-09-16 17:02: on the merged stage tip (58ec1235) the
+full gate chain stopped at lane_oracle after 13 s with the exact known signature
+"exec dispose-in-turn turn=2 dispose=0 g=0000000000000000 c=0000000000000000
+kids=0" -- the bind-record race, not a regression of the two migrations (the same
+row passes in 68 s on a quiet machine and the merges changed no executor code).
+Its rate inside a gate chain is much higher than in isolation: the chain has run
+it 7 times today and this row has failed 4 of them, always with this signature or
+its 200 s timeout twin, while 100+ direct runs of the same binary stayed clean.
+That is the strongest argument yet for (d)(3) as the fix rather than a retry
+policy -- and the chain was re-run after this record, as the landing practice for
+a documented flake allows.
