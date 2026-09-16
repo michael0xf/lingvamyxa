@@ -1894,6 +1894,14 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         accessor leaves the property with no expression, so each of the four cases gets its invariant restated in
         S6-2's terms -- the destination still findable and in its expected state -- rather than dropped with the
         retain/release pairs.
+      - A fault-injection hook goes with the API, and its sibling must not (e9's finding, verified on my side):
+        lmx_msg_test_fail_retain lives INSIDE lmx_msg_endp_retain's own body -- exec.c:347 opens the function and
+        348-353 is the LMX_MSG_EXEC_TEST block that decrements the counter and returns 0 -- so removing endp_retain
+        removes the only place that variable can act, which is why "exec pin-oom" and "exec nself-pin" are
+        whole-case deletions rather than restatements; its setters sit at 407, 6214, 6620, 6625 and 6630. Its
+        sibling lmx_msg_test_fail_post_dead (exec.c:332, read in lmx_msg_test_post_dead_fail at 335-345) is
+        OUTSIDE endp_retain and S6-2 must leave it alone. A blanket deletion of "the test-only fail hooks" would
+        have taken both.
       - Fates, per case: "exec mail-oom" (6010-6036) and "exec outbox-gone" (6156-6180) are restated -- drop the
         refs comparison and the refs bound, keep the inbox-still-0 checks, and say the property directly (the
         destination is still findable, and reached STOPPED) instead of through a count. "exec pin-oom"
@@ -1987,10 +1995,18 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           any count. The LmxMsg record itself stays allocated until its owner frees it (2), because the sender's
           capability is the mailbox handle and 19.29.7's "not a graph reference into another Message's mutable
           arena" (today 12922) means the handle must stay addressable while the parent lives.
-      (2) Who frees them and when. Never the closing child's own lane and never at its close: the parent frees the
-          settled child's record and mailbox with its own storage, at the parent's own release_slot, and R0's at
-          runtime_delete. That is precisely what keeps a sibling's handle valid with no holder count -- the memory
-          outlives every sender that could still address it, because the parent outlives them by construction.
+      (2) Who frees them and when, corrected by the coordinator before any code and checked against the text: a
+          parent's own close does NOT free its settled children's records and mailboxes. They are settled upward
+          with the rest of its storage, recursively -- storage_move_all carries them and each mailbox's owner cell
+          is rewritten to the new owner under that mailbox's own monitor -- and only R0's runtime_delete frees
+          anything. The spec already says the shape: the settle runs "bottom-up as 19.29.8 describes (G's arena
+          joins C, then C's joins P)" (origin/main 077ee6fd, today 12751), and 19.29.7 has a closing Message's
+          mailbox settled into its parent with the rest of its storage.
+          My first wording had the parent free them at its own release_slot, which is wrong for the reason the
+          correction gives: a handle held by an uncle or by an ancestor would dangle at the parent's close. The
+          guarantee I stated -- the memory outlives every sender that could still address it -- holds only for the
+          COMMON ANCESTOR of sender and target, and it is the upward settle that makes the common ancestor the
+          owner by the time any of them closes.
       (3) Reconciliation with 19.29.6, searched before asking rather than raised as a conflict. The sentence "a
           successful orphan is settled at its end-turn and reclaimed, arena and slot, by the settling lane at the
           root's next maintenance point" (today 12755) reads with the same paragraph's own definitions: an orphan
