@@ -2107,15 +2107,27 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         lm1:537 / lm2:573 and ingress_root at lm1:890 / lm2:947 are both earlier). It joins the hold-order check in
         run_port_message.ps1, which now pins six methods rather than five.
       - Two things in it that are mine and are stated as such rather than left in the diff:
-        (1) A DEVIATION from "refused on the parent's lane" as (1) and the coordinator's ruling both word it. The
-            owner is identified by parent_msg exactly as ruled, but the refusal envelope is queued on R0's
-            transport under R0's monitor -- post_dead's path -- and NOT under the owner's own mailbox monitor.
-            Reasons: the transport queue is R0's, so R0's monitor is the one that orders a write to it; pump leaves
-            R0's monitor before calling admit_one, so this is sequential and never nested; and taking the owner's
-            monitor as well would add a second hold in a stage whose whole purpose is removing them. The sentence
-            "refused on the parent's lane" is satisfied in the sense that matters -- the refusal is decided by
-            following the owner cell, not by a count of holders -- and not in the literal sense of running under
-            the owner's monitor. Flagged to the coordinator rather than smoothed, since he ruled on the wording.
+        (1) WITHDRAWN, and the paragraph above describing admission-time refusal is superseded with it. I first
+            refused at admission: admit_one split RELEASED out of the GONE disjunction and posted the refusal
+            itself, with the owner identified by parent_msg but the envelope queued on R0's transport. I flagged
+            that as a deviation from "refused there, on the parent's lane" and asked the coordinator rather than
+            let it sit in a diff. He ruled against it, and the third of his three reasons is the one I had not
+            seen: at Y3 the transport queue and the pump GO, so an admission-time refusal is code that Y3 deletes
+            and rewrites -- and the other two are that it is the sentence as written, and that it removes a
+            foreign-lane read of parent_msg from the pump's lane entirely, since the owner knows its own settled
+            list and nobody else needs the cell for the refusal (the cell stays for the upward settle).
+            THE SHAPE NOW: admit_one stops treating RELEASED as GONE and simply DELIVERS -- the envelope is pushed
+            into the settled mailbox under that mailbox's own monitor, with none of the live-destination
+            bookkeeping (no state change, no ready, no done-id, no retain), because no turn will ever run for that
+            record again. The refusal is the owner's act in its own round: lmx_msg_drain_settled walks the owner's
+            settled list, takes each mailbox's queue (inbox_take locks and unlocks that one mailbox), and answers
+            every sender through post_rejected, which takes R0's monitor on its own afterwards. One monitor at a
+            time, never nested, and no cross-lane read of anything.
+            A CONSEQUENCE I had to solve and that is worth recording, because it is forced rather than stylistic:
+            end_turn used to END with "return: pump(rt)", and that pump is what admits the late send. A drain
+            placed before it sees an empty settled mailbox; a drain placed after it is unreachable. So end_turn
+            becomes pump (admit) -> drain_settled (answer) -> pump (deliver). Three steps in that order, or the
+            sender's next recv finds nothing and the case passes or fails for the wrong reason.
         (2) A refusal is never itself refused: a REJECTED envelope meeting a settled record is dropped without
             posting another. Without that guard the transport could feed itself, since pump drains what admit_one
             posts. It also terminates on its own if the sender has settled too (post_rejected's self_or_find finds
