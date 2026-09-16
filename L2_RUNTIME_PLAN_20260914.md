@@ -7256,3 +7256,29 @@ freed by the chain, only the expected moment moves (the fallback
 frees the record at release, keeping the mailbox object as the
 capability). Arena blocks moved by storage_move_all are the owner's,
 watched at the owner's close if at all.
+The lead's finding on part (2), measured on the landed tip: after the
+settle a record hangs on nothing but rt\slots through alloc_next
+(release_slot takes it off the family chain, lmx_message.lm1:1400),
+and both free paths walk that list (endp_try_retire exec.c:1202-1211;
+runtime_delete lmx_message.lm1:1029-1040 calling slot_free, exec.c
+1163-1172, the mutex destroy and free(m)); with slots deleted every
+settled record and mailbox monitor would leak, R0's tree walk unable
+to reach them. Resolution, the lead's, no lock, wait or signal: the
+parent keeps its settled children on a list of its own (one link cell
+per record replacing alloc_next), written only by the settling lane,
+carried to the new owner by the upward settle as the blocks are;
+runtime_delete frees by walking R0's storage with its settled
+children. COORDINATOR: completes part (2) (the spec's "with the rest
+of its storage" needs an enumerable container; a per-Message list is
+the parent's own data in the sense of "Parent supervision uses its own
+child list, not a scan of a shared process-wide Message table", not a
+runtime list of S5's kind), on two conditions written into the
+section: the list is written only on the owner's lane, where the
+settle already runs (dispose_mark/adopt_mark by the parent, the orphan
+settle by R0's maintenance), never by the closing child's lane, and
+only the owner and runtime_delete walk it (a late sender reads
+parent_msg under the mailbox monitor); the restated delta pins read
+the settled list on the owner's lane or after the run, the four
+absolute pins become wrap-watched frees at the expected moment. This
+strengthens the question put to Mikhail: the settled record is
+demonstrably the parent's data on the parent's own list.
