@@ -2040,6 +2040,39 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           dynamically from the indices whenever a string address is needed; path, path_n, path_cap and the
           path_storage module still go; b5's 18f5701d merges with them; the planted red is still the refusal's
           falsifier, now going green by the service's refusal of an unregistered handle.
+        * THE CAUSAL-ORDER CLAIM AND ITS EVIDENCE, named by file and line before the first build because the
+          safety of delivery by memory address rests entirely on it. A child is created ON ITS PARENT'S LANE --
+          create_prepare asserts require_turn(rt, parent) when there is a parent (lmx_message.lm1:1265,
+          lmx_message.lm2:1322) and require_owner only when there is not (lm1:1260, lm2:1317) -- so
+          registration into R0's live set is a LETTER, asynchronous to the create, not a direct write. A
+          cross-lane write here would be the very thing this stage deletes. The claim is then: a registration
+          letter is admitted before any letter that could carry the child's handle to another lane. Two
+          measurements support it, both taken before any code was written:
+            (1) THE TRANSPORT IS FIFO between push and drain. lmx_msg_q_push (lmx_message.lm1:531-543) appends at
+                the tail -- current_tail\next: node, then \tail: node -- and lmx_msg_q_pop (lm1:545-555) takes
+                \head and advances it. Push order is drain order. (Those two spans are the corrected ones: I first
+                wrote 445-457 and 459-469 from memory of an earlier read, in the very bullet about citing evidence
+                by line, and measured them only because the claim was about to be checkable. A wrong citation here
+                would have been worse than none, since it reads as verified.) The ordering constraint this imposes
+                is stated rather than hoped for: the registration letter is pushed BEFORE create_prepare returns
+                the address, since the parent holds the handle the moment create returns; any send it then makes
+                is pushed after, and FIFO drains them in that order.
+            (2) NO PRODUCTION SITE COPIES A RECORD POINTER INTO ANOTHER LANE'S DATA EXCEPT THROUGH AN ENVELOPE.
+                Measured over the population of record-pointer fields (lmx_message.h: dest_msg 110, delivered 111,
+                service 127, live 136, parent_msg 170, first_child 171, last_child 172, next_sibling 173, and
+                LmxMsgRuntime.root 226). Envelope writes, all of them dest_msg or delivered: lm1 480, 493, 497,
+                528, 1418, 1460, 1470, 1522, 2881; lm2 512, 526, 530, 561, 1323, 1366, 1376, 1429, 2824;
+                lmx_message_exec.c:973. Family-chain writes, all inside child_link (lm1:615-622), the chain
+                removal (633-641), the teardown clears (1013-1014) and the two next_sibling resets (1268, 1504):
+                family structure on the owning lane, not a handle handed to a stranger. service and live are the
+                service's own, written on its lane.
+            BOTH PROBES WERE RUN TWICE. The first pass reported the envelope half as empty with a control that
+            printed 0 on a line I had already measured -- the backslash mangling I have a standing rule about --
+            and the C half errored with "grep: unknown option -- >" because -> was read as a flag. An empty result
+            whose control fails is a broken instrument, not a finding, and it is recorded here because the
+            conclusion would have been the same and would have been worthless.
+            IF EITHER HAD FAILED the stage stops for Mikhail rather than being papered over; both hold, so the
+            claim stands on measurement.
         * CODE ORDER, as the coordinator gave it: the service field and the live set with registration and
           removal; the send through the service with the check and the refusal; get_address and the chain as the
           addition; the arrays and the module; the fixtures.
