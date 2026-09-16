@@ -7215,3 +7215,24 @@ state an absolute count (270, 344, 158, 167) and take the membership
 form first; all restated as ownership and state checks, never "find
 says gone". 04852c20 carries the reconciliation with "never at
 process end" that the coordinator put to Mikhail (above).
+b5's mixa module-list work complete on sonnet/mixa-module-list
+(4b527e1a fix, e5c38b53 after-table, 41e13bf8 diagnosis): after the
+L2-native unit step, app_panel moves to PASS; the dispatcher
+(app_window) moves from the root_record link failure to a pre-existing
+duplicate-symbol link error between mixa_draw.o and mixa_buttons.o (a
+finding); app_controller stays red at mixa_app_controller.lm2:14:5,
+l2trans "unsupported body" for mixa_app_fmpanel_close, whose header
+keeps fmpanel opaque by design (an earlier predef draft overflowed
+l1trans's import path table); app_win32 stays red at
+mixa_app_win32.lm2:463:50, "address of an Array element needs an
+explicit adapter" on `@ dslot[0]` (spec 11.3.1, 12.2, a documented L2
+restriction); audio_mp3's THROW and the two core barriers unchanged;
+none of the four names anything the lock stages deleted (their .lm2
+files carry only their own port commits). RULED: the branch merges to
+main after S6-2 lands (it touches mixa_manager and the audit only),
+with run_mixa.ps1 and run_ingress_harness.ps1 run cold on the merge
+as its check (neither calls Add-L2RuntimeSupport); b5 next fixes the
+dispatcher's duplicate symbols and app_win32's one adapter site, each
+its own commit with the runner's before/after, and records
+app_controller's fmpanel opacity as a port design note; then the five
+own-list runners onto the lib.
