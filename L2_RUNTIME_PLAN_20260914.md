@@ -7142,3 +7142,31 @@ objects seeding $L2RuntimeObjs; $L2RuntimeNames untouched; the five
 own-list runners recorded as a later ticket. Read by the coordinator
 against run_port_message.ps1's shape and accepted; (2) the seven
 re-measured and (3) the two own-module first failures follow.
+QUESTION PUT TO MIKHAIL (2026-09-15, S6-2, from the lead's paragraph
+during the restatements): the fixtures family_release_17 and
+orphan_mapped_17 measure "gone" by rt\n, not by lmx_msg_find, on the
+spec's 2026-09-14 sentence (12694-12700): "A released branch is never
+retained ... the branch's slots and arenas are freed by that chain,
+never at process end." The 2026-09-15 sentence (19.29.7, agreed "давай
+так"): a closing Message's mailbox is settled into its parent with the
+rest of its storage, a late send is refused there on the parent's
+lane, there is no count of holders. Under S6-2 a settled child's
+record and mailbox are the parent's storage until the parent closes,
+so for R0's direct children until runtime_delete, which is process end
+in the letter of the first sentence. The lead's reading, adopted as
+the stage's stated assumption: from the settle the storage has a live
+owner (ordinary ownership, not a branch left hanging until teardown),
+the arena content is reclaimable by the owner's end-turn garbage
+collection, and only the record with its mailbox is kept, because a
+late sender must find it with no count; the restatements become
+ownership and state checks (the record is the parent's data, state
+RELEASED, off the child list), never find-based, since after the
+settle find would pass on the very state decision 17 forbids. Asked of
+Mikhail: is that reading right, or must the slot itself be freed by
+the chain? Named fallback if the latter: the capability becomes the
+mailbox object itself ("the target's mailbox handle"), a separate
+small allocation the parent keeps with its owner cell, and the record
+is freed by the chain; the deletion of refs and slots is unchanged,
+only the handle's type and the settle's lines move. The stage
+continues under the reading; the restatements are the only code that
+would change.
