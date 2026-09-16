@@ -106,6 +106,35 @@ scenario36    run_model_scenario36.ps1
     releases P at once: P's slot goes").
   These are the spec's own release accounting (12748-12761) expressed as slot counts, so they need a
   replacement property, not a deletion: what the test is really asserting is that the record was reclaimed.
+
+  What that replacement is NOT, corrected here because an earlier version of this row said the opposite and
+  the lead caught it while writing the restatements: it is not a membership check. gone() in
+  family_release_17 is literally `return: lmx_msg_find(rt, a) = 0` (66-67), and the fixture's own header at
+  29-33 rejects that measure in so many words -- "Gone is measured by the runtime's slot count rt\n, not by
+  lmx_msg_find: find walks only what rt->root reaches, so a subtree released from its parent but still
+  retained (the very state decision 17 forbids) would read as gone" (the lead's finding on the no-cascade
+  mutation, 2026-09-14). Membership says who is REACHABLE, never whether the unreachable was FREED, so
+  replacing the four absolute pins with it would reopen the hole this fixture exists to catch.
+
+  What can state it honestly, already present in this suite and needing no runner change: watch the exact
+  block bases through ld --wrap free and require each freed once, as lmx_model_turn_arena_o1_selftest.lm1
+  does (g_watch_a/g_watch_r at 57-58, __wrap_free at 62-73, lmx_msg_adopted_base at 110) -- a statement
+  about the storage rather than about who can resolve an address, and one that survives rt\n's deletion.
+  run_model_scenario36.ps1:127-135 already scans each test for __wrap_NAME and links -Wl,--wrap=NAME for
+  every one it finds, so a converted fixture is linked correctly by the same gate.
+  Open, and the lead's to answer from the allocation path: whether the bases of a released child's own
+  arena are reachable to the test at the moment it must watch them. turn_arena_o1 has lmx_msg_adopted_base
+  for adopted blocks; if no equivalent exists before release, the restatement needs one, and THAT is the
+  stage-level question rather than a choice of wording.
+
+  The unit for "what must change" here is reads of the field, not pins. Counting pins understates it, which
+  is how an earlier version of this row missed a line that is not an assertion at all: orphan_mapped_17:163
+  is `while: rt\n != 2` with lmx_msg_drive in its body -- a WAIT for the sweep to finish, which does not
+  compile once rt\n is gone and becomes a wait on the property the loop was after
+  (`while: lmx_msg_find(rt, cc) != 0`), legitimate there precisely because it is a wait and not a
+  measurement, with 167 left to carry the real property. Across the three fixtures: 17 pins, 8 captures,
+  1 loop, and two pieces of rationale text that outlive the measure (orphan_mapped_17:14 and
+  family_release_17:29-33) -- a file that keeps them would explain a measure it no longer uses.
   Support list: run_model_scenario36.ps1:85.
 
 lmx_message   run_lmx.ps1 -Suite Message (MessageApi + Host + Exec + Production)
