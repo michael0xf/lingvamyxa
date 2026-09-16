@@ -2001,6 +2001,31 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           будет отваливаться на несуществующих узлах".
         * R0's transport queue stays as today's carrier until Y3, so this is a re-pointing of the existing relay
           rather than a new transport.
+        * THE HOP CHAIN IS THE SERVICE'S DELIVERY MECHANISM, NOT A REPLACEMENT FOR IT (Mikhail's ninth line,
+          verified by me on origin/main aaed1653; the coordinator's falsifier said grep -c "com.mtk.map" prints 1
+          and it prints 3, since the sentence names the path twice and his quote carries it again). 19.29.7: "every
+          Message receives from the root, at its creation, the reference to the mail service; getAddress and the
+          hop-by-hop delivery below are an addition to that service, its delivery mechanism today, since the map
+          algorithm is not easily rewritten as event-driven at once". The reason is concrete and dated rather than
+          architectural taste: include_languages/com.mtk.map (the author's hash tables, arrays and cursors) will be
+          rewritten onto Message later and take the resolution's place, and it does not become event-driven in one
+          step. Verbatim: "оставьте пока getAddress и второй описанный механизм доставки, но сделайте его
+          дополнением к почтовому сервису ссылка на который передаётся от root".
+          WHAT IT MEANS FOR THIS STAGE'S CODE: nothing changes in the mechanism, and one thing changes in its
+          SHAPE. lmx_msg_send_to is the service's operation, reached through the reference every Message already
+          has (R0 fills the role, rt\root\addr names it, no new entity and no new field -- lm1:909-914). Today that
+          operation's body is the letter handed to the sender's parent. A later stage swaps the body under the same
+          call, and nothing that calls send_to has to know. S6-2 builds no sorted list and no map; it writes the
+          call in the place where the map will one day answer it.
+        * WHAT THE SERVICE WILL DO LATER, recorded so the shape written now is not mistaken for the destination
+          (Mikhail's tenth line, verified on origin/main: grep -c "addresses do not move" prints 1). 19.29.7: "the
+          service, once it has the map, delivers directly by the memory address of the target, since addresses do
+          not move". Verbatim: "Почтовый сервис будет доставлять сразу по адресу в памяти так как адреса не
+          двигаются." Nothing in S6-2 changes for it, and the reason it is written here is that it settles what the
+          hop chain IS: not an approximation of a lookup, but the delivery under a call whose later implementation
+          skips the walk entirely. It also explains why the arrays could go without anything replacing them --
+          the eventual resolution is a memory address, not a path, and the path is only what the letter carries
+          while the map does not exist yet.
       - THE IMPACT LIST, every number with its population named and measured at ab2db782, since this section has
         already had two unlabelled figures propagate tonight before they were checked:
         * RECEIVER-QUALIFIED READS of LmxMsg's path fields (path, path_n, path_cap on any receiver): lmx_message.h
@@ -2049,13 +2074,27 @@ S6. The lock deleted (L4, L7, L8 and what remains).
             review. (In my own working tree those lines read 1070 and 1080, because step 1 shifted them: same four
             sites, two trees, and the difference is the reason a count names its commit.)
         (5) PROSE CITING IT AS PRECEDENT: to sweep with the rest.
-        Outside the five and outside every gate: SEVEN mixa_manager files name the module in build lists, 10 lines
-        -- lib_l2_runtime_support.ps1:95 ($L2RuntimeNames), run_mixa_app_fmpanel:293, run_mixa_app_path:242,
-        run_mixa_backend_win32:213, run_mixa_composite_glyphs:64 and :102, run_mixa_selection:78 and :122,
-        run_mixa_tiles:62 and :94. e9 reported six; the seventh is run_mixa_backend_win32_l2_parity.ps1, which
-        names the module directly rather than through the shared lib, and I measured it after taking his list. None
-        of the seven is a run_gates row, so the deletion breaks them with NO RED ANYWHERE -- the ungated-runners
-        lesson exactly, and the reason this line is in the section rather than in a message.
+        Outside the five and outside every gate: SIX mixa_manager files name the module in build lists --
+        lib_l2_runtime_support.ps1 ($L2RuntimeNames), run_mixa_app_fmpanel, run_mixa_app_path,
+        run_mixa_composite_glyphs, run_mixa_selection, run_mixa_tiles. Measured with
+        git grep -l lmx_msg_path_storage 7b3a8668 -- mixa_manager, which lists exactly those six, and the same at
+        origin/main. None is a run_gates row, so the deletion breaks them with NO RED ANYWHERE unless they are
+        edited with it; b5's sonnet/s6-2-mixa-lists-2 (18f5701d off 7b3a8668, six files, +8 -9) covers exactly
+        these and is complete.
+        I CLAIMED A SEVENTH AND I WAS WRONG, recorded because of how the error was made rather than that it was
+        made. I reported run_mixa_backend_win32_l2_parity.ps1:213 as a seventh file naming the module in its own
+        $L2RuntimeNames, told e9 his six was short, and asked the coordinator to have b5's branch grown. He
+        re-measured and it reads 0 at 7b3a8668, 2d8f2b6a, origin/main, origin/d6/lock-s6-2 AND on b5's branch.
+        What I had read was the MAIN CHECKOUT's working tree at C:\Nyasha_Planet\lingvamyxa, whose HEAD is
+        03d42898 of 2026-09-14 -- two days stale, from before e93bc49d (ONE ROOT 2/3) removed the name from that
+        file. git log -S on the file shows the name entering at ab8a95fb and leaving at e93bc49d.
+        This is the THIRD time in one night that I measured the tree I happened to be standing in rather than the
+        tree under discussion: the id mint cited from the design worktree, the four path_grow line numbers from my
+        edited working tree, and now this. The first two cost a citation. This one cost a correction ISSUED
+        AGAINST A PEER WHO WAS RIGHT and a request to change someone else's branch. The rule the other two taught
+        was "name the commit"; the rule this one adds is sharper: when the measurement will be used to CONTRADICT
+        somebody, take it from a ref -- git show <ref>:<path> or git grep <ref> -- never from a working tree,
+        because a working tree has no name to put in the claim.
         The module's own paths (D): LMX_MSG_PATH_STORAGE.txt, lmx_msg_path_storage.h.lm1/.lm1/.lm2,
         tests/lmx_msg_path_storage_selftest.lm1, run_msg_path_storage.ps1, run_port_msg_path_storage.ps1 -- seven.
         run_gates loses the port_path_storage row at 103 and its header note at 30; the gate count goes 30 -> 29.
