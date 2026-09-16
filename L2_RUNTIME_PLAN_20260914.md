@@ -9289,3 +9289,23 @@ finish/rbreak), the last entered function before the generic fallback.
 (Correction, 2026-09-16 09:04: five clock times in the entries above from
 08:48 to 09:00 were written as guesses, up to 85 minutes ahead; they now
 read the commit times, which are authoritative.)
+
+COMPILER TICKET 1 DONE on a branch, 09:13: origin/fable/l2trans-define-actual
+d17eefc3 (off integration 7b3a8668; lands after S6-2 through the chain).
+l2_define_known (a define: name of the unit or its predef chain, any value)
+makes l2_ccall_box_int return 0, so the constant reaches the call as itself;
+l2_predef_file_define gains int any (0 keeps l2_define_count's count-literal
+search).  Fixture unit_define_actual in run_l2trans: red at 7b3a8668 (three
+defines boxed, gcc exit 0 with four -Wint-conversion warnings), green
+(run_l2trans exit 0, 294 s), falsifier (the box_int check removed ->
+run_l2trans exit 1 "unit_define_actual did not pass the predef defines as
+themselves"; restored, cmp identical).  b5 checks app_window end to end on a
+scratch merge with sonnet/mixa-module-list (before must reproduce the
+SIGSEGV after check 15), plus the twelve parity rows.  b5's AD impact list
+(sonnet/ad-preread 5348280e, l2src/AD_IMPACT_FIND_DELETION.md): baseline
+reproduced from a clean worktree (37/37/15 self_or_find, 3/3/102 find, 3/3
+dest_from_src, 3/3 find_tree); 199 sites classified HOLDS-POINTER or ID-ONLY
+with lanes, 10 internal to the four-function cluster; findings for AD: the
+id-taking adopt_mark/dispose_mark have no live caller (to be confirmed by a
+caller grep over both cores), and admit_one's self_or_find fires only when
+send found no dest_msg, so it folds into the refusal path.
