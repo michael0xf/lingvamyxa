@@ -7577,3 +7577,24 @@ held-capability case); the lead's five lines with the gate's verdict
 and the two tripwires follow, then the window pins, the remaining
 refs sites, the header, the lm1 fixtures, the module and the runner
 lines, then the tip.
+Design 4295292a (the lead): the executor selftest's counter pins are
+done, case by case on the gate (the rolled-back child, the
+failed-branch dispose, the mapped orphan's three uses, the held
+capability, the ctx rollback, the dispose-in-turn, the exec-maintain
+trio, the parent's own turn, the unbound close dispose), two
+file-scope helpers settled_has and settled_n replacing five copies of
+the walk; the one surviving 'rt->n' string is prose in a case header,
+rewritten (after the settle, "retained but unreachable" is the normal
+state, so the count could not be the oracle). Why the restatements
+are stronger: the count said "one fewer" but never whose; ownership
+says both. A second population found by the gate: the
+family-boundary case asserted km->parent_msg != 0 as "left its
+family" and now reads != pm (the cell must still name the owner, a
+stronger claim than zero). The parent_msg population measured and
+classified by field: 20 in lm1, 20 in lm2, 19 in exec.c, 9 in the
+selftest, of which 6 / 6 / 10 / 3 compare against zero; null-guards
+before a dereference (unaffected), ownership comparisons against a
+specific parent (unaffected, the shape the unlink case converted to),
+and exactly two genuine "zero means detached" readers, lm1:688 /
+lm2:731 plus exec.c:1192 (endp_try_retire's guard, which goes with
+refs): two sites, not twenty.
