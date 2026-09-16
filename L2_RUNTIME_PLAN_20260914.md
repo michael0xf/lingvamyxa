@@ -10034,3 +10034,24 @@ Two stage-5 claims are now closed: the l2trans non-determinism was a TRIGGER (th
 stray file only shifted the layout that exposed the executor race), and nothing
 about f1379551 needs pushing (origin/main is newer; the 156 files are already
 there).
+
+TWO DEFECTS, NOT ONE -- a correction of the coordinator's own phrasing, 2026-09-16 16:57.
+The earlier entry said the l2trans non-determinism "was a trigger, not the root
+cause"; that is true only of the FLAKE. There are two independent defects and
+both are real:
+  (i) the FLAKE is the executor race in launch_ctx_thread_rec (a foreign lane
+      retiring the wait record), and stage AD (d) is its fix;
+  (ii) the l2trans reading of an uninitialized fn_frame->trailer->spelling is a
+      defect of the TRANSLATOR, on its own, and AD does not and cannot fix it.
+The second blocks 5c's app_controller row: on the row-bounds tip 76331f43 the
+translation fails 1 of 1 ("unsupported body, frame=mixa_app_fmpanel_close"), so
+the link-list fix cannot even be verified until the translator is fixed. Ticket 5
+is therefore re-opened as a FIX and not a diagnosis; the fix goes in
+l2src/l2trans.lm1 (l2trans.c is generated), it does NOT disturb the self-build
+fixed point (the eight committed files are l1trans's output, l2trans.lm1 is not
+among them, so no selfbuild tag follows), and its acceptance is four-fold:
+translation passes on the tree that fails today AND on the tree that passed
+before, the result no longer depends on l2src/LOCK_REMOVAL_SPEC_MAP.txt's
+presence either way, and run_l2trans is green -- with the missing initialization
+named, not zeroed defensively, and the frame's neighbouring fields checked for
+the same hole.
