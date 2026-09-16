@@ -6634,3 +6634,16 @@ the stage tip merged with 695d54fc, the falsifier one retain put back.
 e9's cold self-build of 7b3a8668 is on origin (tag selfbuild/7b3a8668,
 log branch claude-0c/selfbuild-log-7b3a8668 b522e078); the cold gate
 follows.
+S6-2 ACCEPTANCE BASE: fable/s6-2-acceptance 4189dea0 = 7b3a8668 merged
+with d6/lock-s6-red 695d54fc (the probe only, never folded into a
+stage), red measured there: refs=342 runtime_lists=36, S6-2 RED. The
+green is the stage tip merged with 4189dea0 (or with 695d54fc alone,
+the same tree): -Part 2 0/0, plus the union base; the falsifier one
+retain put back on the green tree. Git-freeze window for e9's
+archive-hang isolation (GATE_ARCHIVE_HANG.txt b919895a: stages A about
+5 min, B about 10, C about 20, D about 5, a hard stop at 60 min
+reported as incomplete; git activity held before and after each stage,
+reflog heads compared): announced by the coordinator to all sessions
+after e9's cold gate record of 7b3a8668, lifted in one line; during it
+no pushes, fetches, checkouts or builds by anyone, doc writing in
+working trees allowed but not committed.
