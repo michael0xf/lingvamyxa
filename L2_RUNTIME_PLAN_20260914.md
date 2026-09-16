@@ -6647,3 +6647,27 @@ reflog heads compared): announced by the coordinator to all sessions
 after e9's cold gate record of 7b3a8668, lifted in one line; during it
 no pushes, fetches, checkouts or builds by anyone, doc writing in
 working trees allowed but not committed.
+b5's S6-2 pre-read landed on sonnet/s6-2-preread 158952fd
+(l2src/LOCK_REMOVAL_S6_2_PREREAD.txt, 235 lines, off 7b3a8668,
+cross-referenced with e9's 16335e9b; read by the coordinator): 24
+sites (21 retain/release functions: 5 in lmx_message_exec.c, 16 in
+lmx_message.lm1; 3 readers of slots/n/alloc_next: create_prepare,
+endp_try_retire, runtime_delete); 0 contradictions; every site's
+replacement is the design's ruled principle on 19.29.7 "there is no
+count of holders" (a closing Message's mailbox is settled into its
+parent with the rest of its storage, the parent's arena blocks do not
+move, so a stale handle stays valid memory and the count deferred a
+free that no longer happens), the one write site (admit_one/recv)
+already under the per-Message mailbox monitor; drive_walk_list's
+snapshot walk is the design's own "another lane still holds through
+refs" example and reads only ->parent_msg and ->state, checked against
+RELEASED; runtime_delete's slots walk goes on 19.28 "the slot list
+served only the L1 delete loop" with no walk at deletion (the close is
+R0's own closing end-turn). One designed-but-uncoded item, not a
+contradiction: the send-to-a-closed-sibling redirect to the parent's
+mailbox and refusal on the parent's lane, which the design already
+names as needing its own red-first check; it goes into the lead's
+S6-2 section as that check. Method note kept: backslash field
+patterns (rt\slots, rt\n, \alloc_next) are grepped in PowerShell with
+word boundaries, the matched lines inspected before the count is
+trusted.
