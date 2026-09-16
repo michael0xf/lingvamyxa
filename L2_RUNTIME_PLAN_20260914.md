@@ -7885,3 +7885,22 @@ refs=1 S6-2 RED, restored to dirty=0 and refs=0. The gate half of the
 green leg (port_message plain and -LaneCheck, run_lmx -Suite Message,
 scenario36, entry_turn, graph_abi) runs cold on the same merge once
 the lead's five lines name 2d8f2b6a as the tip; then "launch" to e9.
+e9: land_s6_2.sh at claude-0c/land-s6-2 9443bf8b, the allowlist 54
+after the dry run over 51b73274 flagged three paths outside
+(run_entry_turn.ps1, lmx_graph_copy_owned.lm2, lmx_msg_mail_chain.lm2;
+all confirmed intended by the lead), re-run over 2d8f2b6a: 54 paths,
+0 outside, the path set byte-identical to 51b73274's; the decoys
+refused. claude-0c/s6-2-gate-impact 97a9485b carries e9's own
+correction: run_entry_turn.ps1 was filed as "needs no edit" from its
+Test-Path guard, but the guard prevents a build failure, not the stale
+name in $names: "will not break" and "needs no edit" are different
+claims; 23 runners need the edit, 22 red at build if missed,
+entry_turn the one that would have reached a landing unnoticed. The
+counting rule's third part, recorded: name the population, the
+commit, and what the pattern actually matches (the sixth count
+disagreement, the lead's 55 by prose categories against e9's 54 by
+name-status lines, caught before either was acted on). The
+coordinator's green-leg runner half is running cold on the measuring
+merge (port_message plain and -LaneCheck, run_lmx -Suite Message,
+scenario36, entry_turn, graph_abi, the port_slots absence), the pin
+re-installed before each.
