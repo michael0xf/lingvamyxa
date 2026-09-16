@@ -196,6 +196,16 @@ $processWin32O = Build-RealDep "mixa_process_win32" "mixa_manager\mixa_process_w
 $fmpanelO = Build-RealDep "mixa_app_fmpanel" "mixa_manager\mixa_app_fmpanel.lm1"
 $highlightO = Build-RealDep "mixa_highlight" "mixa_manager\mixa_highlight.lm1"
 
+# Modules embedded in the Oracle controller's predef chain (mixa_app_controller.lm1
+# predef's mixa_fm_copy which transitively embeds file_manager, copy, dir_win32,
+# selection, selection_walk) but emitted as extern calls by the L2 translation.
+# Adding mixa_fm_copy.o to the L2 link list resolves all 14 undefined references
+# (mixa_app_loop_*, mixa_fm_*, mixa_dir_remove, mixa_selection_*). NOT added to the
+# Oracle link: the Oracle controller embeds these bodies inline via its predef chain,
+# so a shared object would duplicate symbols.
+$fmCopyO = Build-RealDep "mixa_fm_copy" "mixa_manager\mixa_fm_copy.lm1"
+$EmbeddedDepsO = @($fmCopyO)
+
 $SharedDepsO = @($fmpanelO, $highlightO, $eventFifoO, $backendTableO, $backendHeadlessO, $backendCtorsO, $pumpO, $consoleWindowO, $fileWin32O, $appPathO, $helpO, $cmdlineO, $cmdlineDispatchO, $processMarkerO, $processWin32O)
 
 # ---- Step 3: ALWAYS build + run the ORACLE-side harness. mixa_app_
@@ -291,7 +301,7 @@ if ($AcExit -ne 0 -and $KnownBarrier) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2ac_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2ac_link_stderr.log"
-            $l2LinkArgs = @("$GccStd", "-I", "`"$RepoRoot`"", "-I", "`"$RunDir\headers`"", "`"$harnessO`"", "`"$l2AcO`"") + ($SharedDepsO | ForEach-Object { "`"$_`"" }) + @($L2Rt.ObjList, "-o", "`"$l2Exe`"", $LinkLibs)
+            $l2LinkArgs = @("$GccStd", "-I", "`"$RepoRoot`"", "-I", "`"$RunDir\headers`"", "`"$harnessO`"", "`"$l2AcO`"") + ($SharedDepsO | ForEach-Object { "`"$_`"" }) + ($EmbeddedDepsO | ForEach-Object { "`"$_`"" }) + @($L2Rt.ObjList, "-o", "`"$l2Exe`"", $LinkLibs)
             $l2olExit = Invoke-Cmd "gcc" ($l2LinkArgs -join " ") $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
