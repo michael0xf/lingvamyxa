@@ -329,7 +329,8 @@ int lmx_msg_service_unregister(LmxMsg *svc, LmxMsg *m, LmxMsgAddr id);
 int lmx_msg_service_is_live(LmxMsg *svc, LmxMsg *m, LmxMsgAddr id);
 /* S6-2 (SPEC 19.29.7): compose a Message's hierarchical address by walking the
  * parent links to the root.  Returns the number of indices, or -1 if the Message
- * is not reachable.  Fills out[0..n-1] root-first when out is non-zero and cap is
+ * is not reachable or its chain changed between the count and the fill (a
+ * handoff or an orphaning on another lane); the fill never writes past cap.  Fills out[0..n-1] root-first when out is non-zero and cap is
  * at least n; with a smaller cap (or out == 0) it returns the count and writes
  * nothing, so a caller can size its buffer first.  Nothing is allocated, so there
  * is nothing to free -- the shape lmx_msg_poll already uses. */
