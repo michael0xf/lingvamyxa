@@ -6844,3 +6844,12 @@ runs in the host loop at a host setting ("host settings, not language
 constants", 13190-13191), and on expiry leaves the OS process; the
 liveness_33 line 372 becomes live_query(R0) == the stub's answer. For
 the lead's R0P section after S6-2.
+Attribution corrected for the R0P poll ruling above: "R0 polls it as any
+child polls its parent" is the coordinator's reading in the spec's
+liveness paragraph, not Mikhail's words; the ruling rests on his
+verbatim sentences there and in section 2: the mutual poll ("ребенок и
+родитель взаимно опрашиваются (в приоритете ребенок опрашивает -- он и
+должен оставлять след что живой)") and the stub ("я выше просил
+заглушку 'родитель корневого L3 Thread'", with the root thread's
+timeout leaving the OS process). R0 is a child of the stub under the
+first sentence, so it polls the stub in the general sweep.
