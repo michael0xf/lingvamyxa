@@ -3617,3 +3617,16 @@ and the stage probe:
       self_or_find_fallback, id_marks, parent_field) with its positive control,
       the full gate chain cold, and the UAF kit as the flake's detector: 0
       unclean runs of 40 where the parent tree gave 2.
+
+NOTE ON (d)(1)'s ORDER, added the same hour after reading the launch path
+closely: a LOCAL re-validation at the launch site is not a fix by itself. The
+three faces of the flake are the same missing guarantee seen from three sides --
+the launch path holds a record whose wait another lane may retire -- so a guard
+that merely re-reads r->wait and returns INVALID on 0 converts the refusal face
+into the hang face (a worker the test waits for is never launched), and a guard
+that skips a vanished record silently drops a launch the walk had decided on.
+The guarantee that removes all three at once is the one the design already names:
+the retire goes through the pending-free list and the record is freed only when
+no lane can still hold it -- i.e. (d)(3) lands FIRST, and (d)(1) then routes
+bind_wait_retire_locked's free through that list. Only after that is the launch
+path's own re-resolve a pure simplification rather than a trade between faces.
