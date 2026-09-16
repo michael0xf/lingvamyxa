@@ -9475,3 +9475,25 @@ one exit through an inner function), with a capacity-taking concatenation for
 it; keep the located overflow report (the flag and l2_text_at).  Red first
 again, and the depth probe plus the whole-tree comparison are part of its
 evidence.
+
+S6-2 LANDED, 10:05:44 (recorded 10:07): integration/main-absorbs-core 07cd6901
+= Merge claude-0c/archive-timeout-3 (3d4eb0be) into 7b3a8668, pushed by
+land_s6_2.sh after every step exited 0: probe 09:44:26 (S6-2 GREEN, refs=0
+runtime_lists=0, acceptance base 96a754e0); self_build 09:44:37 (8 of 8,
+generated C equal to the fixed point, 10 s, no new commit); gates 09:53:24
+(29 of 29 in 526 s); port_message 09:54:17 and port_message -LaneCheck
+09:55:10 (parity PASS); l2trans 10:00:02 (gen2 ok, 292 s); port_parser
+10:04:48 (ok, 286 s); mixa 10:05:04 (backend table ok); ingress 10:05:06
+(fail_keep_runtime path ok); scenario36 10:05:28 (core tests PASS);
+lmx_cancel 10:05:40 (selected=Cancel ok).  Annotated tag selfbuild/07cd6901
+(tag object 850a16c4) on origin.  Main: the coordinator merged integration
+into main as 81dc3791 (parents 771788d7 and 07cd6901; 0 conflicts over base
+7b3a8668; the merge brings exactly the stage's 77 paths).
+NEXT, in order: b5 moves sonnet/mixa-module-list onto the new integration by
+the restated name rule and runs run_mixa and run_ingress_harness cold; the
+coordinator reworks compiler ticket 2 (heap text for statement calls, 256 in
+the recursive path, the located overflow report) and runs run_l2trans, the
+depth probe and the whole-tree comparison on both translator branches before
+their landing; the lead writes stage AD's design section on the restated
+scope (the handle pair, the id scans deleted, parent's id retired, atomic
+link cells with a free grace) and its acceptance; then R0P, Y, A.
