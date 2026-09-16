@@ -28,6 +28,8 @@ typedef unsigned char uchar;
 #define LMX_MSG_DUPLICATE 6
 #define LMX_MSG_GONE 7
 #define LMX_MSG_EMPTY 8
+/* S6-2: string address not deliverable yet (lmx_msg_send_address's body today). */
+#define LMX_MSG_UNDELIVERABLE 9
 
 #define LMX_MSG_KIND_NUMBER 0
 #define LMX_MSG_KIND_BYTES 1
@@ -342,6 +344,13 @@ int lmx_msg_service_is_live(LmxMsg *svc, LmxMsg *m, LmxMsgAddr id);
  * nothing, so a caller can size its buffer first.  Nothing is allocated, so there
  * is nothing to free -- the shape lmx_msg_poll already uses. */
 int lmx_msg_get_address(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned *out, int cap);
+/* S6-2 (SPEC 19.29.7): the common API's second entry, send by string address
+ * (addr[0..addr_n-1], root-first, the shape lmx_msg_get_address fills).  The
+ * default body delegates to the sender's service.  R0's body today refuses: a
+ * KIND_REJECTED letter to the sender and LMX_MSG_UNDELIVERABLE returned -- the
+ * hop-by-hop chain waits for the stage whose executor runs every holder's round. */
+int lmx_msg_service_send_address(LmxMsgRuntime *rt, LmxMsg *svc, LmxMsgAddr from, const unsigned *addr, int addr_n, const LmxMsgEnv *env);
+int lmx_msg_send_address(LmxMsgRuntime *rt, LmxMsgAddr from, const unsigned *addr, int addr_n, const LmxMsgEnv *env);
 int lmx_msg_path_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_path_seg(LmxMsgRuntime *rt, LmxMsgAddr who, int i, unsigned *out);
 int lmx_msg_child_n(LmxMsgRuntime *rt, LmxMsgAddr who);

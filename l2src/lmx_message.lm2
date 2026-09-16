@@ -2793,6 +2793,41 @@ fn: msg_get_address (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: unsigned out; int:
     return: msg_address_of(m, out, cap)
 end: msg_get_address
 
+# S6-2 (SPEC 19.29.7, the common mail API's SECOND ENTRY; ruled 2026-09-16 on
+# Mikhail's fourteenth line): send by string address. The service's body today
+# delivers nothing by string address: the hop-by-hop chain needs each holder's own
+# round to look at a hop letter, and the bootstrap executor cannot run the round of
+# a Message with no bound turn, so the chain waits for its stage. What is written
+# now is the interface, so no caller changes when the body is swapped: the service
+# refuses with KIND_REJECTED to the sender and returns LMX_MSG_UNDELIVERABLE. It
+# reads no other Message's links -- only its own addr and the sender's handle.
+fn: msg_service_send_address (@: LmxMsgRuntime rt; @: LmxMsg svc; LmxMsgAddr: from; const: @(unsigned addr); int: addr_n; const: @(LmxMsgEnv env)) int
+    int: pst
+    if: rt = 0 || svc = 0 || addr = 0 || addr_n < 1 || env = 0
+        return: c.LMX_MSG_INVALID
+    ---
+    pst: msg_post_rejected(rt, svc\addr, from, env\correlation)
+    if: pst = c.LMX_MSG_NOMEM
+        return: pst
+    ---
+    return: c.LMX_MSG_UNDELIVERABLE
+end: msg_service_send_address
+
+# The default body every L3 Thread carries: read the sender's own service reference
+# and delegate. The sender is inside its own turn, so its record cannot be freed
+# under the call.
+fn: msg_send_address (@: LmxMsgRuntime rt; LmxMsgAddr: from; const: @(unsigned addr); int: addr_n; const: @(LmxMsgEnv env)) int
+    @: LmxMsg src
+    if: msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U
+        return: c.LMX_MSG_INVALID
+    ---
+    src: msg_self_or_find(rt, from)
+    if: src = 0
+        return: c.LMX_MSG_INVALID
+    ---
+    return: msg_service_send_address(rt, msg_service_of(src), from, addr, addr_n, env)
+end: msg_send_address
+
 fn: msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: pn

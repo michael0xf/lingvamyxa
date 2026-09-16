@@ -6163,6 +6163,52 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        {
+            /* S6-2 (the common API's second entry, ruled 2026-09-16): send by string
+             * address is written now as the interface, and R0's body refuses it --
+             * KIND_REJECTED to the sender, LMX_MSG_UNDELIVERABLE returned -- until the
+             * stage whose executor runs every holder's round. The address used is a
+             * real one from lmx_msg_get_address, so the refusal is not an unknown
+             * address being refused: nothing is delivered by string address yet. */
+            LmxMsgAddr p = 0, a = 0, b = 0;
+            unsigned baddr[16];
+            int bn;
+            int st;
+            LmxMsgEnv se;
+            LmxMsgEnv got;
+            memset(&se, 0, sizeof(se));
+            memset(&got, 0, sizeof(got));
+            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec send-address create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            bn = lmx_msg_get_address(rti, b, baddr, 16);
+            se.kind = LMX_MSG_KIND_NUMBER;
+            se.number = 5;
+            se.correlation = 31U;
+            st = lmx_msg_send_address(rti, a, baddr, bn, &se);
+            r0_round(rti);
+            if (bn != 3 || st != LMX_MSG_UNDELIVERABLE || lmx_msg_inbox_n(rti, b) != 0
+                || lmx_msg_recv(rti, a, &got) != LMX_MSG_OK || got.kind != LMX_MSG_KIND_REJECTED
+                || got.correlation != 31U) {
+                fprintf(stderr, "exec send-address bn=%d st=%d inbox_b=%d kind=%d corr=%u\n",
+                    bn, st, lmx_msg_inbox_n(rti, b), got.kind, got.correlation);
+                lmx_msg_env_release(&got);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_env_release(&got);
+            fprintf(stderr, "exec wait: send by string address is refused by R0's body with KIND_REJECTED and UNDELIVERABLE\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
         seen_new(rti);
         {
             LmxMsgAddr p = 0, a = 0, d = 0;
