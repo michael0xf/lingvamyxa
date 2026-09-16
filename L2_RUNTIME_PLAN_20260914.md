@@ -7727,3 +7727,32 @@ alloc_next) with runtime_delete walking the settled list, the lm1
 fixtures' seventeen pins with their captures and the loop wait, the
 module's seven files, run_gates.ps1's port_slots row, the 22 runner
 support lines, then the probe -Part 2 at 0/0 on the measuring merge.
+S6-2 STEP TWO, the lead's five lines at 95de9bf4: both gates green
+(run_port_message parity PASS both runs; run_lmx -Suite Message exit
+0). Deleted: LmxMsg.refs and every mechanism over it (endp_retain and
+endp_release the only writers and the only path to endp_try_retire,
+which was the only walker of rt->slots besides runtime_delete and the
+only caller of slot_free outside it, so the three went together;
+endp_refs in both cores with its declaration; slot_new's refs = 1;
+46 call sites per core across 14 functions). What the pins guarded,
+"this record cannot be freed under me" across an unlocked window, the
+settle answers (nothing frees a record but R0's teardown); re-checks
+beside a pin (drive_one's still-closing, still-empty, same-address,
+not-RELEASED) stay, and drive_walk_list's snapshot stays as the guard
+against the list changing under the walk. Tests per fate: two whole
+cases cut with the forced-retain-failure hook (as e9's row predicted),
+two kept their subject without the refs framing, one SUCCESS marker
+that advertised a refs check it no longer performed corrected (the
+decorative gate in another costume). METHOD RULE recorded: the lead
+removed one side of a retain/release pair four times in the sweep
+(drive_walk_roots, send_owned in lm1 and lm2, after copy_free) and a
+survivor grep by enclosing function caught each within its batch: a
+mechanical deletion needs a mechanical check after every batch; care
+does not scale across a hundred sites, the check does. Next the
+registry (rt\slots, rt\n, alloc_next, the module's eight files,
+run_gates' port_slots row with the count 31 to 30, 25 runner list
+sites); RULED on its one design piece: runtime_delete's two passes
+(drain every mailbox, then free) become one recursive traversal of
+R0's settled lists plus whatever is still attached to its tree, in
+that order: freeing the owner's storage, not the runtime-wide walk
+5.1 forbids, written in the section in those words.
