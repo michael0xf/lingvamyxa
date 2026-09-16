@@ -467,8 +467,9 @@ prototype:
     fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_cnt_keep (const: @(LmP0Text src)) @: LmP0Text
     fn: l2_cnt_free () int
-    fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted)) @: LmP0Text
+    fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted); int: any) @: LmP0Text
     fn: l2_define_count (const: @(LmP0Text name)) @: LmP0Text
+    fn: l2_define_known (const: @(LmP0Text name)) int
     fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_predef_has_function (const: @(LmP0Text name)) int
     fn: l2_foreign_free () int
@@ -4232,7 +4233,10 @@ return: 0
 # A top-level `define: NAME <literal>` in a predef'd .h.lm1, or in a .h.lm1 that
 # one predefs (the same single-file predef closure l2_predef_file_has_type
 # follows). The literal is kept, because this document is destroyed here.
-fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted)) @: LmP0Text
+# With any = 0 only an array-count literal is found (l2_define_count); with
+# any = 1 a define of any value is, and the kept text is its name
+# (l2_define_known).
+fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted); int: any) @: LmP0Text
     size_t: n
     @: char path 0
     @: LmP0Document document 0
@@ -4262,14 +4266,17 @@ fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted)) @
                     if: first != 0
                         second: l2_next_active(first\next)
                     ---
-                    if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name) && second != 0 && second\value != 0 && second\value\kind = c.LM_P0_NODE_ATOM && l2_array_count_is(second\value\as\atom) != 0
+                    if: any != 0 && first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name) && second != 0 && second\value != 0
+                        found: l2_cnt_keep(first\value\as\atom)
+                    ---
+                    if: any = 0 && first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name) && second != 0 && second\value != 0 && second\value\kind = c.LM_P0_NODE_ATOM && l2_array_count_is(second\value\as\atom) != 0
                         found: l2_cnt_keep(second\value\as\atom)
                     ---
                 ---
                 if: found = 0 && l2_frame_head(item, "predef") && item\as\frame\body != 0 && l2_count_active(item\as\frame\body) = 1
                     first: l2_next_active(item\as\frame\body\first_field)
                     if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM
-                        found: l2_predef_file_define(name, first\value\as\atom)
+                        found: l2_predef_file_define(name, first\value\as\atom, any)
                     ---
                 ---
                 f: l2_next_active(f\next)
@@ -4306,7 +4313,7 @@ fn: l2_define_count (const: @(LmP0Text name)) @: LmP0Text
     ---
     i: 0
     while: i < l2_pd_n && r = 0
-        r: l2_predef_file_define(name, l2_pd[i])
+        r: l2_predef_file_define(name, l2_pd[i], 0)
         i: i + 1
     ---
 return: r
@@ -12275,6 +12282,34 @@ fn: l2_addr_tail (@: LmP0Field f; int: mi; @@: LmP0Field out_name; @@: LmP0Field
     \out_after: p2
 return: 0
 
+# A name defined by define: -- in this unit, or in its predef chain, whatever
+# its value -- is a constant. As a call actual it is passed as itself, the way
+# l1trans passes it; staging it into a typed temporary guesses a type the
+# define does not have (mixa_app_window: a char* define boxed into an int lost
+# its high bits and the callee's strlen faulted).
+fn: l2_define_known (const: @(LmP0Text name)) int
+    int: i 0
+    @: LmP0Field first
+    if: name = 0 || l2_ident(name) = 0
+        return: 0
+    while: i < l2_def_n
+        if: l2_def[i] != 0 && l2_def[i]\as != 0 && l2_def[i]\as\frame != 0 && l2_def[i]\as\frame\body != 0 && l2_count_active(l2_def[i]\as\frame\body) = 2
+            first: l2_next_active(l2_def[i]\as\frame\body\first_field)
+            if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name)
+                return: 1
+            ---
+        ---
+        i: i + 1
+    ---
+    i: 0
+    while: i < l2_pd_n
+        if: l2_predef_file_define(name, l2_pd[i], 1) != 0
+            return: 1
+        ---
+        i: i + 1
+    ---
+return: 0
+
 fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
     int: ei
     int: fi
@@ -12331,6 +12366,9 @@ fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
     ---
     # A function as a value is passed as itself, never boxed.
     if: l2_find_method(node\as\atom) >= 0 || l2_predef_has_function(node\as\atom) != 0
+        return: 0
+    # So is a constant a define: names (l2_define_known).
+    if: l2_define_known(node\as\atom) != 0
         return: 0
 return: 1
 

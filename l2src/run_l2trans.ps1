@@ -2407,6 +2407,20 @@ $fnptrL1 = Invoke-CompileObject "l2src\tests\unit_fnptr_prototype_value.lm2" "un
 if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, lm_own_delete_plain\)') { throw "unit_fnptr_prototype_value did not pass the prototype function as itself" }
 if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, p0_probe_delete_item\)') { throw "unit_fnptr_prototype_value did not pass the L2 callable as itself" }
 if ($fnptrL1 -match '(?m)^\s*l2_t\d+: (lm_own_delete_plain|p0_probe_delete_item)\s*$') { throw "unit_fnptr_prototype_value boxed a function into a temporary" }
+# mixa_app_window (b5's diagnosis on sonnet/mixa-module-list): a define:'d
+# constant is a call actual passed as itself -- one from the predef chain in an
+# if condition, one of this unit in a return -- never staged into an int
+# temporary, where a char* define lost its high bits.
+$defineHeader = "lm1\build\l2src\tests\unit_define_actual.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $defineHeader) | Out-Null
+& $outputL1trans "l2src\tests\unit_define_actual.h.lm1" $defineHeader
+if ($LASTEXITCODE -ne 0) { throw "unit_define_actual header translation failed" }
+$defineL1 = Invoke-CompileObject "l2src\tests\unit_define_actual.lm2" "unit_define_actual"
+if ($defineL1 -notmatch 'probe_define_take\(l2_p\d+_0, 0U, PROBE_DEFINE_LABEL, PROBE_DEFINE_FG\)') { throw "unit_define_actual did not pass the predef defines as themselves" }
+if ($defineL1 -notmatch 'probe_define_take\(l2_p\d+_0, 1U, PROBE_UNIT_LABEL, 7U\)') { throw "unit_define_actual did not pass the unit define as itself" }
+if ($defineL1 -match '(?m)^\s*l2_t\d+: PROBE_\w+\s*$') { throw "unit_define_actual boxed a define into a temporary" }
+$defineGcc = [IO.File]::ReadAllText((Resolve-L2Path (Join-Path $log "unit_define_actual.gcc.log")))
+if ($defineGcc -match 'int-conversion') { throw "unit_define_actual compiled with an int-conversion warning:`n$defineGcc" }
 # Spec 11.3.1 / 12.2: `@` never names an own Array element's storage; that
 # pointer needs an explicit adapter. 485f15cc's flat-field `@` let
 # `return: @ buf[0]` emit the address of a temporary copy (0c).
