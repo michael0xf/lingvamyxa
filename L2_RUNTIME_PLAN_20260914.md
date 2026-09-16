@@ -7203,3 +7203,15 @@ orphan present after the drive; 167: rt\n = 2 after the deadline).
 Verified by the coordinator with e9's falsifier at 7b3a8668: 5, 11, 1.
 The lead's section carries seventeen; a missed rt\n read cannot pass
 silently, since the field's deletion reds the build.
+The lead's design at d6/lock-removal 4a58b99b (after 04852c20): the
+slot-pin inventory measured on the field agrees with e9's 7867db9b:
+seventeen check lines (family_release_17 212, 222, 248, 270, 303, 304,
+321, 342, 344, 345, 346; orphan_mapped_17 149, 157, 158, 159, 167;
+entry_turn 84), eight n0 captures, and one loop condition
+(orphan_mapped_17:163, `while: rt\n != 2`, the wait for the sweep,
+which becomes a wait on the property, `while: lmx_msg_find(rt, cc)
+!= 0`, with the drive inside; a wait, not an assertion); four pins
+state an absolute count (270, 344, 158, 167) and take the membership
+form first; all restated as ownership and state checks, never "find
+says gone". 04852c20 carries the reconciliation with "never at
+process end" that the coordinator put to Mikhail (above).
