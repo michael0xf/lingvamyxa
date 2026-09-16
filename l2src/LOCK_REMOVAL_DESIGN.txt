@@ -1852,6 +1852,30 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       The half that could have been a real surprise was measured and is clean: run_msg_family_handoff stays at
       "checks=67 failures=0 watched_frees=4", so not draining the mailbox did not move that runner's block-free
       count -- the numeric side effect I went looking for is not there.
+    - MEASURED, and it settles which reds belong to the stage rather than to a step inside it: run_port_message is
+      red at "rolled-back bound child not retired n=4 bind=0" (the executor selftest's check at
+      lmx_message_exec_selftest.c:2855, rtb->n != n0 - 1) on the settled-list commit AND, identically, on its
+      parent 8dc450fc -- same line, same numbers, measured cold in a detached worktree at the parent before the
+      claim was made. So port_message joins scenario36 as a runner that is red BY the settle and stays red until
+      the deletion and the restatements land; neither is a checkpoint for this branch meanwhile, and the settled
+      list is neutral on it. The mechanism is the same one already written up for scenario36: end_turn's rollback
+      releases an uncommitted INACTIVE child (lmx_message.lm1:1733-1734) through release_slot, the settle keeps
+      parent_msg, endp_try_retire refuses on parent_msg != 0, so rt->n never decrements. That check is one of the
+      restatements, not a defect to fix.
+      Counted by field and split by role, the executor selftest's own share of this work: 39 reads of ->n, of which
+      12 sit in a condition and 10 are captures, plus 16 endp_ lines in two groups (the six-line retain/release
+      block at 3172-3202 and the endp_refs reads at 6017-6624). The unit matters: "31 rt
+ reads" in the earlier
+      inventory counted a different population than either of these, which is the counting lesson below.
+    - COUNTING RULE, learned the hard way tonight across four disagreeing inventories (mine and 0c's, in both
+      directions): mentions, pins, sites, gates and runners are five different populations over one grep, and a
+      count that does not say which population it counted cannot be checked. Count the FIELD, then split by role
+      (assertion / capture / loop condition / comment). My "six pins in family_release_17" was five short because a
+      text-led pass reads wording, and "eight in orphan_mapped_17" was three long because a mention is not a pin;
+      0c's "19 reads, pinned at three" had the 19 right and the three wrong, which is worse than being wrong twice
+      because the number looks measured. The loop condition at orphan_mapped_17:163 escaped BOTH passes, because
+      it is neither a mention-in-prose nor a pin -- and it is the one site that does not even compile once the
+      field goes.
     - The slot-count pins cannot be restated as find-based "gone", and the reason is written in the fixtures
       themselves: family_release_17 says "'Gone' is measured by the runtime's slot count rt\n, not by
       lmx_msg_find: find walks only what rt->root reaches, so a subtree released from its parent but still
