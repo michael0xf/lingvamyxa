@@ -8112,3 +8112,15 @@ requiring the marker line for every row (tripwire: a scratch row
 exiting 0 without its marker reads FAIL), measured on the tip so all
 30 markers still match (strictly stricter); the lead merges both, the
 allowlist grows by two, then run_gates whole.
+The lead's third count agrees (lane_oracle the one five-element row,
+28 four-element rows plus the appended one; his first probe counted a
+trailing comma as a fifth element). His caution, passed to e9: the
+marker rule turns a gate red the instant a configured marker does not
+match what the runner prints on a good run (c_scanners' row printed
+"(empty log)" tonight), so the safety measurement is the strong form,
+row by row (each of the 30 printed its own marker on a green run),
+not "the chain came out green"; a mismatch is the rule's fault and the
+table's marker text is corrected, never the rule loosened. His
+verification on e9's push: descent from 2d8f2b6a, name-status exactly
+the two runners plus the tripwire path, and the "no marker line" FAIL
+branch outside the Count -gt 4 guard.
