@@ -60,7 +60,15 @@
 #   run_foreign_alloc has no port parity runner.
 param(
     [switch]$L2MessageRoot,
-    [string]$LogDir
+    [string]$LogDir,
+    # Row selection. The chain is the same set whether or not these are used: with
+    # neither flag every row runs and the verdict line reads "N of N" exactly as a
+    # landing script's pin expects. -Only/-Skip exist so a worker can measure the
+    # rows its change can actually reach instead of the whole chain -- and when
+    # they are used the verdict line SAYS SO, so a filtered run can never be
+    # mistaken for the full one.
+    [string[]]$Only = @(),
+    [string[]]$Skip = @()
 )
 $ErrorActionPreference = 'Continue'
 $baseline = Split-Path -Parent $PSScriptRoot
@@ -118,6 +126,19 @@ $decoration = '^\s*(At line:|At [A-Za-z]:\\|\+ |CategoryInfo|FullyQualifiedError
 $rows = @()
 $red = $false
 $chainStarted = Get-Date
+if ($Only.Count -gt 0) {
+    $unknown = @($Only | Where-Object { @($gates | ForEach-Object { $_[0] }) -notcontains $_ })
+    if ($unknown.Count -gt 0) { Write-Output ("unknown row name(s): " + ($unknown -join ', ')); exit 1 }
+    $gates = @($gates | Where-Object { $Only -contains $_[0] })
+}
+if ($Skip.Count -gt 0) {
+    $unknown = @($Skip | Where-Object { @($gates | ForEach-Object { $_[0] }) -notcontains $_ })
+    if ($unknown.Count -gt 0) { Write-Output ("unknown row name(s): " + ($unknown -join ', ')); exit 1 }
+    $gates = @($gates | Where-Object { $Skip -notcontains $_[0] })
+}
+if ($gates.Count -eq 0) { Write-Output "no rows selected"; exit 1 }
+$filtered = ($Only.Count -gt 0) -or ($Skip.Count -gt 0)
+
 foreach ($g in $gates) {
     $name = $g[0]
     $log = Join-Path $LogDir "$name.log"
@@ -171,9 +192,11 @@ Write-Output ''
 Write-Output '==== gate summary ===='
 Write-Output $header
 $rows | ForEach-Object { Write-Output $_ }
+$note = ''
+if ($filtered) { $note = " (FILTERED: only=[" + ($Only -join ',') + "] skip=[" + ($Skip -join ',') + "])" }
 if ($red) {
-    Write-Output "gates RED: stopped at $stoppedAt after ${chainSeconds}s"
+    Write-Output "gates RED: stopped at $stoppedAt after ${chainSeconds}s$note"
     exit 1
 }
-Write-Output "gates GREEN: $($gates.Count) of $($gates.Count) in ${chainSeconds}s"
+Write-Output "gates GREEN: $($gates.Count) of $($gates.Count) in ${chainSeconds}s$note"
 exit 0

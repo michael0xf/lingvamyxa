@@ -1888,6 +1888,7 @@ static int launch_ctx_thread_rec(LmxMsgRuntime *rt, LmxMsg *m) {
     LmxMsgExec *e = exof(rt);
     LmxMsgCtxPack *pack;
     LmxMsgExecBind *r;
+    LmxMsgBindWait *wait;
 #if defined(_WIN32)
     HANDLE th;
 #else
@@ -1911,21 +1912,41 @@ static int launch_ctx_thread_rec(LmxMsgRuntime *rt, LmxMsg *m) {
     if (bind_has_worker(r) != 0) {
         return LMX_MSG_OK;
     }
-    if (r->wait == 0) {
-        r->wait = (LmxMsgBindWait *)calloc(1U, sizeof(LmxMsgBindWait));
-        if (r->wait == 0) {
+    /* AD (2026-09-16): THE WAIT IS CLAIMED BEFORE IT IS PUBLISHED.  A foreign
+     * lane retires the record (bind_wait_retire_locked) and frees it whenever
+     * worker_on is 0 -- which is exactly this window, the one between allocating
+     * the record and the worker's existence.  The old order (publish the pointer,
+     * then set the flag) let that lane free a block this path was about to use:
+     * under the poisoning allocator the cell then read back as 0 and the next
+     * store faulted (c0000005, access=0 -- lmx_message_exec.c:1901 in the flake
+     * tree).  Now the flag is set while the record is still private, so a
+     * retiring lane cannot take it, and the publish is verified by reading the
+     * cell back: a mismatch means a lane retired it between the store and the
+     * read, the block is not ours to touch again, and the caller re-runs the
+     * walk -- a launch that is not ready now, never a launch refused. */
+    wait = __atomic_load_n(&r->wait, __ATOMIC_RELAXED);
+    if (wait == 0) {
+        wait = (LmxMsgBindWait *)calloc(1U, sizeof(LmxMsgBindWait));
+        if (wait == 0) {
             return LMX_MSG_NOMEM;
         }
-        r->wait->rec = r;
+        wait->rec = r;
+        wait->worker_on = 1;
+        __atomic_store_n(&r->wait, wait, __ATOMIC_RELAXED);
+        if (__atomic_load_n(&r->wait, __ATOMIC_RELAXED) != wait) {
+            return LMX_MSG_INVALID;
+        }
+    } else {
+        __atomic_store_n(&wait->worker_on, 1, __ATOMIC_RELAXED);
     }
     pack = (LmxMsgCtxPack *)malloc(sizeof(LmxMsgCtxPack));
     if (pack == 0) {
+        __atomic_store_n(&wait->worker_on, 0, __ATOMIC_RELAXED);
         return LMX_MSG_NOMEM;
     }
     pack->rt = rt;
     pack->addr = m->addr;
-    pack->wait = r->wait;
-    r->wait->worker_on = 1;
+    pack->wait = wait;
     (void)__atomic_add_fetch_4(&e->nworkers, 1, __ATOMIC_RELAXED);
 #if defined(_WIN32)
     th = CreateThread(0, 0, context_worker, pack, 0, 0);
@@ -1933,7 +1954,7 @@ static int launch_ctx_thread_rec(LmxMsgRuntime *rt, LmxMsg *m) {
 #else
     if (pthread_create(&th, 0, context_worker, pack) != 0) {
 #endif
-        r->wait->worker_on = 0;
+        __atomic_store_n(&wait->worker_on, 0, __ATOMIC_RELAXED);
         (void)__atomic_sub_fetch_4(&e->nworkers, 1, __ATOMIC_RELAXED);
         free(pack);
         return LMX_MSG_NOMEM;
