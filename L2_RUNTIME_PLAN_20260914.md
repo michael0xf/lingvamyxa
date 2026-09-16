@@ -7934,3 +7934,12 @@ and the count 30 the landing sees), then run_port_parser (in no row);
 five lines on those two; nothing pushed since 2d8f2b6a. Recorded as
 two readings, not one: the coordinator's six gates on the measuring
 merge with the acceptance base, the lead's run_gates on the stage tip.
+e9: land-s6-2 502deb03: the port_slots absence check is the row form
+(grep -c -E "^\s*@\('port_slots'" = 0 at 2d8f2b6a; the bare form
+prints 2 from the two header prose lines), the reason recorded beside
+the fix (the old check could pass only by never being run); the
+coordinator's measured set carried into the landing sheet as his;
+the gate count 30 (29 rows plus the conditional one); e9's hygiene
+gate blocked the commit on one non-ASCII byte, the third catch since
+it enforces. land_s6_2.sh unlaunched, the allowlist 54 paths 0 outside
+over 51b73274 and 2d8f2b6a; "launch" on the lead's five lines.
