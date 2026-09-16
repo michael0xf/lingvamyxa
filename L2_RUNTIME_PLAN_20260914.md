@@ -9814,3 +9814,32 @@ chain was re-run to confirm; the branch's own tripwire already passes.
 
 GROK_BOT'S FIRST TASK ANSWERED (audit), second task in its inbox (the same audit
 over wt_ref_main/l2src).
+
+ROW-BOUNDS LANDED, recorded 2026-09-16 15:14 by the coordinator (lingvamyxa-08): the branch
+claude-0c/gate-row-bounds-2 (76331f43, the re-cut of 6c8034b4 onto the new
+integration head 36518364) is pushed, integration/main-absorbs-core was
+fast-forwarded to it, and main carries it as the merge 5f3f2917. It changes
+run_gates.ps1 (a per-row bound that fails a hanging row BY NAME and kills it to
+its selftest) and tripwire_gate_bounds.ps1.
+
+Evidence, in the order it was gathered: (1) the branch's own falsifier PASSES --
+"fixed: exited=True wall=11s leftover=0 :: tripwire_hang FAIL timeout after 10s
+(row bound 10s)" against "control (d3bde8b5): exited=False wall=40s selftest
+alive at window end=1"; (2) the full gate chain GREEN 29 of 29 in 618 s on the
+third attempt. The first two attempts were RED and both are the rare flake, not
+this change: attempt 1 "lane_oracle FAIL timeout after 207s (row bound 200s)"
+with an empty log -- the hang the row bound exists to catch, caught by it, on a
+row that passes in 68 s when the machine is quiet -- and attempt 2 "lane_oracle
+FAIL exit=1 13s" with the original disposition diagnostic "exec dispose-in-turn
+turn=2 dispose=0 g=0000000000000000 c=0000000000000000 kids=0".
+
+THE FLAKE STANDS AS THE NEXT CORE ITEM: it has now been seen four times today
+(the landing's -LaneCheck red, one parity run's heap corruption, and these two),
+it is load-dependent (96 parallel runs of the same reference binary and 107
+sequential ones never reproduced it, while three runner-context chains hit it),
+and the two symptoms -- start_contexts refusing with LMX_MSG_INVALID, and
+STATUS_HEAP_CORRUPTION -- remain consistent with one cause. The lock audit
+grok_bot returned over the main tree adds a fact to it: production keeps only
+the mailbox monitor, while the SELFTESTS still use events, condition variables
+and joins, i.e. the executor fixtures are the code still carrying the
+synchronization the model removed.
