@@ -8890,3 +8890,24 @@ map retry; the rtl/rtr/rtc/rtp cases starting contexts through
 own_turn), the rti seven confirmed by two signals each; both macros
 emit a byte-identical "reading:" line for the stderr comparison. The
 gate reruns.
+Rerun verdict (the lead): run 1 passes the first scenario ("mass wait
+ok") and live-cascade COMPLETES; the 0xC0000374 that was
+deterministic there on both earlier runs does not reproduce with the
+live-set writes confined to R0's lane (the race reading's evidence,
+not a proof; the section keeps "leading reading"). The gate is red
+at a later case, an ordinary assertion: "spawn child done p=1 c=0
+st=0 ch=4": the parent's turn ran on a worker and created the child,
+but the child's turn never ran, the host waiting in a Sleep/GetTickCount
+deadline loop that never runs R0's round; the same defect in another
+spelling. The wait population is larger than the 19: by spelling 26
+Sleep( calls, 21 GetTickCount() deadlines, 23 WaitForSingleObject(
+waits; not all broken (the Sleep-deadline loops in fail-handler,
+err-after and omit-end have no drain and pass). RULE recorded: a wait
+needs R0's round exactly when its condition depends on a letter a
+worker sends after contexts start; Sleep-deadline loops asserting a
+positive done get r0_round(rt) (a named one-liner over host_drain,
+countable apart from the 19) before each check, per site; a case
+asserting something did not happen by the deadline is read per site
+(a drain would change its meaning); WaitForSingleObject waits are
+restructured into poll-and-drain only where the gate shows one
+blocking. Counts by category in the five lines at the tip.
