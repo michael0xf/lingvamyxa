@@ -3431,6 +3431,29 @@ A1-A3. The arena (19.29.2), after S6 or interleaved where a stage touches the sa
         second, every such caller must already hold the pair. THE QUESTION: may an id be resolved to its
         record by R0, in bounded time, on R0's lane -- yes or no? The design below is written for NO (the
         stricter reading, which is what the ticket states), with the one change YES would make named at (b).
+      - RULED BY THE COORDINATOR, 2026-09-16 (on 873d256c; (a), (b) and (c) accepted, (b) amended, (d)
+        conditioned). Spec cited at main 277437fe, each phrase counted once there with line breaks removed.
+        * THE QUESTION ABOVE IS NOT A CONTRADICTION BETWEEN MIKHAIL'S SENTENCES, so it does not go to him. His
+          19.29.7 sentence -- "a Message is found by its id", resolved in R0's sorted list "in bounded time,
+          never by scanning one by one" -- governs; the coordinator's AD RESTATED (a), where it reads as
+          deleting every lookup, yields to it. RULED YES: R0 may resolve an id to its record in bounded time
+          on its own lane. AD deletes the SCANS (find over R0's tree, find_tree, dest_from_src, self_or_find's
+          fallback) and every cross-lane read of R0's tables; cross-lane targets carry the pair.
+        * ONE STRUCTURE (amends (b)): R0's live set is ordered BY ID, not by pointer. Ids are minted
+          monotonically, so a registration is almost always an append. is_live(ptr, id) becomes a binary
+          search by id plus pointer equality. The owner-lane introspections and owner-lane fixtures resolve an
+          id through that same array under a new name -- never lmx_msg_find. l2trans.lm1:12033's
+          library-open emission changes to that resolver where it runs on the owner's lane, and the fixed
+          point is re-established in that commit.
+        * THE EPOCH CELLS ARE THE MECHANISM'S OWN, not Mikhail's call: the spec's "low-level synchronization is
+          used only inside the Message mechanism" and "Necessary thread, wait/wake and synchronized-mailbox
+          primitives belong to the Message implementation" place order-free atomic cells with no lock, wait or
+          signal inside the mechanism. CONDITIONS: R0 never blocks on the grace; a lane outside a turn counts
+          as past every epoch; the pending-free list is R0's own data, drained in its round; and a
+          deterministic tripwire case shows a record surviving R0's round while a walker's lane is still
+          inside its turn, and freed after it leaves.
+        * The coordinator's two l2trans branches touch l2_emit_ccall and l2_ccall_box_int, not the library-open
+          emission; integration is merged later rather than waited for.
       - (a) THE HANDLE: TWO PARAMETERS, NOT A STRUCT. Wherever a signature names a target Message it carries
         `@: LmxMsg <name>` and `LmxMsgAddr: <name>_id` side by side; create returns the pair through two out
         parameters, the id where it is returned today and the record through a new `@@: LmxMsg out_msg`.
