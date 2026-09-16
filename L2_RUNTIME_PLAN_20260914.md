@@ -7361,3 +7361,17 @@ ownership and state (off the tree, on its parent's settled list,
 RELEASED, unbound), the positive evidence the list is populated; the
 gate re-runs, and the assertion is tripwired (the push removed must
 fail exactly that line) before it is trusted.
+The exec selftest counts reconciled by the coordinator, by commit (the
+lesson: name the commit with the unit): lines reading the field ->n
+(not ->next/->number) in lmx_message_exec_selftest.c: at 7b3a8668 and
+at 5a7a8da3 (the settled list) 39, of which 35 with a runtime
+receiver (e9's cbe63f42 figures, right for the base); at 18c35299
+(the first restatement, the rolled-back child at 2855 as ownership and
+state) 36, of which 32 (the lead's figures, right for his tip); the
+four non-runtime lines (fresh->n, block->n, pb->n, cb->n) are the same
+at both. `int n0;` is declared six times at both hashes; the lead's
+"declared once" was about the one declaration whose block covers five
+later cases (removing it failed the compile at 3182), not the file.
+e9's cbe63f42 also fixes two stale figures (the three-pin paragraph,
+the mentions in the falsifier row). Stage branch: d6/lock-s6-2
+18c35299 (the first restatement).
