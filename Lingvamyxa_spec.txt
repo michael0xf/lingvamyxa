@@ -12961,7 +12961,11 @@ string address is an addition to the service, not its main path; the
 service's reference is not a field of the kernel record beside running but a
 field of the Message's LMX, born with the Message and set from its parent,
 reassignable, never a global, and the service's API is common, so that any L3
-Thread can take the role (Mikhail, 2026-09-16, verbatim: "То есть почтовый сервис это не дополнительное поле рядом c running, а поле уже LMX, а вот API надо сделать общим -- чтобы любой L3 Thread мог выступать в этой роли"); and the service keeps
+Thread can take the role; the common mail API and getAddress are made at
+once, as scaffolding, because rewriting them later would be expensive, and
+today's body for any L3 Thread used as the service is a stub: it looks at its
+own mail-service field and delegates to it (Mikhail, 2026-09-16, verbatim:
+"то есть общее почтовое API и getAddress это пока просто заготовки,но надо их сделать сразу потому что потом переписывать будет дорого. Сейчас должна быть заглушка -- L3 Thread в роли почтового сервиса (если его используют так) просто смотрит свое поле почтового сервиса и делегирует ему"; and: "То есть почтовый сервис это не дополнительное поле рядом c running, а поле уже LMX, а вот API надо сделать общим -- чтобы любой L3 Thread мог выступать в этой роли"); and the service keeps
 its own set of live records (registration at create and removal at release,
 its own acts on its own lane or letters to it, membership in bounded time),
 refusing an unknown address with a status rather than dereferencing it,

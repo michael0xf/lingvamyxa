@@ -8543,3 +8543,13 @@ marked as the C mirror of an LMX field, not a kernel field; the
 service API (register, unregister, send by handle, send by string
 address) is one common interface that R0 implements today and any L3
 Thread may implement.
+
+MIKHAIL, 2026-09-16, verbatim (fourteenth line): "то есть общее почтовое API и getAddress это пока просто заготовки,но надо их сделать сразу потому что потом переписывать будет дорого. Сейчас должна быть заглушка -- L3 Thread в роли почтового сервиса (если его используют так) просто смотрит свое поле почтового сервиса и делегирует ему" Entered in
+spec 19.29.7 and the model. For the code: every L3 Thread implements
+the common mail API now (register, unregister, send by handle, send by
+string address, getAddress); the default body is the stub: look at
+the Message's own mail-service field (the LMX field set from the
+parent) and delegate the call to it; R0's body is the real service
+today (the live set, the check, the admission or the refusal); so a
+call on any Message reaches R0 by delegation through the service
+fields, and a later stage replaces bodies without touching callers.
