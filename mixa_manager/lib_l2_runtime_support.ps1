@@ -92,7 +92,7 @@ function Add-L2RuntimeSupport {
     $L2RuntimeHeaderRoot = Join-Path $RunDir "l2rt_headers"
     $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "l2src"
     New-Item -ItemType Directory -Force -Path $L2RuntimeHeaderTree | Out-Null
-    $L2RuntimeNames = @('lmx_array_owned','lmx_array_ref_owned','lmx_branch_owned','lmx_chars_owned','lmx_graph_copy_owned','lmx_message_graph_copy','lmx_msg_blocks','lmx_msg_history_owned','lmx_msg_liveness','lmx_msg_mail_chain','lmx_msg_path_storage','lmx_msg_roots_stale','lmx_msg_sched_ready','lmx_msg_storage','lmx_msg_visit','lmx_owned_ranges','lmx_value_owned')
+    $L2RuntimeNames = @('lmx_array_owned','lmx_array_ref_owned','lmx_branch_owned','lmx_chars_owned','lmx_graph_copy_owned','lmx_message_graph_copy','lmx_msg_blocks','lmx_msg_history_owned','lmx_msg_liveness','lmx_msg_mail_chain','lmx_msg_roots_stale','lmx_msg_sched_ready','lmx_msg_storage','lmx_msg_visit','lmx_owned_ranges','lmx_value_owned')
 
     Push-Location $L1Root
     try {
