@@ -7475,3 +7475,23 @@ drain after it is unreachable; end_turn becomes pump (admit) then
 drain_settled (answer) then pump (deliver), three steps in that order
 (the pump halves go at Y3 with the transport, leaving the drain in the
 round).
+b5's three commits on sonnet/mixa-module-list: c2b22be6 app_win32,
+the one remaining `@ tslot[0]` site (:510) to the bare array: PASS,
+the L2 trace byte-identical to the oracle's 58 checks; ed9c0078
+composite_glyphs, ten sites of `cell\fg[0]` on a scalar MixaCellByte
+field (the oracle's own form is `cell\fg`): PASS across four
+scenarios; 2b4df6ad app_window's silent stop diagnosed under gdb, not
+fixed: SIGSEGV in strlen under mixa_button_panel_add called from the
+L2-generated mixa_app_window_open on its first call, because l2trans
+stages every define:'d call-actual constant through a temp typed
+`int` (app_window_l2.c:4197-4204, with -Wint-conversion warnings),
+right for numeric FG/BG/ALPHA and wrong for the char*
+MIXA_APP_WINDOW_BTN_LABEL, truncated to 32 bits. TICKET (l2trans, the
+coordinator's, after S6-2 lands and its measurement is done; the
+compiler is not b5's lane): red-first, a unit in run_l2trans.ps1's
+shape with a define:'d char* constant as a call actual whose emitted
+temp must carry the constant's type, then the fix in l2trans.lm1's
+call-actual staging (the special call paths of the per-form prep
+lesson); app_window's parity is the integration check. Nine of the
+thirteen mixa runners now pass or moved past their old red; the
+branch merges after S6-2 lands.
