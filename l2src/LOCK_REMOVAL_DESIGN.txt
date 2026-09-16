@@ -1844,8 +1844,9 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         this stage. WHERE an id is resolved is settled by the second ruling below and not by these functions:
         today's resolvers are lmx_msg_find(rt, addr) (lm1:579) over lmx_msg_find_tree (563), and
         lmx_msg_dest_from_src (593), which walks the sender's subtree, then its parent by address, then R0's tree.
-        All three are scans one by one, which the service sentence forbids for a send, so the send path leaves them
-        for R0's sorted list; they stay only where they already serve something else.
+        All three are scans one by one, which the service sentence forbids for a send. Under the fifth through
+        seventh rulings the send path uses none of them and no sorted list either: it walks the chain. They stay
+        only where they already serve something else.
       - WHAT STANDS, unchanged, already measured, and not re-opened by the respec:
         * The refs deletion in full -- LmxMsg.refs, endp_retain / endp_release / endp_refs / endp_try_retire, the
           field, 46 call sites per core across 14 functions, the C-side pins, and the two whole executor-selftest
@@ -1857,9 +1858,11 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           against myself rather than quietly restating it: I wrote here, minutes before that ruling, that the duty
           is "the tree walk by id, lmx_msg_find, promoted to the spec's own words". That is now WRONG in its second
           half. The service "answers membership in bounded time, never by scanning one by one", and
-          lmx_msg_find_tree IS a scan one by one (lm1:563, first_child/next_sibling recursion). So the send path's
-          resolution moves to R0's sorted list, not to the tree walk; the tree walk keeps only what it already
-          serves elsewhere (the family queries and the fixtures' own find calls), and no send resolves through it.
+          lmx_msg_find_tree IS a scan one by one (lm1:563, first_child/next_sibling recursion). CORRECTED TWICE
+          OVER: the fifth through seventh rulings remove the resolution STEP itself, so the duty does not move to a
+          sorted list either. Delivery walks the parent links hop by hop and looks nothing up anywhere. The tree
+          walk keeps only what it already serves elsewhere (the family queries and the fixtures' own find calls),
+          and nothing in the send path consults it.
         * The exec.c wrapper re-point (tab_n_locked / tab_addr_locked over R0's child chain) with graph_abi 157/157,
           and the fifth-population lesson that found it. Neither touched the settle.
         * Every method rule this section earned: name the population, the unit and the COMMIT; grep the partner
@@ -1897,6 +1900,10 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         already gone: "а если родителя уже нет?", answered by the service rather than by any parent; and on adding
         nothing for it: "Не плодите постоянно лишних сущностей. Так как все Message порождаются из root Message (по
         цепочке) то он может при merge передавать себя как почтовый сервис. В чем проблема?"
+        SUPERSEDED IN ITS MECHANISM by the fifth ruling (below): the sorted list is not built, because delivery does
+        not resolve anything. What survives from this ruling is the frame -- everything inside Messages, no special
+        monitor, no new entity -- and the spec keeps the service as something that MAY exist beside delivery
+        ("a mail service may exist beside this but is not required for delivery"). S6-2 builds none of it.
       - THE SERVICE IS A ROLE, NOT AN OBJECT (Mikhail's fourth line the same night, verified by me on origin/main
         238a8eb1: grep -c "postman" prints 1). 19.29.7 continues that the service "handed down the chain may be any
         Message, not only the root: the membership check by the service itself, the delivery by a postman Message,
@@ -1907,7 +1914,158 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         role today and rt\root\addr already names it (lm1:909-914), the resolution in R0's drain is the seed, and
         postmen are a later optimization inside Messages rather than a stage item. It is written here so a later
         reader does not mistake "the service is R0" for a constraint of the model when it is only today's holder.
-      - THE MECHANISM ON THE NEW FOOTING, in the order the code will take it:
+        And after the fifth ruling, not even that: delivery needs no service at all, so the role is real but unused
+        by S6-2.
+      - RULINGS FIVE THROUGH EIGHT (2026-09-16, inside nine minutes), which replace the resolution
+        with DELIVERY ALONG THE CHAIN and are the footing the code is written on. Each verified by me on
+        origin/main by phrase count, none taken from the relay; one of the coordinator's falsifiers was wrong in
+        its count and I measured the right one before he corrected it, which is the reason for measuring at all.
+        * FIFTH (main 95ad964b): "postman for one step" appears TWICE, not once -- in the LmxMsg record comment of
+          spec section 2 and again in 19.29.7, because the ruling was written into both. Delivery "goes through the
+          parent's inbox, hop by hop along the chain, every L3 Thread a postman for one step that decides by the
+          address whether to hand the Message to its parent or to one of its children". Mikhail verbatim:
+          "Доставку сделать через inbox родителя -- то есть передавать по цепочке и каждый L3 Thread сделать
+          почтальоном на один шаг -- он уже по адресу решает отдавать Message своему родителю или ребенку."
+        * SIXTH (main 71f28e55): "unsigned index;" appears once. The record's address field reduces to its index at
+          its parent -- "the whole of what the hierarchical address a.b.c.d... adds at this level" -- and the full
+          address is composed by walking the parent links. Mikhail verbatim: "Адресные массивы здесь кажется можно
+          оптимизировать применительно к тому адресу который лежит в самом Message. Так как фактически это просто
+          индекс у родителя ... Можете сразу закодить более-менее умно?"
+        * SEVENTH (main 8f2c2a11): "getAddress" appears twice (the sentence and Mikhail's quote inside it). Two
+          methods carry the whole mechanism: getAddress, which returns a Message's address by walking the tree up
+          to the root, and a send to a given address. Verbatim: "То есть сделать метод getAddress который отдаёт
+          адрес проверяя дерево до корня, и потом метод который посылает по какому-то адресу".
+        * EIGHTH (main b31cc55c): "No route is computed" appears once, and it withdrew a paragraph I had written
+          twenty minutes earlier. 19.29.7: "No route is computed and nothing is checked before a send: the sender
+          obtains the destination's address once, anywhere in its code, and keeps it; the letter is given to the
+          sender's parent, and each Message that holds the letter decides alone whether to hand it to its own
+          parent or to one of its children, by comparing the destination address with its own." Mikhail verbatim:
+          "Отправителю достаточно один раз где-то в коде получить адрес и сохранить. Адрес перед отправкой никто не
+          проверяет. Я же описал алгоритм -- письмо дается родителю который решает передать своему родителю или
+          ребенку. Где здесь поиск пути?"
+          WHAT I HAD WRITTEN AND WHY IT WAS WRONG, recorded because the error is instructive rather than clerical:
+          I had the sender compose its own address, derive a route (hops up to the common ancestor, position in the
+          destination path) and the envelope carry those two numbers. Every step of that was defensible as
+          engineering -- it is O(1) per hop and avoids recomposing an address at each holder -- and all of it was
+          answering a question nobody asked. The algorithm was already stated: give the letter to your parent. I
+          optimized a mechanism before it existed, and the cost would have been two fields in the envelope, a
+          route invalidated by any reparent in flight, and a sender that has to know something about the tree.
+        * WHAT THE SIXTH RULING ACTUALLY COSTS, measured rather than feared, and it is the happiest measurement of
+          the night: the index it asks for IS ALREADY COMPUTED. lmx_msg_assign_path (lm1:1063-1087) does
+          p\child_seq: p\child_seq + 1U and then slot\path[p\path_n]: p\child_seq -- the child's index at its
+          parent, already minted per parent -- and copies the parent's array in front of it; R0's path is literally
+          [1] (lm1:1070-1074). So path/path_n/path_cap are a MATERIALIZED CACHE of the parent walk, and the ruling
+          deletes the cache while keeping the value that was always being computed. getAddress is not a new
+          computation, only an unmaterialized one.
+      - THE BOUNDARY, ruled by the coordinator on my measurement and recorded so the stage stays landable: S6-2
+        takes the index field, the arrays' deletion and delivery by the chain; STAGE AD (its own section, impact
+        list, acceptance and landing, right after S6-2 and before R0P) takes the scalar LmxMsgAddr -- 436 sites in
+        l2src, including every create/bind/find/dispose/map signature in the header -- to Mikhail's one-field
+        address. Mikhail is told it lands in two steps.
+      - THE MECHANISM, in the order the code takes it:
+        * LmxMsg.index (unsigned): the record's index at its parent, written where assign_path writes the array's
+          last element today, and rewritten on a parent change. path, path_n and path_cap go with the arrays.
+        * lmx_msg_get_address: walk parent_msg up to R0, collecting indices, and return the address as a string of
+          unsigned indices with its length into the caller's storage. The walk is safe without a hold for a reason
+          measured rather than assumed: a parent is never freed before its children, because settle_child_msg
+          drains first_settled_child bottom-up and each release frees only the record whose chain has already been
+          emptied -- ancestors outlive descendants, which is exactly what makes an upward walk from a live Message
+          total.
+        * lmx_msg_send_to: a letter to a full address. The sender obtained that address ONCE (get_address on a
+          Message it holds, or it arrived by mail), kept it, and checks nothing before sending: it hands the letter
+          to its parent and is done.
+        * THE ENVELOPE GAINS ONE THING ONLY, and this is the one place S6-2 adds rather than removes, so it is
+          stated plainly instead of buried: LmxMsgCopy carries dest_msg (a record pointer) today, which
+          free-at-release makes dangling; it goes, and in its place the copy carries THE DESTINATION ADDRESS alone
+          (len and unsigned*). No hop counter, no position, no route -- see the withdrawal below. The address is
+          owned by the copy and freed with it in copy_free, which is the partner every added allocation needs and
+          the one this stage must not forget.
+        * THE POSTMAN STEP, and it is a decision each holder makes ALONE, with no state carried in the letter
+          beyond the destination address. The Message holding the letter composes its own address (get_address, the
+          walk up) and compares:
+            - equal: the letter is for it -- admit into its own inbox under its own mailbox monitor;
+            - its own address a PREFIX of the destination: hand down to the child whose index is the one following
+              that prefix;
+            - otherwise: hand up to its parent.
+          A hop with no such child, or nothing above it because it is R0, is where the letter falls off: refused
+          with KIND_REJECTED to the sender, on that hop's own lane. Each hop is an ordinary admission into one
+          mailbox under that mailbox's own monitor; no hop holds two monitors and no hop looks anything up.
+          Why this is the whole algorithm and not a simplification of one: a prefix comparison decides up or down
+          without knowing the tree, so the letter needs no route and the sender needs no map -- which is exactly
+          Mikhail's objection to the version I had written, "Где здесь поиск пути?"
+        * THE REFUSAL: a hop whose next index names no live child refuses with KIND_REJECTED on that hop's own
+          lane, through lmx_msg_post_rejected, which is already written and keeps its guard that a REJECTED
+          envelope is never itself refused. One mechanism answers three cases that previously needed separate
+          reasoning -- the target closed, the target never existed, and the whole parent chain gone -- because a
+          letter simply "falls off at a node that does not exist" (the spec's own words). Mikhail: "он просто
+          будет отваливаться на несуществующих узлах".
+        * R0's transport queue stays as today's carrier until Y3, so this is a re-pointing of the existing relay
+          rather than a new transport.
+      - THE IMPACT LIST, every number with its population named and measured at ab2db782, since this section has
+        already had two unlabelled figures propagate tonight before they were checked:
+        * RECEIVER-QUALIFIED READS of LmxMsg's path fields (path, path_n, path_cap on any receiver): lmx_message.h
+          3, lmx_message.lm1 23, lmx_message.lm2 23, lmx_message_exec.c 0, lmx_message_exec_selftest.c 0,
+          lmx_message_selftest.lm1 0, lmx_message_host_selftest.c 0 -- TOTAL 49. Two wrong figures preceded this
+          one and both are named so neither is quoted later: 1023 (the bare word "path" across the tree, which
+          sweeps in file paths in unrelated modules) and 94 (the same loose pattern over the core files only). The
+          94 reached the coordinator and was adopted by him as the section's number before I corrected it, which is
+          the second-order cost of an unlabelled count: it propagates before it is checked.
+        * PUBLIC PATH API CALL SITES (lmx_msg_path_n, lmx_msg_path_seg): 29 -- lmx_message_selftest.lm1 16,
+          lmx_message_exec_selftest.c 9, tests/lmx_msg_send_local_selftest.lm1 2, lmx_message_host_selftest.c 2 --
+          plus their 2 declarations in the header. Every one is a TEST reading a Message's path; none is production.
+        * child_seq: 7 sites. It is the index's source and it STAYS -- the index field is what it already mints.
+        * run_port_message pins lmx_msg_send_cap among its six method signatures, so that pin moves with the
+          capability's type (record pointer -> destination address). A pinned signature that changes silently is
+          exactly what l1trans will not catch: it links by name and fails at run.
+      - THE PATH_STORAGE MODULE GOES WITH THE ARRAYS, ruled by the coordinator, and my own opposite decision is
+        left visible rather than quietly reversed. I had decided to delete the arrays and LEAVE the module in
+        place, unused, flagged for AD -- on the grounds that it still compiles, its gate still passes, and 60
+        runner edits inside a stage whose criterion is landability buy nothing. He ruled it into S6-2. Both
+        readings are defensible and the call is his, so it is recorded as his with my reasoning beside it, not
+        rewritten as though I had agreed from the start.
+        The five reference populations, checked before the deletion is written and not after (the lesson the slots
+        module taught this stage). MY FIRST PASS GOT TWO OF THE FIVE WRONG, e9 caught both by pre-measuring against
+        my claim, and I verified his correction myself rather than accepting it -- so the list below is the
+        corrected one and the errors are named, because a population list is the one artefact of this stage that
+        another agent will act on without re-deriving:
+        (1) RUNNER SUPPORT LINES naming lmx_msg_path_storage, excluding the module's own two runners: 33 lines
+            across 27 consumer runners -- run_lmx.ps1 6, run_msg_mail_chain.ps1 2, and 25 runners at one line each
+            (run_entry_turn, run_gates, run_graph_abi, run_l2trans, run_model_scenario36, run_port_message,
+            run_port_parser, the port_* family and the rest). I first wrote "60 across ~20 runners": that was a raw
+            occurrence count over l2src/*.ps1 AND mixa_manager/*.ps1 INCLUDING the module's own two runners, which
+            name it many times each. Neither the 60 nor the 20 was the population I claimed to be counting.
+        (2) FIELD REFERENCES: the arrays themselves, the 49 above.
+        (3) GENERATED-HEADER INCLUDES: NOT none, which is what I first wrote. lmx_message.h:15 carries
+            #include "l2src/lmx_msg_path_storage.lm1.h" and lmx_message.lm2:6 carries
+            predef: "l2src/lmx_msg_path_storage.h.lm1". My probe reported none because it grepped for the include
+            and then filtered its output through grep -v 'lmx_msg_path_storage' -- it removed exactly the lines it
+            was looking for and could not have found them. Suspect the probe before believing an absence: an empty
+            result is a claim about the instrument until the instrument has been shown able to find something.
+        (4) EXPORTED SYMBOL CALLS: the module exports exactly ONE name, lmx_msg_path_grow, and it is not named
+            after the module -- which is why a module-name grep misses it. Four production call sites, measured at
+            2d8f2b6a: lmx_message.lm1:1085 and :1095, lmx_message.lm2:1144 and :1154, each on slot\path and
+            slot\path_cap. They take exactly the fields being deleted, so they go in or before the commit that
+            deletes the module; if one survives the field deletion the module deletion fails at LINK, not at
+            review. (In my own working tree those lines read 1070 and 1080, because step 1 shifted them: same four
+            sites, two trees, and the difference is the reason a count names its commit.)
+        (5) PROSE CITING IT AS PRECEDENT: to sweep with the rest.
+        Outside the five and outside every gate: SEVEN mixa_manager files name the module in build lists, 10 lines
+        -- lib_l2_runtime_support.ps1:95 ($L2RuntimeNames), run_mixa_app_fmpanel:293, run_mixa_app_path:242,
+        run_mixa_backend_win32:213, run_mixa_composite_glyphs:64 and :102, run_mixa_selection:78 and :122,
+        run_mixa_tiles:62 and :94. e9 reported six; the seventh is run_mixa_backend_win32_l2_parity.ps1, which
+        names the module directly rather than through the shared lib, and I measured it after taking his list. None
+        of the seven is a run_gates row, so the deletion breaks them with NO RED ANYWHERE -- the ungated-runners
+        lesson exactly, and the reason this line is in the section rather than in a message.
+        The module's own paths (D): LMX_MSG_PATH_STORAGE.txt, lmx_msg_path_storage.h.lm1/.lm1/.lm2,
+        tests/lmx_msg_path_storage_selftest.lm1, run_msg_path_storage.ps1, run_port_msg_path_storage.ps1 -- seven.
+        run_gates loses the port_path_storage row at 103 and its header note at 30; the gate count goes 30 -> 29.
+      - [SUPERSEDED IN FULL by "THE MECHANISM" above (the fifth through seventh rulings). EVERYTHING IN THIS BULLET
+        DESCRIBES THE MAIL-SERVICE DESIGN AND IS HISTORY: the sorted list is never built, no send resolves at R0,
+        and there is no membership lookup in the send path at all. It is kept because it records what was measured
+        under it -- the seed in R0's transport drain, the root_record precedent, the id's monotonicity -- and
+        because deleting a superseded design hides how the current one was arrived at. Read it as the third of five
+        mechanisms this stage passed through, not as instructions.]
+      - THE MECHANISM ON THE SERVICE FOOTING [SUPERSEDED], in the order the code would have taken it:
         * release_slot: unbind, unlink from the family chain, drain both mailboxes, free init and path, set
           RELEASED, destroy the mailbox monitor and free the record -- unconditionally, with no refs guard and no
           endp_try_retire between it and the free. slot_free's two production callers collapse to one.
@@ -1982,11 +2140,16 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         property.
       - THE FALSIFIER STANDS EXACTLY AS PLANTED, which is the second ruling's quietest piece of evidence in its own
         favour: lmx_message_selftest.lm1:982-987 sends through a handle taken before the rollback and requires the
-        sender's next recv to carry KIND_REJECTED. Under the service the refusal IS a status envelope posted back to
-        the sender, so the case needs no restatement at all -- the same assertion that was red on the landed tip,
-        red again through the withdrawn settle design, and red for a third reason now (the address is absent from
-        R0's list), goes green only when the service answers. A falsifier that survives two changes of mechanism
-        untouched is measuring the behaviour and not the implementation, which is what it was planted for. It keeps
+        sender's next recv to carry KIND_REJECTED. ITS ASSERTION STANDS THROUGH ALL FIVE MECHANISMS; ITS CALL DOES
+        NOT, and I correct my own overstatement here rather than leave it: I wrote "stands exactly as planted" under
+        the service footing, and the seventh ruling falsifies the second half of that. The case today sends with
+        lmx_msg_send_cap(rrt3, rp3, held3, env), where held3 is a RECORD POINTER taken before the rollback
+        (lmx_message_selftest.lm1:965); a capability is now the destination's ADDRESS, so the case captures the
+        child's address with get_address before the rollback and sends to it. What is asserted -- the sender's next
+        recv carries KIND_REJECTED -- is untouched, and it now goes green by the hop's refusal rather than by an
+        owner's round or a service's failed lookup. A falsifier whose ASSERTION survives four changes of mechanism
+        is measuring the behaviour and not the implementation, which is what it was planted for; that its call
+        shape moves with the capability's type is not a weakening but the same distinction applied honestly. It keeps
         its captured statuses in the diagnostic -- the one edit that turned three unreadable runs into one readable
         one -- and the second ruling's own case, an address whose whole parent chain is gone, earns a case beside
         it, since that is the half no parent could ever have answered.
