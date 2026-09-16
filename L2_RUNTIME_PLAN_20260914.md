@@ -9906,3 +9906,46 @@ deletion, the live set's id order, the envelope pair, and the stage probe)
 run_gates.ps1 -L2MessageRoot ends "gates GREEN: 29 of 29 in 601s". So the stage's
 base is green as it stands, and every later family commit is measured against a
 green parent.
+
+AD PROGRESS AT 2026-09-16 16:35 (coordinator, lingvamyxa-08):
+
+PAIR-CALLERS MIGRATED AND MERGED: d6/lock-ad is 8a63ddf5, the merge of
+grok_bot's grok/ad-pair-callers 5e286059 (15 files, +217/-1, callers only, the
+runtime untouched; run_port_message GREEN on the branch and again on the merge).
+The probe on the merge reads "find=217 find_tree=8 dest_from_src=8
+self_or_find_fallback=2 id_marks=0 parent_field=0": find ROSE by 7, and that rise
+is honest and explained -- at the sites where the caller holds only the id of a
+child it just created, the migration had to re-find the record, because the
+child's registration letter has not drained yet. Those 7 sites are exactly what
+the next commit removes.
+
+CREATE HANDS BACK THE RECORD (a), STAGING BRANCH d6/ad-create-out ab9f58e7:
+lmx_msg_create / create_prepare / create_graph gained a final out_msg parameter
+(the record itself, beside the id), and the emitter follows -- the emitted
+library-unit bootstrap used to call create and then find what it had just made,
+and now passes the record. That removes a find from EVERY generated unit. The
+branch is INTENTIONALLY RED: the arity change makes every one of ~350 call sites
+migrate in the same landing, and that caller migration is grok_bot's next
+ticket (its acceptance pins the find count BELOW 217, so a capture cannot be
+"fixed" by adding another lookup). The staging branch is not a candidate.
+
+5c FOUND THE L2TRANS ROOT CAUSE, and it is the class the whole project fears:
+fn_frame->trailer->spelling is READ at l2trans.c:8498 (l2_ret_tr) without being
+set on that path, so a non-"return" garbage value sends the dispatch at :9119
+into l2_take_body, which fails with "unsupported body"; the debugger masks it
+(its own layout), 5x in one worktree is 100% reproducible, and the file in the
+directory only ever changed the garbage. 5c is fixing it in l2src/l2trans.lm1
+with the requirement to name the MISSING initialization rather than zero the
+field defensively, to check neighbouring fields for the same gap, and to prove
+both the 5-of-5 flip and the independence from the stray file.
+
+THE FLAKE HAS A SECOND, REPRODUCED FACE: the UAF kit run on an instrumented
+selftest (q_alloc + LMX_LANE_CHECK, 0 stale writes) hung twice -- "reading: child
+timer: C's own round closes it past its deadline" then "FAIL watchdog: the
+selftest has run for 300 s; a wait never returned" -- i.e. the child-timer case's
+YIELD_UNTIL_R0 never ends, with memory ruled out. A live catcher is running: it
+watches each run's stderr for a stall, and on a stall attaches gdb and dumps
+every thread's backtrace while the process still spins (the 300 s watchdog is the
+window). The refusal face (start_contexts with LMX_MSG_INVALID) is the same
+machinery and the same case family; both are now hunting with the diagnostic
+build that names the refusal.
