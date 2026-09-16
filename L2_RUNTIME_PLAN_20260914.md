@@ -8627,3 +8627,17 @@ Rejected alternatives (the lead's): the releasing lane writing under
 R0's monitor (the special monitor Mikhail refused), deferring to
 teardown (the settled-list leak again), a per-record flag (refs with
 one bit).
+The lead's status (step 1, the registration half, uncommitted):
+LMX_MSG_KIND_REGISTER (kinds 0-11 taken; a new constant, his);
+lmx_msg_post_register modelled on post_dead (the record in dest_msg,
+the id in to, pushed under R0's monitor); the KIND_REGISTER
+interception in admit_one above the destination resolution; the
+registration push in create_prepare before the address is returned
+(the causal-order claim's footing); the live set's entry a pair
+(record pointer and id) with register/unregister/is_live taking the
+id; not yet written: the unregister-and-free letter, the five bodies
+converted to the pair in both cores, the lm2 mirror; no third gap;
+the first build when the whole service step is written. Coordinator's
+option offered (his call): two parallel arrays (live_m, live_id) in
+place of an array of two-field structs, avoiding c.sizeof on a typedef
+and the subscript-then-field-follow spelling.
