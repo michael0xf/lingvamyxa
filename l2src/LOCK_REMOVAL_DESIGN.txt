@@ -2227,6 +2227,32 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         reason: remove the settled push and ownership stops being true; remove the owner's round and the sender
         stops being answered. Two greens that can each be broken by one line, each breaking a DIFFERENT named
         assertion -- which is what distinguishes a mechanism from a coincidence.
+      - STEP TWO WRITTEN (not yet built). Every endp_ call is gone from both cores and from the C side:
+        endp_retain, endp_release and endp_try_retire deleted outright (they were the only writers of LmxMsg.refs,
+        the only path that reached try_retire, and try_retire was the only walker of rt->slots besides
+        runtime_delete); slot_new's refs = 1; the snapshot pins in drive_walk_list and drive_walk_roots; the bind
+        record's retain and the bind retire's release; the test-side staging pair; endp_refs' definition in lm1 and
+        lm2 and its declaration; LmxMsg.refs itself. In lm1/lm2 that is 46 call sites each across 14 functions,
+        plus 7 dead pin/pinned locals per file, deleted only after proving no use survived.
+        Two whole executor-selftest cases went with the hook that drove them -- "dest pin OOM rolls back" and
+        "non-self recv retain fail still pops" -- because their subject was a forced retain FAILURE and there is no
+        retain left to fail. They were cut by verified line span (boundaries located and printed, not assumed), and
+        0c's row had predicted exactly these two from the fail_retain finding. The cases that merely READ the count
+        kept their subject and lost only the refs framing: "mail-oom" (a copy-allocation failure leaves no residue)
+        and "outbox-gone" (a destination stopped after the outbox take admits nothing) now assert the inbox, which
+        is what they were always about.
+      - THE SAME ERROR FOUR TIMES IN ONE SESSION, which is the honest headline of this step. I wrote the rule --
+        before removing one side of a pair, grep the PARTNER and count its sites -- after the copy_free imbalance,
+        and then broke it three more times: drive_walk_roots (retain removed, release left), send_owned in lm1, and
+        send_owned in lm2, the last two being the same function in mirrored files, missed both times because their
+        tail does not match the shared staging pattern the replace_all handled. Every one was caught by the same
+        thing: a survivor grep run immediately after each batch, counting calls by enclosing function. So the
+        working conclusion is not "be more careful" -- I was being careful -- it is that a mechanical deletion
+        needs a mechanical check after every batch, and the check has to count by SITE and by FUNCTION, because a
+        total that drops by roughly the right amount hides a single orphan perfectly.
+        Two structural checks ran with it and are worth reusing: an "if: whose body is now empty" scan (a `---`
+        immediately after an `if:`), and a survivors-by-enclosing-function tally that proves a replace_all did not
+        stray outside the function it was aimed at.
       - The refs deletion's step two, inventoried in the files that tripwire could not be touching (lm1 and lm2
         deliberately not read while a mutation was live in them -- their line numbers would have been shifted and
         one site missing, which is the wrong-inventory failure this document keeps recording):
