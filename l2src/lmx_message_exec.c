@@ -1097,6 +1097,12 @@ void lmx_msg_slot_free(LmxMsg *m) {
     free(m->live_id);
     m->live_m = 0;
     m->live_id = 0;
+    /* AD (2026-09-16): the id order is the same shape again -- a pointer array and
+     * an unsigned array -- and its free-partner is the same. */
+    free(m->byid_m);
+    free(m->byid_id);
+    m->byid_m = 0;
+    m->byid_id = 0;
     m->live_n = 0;
     m->live_cap = 0;
     free(m->exec_bind);

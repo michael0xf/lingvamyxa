@@ -166,6 +166,19 @@ typedef struct LmxMsg {
      * always have the same length; live_n and live_cap describe both. */
     struct LmxMsg **live_m;
     LmxMsgAddr *live_id;
+    /* AD (2026-09-16): the ID order, the same pair in a second order.  SPEC
+     * 19.29.7 makes a capability "the target's id" and requires that a Message is
+     * found by its id "in bounded time, never by scanning one by one" -- the
+     * address order above answers "is this handle live", and this one answers
+     * "which record does this id name" without a walk of R0's tree.  Ids are
+     * minted monotonically and never reused, so the two orders differ and both are
+     * needed.  byid_m[k] and byid_id[k] are one entry of the same set as
+     * live_m[i]/live_id[i]; the three arrays are grown together and register and
+     * unregister maintain both orders, so live_n and live_cap describe all of
+     * them.  A slot whose record was freed is left in this order with byid_m 0 and
+     * answers 0, which is the refusal the caller wants. */
+    struct LmxMsg **byid_m;
+    LmxMsgAddr *byid_id;
     int live_n;
     int live_cap;
     /* S6-2 (SPEC 19.29.7, Mikhail 2026-09-16): this Message's index at its parent

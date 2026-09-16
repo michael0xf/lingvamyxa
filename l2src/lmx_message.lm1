@@ -1148,6 +1148,44 @@ fn: lmx_msg_live_find (@: LmxMsg svc; @: LmxMsg m; @: int at) int
     \at: lo
 return: 0
 
+# AD (2026-09-16): the id order's search, the counterpart of the address search
+# above. SPEC 19.29.7 makes a capability "the target's id" and requires a Message
+# to be found by it "in bounded time, never by scanning one by one", so the same
+# pair is also kept in a second, id-sorted order. \at receives the index when
+# found and the insertion point when not.
+fn: lmx_msg_live_find_id (@: LmxMsg svc; LmxMsgAddr: id; @: int at) int
+    int: lo 0
+    int: hi
+    int: mid
+    if: svc = 0 || id = 0U || at = 0
+        return: 0
+    hi: svc\live_n
+    while: lo < hi
+        mid: lo + ((hi - lo) / 2)
+        if: svc\byid_id[mid] = id
+            \at: mid
+            return: 1
+        ---
+        if: svc\byid_id[mid] < id
+            lo: mid + 1
+        else:
+            hi: mid
+        ---
+    ---
+    \at: lo
+return: 0
+
+# AD: the record the service holds under this id, or 0. This is the bounded-time
+# answer to a target named only by its id: a released record, an id the service
+# never held and an address that fell off all answer 0, and the caller refuses.
+fn: lmx_msg_live_lookup (@: LmxMsg svc; LmxMsgAddr: id) @: LmxMsg
+    int: at 0
+    if: svc = 0 || id = 0U
+        return: 0
+    if: lmx_msg_live_find_id(svc, id, @ at) = 0
+        return: 0
+return: svc\byid_m[at]
+
 # Growth for the live set, in the shape of the path-array growth helper this
 # stage deletes, kept because its two guards are exactly what a leaner version
 # drops: the capacity doubling cannot overflow int, and the byte count cannot
@@ -1165,6 +1203,8 @@ fn: lmx_msg_live_grow (@: LmxMsg svc; int: need) int
     int: cap
     @@: LmxMsg grown_m
     @: unsigned grown_id
+    @@: LmxMsg grown_byid_m
+    @: unsigned grown_byid_id
     if: svc = 0 || need < 1
         return: c.LMX_MSG_INVALID
     if: svc\live_cap >= need
@@ -1187,8 +1227,63 @@ fn: lmx_msg_live_grow (@: LmxMsg svc; int: need) int
     if: grown_id = 0
         return: c.LMX_MSG_NOMEM
     svc\live_id: grown_id
+    # AD: the id order grows with the address order, under the same cap and with
+    # the same "cap advances only when every array did" rule.
+    grown_byid_m: (cast: (@@: LmxMsg) c.realloc((cast: (@: void) svc\byid_m), (cast: (size_t) cap) * c.sizeof(@: void)))
+    if: grown_byid_m = 0
+        return: c.LMX_MSG_NOMEM
+    svc\byid_m: grown_byid_m
+    grown_byid_id: (cast: (@: unsigned) c.realloc((cast: (@: void) svc\byid_id), (cast: (size_t) cap) * c.sizeof(unsigned)))
+    if: grown_byid_id = 0
+        return: c.LMX_MSG_NOMEM
+    svc\byid_id: grown_byid_id
     svc\live_cap: cap
 return: c.LMX_MSG_OK
+
+# AD: insert the pair into the id order. The growth and the shift are the address
+# order's own insert below; an id already present has its record replaced rather
+# than duplicated, because an id names exactly one Message for its whole life.
+fn: lmx_msg_live_byid_add (@: LmxMsg svc; @: LmxMsg m; LmxMsgAddr: id) int
+    int: at 0
+    int: i
+    int: st
+    if: svc = 0 || m = 0
+        return: c.LMX_MSG_INVALID
+    if: lmx_msg_live_find_id(svc, id, @ at) != 0
+        svc\byid_m[at]: m
+        return: c.LMX_MSG_OK
+    st: lmx_msg_live_grow(svc, svc\live_n + 1)
+    if: st != c.LMX_MSG_OK
+        return: st
+    i: svc\live_n
+    while: i > at
+        svc\byid_m[i]: svc\byid_m[i - 1]
+        svc\byid_id[i]: svc\byid_id[i - 1]
+        i: i - 1
+    ---
+    svc\byid_m[at]: m
+    svc\byid_id[at]: id
+return: c.LMX_MSG_OK
+
+# AD: drop the id's entry from the id order. A miss is OK -- a freed record's
+# entry may already be gone -- and the caller that must know whether a RECORD was
+# live reads the address order, which is the order that decides that question.
+sub: lmx_msg_live_byid_remove (@: LmxMsg svc; LmxMsgAddr: id)
+    int: at 0
+    int: i
+    if: svc = 0 || id = 0U
+        return
+    if: lmx_msg_live_find_id(svc, id, @ at) = 0
+        return
+    i: at
+    while: i < svc\live_n - 1
+        svc\byid_m[i]: svc\byid_m[i + 1]
+        svc\byid_id[i]: svc\byid_id[i + 1]
+        i: i + 1
+    ---
+    svc\byid_m[svc\live_n - 1]: 0
+    svc\byid_id[svc\live_n - 1]: 0U
+end: lmx_msg_live_byid_remove
 
 # Registration: the record joins the service's live set, sorted by address so the
 # membership test stays a binary search. Written ONLY on the service's own lane --
@@ -1207,9 +1302,17 @@ fn: lmx_msg_service_register (@: LmxMsg svc; @: LmxMsg m; LmxMsgAddr: id) int
         # Already live at this address. If the id differs the entry is a stale one
         # for a freed record whose address was reused, so it is REPLACED rather
         # than duplicated: the new record is the live one at that address now.
+        # AD: the id order moves with the replacement -- the old id's entry goes
+        # and the new id names this record.
+        lmx_msg_live_byid_remove(svc, svc\live_id[at])
         svc\live_id[at]: id
-        return: c.LMX_MSG_OK
+        return: lmx_msg_live_byid_add(svc, m, id)
     st: lmx_msg_live_grow(svc, svc\live_n + 1)
+    if: st != c.LMX_MSG_OK
+        return: st
+    # AD: the id order first, while live_n still counts the entries that exist in
+    # it; its own grow call is a no-op because the cap is already raised above.
+    st: lmx_msg_live_byid_add(svc, m, id)
     if: st != c.LMX_MSG_OK
         return: st
     i: svc\live_n
@@ -1251,6 +1354,8 @@ fn: lmx_msg_service_unregister (@: LmxMsg svc; @: LmxMsg m; LmxMsgAddr: id) int
         svc\live_id[i]: svc\live_id[i + 1]
         i: i + 1
     ---
+    # AD: the id order loses the entry too, before live_n shrinks past it.
+    lmx_msg_live_byid_remove(svc, id)
     svc\live_n: svc\live_n - 1
     svc\live_m[svc\live_n]: 0
     svc\live_id[svc\live_n]: 0U
@@ -2361,6 +2466,8 @@ sub: lmx_msg_live_sweep (@: LmxMsg svc)
     while: i < svc\live_n
         m: svc\live_m[i]
         if: m != 0 && m != svc && m\state = c.LMX_MSG_STATE_RELEASED
+            # AD: the id order loses the entry before the record is freed.
+            lmx_msg_live_byid_remove(svc, svc\live_id[i])
             c.lmx_msg_slot_free(m)
             svc\live_m[i]: 0
         ---
