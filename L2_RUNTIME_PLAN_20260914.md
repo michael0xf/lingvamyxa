@@ -8641,3 +8641,30 @@ the first build when the whole service step is written. Coordinator's
 option offered (his call): two parallel arrays (live_m, live_id) in
 place of an array of two-field structs, avoiding c.sizeof on a typedef
 and the subscript-then-field-follow spelling.
+The lead's status (the service step, uncommitted): the live set as
+two parallel arrays live_m and live_id with one live_n/live_cap
+(reached independently: name[i]\field has zero occurrences in either
+core against 18 plain subscripts, so the array-of-struct follow had no
+neighbour to copy), sized as the done_from/done_id precedent
+(lm1:792-794: c.sizeof(@: void) for the pointer array,
+c.sizeof(unsigned) for the id array; the coordinator's
+c.sizeof(@: LmxMsgAddr) would have sized a pointer to the id, a quiet
+error); the five bodies converted in both cores with the id required
+for membership, post_register on post_dead's shape, the KIND_REGISTER
+interception above admit_one's destination resolution, the
+registration in create_prepare before the address is returned, parity
+verified (lm2's end: convention explains the +1 per name); bare live[
+gone. Not done: the unregister-and-free letter (KIND_UNREGISTER in
+the header with the ruling in its comment; the poster, the service
+handler, release_slot posting instead of calling slot_free, both
+cores). Two findings from runtime_delete: (a) R0's free does not go
+through release_slot (teardown_drain, the transport teardown,
+teardown_free calling slot_free on every record), so the letter
+replaces slot_free in release_slot only, and teardown posts no letter
+(the transport is torn down by then; a push there would be a
+use-after-free); R0's live set dies with R0; (b) the two heap arrays
+added to the record had no free-partner (the rule he quoted at the
+envelope's address field, broken in his own work within the hour):
+live_m and live_id are freed in slot_free with the record's other
+allocations. No spelling blocks him; the first build after the
+letter and the free-partner land.
