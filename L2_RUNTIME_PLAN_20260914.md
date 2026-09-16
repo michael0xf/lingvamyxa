@@ -7414,3 +7414,23 @@ now carries the real property (the orphan on R0's settled list,
 RELEASED, no binds). Remaining at e0b38ffb: 29 counter sites with a
 runtime receiver in five cases (the held-capability pair 3220/3227,
 the ctx rollback 3338, the exec-maintain group 7120-7443).
+S6-2, the admission refusal: the lead wrote it as an admission-time
+refusal (send_cap stores the record pointer in the envelope,
+lmx_message.lm1:2768; admit_one splits RELEASED out of the
+DEAD/STOPPED disjunction; lmx_msg_post_rejected in post_dead's shape,
+kind KIND_REJECTED, queued on R0's transport under R0's monitor; the
+hold-order check pins six methods; a refusal is never itself refused)
+and announced the deviation from "on the parent's lane" before the
+gate returned. RULED (the coordinator, for the spec's letter): the
+late send is admitted into the settled mailbox as into any mailbox,
+under that mailbox's own monitor (admit_one no longer treats RELEASED
+as GONE), and the refusal is the owner's act in its own round: the
+parent drains its settled children's mailboxes (its settled list
+enumerates them), one monitor at a time, never nested, and posts
+KIND_REJECTED to each sender on its own lane (R0's transport today,
+direct at Y3); a REJECTED envelope found in a settled mailbox is
+dropped by the owner's drain. Reasons: the sentence as written; Y3
+deletes the transport lane, so an admission-time refusal is code Y3
+would rewrite into this; and no foreign-lane read of parent_msg is
+needed for the refusal. The planted red (lmx_message_selftest.lm1
+982-987) stays the falsifier.
