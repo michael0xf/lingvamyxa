@@ -1864,9 +1864,21 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       ordinary ownership rather than a branch retained to process end. The forbidden state is a subtree left
       hanging, unowned, waiting for teardown; the settled state is owned by a live parent from the moment of the
       settle. Both sentences hold under that reading, which is the one the coordinator's own correction adopted.
-      What it costs: the six pins in family_release_17 (212, 222, 248, 270, 303, 304, with their n0 captures at
-      209, 219, 245, 267, 290), the eight sites in orphan_mapped_17 and the one in entry_turn are restated as
-      OWNERSHIP and STATE checks -- the record is the parent's data, its state is RELEASED, it is out of its
+      What it costs, counted on the field and then split by role (my first figure -- "six in family_release_17,
+      eight in orphan_mapped_17" -- was wrong in BOTH directions, and the two errors nearly cancelled, which is
+      how a wrong total looked plausible; 0c found the same trap from the other side):
+        * check lines pinning the count, SEVENTEEN: family_release_17 212, 222, 248, 270, 303, 304, 321, 342,
+          344, 345, 346 (eleven -- 222, 248, 321, 342 and 344-346 say the same thing in other words, which a
+          text-led pass skips); orphan_mapped_17 149, 157, 158, 159, 167 (five); entry_turn 84 (one).
+        * n0: captures that go with them, EIGHT: 209, 219, 245, 267, 290, 320, 334 and orphan_mapped_17 148.
+        * ONE loop condition, orphan_mapped_17:163, `while: rt\n != 2`. It pins nothing, so a pin-counting pass
+          drops it, but it is the site that cannot become an assertion of any shape: it is the wait for the
+          sweep to finish, and with rt\n deleted it does not even compile. It becomes a wait on the property
+          the loop was really after -- `while: lmx_msg_find(rt, cc) != 0` -- with the drive still inside.
+        * four of the pins state an ABSOLUTE count of who remains, not a delta, so no "one slot fewer" wording
+          reaches them: family_release_17 270 (= n0 - 2 && = 6) and 344 (= 3), orphan_mapped_17 158 (= 3) and
+          167 (= 2). These are the ones the membership form was invented for, and they go first.
+      All of them are restated as OWNERSHIP and STATE checks -- the record is the parent's data, its state is RELEASED, it is out of its
       parent's child list -- and never as "find says gone", which after S6-2 is true of a settled record by
       construction and therefore asserts nothing.
     - Counting method, so two honest counts are not read later as a contradiction in the code: my numbers are
