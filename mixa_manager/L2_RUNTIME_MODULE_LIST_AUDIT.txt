@@ -339,3 +339,44 @@ run_mixa_app_win32_l2_parity.ps1 -- first failure:
   are local mixa_manager variables, unconnected to the runtime/executor
   internals those four stages touched (git log on this .lm2 shows only
   its own 29539c99 port commit, likewise untouched by all four).
+
+--- Fix: the dispatcher's app_window duplicate symbols (mixa_draw.o vs
+    mixa_buttons.o)
+
+Cause, confirmed directly (both generated .c files inspected, not
+guessed): mixa_draw.lm1 predefs mixa_text_rect.lm1 (full body, not
+header-only); mixa_buttons.lm1 predefs mixa_tiles.lm1, which itself
+predefs mixa_text_rect.lm1 -- so BOTH mixa_draw.c and mixa_buttons.c
+carry their own byte-identical copy of mixa_rect_open/_release/_fill/
+_put_text/_dump/mixa_cell_at/_at_const (verified: `int mixa_rect_open`
+appears in both, line 4 of each, same generated text). This is not new
+-- the now-deleted per-module run_mixa_app_window_l2_parity.ps1 (git
+show ce18299f^, before batch 3 folded it into the dispatcher) linked
+the L2 side's mixa_buttons.o and mixa_draw.o together the identical
+way and would have hit the same clash; it was masked until now by the
+lmx_msg_sched_ready throw and then the lmx_root_record link failure --
+the same masking pattern this whole audit has already found twice.
+The oracle side never sees it: mixa_app_window.lm1 itself predefs both
+chains directly, so OracleDeps is empty and only one copy is ever
+compiled.
+
+Fix: a new per-module table field, L2LinkAllowMultipleDefinition
+(l2_parity_module_table.ps1, documented in the schema comment), set
+$true only on app_window; run_mixa_l2_parity.ps1's L2-side link
+appends -Wl,--allow-multiple-definition only when that field is set
+(run_mixa_l2_parity.ps1, the L2-side link-args block). Scoped to this
+one module -- every other module's L2-side link is unchanged. Safe
+because the two definitions are guaranteed identical by construction
+(same source, same translator, same flags), not an unrelated clash
+being papered over.
+
+Before: UNEXPECTED_FAILURE -- `ld.exe: ...mixa_draw.o:mixa_draw.c:
+(.text+0x0): multiple definition of `mixa_rect_open'; ...mixa_buttons.
+o:mixa_buttons.c:(.text+0x0): first defined here` (plus 6 more of the
+same shape for the other 6 functions).
+After: PARITY_FAILURE -- link succeeds, both sides build and run;
+falsifier met (the verdict line no longer names a duplicate symbol).
+Oracle trace completes all 162 checks ("mixa app window parity harness
+ok checks=162"); the L2 trace stops silently after check 15 ("CHK open
+too small got=1 want=1 PASS", no crash message in stdout or stderr) --
+a real, further divergence, a new finding, not chased here.
