@@ -134,7 +134,6 @@ typedef struct LmxMsgCopy {
 
 typedef struct LmxMsg {
     LmxMsgAddr addr;
-    LmxMsgAddr parent;
     /* S6-2 (SPEC 19.29.7, Mikhail 2026-09-16, thirteenth line): THE C MIRROR OF AN
      * LMX FIELD, NOT A KERNEL FIELD.  The mail service's reference belongs to the
      * Message's LMX -- "поле уже LMX, а вот API надо сделать общим" -- and the
@@ -345,7 +344,7 @@ int lmx_msg_send_address(LmxMsgRuntime *rt, LmxMsgAddr from, const unsigned *add
 int lmx_msg_child_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 LmxMsgAddr lmx_msg_child_at(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
 /* Decision 17 rule 4: hand the supervision of old_parent's direct child to the
- * live new_parent. Mailbox, arena, turn and record stay; parent_msg, parent,
+ * live new_parent. Mailbox, arena, turn and record stay; parent_msg,
  * scheduler place and liveness window move, and the index is minted afresh by
  * new_parent (S6-2, SPEC 19.29.7: "when a Message changes parent its address
  * changes"), so lmx_msg_get_address reads the new parent's address plus it. */

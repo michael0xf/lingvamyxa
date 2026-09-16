@@ -3096,14 +3096,14 @@ int main(int argc, char **argv) {
                 || n_ctx != 1
                 || lmx_msg_child_n(rtv, vp) != 0 || lmx_msg_child_n(rtv, vq) != 1
                 || lmx_msg_child_at(rtv, vq, 0) != vc
-                || vcm->parent != vq || vcm->parent_msg != lmx_msg_find(rtv, vq)
+                || vcm->parent_msg == 0 || vcm->parent_msg->addr != vq || vcm->parent_msg != lmx_msg_find(rtv, vq)
                 || path_before != 3 || path_after != 3
                 || addr_before[0] != 1U || addr_before[1] != 1U || addr_before[2] != 1U
                 || addr_after[0] != 1U || addr_after[1] != 2U || addr_after[2] != 1U) {
                 fprintf(stderr, "handoff move st=%d binds=%d pn=%d qn=%d parent=%u addr=%d/%d\n",
                     vst, n_ctx,
                     lmx_msg_child_n(rtv, vp), lmx_msg_child_n(rtv, vq),
-                    vcm != 0 ? (unsigned)vcm->parent : 0U,
+                    (vcm != 0 && vcm->parent_msg != 0) ? (unsigned)vcm->parent_msg->addr : 0U,
                     path_after, path_before);
                 return 1;
             }

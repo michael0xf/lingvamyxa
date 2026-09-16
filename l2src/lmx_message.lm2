@@ -661,6 +661,16 @@ sub: msg_child_link (@: LmxMsg parent; @: LmxMsg child)
     parent\last_child: child
 end: msg_child_link
 
+# AD (c): LmxMsg.parent, the parent's id, is retired as a duplicate of parent_msg
+# (every reparenting site wrote both in lockstep). A reader that wants the id reads
+# it from the record parent_msg names; 0 when there is none (R0).
+fn: msg_parent_id (@: LmxMsg m) LmxMsgAddr
+    if: m = 0 || m\parent_msg = 0
+        return: 0U
+    ---
+    return: m\parent_msg\addr
+end: msg_parent_id
+
 fn: msg_child_chain_remove (@: LmxMsg parent; @: LmxMsg child) int
     @: LmxMsg p
     @: LmxMsg n
@@ -705,10 +715,9 @@ end: msg_child_unlink
 
 # Decision 17 rule 4 (Mikhail, 2026-09-14): a running Message survives its
 # parent's closing only by a handoff of supervision to another live parent.
-# The child keeps its arena, mailbox, turn, record, path (its genesis) and its
-# ready flag (decision 18). Its parent capability (parent_msg and the address
-# parent) and its liveness window move to the new parent, all under the exec
-# lock (3b-9). Addresses are the bootstrap's capabilities: "the new
+# The child keeps its arena, mailbox, turn, record and its ready flag (decision
+# 18). Its parent link (parent_msg; the separate parent id was retired in AD (c)),
+# its index at the parent and its liveness window move to the new parent. Addresses are the bootstrap's capabilities: "the new
 # parent is live in the same runtime" is the check until 19.28.R2.
 fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsgAddr: child; LmxMsgAddr: new_parent) int
     @: LmxMsg p
@@ -752,7 +761,6 @@ fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsg
     # there; every descendant's address follows by the walk, with nothing stored.
     q\child_seq: q\child_seq + 1U
     ch\index: q\child_seq
-    ch\parent: q\addr
     ch\child_heard_at: c.lmx_msg_now(rt)
     ch\live_query_id: 0U
     ch\live_query_pend_id: 0U
@@ -1512,10 +1520,6 @@ fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx source; 
         return: st
     # S5: the address comes from the runtime's order-free atomic counter (no owner lane).
     slot\addr: c.lmx_msg_addr_take(rt)
-    slot\parent: parent
-    if: top != 0
-        slot\parent: p\addr
-    ---
     slot\state: c.LMX_MSG_STATE_INACTIVE
     slot\committed: 0
     if: parent = 0U
@@ -1769,7 +1773,7 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
         msg_child_unlink(m\parent_msg, m)
     ---
     # S5: only R0 has no parent, and it is the one root.
-    if: rt != 0 && m\parent = 0U
+    if: rt != 0 && m\parent_msg = 0
         if: rt\root = m
             rt\root: 0
         ---
@@ -1849,7 +1853,7 @@ end: msg_first_settled_child
 # Decision 17 with spec 19.29.6 (iii) and stage-5 clarification (iv): a child
 # of x still running when x is settled is re-rooted under R0 as an orphan,
 # closing by the chain. Its arena, mailbox, record and ready flag stay; its
-# supervision (parent_msg, parent) goes to R0, and with it its address: S6-2 (SPEC
+# supervision (parent_msg) goes to R0, and with it its address: S6-2 (SPEC
 # 19.29.7, "when a Message changes parent its address changes") -- R0 mints the
 # orphan's index exactly as handoff_supervision's new parent does, so the address
 # composed by the walk never repeats a live R0 child's. x is settled, so the lane
@@ -1865,7 +1869,6 @@ sub: msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
             more: 0
         else:
             msg_child_chain_remove(x, g)
-            g\parent: rt\root\addr
             g\orphan: 1
             msg_child_link(rt\root, g)
             # An orphaning cannot fail, so an exhausted counter gives index 0, which
@@ -2530,7 +2533,7 @@ fn: msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: m = 0
         return: c.LMX_MSG_INVALID
     m\state: c.LMX_MSG_STATE_DEAD
-    parent: m\parent
+    parent: msg_parent_id(m)
     req: m\exec_id
     # S6-2: fail pinned m across its post_dead calls and its mailbox work. Nothing
     # frees a record now, and m is this turn's own Message throughout.
@@ -2580,9 +2583,9 @@ end: msg_fail
 fn: msg_parent_gone (@: LmxMsgRuntime rt; @: LmxMsg child; unsigned: now; unsigned: threshold) int
     @: LmxMsg p
     unsigned: idle
-    if: child = 0 || child\parent = 0U
+    if: child = 0 || child\parent_msg = 0
         return: 0
-    p: msg_self_or_find(rt, child\parent)
+    p: child\parent_msg
     if: p = 0
         return: 1
     if: p\state = c.LMX_MSG_STATE_DEAD || p\state = c.LMX_MSG_STATE_STOPPED || p\state = c.LMX_MSG_STATE_RELEASED
@@ -2602,7 +2605,7 @@ end: msg_parent_gone
 fn: msg_poll_mark (@: LmxMsgRuntime rt; @: LmxMsg m; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap; int: n) int
     if: m = 0
         return: n
-    if: m\parent != 0U && (m\state = c.LMX_MSG_STATE_RUNNING || (m\state = c.LMX_MSG_STATE_INACTIVE && m\committed != 0))
+    if: m\parent_msg != 0 && (m\state = c.LMX_MSG_STATE_RUNNING || (m\state = c.LMX_MSG_STATE_INACTIVE && m\committed != 0))
         if: msg_parent_gone(rt, m, now, threshold) != 0
             m\closing: 1
             msg_exec_ready(rt, m\addr)
@@ -2912,7 +2915,7 @@ fn: msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
         return: c.LMX_MSG_INVALID
     m: msg_turn_slot(rt, who)
     if: m != 0
-        parent: m\parent
+        parent: msg_parent_id(m)
         n: m\init_n
         initp: msg_copy_bytes(m\init, n)
         if: n != 0U && initp = 0
@@ -2933,7 +2936,7 @@ fn: msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     m: msg_self_or_find(rt, who)
     if: m = 0
         return: c.LMX_MSG_INVALID
-    parent: m\parent
+    parent: msg_parent_id(m)
     n: m\init_n
     initp: msg_copy_bytes(m\init, n)
     if: n != 0U && initp = 0
@@ -2959,7 +2962,7 @@ fn: msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     m: msg_turn_slot(rt, who)
     if: m = 0
         m: msg_self_or_find(rt, who)
-        if: m = 0 || m\parent = 0U
+        if: m = 0 || m\parent_msg = 0
             return: c.LMX_MSG_INVALID
         ---
         if: m\live_query_id != 0U || m\live_query_pend_id != 0U
@@ -2970,10 +2973,10 @@ fn: msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         ---
         m\live_seq: m\live_seq + 1U
         qid: m\live_seq
-        parent: m\parent
+        parent: msg_parent_id(m)
     ---
     if: m != 0 && qid = 0U
-        if: m\parent = 0U
+        if: m\parent_msg = 0
             return: c.LMX_MSG_INVALID
         ---
         if: m\live_query_id != 0U || m\live_query_pend_id != 0U
@@ -2984,7 +2987,7 @@ fn: msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         ---
         m\live_seq: m\live_seq + 1U
         qid: m\live_seq
-        parent: m\parent
+        parent: msg_parent_id(m)
     ---
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: env = 0
@@ -3031,7 +3034,7 @@ fn: msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEnv en
         ---
         from: m\exec_from
         if: env\number = c.LMX_MSG_PROF_LIVE_R
-            if: from = m\parent && env\correlation != 0U && env\correlation = m\live_query_id
+            if: from = msg_parent_id(m) && env\correlation != 0U && env\correlation = m\live_query_id
                 m\live_query_id: 0U
             ---
             return: c.LMX_MSG_OK
@@ -3059,7 +3062,7 @@ fn: msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEnv en
         ---
         from: m\exec_from
         if: env\number = c.LMX_MSG_PROF_LIVE_R
-            if: from = m\parent && env\correlation != 0U && env\correlation = m\live_query_id
+            if: from = msg_parent_id(m) && env\correlation != 0U && env\correlation = m\live_query_id
                 m\live_query_id: 0U
             ---
             return: c.LMX_MSG_OK

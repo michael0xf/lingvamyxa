@@ -87,7 +87,7 @@ sub: send_init_case (@: LmxMsgRuntime rt; unsigned: who; @: LmxMsg source)
     send_check(lmx_msg_init_copy(rt, 0U, got) = LMX_MSG_INVALID, "invalid init address refused")
     send_check(got\id = 91U && got\number = 92 && got\bytes = 0 && got\n = 0U, "invalid init leaves output unchanged")
     send_check(lmx_msg_init_copy(rt, who, got) = LMX_MSG_OK, "copy initial data")
-    send_check(got\id = 0U && got\correlation = 0U && got\reply_to = source\parent && got\kind = LMX_MSG_KIND_BYTES && got\number = 0, "init metadata contract")
+    send_check(got\id = 0U && got\correlation = 0U && source\parent_msg != 0 && got\reply_to = source\parent_msg\addr && got\kind = LMX_MSG_KIND_BYTES && got\number = 0, "init metadata contract")
     send_check(got\n = 1U && got\bytes != 0 && got\bytes != source\init && got\bytes[0] = 7, "init copy has independent allocation")
     # This returned allocation belongs to this test; the API exposes a const
     # view, so make the deliberate alias-independence probe explicit.
