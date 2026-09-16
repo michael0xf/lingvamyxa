@@ -761,3 +761,24 @@ for calling mixa_app_fmpanel_close becomes a separate, still-open
 question (an L2-visible declaration existing is necessary but not
 independently confirmed sufficient here) -- not resolved by this note,
 a next step for whoever picks up either ticket.
+
+--- Fix: retire audio_mp3's scratch second-translator mechanism
+
+Removed the whole mechanism, not just the missing-file check: the
+second translator's own path/hash constants (formerly :52-53), its
+existence/hash-mismatch throws (formerly :56-62), and every one of its
+9 call sites (the 11 header translations, the harness translation, the
+oracle translation, and the stable-fails-then-retry-with-it fallback
+in the intermediate-.lm1 translation step) -- all now use $L1Trans, the
+same stable, pinned translator every other module in this tree already
+uses. `grep -c candidate mixa_manager/run_mixa_audio_mp3_l2_parity.ps1`
+prints 0 (falsifier met).
+
+Before: THROW at the old :57 (missing artifact). After: PASS -- full
+translation, build, and run; L2 trace byte-identical to the oracle's
+own trace ("mp3 composition selftest: 36 checks, 0 failures" both
+sides), 23.1s cold. Confirms the 2026-09-16 finding above directly:
+the fixed import cap this whole mechanism existed to work around is
+genuinely gone from the current pin, and the real 22-import module
+needed no special-case translator at all once asked to use the one
+every other module already uses.
