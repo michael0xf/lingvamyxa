@@ -9253,3 +9253,14 @@ exec-selftest case has a mapped child's turn get LMX_MSG_INVALID from
 pump with R0's transport untouched, falsifier the fallback restored.
 Noted, not blocking: two orphans minted past a wrapped R0 counter share
 [1,0] (about 2^32 R0 children); the comment names it.
+The live set's single-lane claim, traced at 066fb5a1 (L1 core; lm2 mirrors
+it): every read and write of live_m/live_id/live_n is in live_find,
+live_grow, live_sweep, service_register, service_unregister and
+service_is_live; those are called only from admit_one (the KIND_REGISTER
+and KIND_UNREGISTER interceptions and the delivery check), from
+create_prepare and release_slot only when the record is its own service
+(R0, on the owner's lane), and from teardown's sweep; admit_one's only
+caller is pump (0 callers outside the cores); exec.c touches the arrays
+only to free them in slot_free.  So with pump's any-turn fallback deleted,
+the live set is written and read on the owner's lane alone, which is the
+host that runs R0's turns.
