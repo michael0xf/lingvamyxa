@@ -10134,3 +10134,19 @@ The flake's remaining half is recorded in the fix's own commit: r == 0 from a
 record retired under the walk is dampened only for the wait cell, and the record
 lifetime itself is (d)(3)'s epoch grace. The design document (d6/lock-removal
 dec501c4) already carries the order and the reasoning.
+
+STAGE AT 2026-09-16 18:24: d6/lock-ad is 492a8afb -- the wait-claim fix (b3fc817a) plus
+grok/ad-find-lookup 52d674ae merged (22 files, +207/-29; the substitution of
+lmx_msg_live_lookup for lmx_msg_find at the sites whose record is already in R0's
+live set, with every remaining site carrying a comment naming its reason). The
+chain on the fix was GREEN 29 of 29 in 558s with the unfiltered verdict line the
+landing scripts pin, and the merge itself: probe "find=172 find_tree=8
+dest_from_src=8 self_or_find_fallback=2 id_marks=0 parent_field=0" (find DOWN 28
+from 200) and run_port_message GREEN.
+
+Remaining for the stage's acceptance: the 172 find sites whose records are NOT
+yet registered (grok_bot's list names them by file:line, all "registration not
+drained") -- those need the pair from create's out_msg or a drain, not a lookup;
+then the definitions of find and find_tree go; then (d)(3), the epoch grace, for
+the record lifetime itself. The probe's six counters must all read 0 with its
+positive control before the stage lands.
