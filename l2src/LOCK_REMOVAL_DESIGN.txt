@@ -1881,6 +1881,16 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         already gone: "а если родителя уже нет?", answered by the service rather than by any parent; and on adding
         nothing for it: "Не плодите постоянно лишних сущностей. Так как все Message порождаются из root Message (по
         цепочке) то он может при merge передавать себя как почтовый сервис. В чем проблема?"
+      - THE SERVICE IS A ROLE, NOT AN OBJECT (Mikhail's fourth line the same night, verified by me on origin/main
+        238a8eb1: grep -c "postman" prints 1). 19.29.7 continues that the service "handed down the chain may be any
+        Message, not only the root: the membership check by the service itself, the delivery by a postman Message,
+        the list of postmen held by the service, and so on, everything written and optimized within Messages"
+        (verbatim: "это может быть _любой_ Message которого R0 передаёт по цепочке при создании L1 Thread ...
+        конкретно доставку -- специальный почтальон, список почтальонов может держать почтовый сервис и так далее
+        -- вы можете _всё_ написать и всё оптимизировать в этой парадигме"). For S6-2 nothing changes: R0 fills the
+        role today and rt\root\addr already names it (lm1:909-914), the resolution in R0's drain is the seed, and
+        postmen are a later optimization inside Messages rather than a stage item. It is written here so a later
+        reader does not mistake "the service is R0" for a constraint of the model when it is only today's holder.
       - THE MECHANISM ON THE NEW FOOTING, in the order the code will take it:
         * release_slot: unbind, unlink from the family chain, drain both mailboxes, free init and path, set
           RELEASED, destroy the mailbox monitor and free the record -- unconditionally, with no refs guard and no
