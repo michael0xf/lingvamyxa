@@ -2290,6 +2290,20 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         translator regression fixture for a reason having nothing to do with it. Exactly the unit_msg_cursor trap
         a second time: the slot list was the SUBJECT of these fixtures, never what they were testing, and "delete
         everything that mentions the deleted thing" cannot tell those apart.
+      - GRAPH_ABI GREEN on the registry group, fixtures 157/157, and the way the two re-pointed units were
+        finished is the part worth keeping. run_graph_abi pins unit_msg_cursor and unit_msg_adapter by matching
+        the EMITTED L1 text, so after re-pointing them at R0's child chain I did not write the new patterns from
+        the design -- I ran the gate, read build/graph_abi/<stamp>/unit_msg_cursor.lm1, and copied what l2trans
+        actually emitted: `m: l2_p1_0ootirst_child`, `m: m
+ext_sibling`, `return: mddr`, and for the
+        count `return: l2_p0_0oot\path_n` with no while:. The one pattern I did predict (the adapter's, from
+        the cursor's identical expression) the gate then confirmed. That order matters because an assertion
+        written from intent passes when the intent is wrong; an assertion written from output fails when the
+        output changes, which is what it is for.
+        A detail that cost a round trip and is worth recording: the emitted fixtures do NOT live in the evidence
+        directory the runner names on failure (build/fable/graph_abi/run_*); they are written to
+        build/graph_abi/<stamp>/<stem>.lm1. Two searches of the wrong tree returned nothing, which reads exactly
+        like "the file was never produced".
       - THE GATE COUNT, resolved by 0c and worth keeping as the cleanest instance of the whole pattern: three
         numbers, all correct, counting different things. The $gates array held 30 rows and holds 29 after the
         port_slots row goes; run_gates appends l2_message_root under -L2MessageRoot BEFORE printing $gates.Count,
