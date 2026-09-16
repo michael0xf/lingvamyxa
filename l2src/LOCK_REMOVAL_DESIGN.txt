@@ -2279,6 +2279,24 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         precedent (two .lm2 comments do) -- and a deletion that checks fewer than all of them compiles until it
         does not. This is the same lesson as the pair-deletion misses in a different dimension: the check has to
         enumerate the KINDS of reference, not just the occurrences of one kind.
+      - THE FIFTH POPULATION RESOLVED, and it turned out to be a re-point rather than a deletion. exec.c's
+        lmx_msg_exec_tab_n_locked / _addr_locked delegated to the deleted module, but they are not dead: they are
+        called by tests/l2_and_foreign_call_own_local.lm2, and run_l2trans.ps1:2354-2358 asserts on that fixture's
+        EMITTED L1 -- that a C call on the right of && does not take the condition temporary's name through the
+        shared l2_tok buffer, and that the actual reaches the call through a temp assigned from its working local.
+        The fixture is Invoke-CompileObject: compiled, never executed. So what those wrappers owe it is their
+        SIGNATURES, not their old behaviour, and they are re-implemented over R0's child chain -- the records the
+        registry listed for this purpose -- with the signatures untouched. Deleting them would have dropped a
+        translator regression fixture for a reason having nothing to do with it. Exactly the unit_msg_cursor trap
+        a second time: the slot list was the SUBJECT of these fixtures, never what they were testing, and "delete
+        everything that mentions the deleted thing" cannot tell those apart.
+      - THE GATE COUNT, resolved by 0c and worth keeping as the cleanest instance of the whole pattern: three
+        numbers, all correct, counting different things. The $gates array held 30 rows and holds 29 after the
+        port_slots row goes; run_gates appends l2_message_root under -L2MessageRoot BEFORE printing $gates.Count,
+        and both landing scripts pass that switch -- so a landing reported 31/31 and will now report 30/30. My 29,
+        the plan's 31 and the array's 30 were never in conflict. It is the FIRST time in this stage that one of us
+        stopped before publishing either number instead of afterwards, and it cost a single grep; every earlier
+        instance cost a correction sent to someone who had already recorded it.
       - THE GATE COUNT, flagged rather than reconciled: the gates table holds 29 rows after the port_slots row
         goes, so it held 30 before -- but the stage plan and the S6-1 landing both say "31 gates", and a landing
         run reported 31/31. Either the table has lost a row since, or that figure counts something beyond these
