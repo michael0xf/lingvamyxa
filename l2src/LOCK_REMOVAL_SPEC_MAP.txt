@@ -63,6 +63,14 @@ cite this map's owner codes in their target-owner column.
 
 2. WHAT THE SPEC ALREADY SAYS, BY LINE (origin/main 07ad3679)
 
+   PIN NOTE (2026-09-16): every line range in this section is as of Lingvamyxa_spec.txt at
+   origin/main 07ad3679 and is NOT renumbered as the spec grows; the quoted text beside each
+   range is the authoritative anchor (find it with grep -F on the phrase). e9's sweep on
+   2026-09-16: at 07ad3679 all 25 testable citations land in their ranges; at c22a7dcb (the
+   spec grown by 141 lines through four edits that day) 24 of 25 no longer do. Section 5.6 is
+   annotated WITHDRAWN below; the citations of L2_CORE_AND_MESSAGE_MODEL and of exec.c in
+   sections 3 and 5 are not spec ranges.
+
 2.1 19.28.R2.2 Message Thread (11430-11596).
   11432-11435: "An inactive Message becomes an L3 Thread when explicitly launched. Its management state
     is ordinary Structure data, to be implemented in L2, not an external C control model. Native handles

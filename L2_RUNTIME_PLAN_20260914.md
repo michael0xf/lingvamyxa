@@ -8276,3 +8276,12 @@ plan's earlier ruling "5.6 is settled in Mikhail's agreed wording
 form survives, the range does not). e9 sweeps the map's by-line
 citations against the current spec and reports the moved ranges; the
 coordinator edits the map.
+e9's sweep of the spec map's by-line citations: 41 ranges, 25 testable
+spec citations with quoted anchors; at the map's pin 07ad3679 all 25
+land (two apparent moves were the sweep's own artifacts: a line with
+two ranges, a sentence wrapping); at c22a7dcb (the spec grown by 141
+lines through four edits on 2026-09-16) 24 of 25 no longer land; five
+ranges cite the model or exec.c, not the spec. RULED as e9
+recommended: no renumbering; a dated PIN NOTE under the map's section
+2 heading states the numbers are as of 07ad3679 and never renumbered,
+the quoted text the authoritative anchor. Pushed.
