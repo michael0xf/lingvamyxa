@@ -8859,3 +8859,22 @@ clean; the never-refuse-a-refusal guard re-measured with a literal
 calibration: whether the core change is sound (no heap corruption at
 live-cascade) and where the first delivery assertion needing an R0
 round breaks.
+Calibration verdict (the lead): compile PASSED; run 1 HUNG ("FAIL
+watchdog: the selftest has run for 300 s; a wait never returned",
+exit 3) in the very first scenario; live-cascade not reached, so the
+heap corruption's fate is unmeasured. Located: the case starts worker
+contexts and waits in YIELD_UNTIL (which only yields) on workers
+having received letters; exec.c never drains the transport (no pump,
+host_drain or drive in it), R0 is never bound to a worker, so under
+(b) the workers' turn ends only push, nothing runs R0's round, the
+predicate never holds. The coordinator's clause "a worker context
+that ends R0's round itself is left alone" was empty in this executor
+and is withdrawn: the fixture cost includes every wait that silently
+depended on workers' turn ends delivering. APPROVED, the lead's
+model-faithful fix: the host is R0's lane and R0's loop checks its
+mail every round, so YIELD_UNTIL_R0(rt, what, cond) drains R0's
+transport before each check (single-writer, the drain only on the
+host, a no-op when empty), substituted per site (19 YIELD_UNTIL sites,
+a textual 7 after exec_start_contexts, plus about three hand-rolled
+waits, read by scope); the hang under the 300 s watchdog, not a
+crash, is evidence the runner bound works.
