@@ -9497,3 +9497,46 @@ depth probe and the whole-tree comparison on both translator branches before
 their landing; the lead writes stage AD's design section on the restated
 scope (the handle pair, the id scans deleted, parent's id retired, atomic
 link cells with a free grace) and its acceptance; then R0P, Y, A.
+
+STAGE AD DESIGN APPROVED, recorded 10:17: the lead's section at d6/lock-removal
+873d256c (inserted before QUESTIONS; first commit 9232d6c4); probe branch
+d6/lock-ad-red b6fe8e92 (l2src/run_lock_ad_probe.ps1, off d3bde8b5), measured by
+the coordinator: "AD probe: find=210 find_tree=8 dest_from_src=8
+self_or_find_fallback=2 id_marks=4 parent_field=38", AD RED, exit 1 (every
+needle nonzero at the base, the positive control); stage branch d6/lock-ad =
+d3bde8b5.  The lead's caller grep confirms b5: the id-taking
+lmx_msg_exec_adopt_mark and _dispose_mark have no live caller.  Decisions:
+(a) a target is two parameters, the record pointer and its id (no new kernel C
+type; L1 has no by-value struct precedent); create gains an out pointer;
+LmxMsgEnv gains to_msg, reply_to_msg and from_msg.  (b) pair sources: turn_self
+for self-turn sites, the envelope for send's to, the answered letter for
+post_rejected, post_dead, request_children_close and admit_one's fallback,
+create's result for exec.c's id APIs; the id forms with _msg siblings deleted.
+(c) LmxMsg.parent retired (38 lines by the probe's regex).  (d) atomic
+parent_msg and index cells and an epoch grace (each lane publishes its turn-entry
+epoch in its own atomic cell; R0 defers frees to a pending list drained in its
+round); the acknowledgement shape rejected because the bootstrap executor cannot
+run an unbound child's round and the cycle check walks the new parent's
+ancestors.
+The lead's question, RULED by the coordinator, not a contradiction between
+Mikhail's sentences: 19.29.7 says "a Message is found by its id" and gives the
+resolution to R0's sorted list "in bounded time, never by scanning one by one";
+the coordinator's AD RESTATED (a) yields to it.  R0 may resolve an id to its
+record in bounded time on its own lane; AD deletes the scans (find over R0's
+tree, find_tree, dest_from_src, self_or_find's fallback) and every cross-lane
+read of R0's tables; cross-lane targets carry the pair.  One structure: R0's
+live set ordered by id (ids are monotonic), is_live(ptr, id) a binary search
+by id plus pointer equality, owner-lane introspections and fixtures resolving
+ids through it under a new name.  The library-open emission (l2trans.lm1:12033,
+c.lmx_msg_find(process_runtime, process_addr) in every library unit) moves to
+that resolver, so AD's commit re-establishes the self-build fixed point.  The
+epoch cells are the Message mechanism's own order-free atomics (spec: "low-level
+synchronization is used only inside the Message mechanism"; "Necessary thread,
+wait/wake and synchronized-mailbox primitives belong to the Message
+implementation"): no lock, no wait, no signal, so ours; conditions: R0 never
+blocks on the grace, a lane outside a turn counts as past every epoch, the
+pending list is R0's own data, and a deterministic tripwire shows a record
+surviving R0's round while a walker's lane is inside its turn and freed after.
+The lead's finding: b5's 209 find sites covered four files; the tree has 210
+find lines in 28 files, the rest in L1 selftests, three generated-array collect
+drivers, cancel_spin_host.c, the c_scanners driver and the l2trans emission.
