@@ -122,10 +122,29 @@ scenario36    run_model_scenario36.ps1
   about the storage rather than about who can resolve an address, and one that survives rt\n's deletion.
   run_model_scenario36.ps1:127-135 already scans each test for __wrap_NAME and links -Wl,--wrap=NAME for
   every one it finds, so a converted fixture is linked correctly by the same gate.
-  Open, and the lead's to answer from the allocation path: whether the bases of a released child's own
-  arena are reachable to the test at the moment it must watch them. turn_arena_o1 has lmx_msg_adopted_base
-  for adopted blocks; if no equivalent exists before release, the restatement needs one, and THAT is the
-  stage-level question rather than a choice of wording.
+  Resolved by the lead from the allocation path, so no new accessor is needed: lmx_msg_adopted_base(rt,
+  who, i) takes an ADDRESS and indexes the Message's own block list (lmx_message.h:361, exec.c:2569), so a
+  fixture captures the child's block bases while it is still findable, before the release, and enumerates
+  the PARENT's adopted blocks after the settle -- turn_arena_o1's own shape at 108-110.
+
+  WHEN the watched free is expected, and this is the part a reader will get wrong (the coordinator's
+  correction, 2026-09-15): under the stage's stated assumption -- the settled record is the OWNER's storage
+  until the owner closes, which is with Mikhail today -- the record is NOT freed by the settle chain, so a
+  watched free expected AT RELEASE would be red by design. The check expects the record's base freed
+  exactly once by runtime_delete for R0's children, and at the parent's release for deeper ones, alongside
+  the ownership and state check at the release itself. If Mikhail rules that slots are freed by the chain,
+  the expected moment moves and the shape of the check does not.
+
+  Why that assumption is load-bearing rather than a detail, verified here at 7b3a8668 after the lead
+  reported it: both production routes to lmx_msg_slot_free -- which is what destroys the mailbox monitor
+  and frees the record (exec.c:1133, 1163-1172) -- are closed by this stage. runtime_delete reaches records
+  only by walking rt\slots through alloc_next (lm1:1025-1036), the structure S6-2 deletes; and
+  lmx_msg_endp_try_retire refuses unless m->refs == 0 AND m->parent_msg == 0 (exec.c:1189-1194), while the
+  new settle keeps parent_msg and refs is itself deleted. Its only callers are exec.c:394 and 405. The five
+  other slot_free calls in lm1 (1122-1155) are create-failure unwind after slot_new, not a settle path, and
+  release_slot (1395-1412) unlinks, drains the mailboxes and frees init but never frees the record. So a
+  settled record would be reachable from nothing and leak WITH ITS MONITOR -- which is why the owner's
+  settled list, or Mikhail's ruling, decides the free site before any of these pins can be restated.
 
   The unit for "what must change" here is reads of the field, not pins. Counting pins understates it, which
   is how an earlier version of this row missed a line that is not an assertion at all: orphan_mapped_17:163
