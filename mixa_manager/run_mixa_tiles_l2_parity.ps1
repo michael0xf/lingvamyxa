@@ -59,7 +59,7 @@ function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$er
 # ---- Step 0: stage the generated library's complete predef closure. ----
 $CoreHeaderUnits = @(
     "lmx_msg_blocks.h.lm1", "lmx_owned_ranges.h.lm1", "lmx_msg_storage.h.lm1",
-    "lmx_msg_path_storage.h.lm1", "lmx_msg_slots.h.lm1", "lmx_msg_mail_chain.h.lm1",
+    "lmx_msg_slots.h.lm1", "lmx_msg_mail_chain.h.lm1",
     "lmx_msg_sched_ready.h.lm1", "lmx_msg_visit.h.lm1", "lmx_msg_liveness.h.lm1",
     "lmx_chars_owned.h.lm1", "lmx_array_owned.h.lm1", "lmx_array_ref_owned.h.lm1",
     "lmx_branch_owned.h.lm1", "lmx_value_owned.h.lm1", "lmx_msg_history_owned.h.lm1",
@@ -91,7 +91,7 @@ foreach ($unit in $CoreHeaderUnits) {
 # Generated library wrappers execute through a real, freshly built Message runtime.
 $CoreImplUnits = @(
     "lmx_msg_blocks.lm1", "lmx_owned_ranges.lm1", "lmx_msg_storage.lm1",
-    "lmx_msg_path_storage.lm1", "lmx_msg_slots.lm1", "lmx_msg_mail_chain.lm1",
+    "lmx_msg_slots.lm1", "lmx_msg_mail_chain.lm1",
     "lmx_msg_sched_ready.lm1", "lmx_msg_visit.lm1", "lmx_msg_liveness.lm1",
     "lmx_chars_owned.lm1", "lmx_array_owned.lm1", "lmx_array_ref_owned.lm1",
     "lmx_branch_owned.lm1", "lmx_value_owned.lm1", "lmx_msg_history_owned.lm1",
