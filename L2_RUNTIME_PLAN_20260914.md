@@ -8194,3 +8194,12 @@ is withdrawn. Today's transport relay under R0's monitor is the seed
 of this service and grows the sorted list; at Y3 the queue goes and
 the service stays a Message. The lead's rewritten S6-2 section is
 written on this footing.
+
+MIKHAIL, 2026-09-16, verbatim: "Не плодите постоянно лишних сущностей. Так как все Message порождаются из root Message (по цепочке)то он может при merge передавать себя как почтовый сервис. В чем проблема?" Entered in spec 19.29.7 and
+the model: the mail service is not a new entity; R0 passes itself as
+the service at merge along the creation chain, so every Message holds
+the service's address from creation; the sorted address list is R0's
+own data. For the lead's section: the "service" is R0's address as a
+field every Message carries from merge (the root field of LmxMsg is
+already that address: running, success, handoff_safe, root), and the
+resolution is a letter to R0.

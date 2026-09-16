@@ -12914,7 +12914,10 @@ status when the address is absent, whether the target or its whole parent
 chain is gone; a later migration to another send/receive model stays within
 Message (Mikhail, 2026-09-16, verbatim: "я же вам писал что всё надо свести к Message. Какая вообще проблема не заводить специальный монитор, а завести почтовый сервис который будет хранить сортированный список адресов и давать за конечное время (только не перебором по одному) вхождение?!!!!  Тот же самый R0. Даже если запланирована потом миграция на какую-то другую моель полуения-отправки , она все равно будет в рамках MEssage"; and on a parent
 already gone: ""родитель отвечает отправителю отказом со статусом (kind REJECTED) из своего списк" -- а если родителя уже нет?", answered by the service: an absent address is
-refused by the service, not by any parent). The delivered storage must be independently
+refused by the service, not by any parent). The service is not a new entity:
+every Message is created from the root Message by the chain, so the root
+passes itself as the mail service at merge, and every Message holds the
+service's address from its creation (Mikhail, 2026-09-16, verbatim: "Не плодите постоянно лишних сущностей. Так как все Message порождаются из root Message (по цепочке)то он может при merge передавать себя как почтовый сервис. В чем проблема?"). The delivered storage must be independently
 transferable: a running sender cannot also keep using it through mutable aliases.
 An explicit copy, merge, materialization or transport/codec contract may allocate
 fresh state; this is not a runtime choice to clone ordinary delivery. Activation preserves
