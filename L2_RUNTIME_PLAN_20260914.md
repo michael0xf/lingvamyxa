@@ -7970,3 +7970,27 @@ TimeoutSec 40 to 60 on a re-measured 22.5 s): the gate cold twice "12
 of 12 as expected" (201.7 s, 202.9 s). app_controller now fails only
 on the compiler's internal error, the coordinator's l2trans ticket.
 b5 holds for S6-2's landing and the merge.
+ARCHIVE HANG, LIVE (2026-09-16, the lead's watchdog line, measured):
+run_gates -L2MessageRoot at 2d8f2b6a hung at gate 10 of 30,
+c_scanners' archive_core step: the log stops at "family_handoff PASS
+28s" (00:46:05); build/codex/candidate_c_scanners/20260916_004605_852
+holds archive_core.stdout.txt and .stderr.txt created 00:46:15, both
+zero bytes, and evidence.json written 00:48:15; nothing under build/
+since (find -newermt); no git, tar, gcc or l1trans process alive, only
+run_gates' powershell (PID 4520, started 00:43:28) and the lead's two
+bash wrappers: the runner is blocked after its child exited, and the
+120 s archive bound (3f131768) did not fire because it wrapped the
+child, not the wait and the stream read. port_parser not started;
+nothing pushed; the remote at 2d8f2b6a. RULED: capture before the
+kill (e9: the process tree, a full dump of 4520, its handles, the
+exact wait-and-read line of run_candidate_c_scanners.ps1, trace2 if
+set, each under a timeout; "captured" to the lead and the
+coordinator; twenty minutes at most), then the lead kills the chain
+and re-runs run_gates whole; e9 fixes the bound to cover the wait and
+the read (Wait-Job -Timeout around the whole step, or WaitForExit(ms)
+with non-blocking reads) with a tripwire, on claude-0c/archive-timeout-2
+off 2d8f2b6a, merged into the stage before the landing, the path added
+to the allowlist; the coordinator re-runs the six gates on the new
+tip's measuring merge. The lead's instrument note: a %TH:%TM:%TS
+string sort put 23:xx above 01:xx across midnight; -newermt is the
+sound form.
