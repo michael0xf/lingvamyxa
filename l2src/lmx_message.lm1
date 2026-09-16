@@ -14,6 +14,14 @@ prototype:
     fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
     fn: lmx_msg_root_release (@: LmxMsg m; @: void p) int
     fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
+    # S6-2: the service's three, declared here because L1 emits in source order
+    # and does not hoist -- release_slot, create_prepare and runtime_delete all
+    # sit earlier in this file than the definitions, so without these the calls
+    # are implicit declarations and the gate compiles with
+    # -Werror=implicit-function-declaration.
+    fn: lmx_msg_post_register (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    fn: lmx_msg_post_unregister (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    sub: lmx_msg_live_sweep (@: LmxMsg svc)
     sub: lmx_msg_teardown_drain (@: LmxMsg m)
     sub: lmx_msg_teardown_free (@: LmxMsg m)
     fn: lmx_msg_pump (@: LmxMsgRuntime rt) int

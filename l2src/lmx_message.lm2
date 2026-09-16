@@ -1087,6 +1087,82 @@ sub: msg_teardown_free (@: LmxMsg m)
     c.lmx_msg_slot_free(m)
 end: msg_teardown_free
 
+# S6-2: teardown's collector for records the service never got to free -- see the
+# call in msg_runtime_delete for why they exist and why this runs before
+# msg_teardown_free. R0 itself is skipped: teardown_free frees it, and freeing it
+# here would leave the walk below reading a freed record.
+# PLACED HERE, above every caller, because lm2 has no forward-declaration block
+# (lm1 does, and its three names are in it): L1 emits functions in source order
+# and does not hoist, so a call earlier in the file than its definition compiles
+# as an implicit declaration and this gate uses
+# -Werror=implicit-function-declaration. Its callees -- msg_copy_free 517,
+# msg_q_push 565, msg_self_or_find 632, msg_ingress_root 939 -- are all above
+# this point, so nothing is pushed forward by the move.
+sub: msg_live_sweep (@: LmxMsg svc)
+    int: i 0
+    @: LmxMsg m
+    if: svc = 0
+        return
+    while: i < svc\live_n
+        m: svc\live_m[i]
+        if: m != 0 && m != svc && m\state = c.LMX_MSG_STATE_RELEASED
+            c.lmx_msg_slot_free(m)
+            svc\live_m[i]: 0
+        ---
+        i: i + 1
+    ---
+end: msg_live_sweep
+
+# S6-2 (SPEC 19.29.7, the removal ruling): the unregister-and-free letter. Same
+# shape as msg_post_register, opposite act: the service removes the entry and then
+# calls slot_free, in that order, on its own lane. msg_release_slot cannot do
+# either itself -- writing the live set would be a cross-lane write, and freeing
+# the record would leave the service holding an entry that names freed memory
+# until it next drains.
+fn: msg_post_unregister (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    @: LmxMsgCopy entry
+    @: LmxMsg root
+    if: rt = 0 || m = 0
+        return: c.LMX_MSG_INVALID
+    entry: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: entry = 0
+        return: c.LMX_MSG_NOMEM
+    entry\from: m\addr
+    entry\to: m\addr
+    entry\kind: c.LMX_MSG_KIND_UNREGISTER
+    entry\dest_msg: m
+    root: msg_ingress_root(rt)
+    c.lmx_msg_mail_lock(root)
+    msg_q_push(@ rt\transport, @ rt\transport_tail, entry)
+    c.lmx_msg_mail_unlock(root)
+    return: c.LMX_MSG_OK
+end: msg_post_unregister
+
+# S6-2 (SPEC 19.29.7): the registration letter, modelled on msg_post_dead -- the
+# same shape of unsolicited notice, with R0's monitor taken and left on its own.
+# It carries the record itself in dest_msg, which for this kind is the payload and
+# not a delivery target, and the id in to; msg_admit_one intercepts it before any
+# destination is resolved. Posted by the creating lane, drained by the service's,
+# which is what keeps the live set single-writer.
+fn: msg_post_register (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    @: LmxMsgCopy entry
+    @: LmxMsg root
+    if: rt = 0 || m = 0
+        return: c.LMX_MSG_INVALID
+    entry: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: entry = 0
+        return: c.LMX_MSG_NOMEM
+    entry\from: m\addr
+    entry\to: m\addr
+    entry\kind: c.LMX_MSG_KIND_REGISTER
+    entry\dest_msg: m
+    root: msg_ingress_root(rt)
+    c.lmx_msg_mail_lock(root)
+    msg_q_push(@ rt\transport, @ rt\transport_tail, entry)
+    c.lmx_msg_mail_unlock(root)
+    return: c.LMX_MSG_OK
+end: msg_post_register
+
 sub: msg_runtime_delete (@: LmxMsgRuntime rt)
     @: LmxMsg root
     if: rt = 0
@@ -2349,64 +2425,9 @@ end: msg_env_release
 # call in msg_runtime_delete for why they exist and why this runs before
 # msg_teardown_free. R0 itself is skipped: teardown_free frees it, and freeing it
 # here would leave the walk below reading a freed record.
-sub: msg_live_sweep (@: LmxMsg svc)
-    int: i 0
-    @: LmxMsg m
-    if: svc = 0
-        return
-    while: i < svc\live_n
-        m: svc\live_m[i]
-        if: m != 0 && m != svc && m\state = c.LMX_MSG_STATE_RELEASED
-            c.lmx_msg_slot_free(m)
-            svc\live_m[i]: 0
-        ---
-        i: i + 1
-    ---
-end: msg_live_sweep
-
-# S6-2 (SPEC 19.29.7, the removal ruling): the unregister-and-free letter. Same
-# shape as msg_post_register, opposite act: the service removes the entry and then
-# calls slot_free, in that order, on its own lane. msg_release_slot cannot do
-# either itself -- writing the live set would be a cross-lane write, and freeing
-# the record would leave the service holding an entry that names freed memory
-# until it next drains.
-fn: msg_post_unregister (@: LmxMsgRuntime rt; @: LmxMsg m) int
-    @: LmxMsgCopy entry
-    @: LmxMsg root
-    if: rt = 0 || m = 0
-        return: c.LMX_MSG_INVALID
-    entry: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
-    if: entry = 0
-        return: c.LMX_MSG_NOMEM
-    entry\from: m\addr
-    entry\to: m\addr
-    entry\kind: c.LMX_MSG_KIND_UNREGISTER
-    entry\dest_msg: m
-    root: msg_ingress_root(rt)
-    c.lmx_msg_mail_lock(root)
-    msg_q_push(@ rt\transport, @ rt\transport_tail, entry)
-    c.lmx_msg_mail_unlock(root)
-    return: c.LMX_MSG_OK
-end: msg_post_unregister
-
-fn: msg_post_register (@: LmxMsgRuntime rt; @: LmxMsg m) int
-    @: LmxMsgCopy entry
-    @: LmxMsg root
-    if: rt = 0 || m = 0
-        return: c.LMX_MSG_INVALID
-    entry: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
-    if: entry = 0
-        return: c.LMX_MSG_NOMEM
-    entry\from: m\addr
-    entry\to: m\addr
-    entry\kind: c.LMX_MSG_KIND_REGISTER
-    entry\dest_msg: m
-    root: msg_ingress_root(rt)
-    c.lmx_msg_mail_lock(root)
-    msg_q_push(@ rt\transport, @ rt\transport_tail, entry)
-    c.lmx_msg_mail_unlock(root)
-    return: c.LMX_MSG_OK
-end: msg_post_register
+# [S6-2: the three functions this comment introduced were MOVED above
+# msg_runtime_delete -- lm2 has no forward-declaration block, and L1 emits in
+# source order without hoisting. See them after end: msg_teardown_free.]
 
 fn: msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
     @: LmxMsgCopy entry
