@@ -1,0 +1,9 @@
+include: "<stddef.h>"
+
+define: PROBE_DEFINE_LABEL "OK"
+define: PROBE_DEFINE_FG 4294967295U
+define: PROBE_DEFINE_OK 0
+
+prototype:
+    fn: probe_define_take (@: void panel; size_t: line; const: @(char label); unsigned: fg) int
+end: prototype

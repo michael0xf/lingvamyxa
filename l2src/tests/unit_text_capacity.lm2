@@ -1,0 +1,15 @@
+predef: "l2src/tests/unit_text_capacity.h.lm1"
+
+# mixa_app_controller's "translation failed with no located diagnostic": a statement
+# call whose emitted text passed 255 bytes failed l2_cat in l2_emit_ccall's 256-byte
+# stack buffer, and nothing printed a diagnostic. Twelve long field-path actuals
+# (about 660 bytes) must translate: a statement call's text has its own buffer.
+
+fn: probe_text_long (@: ProbeTextCtx ctx) int
+    probe_text_take12(ctx\probe_text_capacity_field_with_a_long_name_00, ctx\probe_text_capacity_field_with_a_long_name_01, ctx\probe_text_capacity_field_with_a_long_name_02, ctx\probe_text_capacity_field_with_a_long_name_03, ctx\probe_text_capacity_field_with_a_long_name_04, ctx\probe_text_capacity_field_with_a_long_name_05, ctx\probe_text_capacity_field_with_a_long_name_06, ctx\probe_text_capacity_field_with_a_long_name_07, ctx\probe_text_capacity_field_with_a_long_name_08, ctx\probe_text_capacity_field_with_a_long_name_09, ctx\probe_text_capacity_field_with_a_long_name_10, ctx\probe_text_capacity_field_with_a_long_name_11)
+    return: 0
+end: probe_text_long
+
+fn: main () int
+    return: 0
+end: main

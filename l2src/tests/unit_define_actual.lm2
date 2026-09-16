@@ -1,0 +1,26 @@
+predef: "l2src/tests/unit_define_actual.h.lm1"
+
+# Repro for mixa_app_window's L2 crash (b5, sonnet/mixa-module-list,
+# L2_RUNTIME_MODULE_LIST_AUDIT.txt): a define:'d constant passed as a call
+# actual was staged into an int temporary, so a char* constant lost its high
+# bits and the callee's strlen faulted. The shape is app_window's own:
+#   if: mixa_button_panel_add(panel, 0U, MIXA_APP_WINDOW_BTN_LABEL, ...) != OK
+# Two cases: a define from the predef chain inside an if condition, and a
+# define of this unit in a return. A constant has nothing to stage; each is
+# passed as itself.
+
+define: PROBE_UNIT_LABEL "unit"
+
+fn: probe_define_header_actual (@: void panel) int
+    if: probe_define_take(panel, 0U, PROBE_DEFINE_LABEL, PROBE_DEFINE_FG) != PROBE_DEFINE_OK
+        return: 1
+    return: 0
+end: probe_define_header_actual
+
+fn: probe_define_unit_actual (@: void panel) int
+    return: probe_define_take(panel, 1U, PROBE_UNIT_LABEL, 7U)
+end: probe_define_unit_actual
+
+fn: main () int
+    return: 0
+end: main
