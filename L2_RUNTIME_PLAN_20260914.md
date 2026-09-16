@@ -7042,3 +7042,19 @@ by e9: the lead's merge 6e2ea936 of 4409805c into d6/lock-s6-2 is
 local (visible in the shared store, on no remote ref); the pushed
 stage is still b78f743e, so the dry run over the stage tip is re-run
 when the merge is pushed. Not launched.
+The lead's (1a) at d6/lock-removal 3729c911, found by the code: after
+today's release_slot a record has state RELEASED, no chain place and
+parent_msg 0 (child_unlink clears it at lmx_message.lm1:662), so
+nothing in it names the parent that owns its storage, which a late
+sender must follow to be refused on the parent's lane; the choice was
+put to the coordinator before code. RULED: parent_msg is the owner
+cell, no second cell; the settle path's unlink clears only the chain
+links, never parent_msg; each upward settle rewrites it to the new
+owner under the record's own mailbox monitor, where the admission
+reads it, so the read is ordered by the one lock the model keeps;
+RELEASED plus parent_msg is one relation ("whose storage am I part
+of"); live-family reads of parent_msg act on running Messages and
+never meet a RELEASED record on the chain; any site reading
+parent_msg == 0 as "released" converts to the state, named in the
+lead's five lines. The stage push d6/lock-s6-2 6e2ea936 (the merge of
+b5's 4409805c) is on origin; e9 re-runs the allowlist dry run on it.
