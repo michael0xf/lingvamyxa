@@ -1,0 +1,1027 @@
+predef: "mixa_manager/mixa_pointer.lm1"
+include: "<stdio.h>" "<stdlib.h>"
+
+# Pointer bounds: comprehensive coverage
+# 8 scenarios covering:
+# - Basic 8-direction nudges and zero-delta preservation
+# - Underflow rejection at boundaries (0,0)
+# - Successful boundary operations (one step from underflow)
+# - SIZE_MAX boundary conditions
+# - INT32 extremes (INT32_MIN, INT32_MAX)
+# - move_to displacement limits (±2147483647)
+# - Released/closed and NULL pointer behavior
+# Note: dx changes COL, dy changes ROW; move_to uses row,col directly
+
+fn: expect_oct (int: got; int: want; const: @(char label); @: int failures; @: int checks) int
+    checks[0]: checks[0] + 1
+    if: got != want
+        c.printf("mixa_pointer_bounds: %s got=%d want=%d\n", label, got, want)
+        failures[0]: failures[0] + 1
+        return: 1
+return: 0
+
+fn: expect_pos (size_t: got; size_t: want; const: @(char label); @: int failures; @: int checks) int
+    checks[0]: checks[0] + 1
+    if: got != want
+        c.printf("mixa_pointer_bounds: %s got=%zu want=%zu\n", label, got, want)
+        failures[0]: failures[0] + 1
+        return: 1
+return: 0
+
+fn: main () int
+    @: MixaPointer p
+    int: failures
+    int: checks
+    int: assertions
+    int: rc
+    
+    failures: 0
+    checks: 0
+    assertions: 0
+    
+    p: (cast: (@: MixaPointer) c.calloc(1U, c.sizeof(c.MixaPointer)))
+    if: p = 0
+        c.printf("mixa_pointer_bounds: alloc failed\n")
+        return: 1
+    if: mixa_pointer_init(p) != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: init failed\n")
+        return: 1
+    
+    # Scenario 1: Eight successful nudge directions from safe position (100,100)
+    # Expected results: dx changes COL, dy changes ROW
+    
+    # Direction UP (dy=-1, dx=0): pos (99,100), octant UP(0)
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: move_to(100,100) failed rc=%d\n", rc)
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) -1))
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: UP nudge failed rc=%d\n", rc)
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_UP, "UP octant", @ failures, @ checks)
+    expect_pos(p\row, 99U, "UP row", @ failures, @ checks)
+    expect_pos(p\col, 100U, "UP col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "UP is_open", @ failures, @ checks)
+    
+    # Direction UP_RIGHT (dy=-1, dx=1): pos (99,101), octant UP_RIGHT(1)
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) -1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_UP_RIGHT, "UP_RIGHT octant", @ failures, @ checks)
+    expect_pos(p\row, 99U, "UP_RIGHT row", @ failures, @ checks)
+    expect_pos(p\col, 101U, "UP_RIGHT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "UP_RIGHT is_open", @ failures, @ checks)
+    
+    # Direction RIGHT (dx=1, dy=0): pos (100,101), octant RIGHT(2)
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_RIGHT, "RIGHT octant", @ failures, @ checks)
+    expect_pos(p\row, 100U, "RIGHT row", @ failures, @ checks)
+    expect_pos(p\col, 101U, "RIGHT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "RIGHT is_open", @ failures, @ checks)
+    
+    # Direction DOWN_RIGHT (dx=1, dy=1): pos (101,101), octant DOWN_RIGHT(3)
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_DOWN_RIGHT, "DOWN_RIGHT octant", @ failures, @ checks)
+    expect_pos(p\row, 101U, "DOWN_RIGHT row", @ failures, @ checks)
+    expect_pos(p\col, 101U, "DOWN_RIGHT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "DOWN_RIGHT is_open", @ failures, @ checks)
+    
+    # Direction DOWN (dy=1, dx=0): pos (101,100), octant DOWN(4)
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_DOWN, "DOWN octant", @ failures, @ checks)
+    expect_pos(p\row, 101U, "DOWN row", @ failures, @ checks)
+    expect_pos(p\col, 100U, "DOWN col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "DOWN is_open", @ failures, @ checks)
+    
+    # Direction DOWN_LEFT (dx=-1, dy=1): pos (101,99), octant DOWN_LEFT(5)
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) -1), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_DOWN_LEFT, "DOWN_LEFT octant", @ failures, @ checks)
+    expect_pos(p\row, 101U, "DOWN_LEFT row", @ failures, @ checks)
+    expect_pos(p\col, 99U, "DOWN_LEFT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "DOWN_LEFT is_open", @ failures, @ checks)
+    
+    # Direction LEFT (dx=-1, dy=0): pos (100,99), octant LEFT(6)
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) -1), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_LEFT, "LEFT octant", @ failures, @ checks)
+    expect_pos(p\row, 100U, "LEFT row", @ failures, @ checks)
+    expect_pos(p\col, 99U, "LEFT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "LEFT is_open", @ failures, @ checks)
+    
+    # Direction UP_LEFT (dx=-1, dy=-1): pos (99,99), octant UP_LEFT(7)
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) -1), (cast: (i32) -1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_UP_LEFT, "UP_LEFT octant", @ failures, @ checks)
+    expect_pos(p\row, 99U, "UP_LEFT row", @ failures, @ checks)
+    expect_pos(p\col, 99U, "UP_LEFT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "UP_LEFT is_open", @ failures, @ checks)
+    
+    # Scenario 2: Zero-delta preserves all 4 fields for each direction
+    
+    # Zero-delta in UP octant
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) -1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    int: snap_oct
+    size_t: snap_row
+    size_t: snap_col
+    snap_oct: p\octant
+    snap_row: p\row
+    snap_col: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct, "zero-delta UP octant", @ failures, @ checks)
+    expect_pos(p\row, snap_row, "zero-delta UP row", @ failures, @ checks)
+    expect_pos(p\col, snap_col, "zero-delta UP col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "zero-delta UP open", @ failures, @ checks)
+    
+    # Zero-delta in UP_RIGHT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) -1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    snap_oct: p\octant
+    snap_row: p\row
+    snap_col: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct, "zero-delta UP_RIGHT octant", @ failures, @ checks)
+    expect_pos(p\row, snap_row, "zero-delta UP_RIGHT row", @ failures, @ checks)
+    expect_pos(p\col, snap_col, "zero-delta UP_RIGHT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "zero-delta UP_RIGHT open", @ failures, @ checks)
+    
+    # Zero-delta in RIGHT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    snap_oct: p\octant
+    snap_row: p\row
+    snap_col: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct, "zero-delta RIGHT octant", @ failures, @ checks)
+    expect_pos(p\row, snap_row, "zero-delta RIGHT row", @ failures, @ checks)
+    expect_pos(p\col, snap_col, "zero-delta RIGHT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "zero-delta RIGHT open", @ failures, @ checks)
+    
+    # Zero-delta in DOWN_RIGHT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    snap_oct: p\octant
+    snap_row: p\row
+    snap_col: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct, "zero-delta DOWN_RIGHT octant", @ failures, @ checks)
+    expect_pos(p\row, snap_row, "zero-delta DOWN_RIGHT row", @ failures, @ checks)
+    expect_pos(p\col, snap_col, "zero-delta DOWN_RIGHT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "zero-delta DOWN_RIGHT open", @ failures, @ checks)
+    
+    # Zero-delta in DOWN
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    snap_oct: p\octant
+    snap_row: p\row
+    snap_col: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct, "zero-delta DOWN octant", @ failures, @ checks)
+    expect_pos(p\row, snap_row, "zero-delta DOWN row", @ failures, @ checks)
+    expect_pos(p\col, snap_col, "zero-delta DOWN col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "zero-delta DOWN open", @ failures, @ checks)
+    
+    # Zero-delta in DOWN_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) -1), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    snap_oct: p\octant
+    snap_row: p\row
+    snap_col: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct, "zero-delta DOWN_LEFT octant", @ failures, @ checks)
+    expect_pos(p\row, snap_row, "zero-delta DOWN_LEFT row", @ failures, @ checks)
+    expect_pos(p\col, snap_col, "zero-delta DOWN_LEFT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "zero-delta DOWN_LEFT open", @ failures, @ checks)
+    
+    # Zero-delta in LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) -1), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    snap_oct: p\octant
+    snap_row: p\row
+    snap_col: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct, "zero-delta LEFT octant", @ failures, @ checks)
+    expect_pos(p\row, snap_row, "zero-delta LEFT row", @ failures, @ checks)
+    expect_pos(p\col, snap_col, "zero-delta LEFT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "zero-delta LEFT open", @ failures, @ checks)
+    
+    # Zero-delta in UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 100U, 100U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) -1), (cast: (i32) -1))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    snap_oct: p\octant
+    snap_row: p\row
+    snap_col: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct, "zero-delta UP_LEFT octant", @ failures, @ checks)
+    expect_pos(p\row, snap_row, "zero-delta UP_LEFT row", @ failures, @ checks)
+    expect_pos(p\col, snap_col, "zero-delta UP_LEFT col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "zero-delta UP_LEFT open", @ failures, @ checks)
+    
+    # Scenario 3: Zero/one underflow boundary - ERR cases (all 4 fields unchanged)
+    # Case 1: start(0,0), delta(-1,0) - col underflows (dx=-1 affects COL)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    int: snap_oct_uf
+    int: snap_open_uf
+    size_t: snap_row_uf
+    size_t: snap_col_uf
+    snap_oct_uf: p\octant
+    snap_open_uf: p\is_open
+    snap_row_uf: p\row
+    snap_col_uf: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) -1), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: underflow-col should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_uf, "underflow-col octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_uf, "underflow-col open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_uf, "underflow-col row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_uf, "underflow-col col", @ failures, @ checks)
+    
+    # Case 2: start(0,0), delta(0,-1) - row underflows (dx=0, dy=-1 affects ROW)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    snap_oct_uf: p\octant
+    snap_open_uf: p\is_open
+    snap_row_uf: p\row
+    snap_col_uf: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) -1))
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: underflow-row2 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_uf, "underflow-row2 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_uf, "underflow-row2 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_uf, "underflow-row2 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_uf, "underflow-row2 col", @ failures, @ checks)
+    
+    # Case 3: start(0,1), delta(1,-1) - row underflows (dx=1 valid, dy=-1 affects ROW)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 0U, 1U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    snap_oct_uf: p\octant
+    snap_open_uf: p\is_open
+    snap_row_uf: p\row
+    snap_col_uf: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) -1))
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: underflow-row3 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_uf, "underflow-row3 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_uf, "underflow-row3 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_uf, "underflow-row3 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_uf, "underflow-row3 col", @ failures, @ checks)
+    
+    # Case 4: start(1,0), delta(-1,1) - col underflows (dy=1 valid, dx=-1 affects COL)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 1U, 0U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    snap_oct_uf: p\octant
+    snap_open_uf: p\is_open
+    snap_row_uf: p\row
+    snap_col_uf: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) -1), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: underflow-col2 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_uf, "underflow-col2 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_uf, "underflow-col2 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_uf, "underflow-col2 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_uf, "underflow-col2 col", @ failures, @ checks)
+    
+    # Scenario 4: Successful boundary cases (one step from underflow)
+    # Case 1: start(1,1), delta(-1,0) -> (1,0), octant LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 1U, 1U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) -1), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: boundary-left should succeed\n")
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_LEFT, "boundary-left octant", @ failures, @ checks)
+    expect_pos(p\row, 1U, "boundary-left row", @ failures, @ checks)
+    expect_pos(p\col, 0U, "boundary-left col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "boundary-left open", @ failures, @ checks)
+    
+    # Case 2: start(1,1), delta(0,-1) -> (0,1), octant UP
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 1U, 1U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) -1))
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: boundary-up should succeed\n")
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_UP, "boundary-up octant", @ failures, @ checks)
+    expect_pos(p\row, 0U, "boundary-up row", @ failures, @ checks)
+    expect_pos(p\col, 1U, "boundary-up col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "boundary-up open", @ failures, @ checks)
+    
+    # Case 3: start(1,1), delta(-1,-1) -> (0,0), octant UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 1U, 1U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) -1), (cast: (i32) -1))
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: boundary-ul should succeed\n")
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_UP_LEFT, "boundary-ul octant", @ failures, @ checks)
+    expect_pos(p\row, 0U, "boundary-ul row", @ failures, @ checks)
+    expect_pos(p\col, 0U, "boundary-ul col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "boundary-ul open", @ failures, @ checks)
+    
+    # Case 4: start(0,0), delta(+1,+1) -> (1,1), octant DOWN_RIGHT
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 0U, 0U)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: boundary-dr should succeed\n")
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_DOWN_RIGHT, "boundary-dr octant", @ failures, @ checks)
+    expect_pos(p\row, 1U, "boundary-dr row", @ failures, @ checks)
+    expect_pos(p\col, 1U, "boundary-dr col", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "boundary-dr open", @ failures, @ checks)
+    
+    # Scenario 5: SIZE_MAX boundary cases
+    size_t: max_sz
+    max_sz: (cast: (size_t) -1)
+    
+    # Case 1: start(1, max_sz-1), delta(1,0) -> (1, max_sz), octant RIGHT
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 1U
+    p\col: max_sz - 1U
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: size-max-1 should succeed\n")
+        failures: failures + 1
+    expect_pos(p\row, 1U, "size-max-1 row", @ failures, @ checks)
+    expect_pos(p\col, max_sz, "size-max-1 col", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_RIGHT, "size-max-1 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "size-max-1 open", @ failures, @ checks)
+    
+    # Case 2: start(max_sz-1, 1), delta(0,1) -> (max_sz, 1), octant DOWN
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: max_sz - 1U
+    p\col: 1U
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: size-max-2 should succeed\n")
+        failures: failures + 1
+    expect_pos(p\row, max_sz, "size-max-2 row", @ failures, @ checks)
+    expect_pos(p\col, 1U, "size-max-2 col", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_DOWN, "size-max-2 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "size-max-2 open", @ failures, @ checks)
+    
+    # Case 3: start(max_sz, 1), delta(1,1) -> ERR (row already at max, would overflow)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: max_sz
+    p\col: 1U
+    p\octant: MIXA_POINTER_UP_LEFT
+    int: snap_oct_sz
+    int: snap_open_sz
+    size_t: snap_row_sz
+    size_t: snap_col_sz
+    snap_oct_sz: p\octant
+    snap_open_sz: p\is_open
+    snap_row_sz: p\row
+    snap_col_sz: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: size-max-3 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_sz, "size-max-3 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_sz, "size-max-3 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_sz, "size-max-3 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_sz, "size-max-3 col", @ failures, @ checks)
+    
+    # Case 4: start(1, max_sz), delta(1,1) -> ERR (col already at max, would overflow)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 1U
+    p\col: max_sz
+    p\octant: MIXA_POINTER_UP_LEFT
+    snap_oct_sz: p\octant
+    snap_open_sz: p\is_open
+    snap_row_sz: p\row
+    snap_col_sz: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: size-max-4 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_sz, "size-max-4 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_sz, "size-max-4 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_sz, "size-max-4 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_sz, "size-max-4 col", @ failures, @ checks)
+    
+    # Scenario 6: INT32 extremes
+    i32: int32_min
+    i32: int32_max
+    size_t: int32_magnitude
+    int32_min: (cast: (i32) (-2147483647 - 1))
+    int32_max: (cast: (i32) 2147483647)
+    int32_magnitude: (cast: (size_t) 2147483648ULL)
+    
+    # Case 1: start(1, 2147483648), delta(INT32_MIN, 0) -> (1, 0), octant LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 1U
+    p\col: int32_magnitude
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, int32_min, (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: i32-1 should succeed\n")
+        failures: failures + 1
+    expect_pos(p\row, 1U, "i32-1 row", @ failures, @ checks)
+    expect_pos(p\col, 0U, "i32-1 col", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_LEFT, "i32-1 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "i32-1 open", @ failures, @ checks)
+    
+    # Case 2: start(2147483648, 1), delta(0, INT32_MIN) -> (0, 1), octant UP
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: int32_magnitude
+    p\col: 1U
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), int32_min)
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: i32-2 should succeed\n")
+        failures: failures + 1
+    expect_pos(p\row, 0U, "i32-2 row", @ failures, @ checks)
+    expect_pos(p\col, 1U, "i32-2 col", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_UP, "i32-2 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "i32-2 open", @ failures, @ checks)
+    
+    # Case 3: start(1, 2147483647), delta(INT32_MIN, 0) -> ERR (col already at INT32_MAX, would underflow)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 1U
+    p\col: (cast: (size_t) 2147483647)
+    p\octant: MIXA_POINTER_UP_LEFT
+    snap_oct_sz: p\octant
+    snap_open_sz: p\is_open
+    snap_row_sz: p\row
+    snap_col_sz: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, int32_min, (cast: (i32) 0))
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: i32-3 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_sz, "i32-3 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_sz, "i32-3 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_sz, "i32-3 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_sz, "i32-3 col", @ failures, @ checks)
+    
+    # Case 4: start(2147483647, 1), delta(0, INT32_MIN) -> ERR (row already at INT32_MAX, would underflow)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: (cast: (size_t) 2147483647)
+    p\col: 1U
+    p\octant: MIXA_POINTER_UP_LEFT
+    snap_oct_sz: p\octant
+    snap_open_sz: p\is_open
+    snap_row_sz: p\row
+    snap_col_sz: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), int32_min)
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: i32-4 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_sz, "i32-4 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_sz, "i32-4 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_sz, "i32-4 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_sz, "i32-4 col", @ failures, @ checks)
+    
+    # Case 5: start(0, 0), delta(INT32_MAX, 0) -> (0, 2147483647), octant RIGHT
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 0U
+    p\col: 0U
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, int32_max, (cast: (i32) 0))
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: i32-5 should succeed\n")
+        failures: failures + 1
+    expect_pos(p\row, 0U, "i32-5 row", @ failures, @ checks)
+    expect_pos(p\col, (cast: (size_t) 2147483647), "i32-5 col", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_RIGHT, "i32-5 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "i32-5 open", @ failures, @ checks)
+    
+    # Case 6: start(0, 0), delta(0, INT32_MAX) -> (2147483647, 0), octant DOWN
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 0U
+    p\col: 0U
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), int32_max)
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: i32-6 should succeed\n")
+        failures: failures + 1
+    expect_pos(p\row, (cast: (size_t) 2147483647), "i32-6 row", @ failures, @ checks)
+    expect_pos(p\col, 0U, "i32-6 col", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_DOWN, "i32-6 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "i32-6 open", @ failures, @ checks)
+    
+    # Case 7: start(1, max_sz), delta(INT32_MAX, 0) -> ERR (col already at max, would overflow)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 1U
+    p\col: max_sz
+    p\octant: MIXA_POINTER_UP_LEFT
+    snap_oct_sz: p\octant
+    snap_open_sz: p\is_open
+    snap_row_sz: p\row
+    snap_col_sz: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, int32_max, (cast: (i32) 0))
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: i32-7 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_sz, "i32-7 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_sz, "i32-7 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_sz, "i32-7 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_sz, "i32-7 col", @ failures, @ checks)
+    
+    # Case 8: start(max_sz, 1), delta(0, INT32_MAX) -> ERR (row already at max, would overflow)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: max_sz
+    p\col: 1U
+    p\octant: MIXA_POINTER_UP_LEFT
+    snap_oct_sz: p\octant
+    snap_open_sz: p\is_open
+    snap_row_sz: p\row
+    snap_col_sz: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 0), int32_max)
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: i32-8 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_sz, "i32-8 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_sz, "i32-8 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_sz, "i32-8 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_sz, "i32-8 col", @ failures, @ checks)
+    
+    # Scenario 7: move_to displacement limits (L = 2147483647 = INT32_MAX)
+    int: snap_oct_mt
+    int: snap_open_mt
+    size_t: snap_row_mt
+    size_t: snap_col_mt
+    
+    # Case 1: move_to (7,9) from (7,9) - no displacement, all 4 unchanged
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 7U
+    p\col: 9U
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 7U, 9U)
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: move-1 should succeed\n")
+        failures: failures + 1
+    expect_oct(p\octant, MIXA_POINTER_UP_LEFT, "move-1 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "move-1 open", @ failures, @ checks)
+    expect_pos(p\row, 7U, "move-1 row", @ failures, @ checks)
+    expect_pos(p\col, 9U, "move-1 col", @ failures, @ checks)
+    
+    # Case 2: move_to (0,L) from (0,0) where L=2147483647
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 0U
+    p\col: 0U
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 0U, (cast: (size_t) 2147483647))
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: move-2 should succeed\n")
+        failures: failures + 1
+    expect_pos(p\row, 0U, "move-2 row", @ failures, @ checks)
+    expect_pos(p\col, (cast: (size_t) 2147483647), "move-2 col", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_RIGHT, "move-2 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "move-2 open", @ failures, @ checks)
+    
+    # Case 3: move_to (0,0) from (0,L)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 0U
+    p\col: (cast: (size_t) 2147483647)
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 0U, 0U)
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: move-3 should succeed\n")
+        failures: failures + 1
+    expect_pos(p\row, 0U, "move-3 row", @ failures, @ checks)
+    expect_pos(p\col, 0U, "move-3 col", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_LEFT, "move-3 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "move-3 open", @ failures, @ checks)
+    
+    # Case 4: move_to (L,0) from (0,0)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 0U
+    p\col: 0U
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, (cast: (size_t) 2147483647), 0U)
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: move-4 should succeed\n")
+        failures: failures + 1
+    expect_pos(p\row, (cast: (size_t) 2147483647), "move-4 row", @ failures, @ checks)
+    expect_pos(p\col, 0U, "move-4 col", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_DOWN, "move-4 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "move-4 open", @ failures, @ checks)
+    
+    # Case 5: move_to (0,0) from (L,0)
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: (cast: (size_t) 2147483647)
+    p\col: 0U
+    p\octant: MIXA_POINTER_UP_LEFT
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 0U, 0U)
+    if: rc != MIXA_POINTER_OK
+        c.printf("mixa_pointer_bounds: move-5 should succeed\n")
+        failures: failures + 1
+    expect_pos(p\row, 0U, "move-5 row", @ failures, @ checks)
+    expect_pos(p\col, 0U, "move-5 col", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_UP, "move-5 octant", @ failures, @ checks)
+    expect_oct(p\is_open, 1, "move-5 open", @ failures, @ checks)
+    
+    # Case 6: move_to (1,M) from (0,0) - ERR, col displacement too large
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 0U
+    p\col: 0U
+    p\octant: MIXA_POINTER_UP_LEFT
+    snap_oct_mt: p\octant
+    snap_open_mt: p\is_open
+    snap_row_mt: p\row
+    snap_col_mt: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 1U, int32_magnitude)
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: move-6 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_mt, "move-6 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_mt, "move-6 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_mt, "move-6 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_mt, "move-6 col", @ failures, @ checks)
+    
+    # Case 7: move_to (M,1) from (0,0) - ERR, row displacement too large
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 0U
+    p\col: 0U
+    p\octant: MIXA_POINTER_UP_LEFT
+    snap_oct_mt: p\octant
+    snap_open_mt: p\is_open
+    snap_row_mt: p\row
+    snap_col_mt: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, int32_magnitude, 1U)
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: move-7 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_mt, "move-7 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_mt, "move-7 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_mt, "move-7 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_mt, "move-7 col", @ failures, @ checks)
+    
+    # Case 8: move_to (1,0) from (1,M) - ERR, negative col displacement too large
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 1U
+    p\col: int32_magnitude
+    p\octant: MIXA_POINTER_UP_LEFT
+    snap_oct_mt: p\octant
+    snap_open_mt: p\is_open
+    snap_row_mt: p\row
+    snap_col_mt: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 1U, 0U)
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: move-8 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_mt, "move-8 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_mt, "move-8 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_mt, "move-8 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_mt, "move-8 col", @ failures, @ checks)
+    
+    # Case 9: move_to (0,1) from (M,1) - ERR, negative row displacement too large
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: int32_magnitude
+    p\col: 1U
+    p\octant: MIXA_POINTER_UP_LEFT
+    snap_oct_mt: p\octant
+    snap_open_mt: p\is_open
+    snap_row_mt: p\row
+    snap_col_mt: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 0U, 1U)
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: move-9 should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_mt, "move-9 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_mt, "move-9 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_mt, "move-9 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_mt, "move-9 col", @ failures, @ checks)
+    
+    # Scenario 8: Released/closed and null pointer behavior
+    @: MixaPointer null_p
+    null_p: (cast: (@: MixaPointer) 0)
+    
+    # Case 1: Released pointer state verification
+    assertions: assertions + 1
+    rc: mixa_pointer_init(p)
+    if: rc != MIXA_POINTER_OK
+        failures: failures + 1
+    p\row: 7U
+    p\col: 9U
+    p\octant: MIXA_POINTER_UP_LEFT
+    mixa_pointer_release(p)
+    expect_oct(p\is_open, 0, "release-1 open", @ failures, @ checks)
+    expect_oct(p\octant, MIXA_POINTER_DOWN_RIGHT, "release-1 octant", @ failures, @ checks)
+    expect_pos(p\row, 0U, "release-1 row", @ failures, @ checks)
+    expect_pos(p\col, 0U, "release-1 col", @ failures, @ checks)
+    
+    # Case 2: Nudge on released pointer must ERR, all 4 fields remain unchanged
+    snap_oct_mt: p\octant
+    snap_open_mt: p\is_open
+    snap_row_mt: p\row
+    snap_col_mt: p\col
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(p, (cast: (i32) 1), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: nudge-released should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_mt, "release-nudge octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_mt, "release-nudge open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_mt, "release-nudge row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_mt, "release-nudge col", @ failures, @ checks)
+    
+    # Case 3: move_to on released pointer must ERR, all 4 fields unchanged (same snapshot)
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(p, 1U, 1U)
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: move_to-released should fail\n")
+        failures: failures + 1
+    expect_oct(p\octant, snap_oct_mt, "release-move octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_mt, "release-move open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_mt, "release-move row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_mt, "release-move col", @ failures, @ checks)
+    
+    # Case 4: Release again (idempotent)
+    mixa_pointer_release(p)
+    expect_oct(p\octant, snap_oct_mt, "release-2 octant", @ failures, @ checks)
+    expect_oct(p\is_open, snap_open_mt, "release-2 open", @ failures, @ checks)
+    expect_pos(p\row, snap_row_mt, "release-2 row", @ failures, @ checks)
+    expect_pos(p\col, snap_col_mt, "release-2 col", @ failures, @ checks)
+    
+    # Case 5: NULL pointer operations
+    # init(NULL) must ERR
+    assertions: assertions + 1
+    rc: mixa_pointer_init(null_p)
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: init-null should fail\n")
+        failures: failures + 1
+    # nudge(NULL) must ERR
+    assertions: assertions + 1
+    rc: mixa_pointer_nudge(null_p, (cast: (i32) 1), (cast: (i32) 1))
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: nudge-null should fail\n")
+        failures: failures + 1
+    # move_to(NULL) must ERR
+    assertions: assertions + 1
+    rc: mixa_pointer_move_to(null_p, 1U, 1U)
+    if: rc != MIXA_POINTER_ERR
+        c.printf("mixa_pointer_bounds: move_to-null should fail\n")
+        failures: failures + 1
+    # release(NULL) is safe no-op (void, no assertion)
+    mixa_pointer_release(null_p)
+    
+    mixa_pointer_release(p)
+    c.free(p)
+    
+    if: failures = 0
+        c.printf("mixa_pointer_bounds_selftest: scenarios=8 member_checks=%d api_assertions=%d failures=0\n", checks, assertions)
+        c.printf("mixa_pointer_bounds_selftest OK\n")
+        return: 0
+    c.printf("mixa_pointer_bounds_selftest FAILED: %d check(s)\n", failures)
+    return: 1

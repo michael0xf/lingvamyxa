@@ -1,0 +1,531 @@
+predef: "mixa_manager/mixa_highlight.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Exhaustive L1 regression test for complete highlight snapshot restoration.
+# Asserts every cell field (codepoint, fg, bg, flags, width, alpha) across
+# set, move without overlap, move with overlap, clear, cross-target rejection,
+# and repeated cycles. Includes width=2 cells to catch silent normalization.
+
+fn: populate_and_snapshot (@: MixaTextRect rect; @: MixaCell orig; unsigned: seed) int
+    size_t: r
+    size_t: c
+    size_t: idx
+    @: MixaCell p
+    @: MixaCell q
+    unsigned: cp
+    unsigned: fg
+    unsigned: bg
+    unsigned: flags
+    unsigned: width
+    unsigned: alpha
+    if: rect = 0 || orig = 0 || rect\cells = 0
+        return: 1
+    r: 0U
+    while: r < rect\rows
+        c: 0U
+        while: c < rect\cols
+            idx: r * rect\cols + c
+            p: mixa_cell_at(rect, r, c)
+            q: orig + idx
+            cp: 0x2580U + (cast: (unsigned) ((r * 7U + c * 3U + seed) % 16U))
+            fg: 1U + (cast: (unsigned) ((r * 3U + c * 5U + seed) % 14U))
+            bg: (cast: (unsigned) ((r * 5U + c * 2U + seed * 3U) % 16U))
+            flags: (cast: (unsigned) ((r + c + seed) % 4U))
+            width: 1U
+            alpha: 40U + (cast: (unsigned) ((r * 13U + c * 17U + seed * 7U) % 210U))
+
+            # Include width 2 cells with Japanese hiragana codepoints
+            if: ((r + c + seed) % 5U) = 0U
+                width: 2U
+                cp: 0x3042U + (cast: (unsigned) ((r + c) % 10U))
+            ---
+
+            p\codepoint: cp
+            q\codepoint: cp
+            p\fg: (cast: (unsigned char) fg)
+            q\fg: (cast: (unsigned char) fg)
+            p\bg: (cast: (unsigned char) bg)
+            q\bg: (cast: (unsigned char) bg)
+            p\flags: (cast: (unsigned char) flags)
+            q\flags: (cast: (unsigned char) flags)
+            p\width: (cast: (unsigned char) width)
+            q\width: (cast: (unsigned char) width)
+            p\alpha: (cast: (unsigned char) alpha)
+            q\alpha: (cast: (unsigned char) alpha)
+            c: c + 1U
+        ---
+        r: r + 1U
+    ---
+return: 0
+
+fn: verify_all_cells (const: @(MixaTextRect rect); const: @(MixaCell orig); const: @(char desc); @: int member_checks) int
+    size_t: r
+    size_t: c
+    size_t: idx
+    const: @(MixaCell p)
+    const: @(MixaCell q)
+    int: errs
+    if: rect = 0 || orig = 0 || rect\cells = 0
+        return: 1
+    errs: 0
+    r: 0U
+    while: r < rect\rows
+        c: 0U
+        while: c < rect\cols
+            idx: r * rect\cols + c
+            p: mixa_cell_at_const(rect, r, c)
+            q: orig + idx
+
+            member_checks[0]: member_checks[0] + 1
+            if: p\codepoint != q\codepoint
+                c.printf("FAIL [%s] (%u,%u) cp expected 0x%X got 0x%X\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), q\codepoint, p\codepoint)
+                errs: errs + 1
+            ---
+
+            member_checks[0]: member_checks[0] + 1
+            if: p\fg != q\fg
+                c.printf("FAIL [%s] (%u,%u) fg expected %u got %u\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), (cast: (unsigned) q\fg), (cast: (unsigned) p\fg))
+                errs: errs + 1
+            ---
+
+            member_checks[0]: member_checks[0] + 1
+            if: p\bg != q\bg
+                c.printf("FAIL [%s] (%u,%u) bg expected %u got %u\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), (cast: (unsigned) q\bg), (cast: (unsigned) p\bg))
+                errs: errs + 1
+            ---
+
+            member_checks[0]: member_checks[0] + 1
+            if: p\flags != q\flags
+                c.printf("FAIL [%s] (%u,%u) flags expected %u got %u\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), (cast: (unsigned) q\flags), (cast: (unsigned) p\flags))
+                errs: errs + 1
+            ---
+
+            member_checks[0]: member_checks[0] + 1
+            if: p\width != q\width
+                c.printf("FAIL [%s] (%u,%u) width expected %u got %u\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), (cast: (unsigned) q\width), (cast: (unsigned) p\width))
+                errs: errs + 1
+            ---
+
+            member_checks[0]: member_checks[0] + 1
+            if: p\alpha != q\alpha
+                c.printf("FAIL [%s] (%u,%u) alpha expected %u got %u\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), (cast: (unsigned) q\alpha), (cast: (unsigned) p\alpha))
+                errs: errs + 1
+            ---
+            c: c + 1U
+        ---
+        r: r + 1U
+    ---
+return: errs
+
+fn: verify_overlay_active (const: @(MixaTextRect rect); const: @(MixaCell orig); size_t: f_row; size_t: f_col; size_t: f_nrows; size_t: f_ncols; unsigned: f_fg; const: @(char desc); @: int member_checks) int
+    size_t: r
+    size_t: c
+    size_t: idx
+    size_t: r_last
+    size_t: c_last
+    int: is_perim
+    unsigned: expected_cp
+    const: @(MixaCell p)
+    const: @(MixaCell q)
+    int: errs
+    if: rect = 0 || orig = 0 || rect\cells = 0
+        return: 1
+    errs: 0
+    r_last: f_row + f_nrows - 1U
+    c_last: f_col + f_ncols - 1U
+    r: 0U
+    while: r < rect\rows
+        c: 0U
+        while: c < rect\cols
+            idx: r * rect\cols + c
+            p: mixa_cell_at_const(rect, r, c)
+            q: orig + idx
+            is_perim: 0
+            if: r >= f_row && r <= r_last && c >= f_col && c <= c_last
+                if: r = f_row || r = r_last || c = f_col || c = c_last
+                    is_perim: 1
+            ---
+            if: is_perim = 1
+                expected_cp: 0x2550U
+                if: r = f_row && c = f_col
+                    expected_cp: 0x2554U
+                ---
+                if: r = f_row && c = c_last
+                    expected_cp: 0x2557U
+                ---
+                if: r = r_last && c = f_col
+                    expected_cp: 0x255AU
+                ---
+                if: r = r_last && c = c_last
+                    expected_cp: 0x255DU
+                ---
+                if: r > f_row && r < r_last && (c = f_col || c = c_last)
+                    expected_cp: 0x2551U
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: p\codepoint != expected_cp
+                    c.printf("FAIL [%s] overlay glyph at (%u,%u) expected 0x%X got 0x%X\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), expected_cp, p\codepoint)
+                    errs: errs + 1
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: (cast: (unsigned) p\fg) != f_fg
+                    c.printf("FAIL [%s] overlay fg at (%u,%u) expected %u got %u\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), f_fg, (cast: (unsigned) p\fg))
+                    errs: errs + 1
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: p\flags != 0U
+                    c.printf("FAIL [%s] overlay flags at (%u,%u) expected 0 got %u\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), (cast: (unsigned) p\flags))
+                    errs: errs + 1
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: p\width != 1U
+                    c.printf("FAIL [%s] overlay width at (%u,%u) expected 1 got %u\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), (cast: (unsigned) p\width))
+                    errs: errs + 1
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: p\bg != q\bg
+                    c.printf("FAIL [%s] overlay KEEP_BG violated at (%u,%u) bg expected %u got %u\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), (cast: (unsigned) q\bg), (cast: (unsigned) p\bg))
+                    errs: errs + 1
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: p\alpha != q\alpha
+                    c.printf("FAIL [%s] overlay KEEP_BG alpha violated at (%u,%u) alpha expected %u got %u\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), (cast: (unsigned) q\alpha), (cast: (unsigned) p\alpha))
+                    errs: errs + 1
+                ---
+            ---
+            if: is_perim = 0
+                member_checks[0]: member_checks[0] + 1
+                if: p\codepoint != q\codepoint
+                    c.printf("FAIL [%s] untouched cell at (%u,%u) cp expected 0x%X got 0x%X\n", desc, (cast: (unsigned) r), (cast: (unsigned) c), q\codepoint, p\codepoint)
+                    errs: errs + 1
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: p\fg != q\fg
+                    c.printf("FAIL [%s] untouched cell at (%u,%u) fg modified\n", desc, (cast: (unsigned) r), (cast: (unsigned) c))
+                    errs: errs + 1
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: p\bg != q\bg
+                    c.printf("FAIL [%s] untouched cell at (%u,%u) bg modified\n", desc, (cast: (unsigned) r), (cast: (unsigned) c))
+                    errs: errs + 1
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: p\flags != q\flags
+                    c.printf("FAIL [%s] untouched cell at (%u,%u) flags modified\n", desc, (cast: (unsigned) r), (cast: (unsigned) c))
+                    errs: errs + 1
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: p\width != q\width
+                    c.printf("FAIL [%s] untouched cell at (%u,%u) width modified\n", desc, (cast: (unsigned) r), (cast: (unsigned) c))
+                    errs: errs + 1
+                ---
+
+                member_checks[0]: member_checks[0] + 1
+                if: p\alpha != q\alpha
+                    c.printf("FAIL [%s] untouched cell at (%u,%u) alpha modified\n", desc, (cast: (unsigned) r), (cast: (unsigned) c))
+                    errs: errs + 1
+                ---
+            ---
+            c: c + 1U
+        ---
+        r: r + 1U
+    ---
+return: errs
+
+fn: main () int
+    @: MixaTextRect rect_a
+    @: MixaTextRect rect_b
+    @: MixaHighlight hl
+    @: MixaCell orig_a
+    @: MixaCell orig_b
+    @: MixaCell snapshot_a_prereject
+    size_t: rows
+    size_t: cols
+    size_t: total_cells
+    int: failures
+    []: int member_checks 1
+    int: api_assertions
+    int: scenarios_run
+    int: rc
+    int: errs
+
+    rows: 8U
+    cols: 10U
+    total_cells: rows * cols
+    failures: 0
+    member_checks[0]: 0
+    api_assertions: 0
+    scenarios_run: 0
+
+    rect_a: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    rect_b: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    hl: (cast: (@: MixaHighlight) c.calloc(1U, c.sizeof(c.MixaHighlight)))
+    orig_a: (cast: (@: MixaCell) c.calloc(total_cells, c.sizeof(c.MixaCell)))
+    orig_b: (cast: (@: MixaCell) c.calloc(total_cells, c.sizeof(c.MixaCell)))
+    snapshot_a_prereject: (cast: (@: MixaCell) c.calloc(total_cells, c.sizeof(c.MixaCell)))
+
+    if: rect_a = 0 || rect_b = 0 || hl = 0 || orig_a = 0 || orig_b = 0 || snapshot_a_prereject = 0
+        c.printf("highlight restore selftest: alloc failed\n")
+        return: 1
+
+    if: mixa_rect_open(rect_a, rows, cols) != 0 || mixa_rect_open(rect_b, rows, cols) != 0
+        c.printf("highlight restore selftest: rect open failed\n")
+        return: 1
+
+    if: mixa_highlight_init(hl) != MIXA_HIGHLIGHT_OK
+        c.printf("highlight restore selftest: init failed\n")
+        return: 1
+
+    populate_and_snapshot(rect_a, orig_a, 101U)
+    populate_and_snapshot(rect_b, orig_b, 202U)
+
+    # -------------------------------------------------------------
+    # Scenario 1: Set -> Move without overlap -> Move with overlap -> Clear
+    # -------------------------------------------------------------
+    scenarios_run: scenarios_run + 1
+    c.printf("Scenario 1: Set -> Move (no overlap) -> Move (overlap) -> Clear on rect_a\n")
+
+    rc: mixa_highlight_set(hl, rect_a, 1U, 1U, 3U, 3U, 14U)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S1 set frame 1 failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    errs: verify_overlay_active(rect_a, orig_a, 1U, 1U, 3U, 3U, 14U, "S1 frame 1 active", member_checks)
+    failures: failures + errs
+
+    # Move without overlap to (4, 5, 3, 4)
+    rc: mixa_highlight_set(hl, rect_a, 4U, 5U, 3U, 4U, 13U)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S1 move without overlap failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    errs: verify_overlay_active(rect_a, orig_a, 4U, 5U, 3U, 4U, 13U, "S1 frame 2 active", member_checks)
+    failures: failures + errs
+
+    # Move with overlap to (5, 6, 3, 4)
+    rc: mixa_highlight_set(hl, rect_a, 5U, 6U, 3U, 4U, 12U)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S1 move with overlap failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    errs: verify_overlay_active(rect_a, orig_a, 5U, 6U, 3U, 4U, 12U, "S1 frame 3 active", member_checks)
+    failures: failures + errs
+
+    # Clear and verify EVERY cell against original
+    rc: mixa_highlight_clear(hl, rect_a)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S1 clear failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    api_assertions: api_assertions + 1
+    if: hl\is_active != 0
+        c.printf("FAIL: S1 active flag not 0 after clear\n")
+        failures: failures + 1
+    ---
+    errs: verify_all_cells(rect_a, orig_a, "S1 after clear", member_checks)
+    failures: failures + errs
+
+    # -------------------------------------------------------------
+    # Scenario 2: Cross-target mismatch rejection and recovery
+    # -------------------------------------------------------------
+    scenarios_run: scenarios_run + 1
+    c.printf("Scenario 2: Cross-target mismatch rejection on rect_b and recovery on rect_a\n")
+
+    rc: mixa_highlight_set(hl, rect_a, 2U, 2U, 4U, 4U, 15U)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S2 bind to A failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+
+    # Capture independent all-member snapshot of A AFTER set, BEFORE any rejected calls
+    c.memcpy(snapshot_a_prereject, rect_a\cells, total_cells * c.sizeof(c.MixaCell))
+
+    # Attempt clear on B -> must reject
+    rc: mixa_highlight_clear(hl, rect_b)
+    api_assertions: api_assertions + 1
+    if: rc = MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S2 clear on mismatched B succeeded unexpectedly\n")
+        failures: failures + 1
+    ---
+    # Assert full B unchanged against orig_b
+    errs: verify_all_cells(rect_b, orig_b, "S2 B after rejected clear", member_checks)
+    failures: failures + errs
+
+    # Assert full A unchanged from pre-rejection state against snapshot_a_prereject
+    errs: verify_all_cells(rect_a, snapshot_a_prereject, "S2 A after rejected clear on B", member_checks)
+    failures: failures + errs
+
+    # Assert active flag preserved
+    api_assertions: api_assertions + 1
+    if: hl\is_active != 1
+        c.printf("FAIL: S2 hl active flag cleared after rejected clear on B\n")
+        failures: failures + 1
+    ---
+
+    # Attempt move to B -> must reject
+    rc: mixa_highlight_set(hl, rect_b, 1U, 1U, 3U, 3U, 11U)
+    api_assertions: api_assertions + 1
+    if: rc = MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S2 move to mismatched B succeeded unexpectedly\n")
+        failures: failures + 1
+    ---
+    # Assert full B unchanged against orig_b
+    errs: verify_all_cells(rect_b, orig_b, "S2 B after rejected move", member_checks)
+    failures: failures + errs
+
+    # Assert full A unchanged from pre-rejection state against snapshot_a_prereject
+    errs: verify_all_cells(rect_a, snapshot_a_prereject, "S2 A after rejected move to B", member_checks)
+    failures: failures + errs
+
+    # Assert active flag preserved
+    api_assertions: api_assertions + 1
+    if: hl\is_active != 1
+        c.printf("FAIL: S2 hl active flag cleared after rejected move to B\n")
+        failures: failures + 1
+    ---
+
+    # Clear properly on bound target A
+    rc: mixa_highlight_clear(hl, rect_a)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S2 bound clear on A failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    api_assertions: api_assertions + 1
+    if: hl\is_active != 0
+        c.printf("FAIL: S2 active flag not 0 after clear on A\n")
+        failures: failures + 1
+    ---
+    # Assert full A restored to original pre-overlay snapshot
+    errs: verify_all_cells(rect_a, orig_a, "S2 A after bound clear", member_checks)
+    failures: failures + errs
+
+    # Assert full B still untouched
+    errs: verify_all_cells(rect_b, orig_b, "S2 B after A cleared", member_checks)
+    failures: failures + errs
+
+    # -------------------------------------------------------------
+    # Scenario 3: Repeated set/move/clear cycles (stale snapshot check)
+    # -------------------------------------------------------------
+    scenarios_run: scenarios_run + 1
+    c.printf("Scenario 3: Repeated cycles (stale snapshot reuse prevention)\n")
+
+    # Cycle 3.1: (0, 0, 4, 4)
+    rc: mixa_highlight_set(hl, rect_a, 0U, 0U, 4U, 4U, 11U)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S3.1 set failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    errs: verify_overlay_active(rect_a, orig_a, 0U, 0U, 4U, 4U, 11U, "S3.1 active", member_checks)
+    failures: failures + errs
+
+    rc: mixa_highlight_clear(hl, rect_a)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S3.1 clear failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    errs: verify_all_cells(rect_a, orig_a, "S3.1 after clear", member_checks)
+    failures: failures + errs
+
+    # Cycle 3.2: (4, 4, 4, 4) -> move to (2, 2, 5, 5) -> clear
+    rc: mixa_highlight_set(hl, rect_a, 4U, 4U, 4U, 4U, 10U)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S3.2 set failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    rc: mixa_highlight_set(hl, rect_a, 2U, 2U, 5U, 5U, 9U)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S3.2 move failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    errs: verify_overlay_active(rect_a, orig_a, 2U, 2U, 5U, 5U, 9U, "S3.2 active", member_checks)
+    failures: failures + errs
+
+    rc: mixa_highlight_clear(hl, rect_a)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S3.2 clear failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    errs: verify_all_cells(rect_a, orig_a, "S3.2 after clear", member_checks)
+    failures: failures + errs
+
+    # Cycle 3.3: Large frame spanning almost whole rect (1, 1, 6, 8)
+    rc: mixa_highlight_set(hl, rect_a, 1U, 1U, 6U, 8U, 7U)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S3.3 set large frame failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    errs: verify_overlay_active(rect_a, orig_a, 1U, 1U, 6U, 8U, 7U, "S3.3 active", member_checks)
+    failures: failures + errs
+
+    rc: mixa_highlight_clear(hl, rect_a)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S3.3 clear large frame failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    errs: verify_all_cells(rect_a, orig_a, "S3.3 after clear", member_checks)
+    failures: failures + errs
+
+    # Cycle 3.4: Re-populate rect_a with new seed and verify set/move/clear
+    populate_and_snapshot(rect_a, orig_a, 303U)
+    rc: mixa_highlight_set(hl, rect_a, 3U, 3U, 3U, 3U, 6U)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S3.4 set failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    rc: mixa_highlight_set(hl, rect_a, 0U, 0U, 3U, 3U, 5U)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S3.4 move failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    rc: mixa_highlight_clear(hl, rect_a)
+    api_assertions: api_assertions + 1
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("FAIL: S3.4 clear failed rc=%d\n", rc)
+        failures: failures + 1
+    ---
+    errs: verify_all_cells(rect_a, orig_a, "S3.4 after clear with re-seed", member_checks)
+    failures: failures + errs
+
+    # Cleanup
+    mixa_highlight_release(hl)
+    mixa_rect_release(rect_a)
+    mixa_rect_release(rect_b)
+    c.free(orig_a)
+    c.free(orig_b)
+    c.free(snapshot_a_prereject)
+    c.free(hl)
+    c.free(rect_a)
+    c.free(rect_b)
+
+    c.printf("mixa_highlight_restore_selftest: scenarios=%d member_checks=%d api_assertions=%d failures=%d\n", scenarios_run, member_checks[0], api_assertions, failures)
+    if: failures != 0
+        c.printf("mixa_highlight_restore_selftest FAILED\n")
+        return: 1
+    ---
+    c.printf("mixa_highlight_restore_selftest OK\n")
+return: 0
