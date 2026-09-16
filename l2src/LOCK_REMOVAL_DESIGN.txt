@@ -2331,6 +2331,23 @@ oot\path_n` with no while:. The one pattern I did predict (the adapter's, from
         already carries scenario36, lmx_message (run_lmx -Suite Message), entry_turn, graph_abi and lane_oracle --
         and lane_oracle IS run_port_message.ps1 with -LaneCheck, so "port_message plain and -LaneCheck" is one
         separate run plus one row, not two runs. l2trans and port_parser are in no row and run on their own.
+      - RUN_L2TRANS GREEN at 2d8f2b6a ("l2trans gen2 ok", exit 0), and it is the verdict this group most needed.
+        It asserts on the EMITTED call text of tests/l2_and_foreign_call_own_local.lm2 -- that a C call on the
+        right of && does not take the condition temporary's name through the shared l2_tok buffer, and that the
+        actual reaches the call through a temp assigned from its working local. exec.c's tab_n_locked and
+        tab_addr_locked kept their signatures while their bodies changed from the deleted registry to R0's child
+        chain, and a kept signature over a changed body is precisely the case a text assertion catches and a
+        passing suite does not. Green here means the re-point preserved what the fixture pins rather than merely
+        what the wrappers are called.
+      - WHICH OF MY GREENS CARRY TO THE TIP, applied to my own evidence rather than to someone else's claim.
+        2d8f2b6a touched lmx_message_exec.c, lmx_message_exec.h and tests/unit_msg_cursor.lm2. So: port_message
+        plain and l2trans are mine AT that tip; the two fixture conversions (60/0 and 19/0) carry from 51b73274,
+        because that commit touched neither fixture; but scenario36, entry_turn and run_lmx -Suite Message all
+        compile lmx_message_exec.c and graph_abi compiles unit_msg_cursor.lm2, so their earlier greens do NOT
+        carry and are being re-measured. Running run_gates with -L2MessageRoot rather than the five runners
+        separately: that is the landing's own switch, so the row set and the reported count (30) are the ones
+        land_s6_2.sh will see, and its header line checks the same preconditions the landing does -- tip, dirty=0,
+        and pin_matches_L1_PIN. Then run_port_parser, which appears in no row.
       - MY OWN -PART 2 READING, measured rather than taken from the coordinator's: on a worktree cut at 2d8f2b6a
         and merged with the acceptance base 96a754e0 (merge fa94d553, never pushed), the probe prints
         "exec_lock_calls=0 exec_lock_decl=0 host_lock=0 exec_fields=0 | refs=0 runtime_lists=0", with
