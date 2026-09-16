@@ -8419,3 +8419,14 @@ port_path_storage row goes: 29 with the switch, derived from the
 table. DECIDED: b5 prepares sonnet/s6-2-mixa-lists-2 off 7b3a8668 with
 the six edits, the lead merges it into the stage; the preconditions
 go to the lead for the section's five populations.
+e9 on the allowlist: the six mixa_manager paths are already in
+land_s6_2.sh's ALLOW (lines 81-83), so b5's second branch needs no
+widening; five entries justified as "A, arrives with a branch" are
+present at the base since their branches merged (S6_2_MIXA_BASELINE.txt,
+tripwire_s6_2.sh, run_entry_turn.ps1, lmx_graph_copy_owned.lm2,
+lmx_msg_mail_chain.lm2): nothing fails (ALLOW matches A or M) but the
+stated reasons expired, corrected in the widening edit with the "30
+of 30" prose becoming 29 (MEASURE_S6_2.md:147, land_s6_2.sh:22-23; the
+marker itself is parameterised). The coordinator's correction to
+e9's reading: the slots list removals (dfc10d08 inside 4409805c) are
+in the stage; only the path_storage removals are incoming.
