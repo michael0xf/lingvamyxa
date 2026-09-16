@@ -6778,3 +6778,17 @@ LESSON (coordinator): the freeze's terms must forbid every ref move,
 local commits included, and be acknowledged before the first stage;
 a "diff | grep -v" falsifier still prints hunk headers, use
 diff <(grep -v ...) <(grep -v ...).
+b5's S6-2 test inventory landed on sonnet/s6-2-test-inventory 7af872da
+(l2src/LOCK_REMOVAL_S6_2_TEST_INVENTORY.txt, off 7b3a8668): 34 lines;
+13 asserting lines deleted outright, 15 restated through Messages,
+turns and flag reads, 6 in two whole test cases that go with their
+mechanism (lmx_msg_test_fail_retain); 5 numeric pins the slots
+deletion shifts (lmx_entry_turn_selftest.lm1:84,
+lmx_model_family_release_17_selftest.lm1:212/303/304,
+lmx_model_orphan_mapped_17_selftest.lm1:149), all restated as
+membership or state checks; agrees with e9's 16335e9b on every site
+it lists and adds 11 lmx_msg_endp_refs getter calls in
+lmx_message_exec_selftest.c that e9's pattern did not search
+(reported to e9 as a method gap): run_port_message's allowlist entry
+in the S6-2 section therefore carries the exec selftest's edits. The
+lead folds both lists into the section's allowlist before code.
