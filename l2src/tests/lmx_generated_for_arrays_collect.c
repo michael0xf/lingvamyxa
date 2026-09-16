@@ -37,6 +37,7 @@ int main(void)
         fprintf(stderr, "generated for_arrays create\n");
         return 1;
     }
+    /* AD: keep tree walk — registration not drained */
     ma = lmx_msg_find(rt, a);
     if (ma == 0) {
         fprintf(stderr, "generated for_arrays find\n");

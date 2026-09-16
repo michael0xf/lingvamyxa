@@ -179,7 +179,7 @@ fn: yield_until_handoff_ready (@: LmxMsgRuntime rt; unsigned: who) int
 
 fn: yield_until_success (@: LmxMsgRuntime rt; unsigned: who) int
     @: LmxMsg m
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_live_lookup(rt\root, who)
     if: m = 0
         return: 0
     while: c.lmx_msg_success_load(m) = 0
@@ -289,11 +289,17 @@ fn: main () int
     family_check(lmx_msg_create(rt, parent, @ initial, 1U, @ sibling, 0) = LMX_MSG_OK, "create unrelated S")
     family_check(lmx_msg_create(rt, parent, @ initial, 1U, @ successful, 0) = LMX_MSG_OK && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "create K and commit siblings")
     family_check(lmx_msg_create(rt, child, @ initial, 1U, @ grandchild, 0) = LMX_MSG_OK && lmx_msg_end_turn(rt, child, 1) = LMX_MSG_OK, "create G and commit")
+    # AD: keep tree walk — registration not drained
     rootm: lmx_msg_find(rt, root)
+    # AD: keep tree walk — registration not drained
     p: lmx_msg_find(rt, parent)
+    # AD: keep tree walk — registration not drained
     m: lmx_msg_find(rt, child)
+    # AD: keep tree walk — registration not drained
     g: lmx_msg_find(rt, grandchild)
+    # AD: keep tree walk — registration not drained
     s: lmx_msg_find(rt, sibling)
+    # AD: keep tree walk — registration not drained
     k: lmx_msg_find(rt, successful)
     family_check(rootm != 0 && p != 0 && m != 0 && g != 0 && s != 0 && k != 0, "resolve fixture participants")
 
@@ -356,6 +362,7 @@ fn: main () int
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, successful) != 0 && lmx_msg_success_load(k) != 0, "K settled successfully")
     family_check(family_watched_frees = 1 && family_watch_a = 0, "unrooted K block died at K's end-turn")
     family_check(lmx_msg_dispose_child(rt, parent, successful) = LMX_MSG_OK, "dispose K after success")
+    # AD: keep tree walk — registration not drained
     family_check(family_watched_frees = 1 && family_watch_a = 0 && lmx_msg_find(rt, successful) = 0, "successful arena freed once; the disposed K is gone (decision 17)")
     family_check(lmx_msg_adopted_n(rt, parent) = np && lmx_msg_graph(p) = pnode && lmx_owned_ranges_find(p\ranges, (cast: (@: void) pnode)) = rp_node, "K left nothing in P's storage")
 
@@ -387,6 +394,7 @@ fn: main () int
     # --- G to C: storage moves with its range identities; G's graph becomes
     # C's HISTORY root; G's RETAIN root neither travels nor stays.
     family_check(lmx_msg_adopt_failed(rt, child, grandchild) = LMX_MSG_OK, "G to C")
+    # AD: keep tree walk — registration not drained
     family_check(lmx_msg_find(rt, grandchild) = 0 && lmx_msg_child_n(rt, child) = 0, "G's ownership moved and G is gone: adoption closes the adopted (rule 5)")
     family_check(lmx_owned_ranges_find(m\ranges, (cast: (@: void) gnode)) = rg_node && lmx_owned_ranges_find(m\ranges, gcell) = rg_cell && lmx_owned_ranges_find(m\ranges, (cast: (@: void) cnode)) = rc_node, "G's range records follow C with their identity; C's own stay")
     family_check(family_has_block(m, gb\base) != 0 && family_has_block(m, gx_base) != 0 && family_has_block(m, grand_init) != 0 && family_has_block(m, cb\base) != 0 && lmx_msg_adopted_n(rt, child) = nc + ng + 1, "C owns its blocks, all of G's blocks and G's init block")
@@ -399,6 +407,7 @@ fn: main () int
 
     # --- C to P: the same, and G's history is carried through C.
     family_check(lmx_msg_adopt_failed(rt, parent, child) = LMX_MSG_OK, "C to P")
+    # AD: keep tree walk — registration not drained
     family_check(lmx_msg_find(rt, child) = 0 && lmx_msg_child_n(rt, parent) = 1 && lmx_msg_child_at(rt, parent, 0) = sibling, "C's ownership moved and C is gone; S is P's only child left")
     family_check(lmx_owned_ranges_find(p\ranges, (cast: (@: void) gnode)) = rg_node && lmx_owned_ranges_find(p\ranges, (cast: (@: void) cnode)) = rc_node && lmx_owned_ranges_find(p\ranges, (cast: (@: void) pnode)) = rp_node, "both range identities survive the second handoff; P's own stay")
     family_check(family_has_block(p, gb\base) != 0 && family_has_block(p, gx_base) != 0 && family_has_block(p, cb\base) != 0 && family_has_block(p, grand_init) != 0 && family_has_block(p, child_init) != 0 && family_has_block(p, pb\base) != 0 && lmx_msg_adopted_n(rt, parent) = np + nc + ng + 2, "P holds the failed branch's blocks, both init blocks and its own")

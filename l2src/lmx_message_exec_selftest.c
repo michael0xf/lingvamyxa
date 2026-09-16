@@ -1,4 +1,4 @@
-﻿/* Overlapping Message turns. Win32. */
+/* Overlapping Message turns. Win32. */
 #include "l2src/lmx_message.h"
 #include "l2src/lmx_message_exec.h"
 #include "l2src/lmx.h"
@@ -443,6 +443,7 @@ static DWORD WINAPI drive_mail_overlap_helper(void *arg) {
      * monitor (the hook below is called inside it), another thread takes a
      * different Message's monitor and gets it at once. */
     if (g_drive_mail_rt != 0) {
+        /* AD: keep tree walk — registration not drained */
         LmxMsg *om = lmx_msg_find(g_drive_mail_rt, g_mail_other);
         if (om != 0) {
             lmx_msg_mail_lock(om);
@@ -1965,7 +1966,9 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         pm = lmx_msg_find(rtd, p);
+        /* AD: keep tree walk — registration not drained */
         cm2 = lmx_msg_find(rtd, c2);
         if (pm == 0 || cm2 == 0) {
             fprintf(stderr, "drive-snap find\n");
@@ -2015,6 +2018,7 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         cm = lmx_msg_find(rtd, closer);
         if (cm == 0) {
             fprintf(stderr, "drive-mail find\n");
@@ -3026,8 +3030,10 @@ int main(int argc, char **argv) {
         /* S6-2 (respecified 2026-09-16): the rolled-back bound child is freed by
          * its release chain, so "gone" is literal again -- not findable, and its
          * bind gone with it. */
+        /* AD: keep tree walk — registration not drained */
         if (lmx_msg_find(rtb, c1) != 0 || lmx_msg_exec_bind_n(rtb) != 0) {
             fprintf(stderr, "rolled-back bound child still findable or still bound find=%d bind=%d\n",
+                /* AD: keep tree walk — registration not drained */
                 lmx_msg_find(rtb, c1) != 0, lmx_msg_exec_bind_n(rtb));
             lmx_msg_runtime_delete(rtb);
             return 1;
@@ -3085,6 +3091,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rtt);
                 return 1;
             }
+            /* AD: keep tree walk — registration not drained */
             pm = lmx_msg_find(rtt, tp);
             if (pm == 0) {
                 ok = 0;
@@ -3107,8 +3114,10 @@ int main(int argc, char **argv) {
                     ok = 0;
                 }
             }
+            /* AD: keep tree walk — registration not drained */
             if (ok != 1 || present != 0 || n != 1 || lmx_msg_find(rtt, tc1) != 0) {
                 fprintf(stderr, "release-tree chain_ok=%d c1_present=%d n=%d c1_found=%d\n",
+                    /* AD: keep tree walk — registration not drained */
                     ok, present, n, lmx_msg_find(rtt, tc1) != 0);
                 lmx_msg_runtime_delete(rtt);
                 return 1;
@@ -3172,7 +3181,9 @@ int main(int argc, char **argv) {
             }
             vst = lmx_msg_handoff_supervision(rtv, vp, vc, vq);
             n_ctx = lmx_msg_exec_bind_n(rtv);
+            /* AD: keep tree walk — registration not drained */
             vcm = lmx_msg_find(rtv, vc);
+            /* AD: keep tree walk — registration not drained */
             vpm = lmx_msg_find(rtv, vp);
             /* S6-2 (SPEC 19.29.7): "when a Message changes parent its address changes".
              * vp and vq are R0's first and second children and vc was vp's first, so
@@ -3183,6 +3194,7 @@ int main(int argc, char **argv) {
                 || n_ctx != 1
                 || lmx_msg_child_n(rtv, vp) != 0 || lmx_msg_child_n(rtv, vq) != 1
                 || lmx_msg_child_at(rtv, vq, 0) != vc
+                /* AD: keep tree walk — registration not drained */
                 || lmx_msg_parent_load(vcm) == 0 || lmx_msg_parent_load(vcm)->addr != vq || lmx_msg_parent_load(vcm) != lmx_msg_find(rtv, vq)
                 || path_before != 3 || path_after != 3
                 || addr_before[0] != 1U || addr_before[1] != 1U || addr_before[2] != 1U
@@ -3261,10 +3273,12 @@ int main(int argc, char **argv) {
             /* S6-2 (respecified 2026-09-16): "both slots freed" is literal again --
              * each release frees its own record, so neither is findable and the
              * adoption of their storage is what remains observable. */
+            /* AD: keep tree walk — registration not drained */
             if (qst != LMX_MSG_OK || lmx_msg_find(rtq, qp) != 0 || lmx_msg_find(rtq, qc) != 0
                 || lmx_msg_child_n(rtq, qr) != 0
                 || lmx_msg_adopted_n(rtq, qr) < qadopted0 + 2) {
                 fprintf(stderr, "settle branch st=%d find_p=%d find_c=%d adopted=%d adopted0=%d\n",
+                    /* AD: keep tree walk — registration not drained */
                     qst, lmx_msg_find(rtq, qp) != 0, lmx_msg_find(rtq, qc) != 0,
                     lmx_msg_adopted_n(rtq, qr), qadopted0);
                 return 1;
@@ -3317,7 +3331,9 @@ int main(int argc, char **argv) {
                 return 1;
             }
             ost = lmx_msg_dispose_child(rto, r0, op);
+            /* AD: keep tree walk — registration not drained */
             ofp = lmx_msg_find(rto, op) != 0;
+            /* AD: keep tree walk — registration not drained */
             ocm = lmx_msg_find(rto, oc);
             ofc = ocm != 0;
             ocnt = lmx_msg_exec_bind_n(rto);
@@ -3340,6 +3356,7 @@ int main(int argc, char **argv) {
              * property the loop was really after -- the orphan has left the tree --
              * and the assertion below carries the property, since re-testing the
              * condition the loop just exited on would assert nothing. */
+            /* AD: keep tree walk — registration not drained */
             while (lmx_msg_find(rto, oc) != 0) {
                 (void)lmx_msg_drive(rto, 0, 0);
                 SwitchToThread();
@@ -3401,6 +3418,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rtu);
                 return 1;
             }
+            /* AD: keep tree walk — registration not drained */
             cmu = lmx_msg_find(rtu, cu);
             stu = lmx_msg_exec_start_contexts(rtu);
             if (cmu == 0 || cmu->exec_bind == 0 || stu != LMX_MSG_OK || lmx_msg_exec_workers(rtu) != 0
@@ -3469,6 +3487,7 @@ int main(int argc, char **argv) {
             /* S6-2 (respecified 2026-09-16): the rolled-back child is neither
              * retired nor settled -- its release chain frees it, so what is
              * asserted is that it is gone: off the tree and not findable. */
+            /* AD: keep tree walk — registration not drained */
             if (lmx_msg_find(rtb, c1) != 0) {
                 fprintf(stderr, "ctx rolled-back child still findable after its release\n");
                 lmx_msg_exec_stop(rtb);
@@ -3525,6 +3544,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
         }
+        /* AD: keep tree walk — registration not drained */
         if (lmx_msg_find(rtb, c1) != 0) {
             fprintf(stderr, "idle-rollback child still present\n");
             lmx_msg_exec_stop(rtb);
@@ -3592,6 +3612,7 @@ int main(int argc, char **argv) {
         }
         YIELD_UNTIL_R0(rtc, "cancel idle: C1's close runs on its own context",
             lmx_msg_state(rtc, c1) == LMX_MSG_STATE_STOPPED);
+        /* AD: keep tree walk — registration not drained */
         gm = lmx_msg_find(rtc, g);
         if (lmx_msg_state(rtc, c1) != LMX_MSG_STATE_STOPPED || InterlockedCompareExchange(&rec.done, 0, 0) != 0 || gm == 0 || lmx_msg_running_load(gm) != 0) {
             fprintf(stderr, "cancel-idle state=%d done=%ld g_run=%d\n",
@@ -3805,8 +3826,11 @@ int main(int argc, char **argv) {
         if (lmx_msg_create(rth, c, &ini3, 1, &g, 0) != LMX_MSG_OK || lmx_msg_end_turn(rth, c, 1) != LMX_MSG_OK) {
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         gbase = lmx_msg_find(rth, g)->init;
+        /* AD: keep tree walk — registration not drained */
         cbase = lmx_msg_find(rth, c)->init;
+        /* AD: keep tree walk — registration not drained */
         c2base = lmx_msg_find(rth, c2)->init;
         /* M: the nested native-users case (P's turn stepping C) went with the step. */
         if (lmx_msg_exec_bind(rth, g, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
@@ -3825,6 +3849,7 @@ int main(int argc, char **argv) {
         (void)own_turn(rth, c2);
         (void)lmx_msg_exec_unbind(rth, g);
         (void)lmx_msg_drive(rth, 0U, 0U);
+        /* AD: keep tree walk — registration not drained */
         if (lmx_msg_adopt_failed(rth, c2, g) != LMX_MSG_INVALID || lmx_msg_find(rth, g)->init != gbase) {
             fprintf(stderr, "sibling must not adopt G\n");
             lmx_msg_runtime_delete(rth);
@@ -3855,6 +3880,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rth);
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         if (lmx_msg_success_load(lmx_msg_find(rth, p)) != 0) {
             fprintf(stderr, "P success from children\n");
             lmx_msg_runtime_delete(rth);
@@ -3871,12 +3897,16 @@ int main(int argc, char **argv) {
             if ((cst1 = lmx_msg_create(rth, p, &ini, 1, &live, 0)) != LMX_MSG_OK || (cst2 = lmx_msg_create(rth, p, &ini, 1, &drop, 0)) != LMX_MSG_OK
                 || (cst3 = lmx_msg_end_turn(rth, p, 1)) != LMX_MSG_OK) {
                 fprintf(stderr, "live create st=%d,%d,%d p_state=%d p_run=%d p_ok=%d\n", cst1, cst2, cst3, lmx_msg_state(rth, p),
+                    /* AD: keep tree walk — registration not drained */
                     lmx_msg_find(rth, p) != 0 ? (int)lmx_msg_running_load(lmx_msg_find(rth, p)) : -1,
+                    /* AD: keep tree walk — registration not drained */
                     lmx_msg_find(rth, p) != 0 ? (int)lmx_msg_success_load(lmx_msg_find(rth, p)) : -1);
                 lmx_msg_runtime_delete(rth);
                 return 1;
             }
+            /* AD: keep tree walk — registration not drained */
             live_init = lmx_msg_find(rth, live)->init;
+            /* AD: keep tree walk — registration not drained */
             if (lmx_msg_adopt_failed(rth, p, live) != LMX_MSG_INVALID || lmx_msg_find(rth, live)->init != live_init) {
                 fprintf(stderr, "live idle adopt must reject and keep init\n");
                 lmx_msg_runtime_delete(rth);
@@ -3899,6 +3929,7 @@ int main(int argc, char **argv) {
             (void)lmx_msg_host_drain(rth);
             pst = own_turn(rth, p);
             if ((pst != LMX_MSG_OK && pst != 1) || nu.p_during < 1 || nu.p_after != 3
+                /* AD: keep tree walk — registration not drained */
                 || lmx_msg_adopted_n(rth, p) != 3 || lmx_msg_success_load(lmx_msg_find(rth, p)) == 0) {
                 fprintf(stderr, "complete during turn users=%d n=%d after=%d\n",
                     nu.p_during, lmx_msg_adopted_n(rth, p), nu.p_after);
@@ -3919,6 +3950,7 @@ int main(int argc, char **argv) {
             n_before = lmx_msg_adopted_n(rth, p);
             /* Decision 17 with spec 19.29.8: disposing a settled failed child
              * adopts its arena into the parent and releases the child's slot. */
+            /* AD: keep tree walk — registration not drained */
             if (lmx_msg_dispose_child(rth, p, drop) != LMX_MSG_OK || lmx_msg_find(rth, drop) != 0
                 || lmx_msg_adopted_n(rth, p) != n_before + 1) {
                 fprintf(stderr, "failure dispose adopts the history and releases the child n=%d before=%d\n",
@@ -3926,6 +3958,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rth);
                 return 1;
             }
+            /* AD: keep tree walk — registration not drained */
             if (lmx_msg_adopt_failed(rth, p, live) != LMX_MSG_OK || lmx_msg_find(rth, live) != 0
                 || lmx_msg_adopted_n(rth, p) != n_before + 2) {
                 fprintf(stderr, "adopt live fail\n");
@@ -4080,7 +4113,9 @@ int main(int argc, char **argv) {
         cr->stride = 1U;
         cr->kind = 1;
         cr->type = 1;
+        /* AD: keep tree walk — registration not drained */
         pm = lmx_msg_find(rtr, p);
+        /* AD: keep tree walk — registration not drained */
         cm = lmx_msg_find(rtr, c);
         if (pm == 0 || cm == 0
             || lmx_owned_ranges_add(&pm->ranges, pr) != LMX_OWNED_RANGES_OK
@@ -4111,6 +4146,7 @@ int main(int argc, char **argv) {
         }
         free(pr);
         if (lmx_msg_adopt_failed(rtr, p, c) != LMX_MSG_OK
+            /* AD: keep tree walk — registration not drained */
             || lmx_msg_find(rtr, c) != 0 || pm->ranges != cr
             || cr->lo != store + 8 || cr->hi != store + 24 || cr->stride != 1U
             || lmx_owned_ranges_find(pm->ranges, store + 8) != cr
@@ -4164,7 +4200,9 @@ int main(int argc, char **argv) {
         pb->n = 8U;
         cb->base = cbase;
         cb->n = 8U;
+        /* AD: keep tree walk — registration not drained */
         pm = lmx_msg_find(rta, p);
+        /* AD: keep tree walk — registration not drained */
         cm = lmx_msg_find(rta, c);
         if (pm == 0 || cm == 0
             || lmx_owned_ranges_add(&cm->ranges, cr) != LMX_OWNED_RANGES_OK
@@ -4194,6 +4232,7 @@ int main(int argc, char **argv) {
         }
         lmx_msg_exec_test_set_fail_adopt_block(rta, 0);
         if (lmx_msg_adopt_failed(rta, p, c) != LMX_MSG_OK
+            /* AD: keep tree walk — registration not drained */
             || lmx_msg_find(rta, c) != 0
             || pm->ranges != range_keep || pm->blocks == 0
             || pm->blocks->base != init_keep || pm->blocks->next != cb
@@ -4225,7 +4264,9 @@ int main(int argc, char **argv) {
             fprintf(stderr, "chars collect create\n");
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rtc, a);
+        /* AD: keep tree walk — registration not drained */
         mb = lmx_msg_find(rtc, b);
         ta = lmx_chars_new_owned(&ma->blocks, &ma->ranges);
         tb = lmx_chars_new_owned(&mb->blocks, &mb->ranges);
@@ -4305,6 +4346,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "slot-value collect create\n");
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rtv, a);
         root = (ma == 0) ? 0 : lmx_node_new_owned(&ma->blocks, &ma->ranges);
         if (ma == 0 || root == 0
@@ -4396,7 +4438,9 @@ int main(int argc, char **argv) {
             fprintf(stderr, "array collect create\n");
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rta, a);
+        /* AD: keep tree walk — registration not drained */
         mb = lmx_msg_find(rta, b);
         da = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 3U, &ma->blocks, &ma->ranges);
         db = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &mb->blocks, &mb->ranges);
@@ -4482,6 +4526,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "ref array collect create\n");
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rtr, a);
         if (ma == 0) {
             fprintf(stderr, "ref array collect find\n");
@@ -4633,6 +4678,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "end_turn array create\n");
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rte, a);
         if (ma == 0) {
             fprintf(stderr, "end_turn array find\n");
@@ -4709,6 +4755,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "emit array create\n");
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rtg, a);
         if (ma == 0) {
             fprintf(stderr, "emit array find\n");
@@ -4791,6 +4838,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "explicit root create\n");
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rtr, a);
         keep = (ma == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &ma->blocks, &ma->ranges);
         drop = (ma == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 4U, &ma->blocks, &ma->ranges);
@@ -4875,6 +4923,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "graph root create\n");
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rtg, a);
         unit = (ma == 0) ? 0 : lmx_node_new_owned(&ma->blocks, &ma->ranges);
         if (ma == 0 || unit == 0 || lmx_branch_open_owned(unit, 1U, &ma->blocks, &ma->ranges) != 0) {
@@ -4934,6 +4983,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "ref root create\n");
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rtd, a);
         of_desc = (ma == 0) ? 0 : lmx_array_ref_new_positive_owned(LMX_TYPE_ARRAY_OF_DESC, 1U, &ma->blocks, &ma->ranges);
         chars = (ma == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 4U, &ma->blocks, &ma->ranges);
@@ -4978,6 +5028,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "root oom create\n");
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rto, a);
         keep = (ma == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &ma->blocks, &ma->ranges);
         if (ma == 0 || keep == 0) {
@@ -5043,7 +5094,9 @@ int main(int argc, char **argv) {
         }
         (void)lmx_msg_host_drain(rtt);
         (void)own_turn(rtt, c);
+        /* AD: keep tree walk — registration not drained */
         child = lmx_msg_find(rtt, c);
+        /* AD: keep tree walk — registration not drained */
         parent = lmx_msg_find(rtt, p);
         keep = (child == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &child->blocks, &child->ranges);
         if (child == 0 || parent == 0 || keep == 0
@@ -5123,7 +5176,9 @@ int main(int argc, char **argv) {
         }
         (void)lmx_msg_host_drain(rtg);
         (void)own_turn(rtg, c);
+        /* AD: keep tree walk — registration not drained */
         child = lmx_msg_find(rtg, c);
+        /* AD: keep tree walk — registration not drained */
         parent = lmx_msg_find(rtg, p);
         root = child == 0 ? 0 : lmx_node_new_owned(&child->blocks, &child->ranges);
         inner = child == 0 ? 0 : lmx_struct_new_owned(root, &child->blocks, &child->ranges);
@@ -5239,8 +5294,11 @@ int main(int argc, char **argv) {
         }
         (void)lmx_msg_host_drain(rtd);
         (void)own_turn(rtd, srca);
+        /* AD: keep tree walk — registration not drained */
         src = lmx_msg_find(rtd, srca);
+        /* AD: keep tree walk — registration not drained */
         dst = lmx_msg_find(rtd, dsta);
+        /* AD: keep tree walk — registration not drained */
         old_parent = lmx_msg_find(rtd, p);
         root = src == 0 ? 0 : lmx_node_new_owned(&src->blocks, &src->ranges);
         inner = src == 0 ? 0 : lmx_struct_new_owned(root, &src->blocks, &src->ranges);
@@ -5301,7 +5359,9 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         child = lmx_msg_find(rth, c);
+        /* AD: keep tree walk — registration not drained */
         parent = lmx_msg_find(rth, p);
         unit = (child == 0) ? 0 : lmx_node_new_owned(&child->blocks, &child->ranges);
         if (child == 0 || parent == 0 || unit == 0
@@ -5377,7 +5437,9 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         child = lmx_msg_find(rtp, c);
+        /* AD: keep tree walk — registration not drained */
         parent = lmx_msg_find(rtp, p);
         value = (child == 0) ? 0 : lmx_int_new_owned(&child->blocks, &child->ranges);
         if (child == 0 || parent == 0 || value == 0) {
@@ -5434,6 +5496,7 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         owner = lmx_msg_find(rtc, a);
         eternal = owner == 0 ? 0 : lmx_int_new_owned(&owner->blocks, &owner->ranges);
         method = owner == 0 ? 0 : lmx_method_new_owned(&owner->blocks, &owner->ranges);
@@ -5476,6 +5539,7 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         owner = lmx_msg_find(rtrp, a);
         primitive = owner == 0 ? 0 : lmx_int_new_owned(&owner->blocks, &owner->ranges);
         method = owner == 0 ? 0 : lmx_method_new_owned(&owner->blocks, &owner->ranges);
@@ -5534,7 +5598,9 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         child = lmx_msg_find(rto, c);
+        /* AD: keep tree walk — registration not drained */
         parent = lmx_msg_find(rto, p);
         unit = (child == 0) ? 0 : lmx_node_new_owned(&child->blocks, &child->ranges);
         if (child == 0 || parent == 0 || unit == 0
@@ -5619,8 +5685,11 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         pm = lmx_msg_find(rtn, p);
+        /* AD: keep tree walk — registration not drained */
         cm = lmx_msg_find(rtn, c);
+        /* AD: keep tree walk — registration not drained */
         gm = lmx_msg_find(rtn, g);
         cunit = (cm == 0) ? 0 : lmx_node_new_owned(&cm->blocks, &cm->ranges);
         gunit = (gm == 0) ? 0 : lmx_node_new_owned(&gm->blocks, &gm->ranges);
@@ -5719,8 +5788,11 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         pm = lmx_msg_find(rtr, p);
+        /* AD: keep tree walk — registration not drained */
         cm = lmx_msg_find(rtr, c);
+        /* AD: keep tree walk — registration not drained */
         gm = lmx_msg_find(rtr, g);
         cunit = (cm == 0) ? 0 : lmx_node_new_owned(&cm->blocks, &cm->ranges);
         gunit = (gm == 0) ? 0 : lmx_node_new_owned(&gm->blocks, &gm->ranges);
@@ -5833,7 +5905,9 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rts, a);
+        /* AD: keep tree walk — registration not drained */
         mb = lmx_msg_find(rts, b);
         if (ma == 0 || mb == 0 || ma->mapped != 0 || mb->mapped != 0) {
             fprintf(stderr, "exec_start claim pre-map\n");
@@ -5871,6 +5945,7 @@ int main(int argc, char **argv) {
             }
             return 1;
         }
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rtk, a);
         if (ma == 0) {
             fprintf(stderr, "exec_start map find\n");
@@ -5906,6 +5981,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_exec_ready(rtr, dummy);
+        /* AD: keep tree walk — registration not drained */
         ma = lmx_msg_find(rtr, dummy);
         if (ma == 0 || ma->ready == 0) {
             fprintf(stderr, "exec_stop ready flag not set before stop\n");
@@ -6229,6 +6305,7 @@ int main(int argc, char **argv) {
                 || lmx_msg_exec_bind(rti, a, turn_send_to_held, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, b, turn_send_to_held, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                /* AD: keep tree walk — registration not drained */
                 || (dm = lmx_msg_find(rti, d)) == 0) {
                 fprintf(stderr, "exec admit-gate create\n");
                 if (rti != 0) {
@@ -6569,6 +6646,7 @@ int main(int argc, char **argv) {
             if (g_fifo_n != 4 || has11 == 0 || has12 == 0 || has21 == 0 || has22 == 0
                 || has11 > has12 || has21 > has22
                 || lmx_msg_inbox_n(rti, d) != 4
+                /* AD: keep tree walk — registration not drained */
                 || lmx_msg_mail_outbox_empty(lmx_msg_find(rti, a)) == 0) {
                 fprintf(stderr, "exec two-prod n=%d inbox=%d\n", g_fifo_n, lmx_msg_inbox_n(rti, d));
                 lmx_msg_runtime_delete(rti);
@@ -6835,8 +6913,11 @@ int main(int argc, char **argv) {
                 return 1;
             }
             lmx_msg_pump(rti);
+            /* AD: keep tree walk — registration not drained */
             pm = lmx_msg_find(rti, p);
+            /* AD: keep tree walk — registration not drained */
             sm = lmx_msg_find(rti, sib);
+            /* AD: keep tree walk — registration not drained */
             km = lmx_msg_find(rti, kid);
             if (pm == 0 || sm == 0 || km == 0) {
                 fprintf(stderr, "exec map-reparent find\n");
@@ -6844,9 +6925,12 @@ int main(int argc, char **argv) {
                 return 1;
             }
             if (lmx_msg_end_turn(rti, p, 0) != LMX_MSG_OK
+                /* AD: keep tree walk — registration not drained */
                 || lmx_msg_find(rti, kid) != 0
+                /* AD: keep tree walk — registration not drained */
                 || lmx_msg_find(rti, sib) != sm) {
                 fprintf(stderr, "exec map-reparent sibling find_kid=%d\n",
+                    /* AD: keep tree walk — registration not drained */
                     lmx_msg_find(rti, kid) != 0);
                 lmx_msg_runtime_delete(rti);
                 return 1;
@@ -6900,6 +6984,7 @@ int main(int argc, char **argv) {
                 }
                 return 1;
             }
+            /* AD: keep tree walk — registration not drained */
             cm = lmx_msg_find(rti, c);
             if (lmx_msg_exec_unbind(rti, c) != LMX_MSG_OK || cm == 0 || cm->mapped != 0) {
                 fprintf(stderr, "exec remap unbind mapped=%d\n", cm != 0 ? cm->mapped : -1);
@@ -6947,7 +7032,9 @@ int main(int argc, char **argv) {
                 }
                 return 1;
             }
+            /* AD: keep tree walk — registration not drained */
             pm = lmx_msg_find(rti, p);
+            /* AD: keep tree walk — registration not drained */
             km = lmx_msg_find(rti, kid);
             if (pm == 0 || km == 0
                 || lmx_msg_child_unlink(pm, km) != LMX_MSG_INVALID
@@ -7271,6 +7358,7 @@ int main(int argc, char **argv) {
                 || lmx_msg_complete(rti, c) != LMX_MSG_OK
                 || ((st = own_turn(rti, c)) != LMX_MSG_OK && st != 1)
                 || lmx_msg_handoff_ready(rti, c) == 0
+                /* AD: keep tree walk — registration not drained */
                 || lmx_msg_find(rti, g) == 0 || lmx_msg_exec_is_bound(rti, g) != 1) {
                 fprintf(stderr, "exec dispose-in-turn settle g_ready=%d c_ready=%d g_bound=%d\n",
                     lmx_msg_handoff_ready(rti, g), lmx_msg_handoff_ready(rti, c), lmx_msg_exec_is_bound(rti, g));
@@ -7290,12 +7378,14 @@ int main(int argc, char **argv) {
             }
             st = own_turn(rti, p);
             if ((st != LMX_MSG_OK && st != 1) || dz.st != LMX_MSG_OK
+                /* AD: keep tree walk — registration not drained */
                 || lmx_msg_find(rti, g) != 0 || lmx_msg_find(rti, c) != 0
                 /* S6-2 (respecified 2026-09-16): "both slots gone" is again
                  * literal -- G's release frees G, C's frees C, and neither is
                  * findable afterwards. */
                 || lmx_msg_child_n(rti, p) != 0) {
                 fprintf(stderr, "exec dispose-in-turn turn=%d dispose=%d g=%p c=%p kids=%d\n",
+                    /* AD: keep tree walk — registration not drained */
                     st, dz.st, (void *)lmx_msg_find(rti, g), (void *)lmx_msg_find(rti, c),
                     lmx_msg_child_n(rti, p));
                 lmx_msg_runtime_delete(rti);
@@ -7486,12 +7576,15 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
+            /* AD: keep tree walk — registration not drained */
             if (lmx_msg_dispose_child(rti, r, p) != LMX_MSG_OK || lmx_msg_find(rti, c) == 0
                 || lmx_msg_handoff_ready(rti, c) != 0 || lmx_msg_complete(rti, c) != LMX_MSG_OK
                 || ((st = own_turn(rti, c)) != LMX_MSG_OK && st != 1)
                 /* S6-2 (respecified 2026-09-16): P's slot does go at its release --
                  * the release chain frees it, so P stops being findable. */
+                /* AD: keep tree walk — registration not drained */
                 || lmx_msg_find(rti, c) == 0 || lmx_msg_handoff_ready(rti, c) == 0 || lmx_msg_find(rti, p) != 0) {
+                /* AD: keep tree walk — registration not drained */
                 fprintf(stderr, "exec maintain orphan end-turn c=%p p=%p\n", (void *)lmx_msg_find(rti, c), (void *)lmx_msg_find(rti, p));
                 lmx_msg_runtime_delete(rti);
                 return 1;
@@ -7500,7 +7593,9 @@ int main(int argc, char **argv) {
             st = lmx_msg_root_turn(rti, turn_drive_in_turn, &dv);
             /* S6-2 (respecified 2026-09-16): the in-turn drive refuses, so the
              * orphan is still waiting -- still findable, not yet reclaimed. */
+            /* AD: keep tree walk — registration not drained */
             if ((st != LMX_MSG_OK && st != 1) || dv.st != LMX_MSG_INVALID || lmx_msg_find(rti, c) == 0) {
+                /* AD: keep tree walk — registration not drained */
                 fprintf(stderr, "exec maintain in-turn turn=%d drive=%d c=%p\n", st, dv.st, (void *)lmx_msg_find(rti, c));
                 lmx_msg_runtime_delete(rti);
                 return 1;
@@ -7508,7 +7603,9 @@ int main(int argc, char **argv) {
             /* S6-2 (respecified 2026-09-16): the maintenance outside any turn
              * reclaims the orphan -- its release chain frees it, so it stops
              * being findable. */
+            /* AD: keep tree walk — registration not drained */
             if (lmx_msg_drive(rti, dv.now, 0U) != LMX_MSG_OK || lmx_msg_find(rti, c) != 0) {
+                /* AD: keep tree walk — registration not drained */
                 fprintf(stderr, "exec maintain outside c=%p\n", (void *)lmx_msg_find(rti, c));
                 lmx_msg_runtime_delete(rti);
                 return 1;
@@ -7568,6 +7665,7 @@ int main(int argc, char **argv) {
             }
             if (lmx_msg_complete(rti, a) != LMX_MSG_OK
                 || ((st = own_turn(rti, a)) != LMX_MSG_OK && st != 1)
+                /* AD: keep tree walk — registration not drained */
                 || lmx_msg_find(rti, a) == 0 || lmx_msg_handoff_ready(rti, a) == 0) {
                 fprintf(stderr, "exec parent step settle a ready=%d\n", lmx_msg_handoff_ready(rti, a));
                 lmx_msg_runtime_delete(rti);
@@ -7578,9 +7676,11 @@ int main(int argc, char **argv) {
                 /* S6-2 (respecified 2026-09-16): "nothing was settled" is read as
                  * what it means -- A is still P's live child, and P has adopted
                  * nothing. There is no settled list left to be empty. */
+                /* AD: keep tree walk — registration not drained */
                 || lmx_msg_find(rti, a) == 0 || lmx_msg_child_n(rti, p) != 2
                 || lmx_msg_adopted_n(rti, p) != 0) {
                 fprintf(stderr, "exec parent turn settles children turn=%d a=%p kids=%d adopted=%d\n",
+                    /* AD: keep tree walk — registration not drained */
                     st, (void *)lmx_msg_find(rti, a), lmx_msg_child_n(rti, p),
                     lmx_msg_adopted_n(rti, p));
                 lmx_msg_runtime_delete(rti);
@@ -7615,7 +7715,9 @@ int main(int argc, char **argv) {
             st = lmx_msg_dispose_child(rti, p, g);
             /* S6-2 (respecified 2026-09-16): the parent's dispose releases the
              * unbound closing child and the release chain frees it: G is gone. */
+            /* AD: keep tree walk — registration not drained */
             if (st != LMX_MSG_OK || lmx_msg_find(rti, g) != 0) {
+                /* AD: keep tree walk — registration not drained */
                 fprintf(stderr, "exec unbound close dispose st=%d g=%p\n", st, (void *)lmx_msg_find(rti, g));
                 lmx_msg_runtime_delete(rti);
                 return 1;

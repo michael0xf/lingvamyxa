@@ -113,7 +113,7 @@ fn: turn_a (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         return: 2
     observed_id: got\id
     observed_reply_to: got\reply_to
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_live_lookup(rt\root, who)
     graph: lmx_msg_graph(m)
     fprime: lmx_branch_struct_known(graph, 1U)
     observed_fprime: fprime
@@ -282,6 +282,7 @@ fn: main () int
     check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ p, 0) = c.LMX_MSG_OK, "P created as the first Message")
     if: rt = 0 || p = 0U
         return: 2
+    # AD: keep tree walk — registration not drained
     pm: lmx_msg_find(rt, p)
     check(pm != 0 && lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING && lmx_msg_running_load(pm) != 0 && lmx_msg_success_load(pm) = 0, "P is running, running=1 success=0")
     if: pm = 0
@@ -310,6 +311,7 @@ fn: main () int
 
     # --- In its turn P creates A from T. A is an unpublished reservation.
     st: lmx_msg_create_graph(rt, p, root, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ a, 0)
+    # AD: keep tree walk — registration not drained
     am: lmx_msg_find(rt, a)
     check(st = c.LMX_MSG_OK && am != 0 && am != pm, "P creates A from T in its turn")
     if: am = 0
@@ -385,6 +387,7 @@ fn: main () int
     pst: lmx_msg_run_entry_turn(rt, p, turn_p_create_b, 0)
     r0_round(rt)
     b: g_b
+    # AD: keep tree walk — registration not drained
     bm: lmx_msg_find(rt, b)
     check(pst = c.LMX_MSG_OK && g_create_st = c.LMX_MSG_OK && bm != 0, "P creates B from T")
     if: bm = 0
@@ -412,6 +415,7 @@ fn: main () int
     check(lmx_msg_handoff_ready(rt, b) != 0, "B leaves its native activation, handoff-safe")
     check(lmx_msg_inbox_n(rt, p) = 0, "B's turn ended in failure: its unpublished outbox was dropped, P receives nothing")
     check(lmx_msg_adopt_failed(rt, p, b) = c.LMX_MSG_OK, "P adopts B's retained state")
+    # AD: keep tree walk — registration not drained
     check(lmx_msg_find(rt, b) = 0 && lmx_msg_adopted_n(rt, p) > adopted_before, "B's ownership moved to P, nothing copied; adoption closed B (decision 17, rule 5)")
     check(lmx_owned_ranges_find(pm\ranges, b_counter) != 0 && lmx_int_value_known(b_counter) = 7, "B's counter now lives in P's one arena at its old address")
     check(lmx_int_value_known(e_value) = 33 && lmx_msg_eternal_ranges(pm) = p_eternal_before, "E is unaffected by B's failure")

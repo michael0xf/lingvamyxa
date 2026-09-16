@@ -160,7 +160,7 @@ fn: main () int
 
     # --- (1b) the lead's location lines: the first set created R0's policy
     # record in R0's arena, three cells and nothing else, a RETAIN root of R0.
-    r0m: lmx_msg_find(rt, lmx_msg_root_addr(rt))
+    r0m: lmx_msg_live_lookup(rt\root, lmx_msg_root_addr(rt))
     rec: rt\root_record
     check(r0m != 0 && rec != 0 && lmx_owned_ranges_find(r0m\ranges, (cast: (@: void) rec)) != 0, "the first set created R0's policy record in R0's arena")
     cell_clock: lmx_branch_child_known(rec, 0U)

@@ -85,11 +85,11 @@ fn: main () int
     c.lmx_msg_test_set_copy_fail(1)
     st: lmx_msg_create(rt, 0U, payload, 4U, @ parent_b, 0)
     c.lmx_msg_test_set_copy_fail(0)
-    if: st != c.LMX_MSG_NOMEM || parent_b != 0U || lmx_msg_find(rt, parent) = 0 || lmx_msg_child_n(rt, parent) != 1
+    if: st != c.LMX_MSG_NOMEM || parent_b != 0U || lmx_msg_live_lookup(rt\root, parent) = 0 || lmx_msg_child_n(rt, parent) != 1
         c.printf("additional-family init oom must keep first family\n")
         fail: fail + 1
     st: lmx_msg_create(rt, 0U, payload, 4U, @ parent_b, 0)
-    if: st != c.LMX_MSG_OK || lmx_msg_find(rt, parent) = 0 || lmx_msg_find(rt, parent_b) = 0
+    if: st != c.LMX_MSG_OK || lmx_msg_live_lookup(rt\root, parent) = 0 || lmx_msg_live_lookup(rt\root, parent_b) = 0
         c.printf("additional family after oom\n")
         fail: fail + 1
     st: lmx_msg_create(rt, parent_b, payload, 4U, @ child_b, 0)
@@ -1031,6 +1031,7 @@ fn: main () int
     ---
     st: lmx_msg_end_turn(rrt, rc, 1)
     st: lmx_msg_pump(rrt)
+    # AD: keep tree walk — registration not drained
     rdest: lmx_msg_find(rrt, rc)
     if: rdest = 0
         c.printf("no handle to the destination\n")
@@ -1079,6 +1080,7 @@ fn: main () int
     # slot from retiring, the last release retired it); with no count of holders,
     # what it asserts is the refusal status instead. The handle stays usable
     # because the storage settles upward rather than being freed.
+    # AD: keep tree walk — registration not drained
     held3: lmx_msg_find(rrt3, rc3)
     if: held3 = 0
         c.printf("no handle to the child before the rollback\n")
@@ -1086,6 +1088,7 @@ fn: main () int
     ---
     st: lmx_msg_end_turn(rrt3, rp3, 0)
     st: lmx_msg_pump(rrt3)
+    # AD: keep tree walk — registration not drained
     if: lmx_msg_find(rrt3, rc3) != 0
         c.printf("rolled-back child still findable\n")
         fail: fail + 1
@@ -1101,6 +1104,7 @@ fn: main () int
     # release never ran; if it passes and the refusal still does not arrive, the
     # fault is in the service's resolution. One red that cannot say which of the
     # two it is would be useless, which is why the halves stay separate.
+    # AD: keep tree walk — registration not drained
     if: lmx_msg_find(rrt3, rc3) != 0
         c.printf("the rolled-back child is still findable after its release\n")
         fail: fail + 1
@@ -1120,6 +1124,7 @@ fn: main () int
     else:
         lmx_msg_env_release(got)
     ---
+    # AD: keep tree walk — registration not drained
     if: lmx_msg_find(rrt3, rs3) = 0
         c.printf("sibling retired with child\n")
         fail: fail + 1
@@ -1164,6 +1169,7 @@ fn: main () int
         fail: fail + 1
     ---
     st: c.lmx_msg_emergency_cancel(crt, cs)
+    # AD: keep tree walk — registration not drained
     if: c.lmx_msg_success_load(lmx_msg_find(crt, cs)) != 0
         c.printf("cancel manufactured success\n")
         fail: fail + 1
@@ -1231,22 +1237,26 @@ fn: main () int
         fail: fail + 1
     ---
     st: lmx_msg_create(oomrt, 0U, payload, 4U, @ oom_a, 0)
+    # AD: keep tree walk — registration not drained
     if: st != c.LMX_MSG_OK || lmx_msg_find(oomrt, oom_a) = 0
         c.printf("first-root after oom\n")
         fail: fail + 1
     ---
     c.lmx_msg_test_set_copy_fail(1)
     st: lmx_msg_create(oomrt, 0U, payload, 4U, @ oom_b, 0)
+    # AD: keep tree walk — registration not drained
     if: st != c.LMX_MSG_NOMEM || lmx_msg_find(oomrt, oom_a) = 0
         c.printf("second-family init oom\n")
         fail: fail + 1
     ---
     st: lmx_msg_create(oomrt, 0U, payload, 4U, @ oom_b, 0)
+    # AD: keep tree walk — registration not drained
     if: st != c.LMX_MSG_OK || lmx_msg_find(oomrt, oom_a) = 0 || lmx_msg_find(oomrt, oom_b) = 0 || oom_a = oom_b
         c.printf("second-family after oom\n")
         fail: fail + 1
     ---
     st: lmx_msg_create(oomrt, oom_a, payload, 4U, @ oom_c, 0)
+    # AD: keep tree walk — registration not drained
     if: st != c.LMX_MSG_OK || lmx_msg_find(oomrt, oom_c) = 0
         c.printf("child after family oom\n")
         fail: fail + 1

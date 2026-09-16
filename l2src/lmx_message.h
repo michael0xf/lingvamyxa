@@ -451,6 +451,9 @@ void *lmx_msg_turn_new_zero(size_t size);
 char *lmx_msg_turn_copy_bytes(const char *source, size_t length);
 void lmx_msg_slot_free(LmxMsg *m);
 /* Integer resolver for remaining addr APIs. Runtime-owned endpoint list, not a directory. */
+/* AD: bounded-time id lookup in R0's live set (service byid order). Prefer this
+ * over the tree walk when the id is already registered. */
+LmxMsg *lmx_msg_live_lookup(LmxMsg *svc, LmxMsgAddr id);
 LmxMsg *lmx_msg_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
 void lmx_msg_set_graph(LmxMsg *m, struct Lmx *unit);
 struct Lmx *lmx_msg_graph(LmxMsg *m);

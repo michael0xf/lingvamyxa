@@ -85,11 +85,12 @@ fn: main () int
     # in for it is deleted. "R0 alone" is stated as membership: R0 is there, no
     # second Message is, R0 has no child, and R0's live set holds one record -- R0
     # itself, registered directly as its own service -- which is what "one slot" meant.
+    # AD: keep tree walk — registration not drained
     check(c.lmx_msg_find(rt, 1U) != 0 && c.lmx_msg_find(rt, 2U) = 0 && rt\root\first_child = 0 && rt\root\live_n = 1, "M: the runtime creates R0 alone, no UI lane")
     check(c.lmx_msg_create(rt, 0U, @ ini, 1U, @ a, @ am) = c.LMX_MSG_OK, "A, a parent-0 Message, created")
     if: am = 0
         return: 2
-    check(c.lmx_msg_root_addr(rt) = 1U && c.lmx_msg_find(rt, 1U) != 0 && am\parent_msg = c.lmx_msg_find(rt, 1U), "stage 5 (d1): R0 is created with the runtime at address 1, and A, created without a parent, is R0's child")
+    check(c.lmx_msg_root_addr(rt) = 1U && c.lmx_msg_live_lookup(rt\root, 1U) != 0 && am\parent_msg = c.lmx_msg_live_lookup(rt\root, 1U), "stage 5 (d1): R0 is created with the runtime at address 1, and A, created without a parent, is R0's child")
 
     # --- 1. The adapter refuses outside its own Message's turn.
     check(c.l2_program_entry(am, @ result) = c.LMX_MSG_INVALID, "the entry adapter called outside a turn refuses")
@@ -103,12 +104,14 @@ fn: main () int
     # --- 3. The bootstrap's refusals.
     check(c.lmx_msg_create(rt, 0U, @ ini, 1U, @ b, 0) = c.LMX_MSG_OK && c.lmx_msg_exec_bind(rt, b, turn_nothing, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "B created and bound")
     check(c.lmx_msg_run_entry_turn(rt, b, c.l2_program_turn, (cast: (@: void) @ result)) = c.LMX_MSG_INVALID, "the bootstrap refuses a bound address")
+    # AD: keep tree walk — registration not drained
     check(c.lmx_msg_exec_unbind(rt, b) = c.LMX_MSG_OK && c.lmx_msg_graph(c.lmx_msg_find(rt, b)) = 0, "B unbound, its entry never ran")
     check(c.lmx_msg_create(rt, a, @ ini, 1U, @ ch, 0) = c.LMX_MSG_OK, "C, A's child, created")
     check(c.lmx_msg_run_entry_turn(rt, ch, c.l2_program_turn, (cast: (@: void) @ result)) = c.LMX_MSG_INVALID, "the bootstrap refuses a Message deeper than R0's children")
     check(c.lmx_msg_create(rt, 0U, @ ini, 1U, @ d, 0) = c.LMX_MSG_OK && c.lmx_msg_create(rt, 0U, @ ini, 1U, @ e, 0) = c.LMX_MSG_OK, "D and E created")
     nested_target: e
     check(c.lmx_msg_run_entry_turn(rt, d, turn_nested_entry, (cast: (@: void) @ nested_result)) = c.LMX_MSG_OK, "D's turn ran")
+    # AD: keep tree walk — registration not drained
     check(nested_status = c.LMX_MSG_INVALID && nested_result = -1 && c.lmx_msg_graph(c.lmx_msg_find(rt, e)) = 0, "the bootstrap refuses from inside a turn of the same runtime")
 
     # --- 3b. Stage 5 (d1): lmx_msg_root_turn runs exactly one turn of R0.

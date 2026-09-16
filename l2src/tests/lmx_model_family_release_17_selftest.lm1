@@ -70,6 +70,7 @@ fn: turn_ok (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 
 # The address is gone from the runtime: no Message resolves to it any more.
 fn: gone (@: LmxMsgRuntime rt; LmxMsgAddr: a) int
+    # AD: keep tree walk — registration not drained
     return: lmx_msg_find(rt, a) = 0
 
 # S6-2 (SPEC 19.29.7): the count this fixture was written on is deleted, and the
@@ -89,9 +90,10 @@ fn: gone_after_r0_round (@: LmxMsgRuntime rt; LmxMsgAddr: owner; LmxMsgAddr: who
     @: LmxMsg r0
     int: i 0
     lmx_msg_pump(rt)
+    # AD: keep tree walk — registration not drained
     if: lmx_msg_find(rt, who) != 0
         return: 0
-    r0: lmx_msg_find(rt, lmx_msg_root_addr(rt))
+    r0: lmx_msg_live_lookup(rt\root, lmx_msg_root_addr(rt))
     if: r0 = 0
         return: 0
     while: i < r0\live_n
@@ -278,6 +280,7 @@ fn: main () int
     check(lmx_msg_complete(rt, c1) = c.LMX_MSG_OK, "C1 marks success")
     st: r_maps(rt, p1, 1U)
     check(st = c.LMX_MSG_OK, "R's own turn maps P1 and gives it an input; P1's own turn maps C1")
+    # AD: keep tree walk — registration not drained
     cm: lmx_msg_find(rt, c1)
     c.printf("reading: C1 handoff-ready, settled at its end-turn on its worker\n")
     while: cm != 0 && lmx_msg_handoff_ready(rt, c1) = 0
@@ -305,6 +308,7 @@ fn: main () int
     check(lmx_msg_emergency_cancel(rt, p2) = c.LMX_MSG_OK, "R stops P2 while C2 runs")
     st: r_maps(rt, p2, 0U)
     check(st = c.LMX_MSG_OK, "R's own turn maps P2: its closing turn runs on its own worker")
+    # AD: keep tree walk — registration not drained
     cm: lmx_msg_find(rt, c2)
     # The release below settles P2 only when P2 is handoff-ready (its worker has
     # left the turn: native_users 0), which run_one sets after the end-turn that
@@ -329,6 +333,7 @@ fn: main () int
     # --- (3) success with a running child: P3's own algorithm completes while
     # C3 runs; that declares C3's work unneeded, and the chain closes and
     # releases it.
+    # AD: keep tree walk — registration not drained
     cm: lmx_msg_find(rt, c3)
     check(cm != 0 && lmx_msg_running_load(cm) != 0 && lmx_msg_complete(rt, p3) = c.LMX_MSG_OK, "P3 marks success while C3 still runs")
     st: r_maps(rt, p3, 0U)
@@ -349,7 +354,7 @@ fn: main () int
     # An ABSOLUTE pin: it stated WHO remained, which no count could. Membership says
     # it directly, and ownership says where the others went.
     check(gone_after_r0_round(rt, r, p3) != 0 && gone_after_r0_round(rt, r, c3) != 0, "P3's branch became R's storage")
-    check(lmx_msg_find(rt, lmx_msg_root_addr(rt)) != 0 && lmx_msg_find(rt, r) != 0 && lmx_msg_find(rt, p4) != 0 && lmx_msg_find(rt, c4) != 0 && lmx_msg_find(rt, p5) != 0 && lmx_msg_find(rt, c5) != 0, "exactly R0, R, P4, C4, P5 and C5 are still on the tree")
+    check(lmx_msg_live_lookup(rt\root, lmx_msg_root_addr(rt)) != 0 && lmx_msg_live_lookup(rt\root, r) != 0 && lmx_msg_live_lookup(rt\root, p4) != 0 && lmx_msg_live_lookup(rt\root, c4) != 0 && lmx_msg_live_lookup(rt\root, p5) != 0 && lmx_msg_live_lookup(rt\root, c5) != 0, "exactly R0, R, P4, C4, P5 and C5 are still on the tree")
 
     # --- (4) a running descendant at release time: R stops P4 and releases it
     # while C4 still runs; the release returns at once; C4 is closed by the
@@ -360,7 +365,7 @@ fn: main () int
     check(lmx_msg_emergency_cancel(rt, p4) = c.LMX_MSG_OK, "R stops P4 while C4 runs")
     st: r_maps(rt, p4, 0U)
     check(st = c.LMX_MSG_OK, "R's own turn maps P4: its closing turn runs on its own worker")
-    cm: lmx_msg_find(rt, c4)
+    cm: lmx_msg_live_lookup(rt\root, c4)
     c.printf("reading: P4 STOPPED and handoff-ready after its closing turn on its worker\n")
     while: lmx_msg_state(rt, p4) != c.LMX_MSG_STATE_STOPPED || lmx_msg_handoff_ready(rt, p4) = 0
         lmx_msg_pump(rt)
@@ -383,11 +388,12 @@ fn: main () int
         c.SwitchToThread()
     ---
     check(lmx_msg_handoff_ready(rt, c4) != 0, "C4 ran its closing turn as an orphan")
+    # AD: keep tree walk — registration not drained
     check(lmx_msg_find(rt, c4) != 0 && lmx_msg_handoff_ready(rt, c4) != 0 && gone(rt, p4) != 0 && gone_after_r0_round(rt, r, p4) != 0, "C4 is settled at its end-turn and still there until the root's next maintenance; P4 became R's storage at its release")
     # The second ABSOLUTE pin: "R0, R, P5 and C5 remain". Membership states it, and
     # the orphan's reclaim is now a change of owner rather than a disappearance.
     check(lmx_msg_drive(rt, lmx_msg_now(rt), 0U) = c.LMX_MSG_OK && gone(rt, c4) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c4) != 0, "the root's next maintenance settles the successful orphan into R0")
-    check(lmx_msg_find(rt, lmx_msg_root_addr(rt)) != 0 && lmx_msg_find(rt, r) != 0 && lmx_msg_find(rt, p5) != 0 && lmx_msg_find(rt, c5) != 0, "exactly R0, R, P5 and C5 are still on the tree")
+    check(lmx_msg_live_lookup(rt\root, lmx_msg_root_addr(rt)) != 0 && lmx_msg_live_lookup(rt\root, r) != 0 && lmx_msg_live_lookup(rt\root, p5) != 0 && lmx_msg_live_lookup(rt\root, c5) != 0, "exactly R0, R, P5 and C5 are still on the tree")
 
     # --- (5) a failed orphan: C5 runs, never completes; R stops P5 and
     # releases it at once; C5 is re-rooted, runs its closing turn and, having
@@ -408,13 +414,14 @@ fn: main () int
     # C5 had no thread until this map point, as C4 above.
     st: root_maps(rt, c5)
     check(st = c.LMX_MSG_OK, "R0's own turn maps the re-rooted C5 onto its own context")
+    # AD: keep tree walk — registration not drained
     cm: lmx_msg_find(rt, c5)
     c.printf("reading: C5 handoff-ready, settled at its closing end-turn on its worker\n")
     while: cm != 0 && lmx_msg_handoff_ready(rt, c5) = 0
         lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
-    check(cm != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_handoff_ready(rt, c5) != 0 && cm\parent_msg = lmx_msg_find(rt, lmx_msg_root_addr(rt)), "C5 ran its closing turn as a failed orphan: handoff-safe, re-rooted under R0, still held")
+    check(cm != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_handoff_ready(rt, c5) != 0 && cm\parent_msg = lmx_msg_live_lookup(rt\root, lmx_msg_root_addr(rt)), "C5 ran its closing turn as a failed orphan: handoff-safe, re-rooted under R0, still held")
     # Spec 19.29.8: R0's own turn runs R0's settle of its settled children,
     # which never takes an orphan: a failed orphan is retained until its
     # deadline and nobody adopts its arena.
@@ -425,14 +432,14 @@ fn: main () int
     # holds its policy record's five blocks by design (6f).
     adopted0: lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt))
     check(lmx_msg_root_turn(rt, turn_root_settle, 0) = c.LMX_MSG_OK && (g_settle_st = c.LMX_MSG_OK || g_settle_st = 1), "R0's own turn runs its settle of its settled children")
-    check(lmx_msg_find(rt, c5) != 0 && lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt)) = adopted0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) = 0, "R0's settle leaves the failed orphan C5 to the sweep: still found, not adopted, not yet R0's storage")
-    check(lmx_msg_find(rt, r) != 0, "R is still there after R0's settle")
+    check(lmx_msg_live_lookup(rt\root, c5) != 0 && lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt)) = adopted0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) = 0, "R0's settle leaves the failed orphan C5 to the sweep: still found, not adopted, not yet R0's storage")
+    check(lmx_msg_live_lookup(rt\root, r) != 0, "R is still there after R0's settle")
     # The third and fourth ABSOLUTE pins (= 3, then = 2). Retention is "still on the
     # tree and not yet anyone's storage"; the reclaim is "off the tree and now R0's".
-    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) = 0, "the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop")
-    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) = 0, "within the retention window the orphan is still retained")
+    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_live_lookup(rt\root, c5) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) = 0, "the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop")
+    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_live_lookup(rt\root, c5) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) = 0, "within the retention window the orphan is still retained")
     check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5100U, 0U) = c.LMX_MSG_OK && gone(rt, c5) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) != 0, "past its deadline the drive reclaims the failed orphan into R0's storage; only R0 and R are still on the tree")
-    check(lmx_msg_find(rt, r) != 0 && lmx_msg_running_load(lmx_msg_find(rt, r)) != 0, "the root runs on")
+    check(lmx_msg_live_lookup(rt\root, r) != 0 && lmx_msg_running_load(lmx_msg_live_lookup(rt\root, r)) != 0, "the root runs on")
 
     # exec_stop's own rounds read the worker count until every worker has left.
     lmx_msg_exec_stop(rt)

@@ -597,6 +597,7 @@ fn: msg_find_tree (@: LmxMsg m; LmxMsgAddr: addr) @: LmxMsg
         return: m
     ch: m\first_child
     while: ch != 0
+        # AD: keep tree walk — owner-scoped walk
         f: msg_find_tree(ch, addr)
         if: f != 0
             return: f
@@ -609,6 +610,7 @@ end: msg_find_tree
 fn: msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     if: rt = 0 || addr = 0U
         return: 0
+    # AD: keep tree walk — owner-scoped walk
     return: msg_find_tree(rt\root, addr)
 end: msg_find
 
@@ -617,6 +619,7 @@ fn: msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @: Lm
     if: to = 0U
         return: 0
     if: src != 0
+        # AD: keep tree walk — owner-scoped walk
         d: msg_find_tree(src, to)
         if: d != 0
             return: d
@@ -625,6 +628,7 @@ fn: msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @: Lm
             return: c.lmx_msg_parent_load(src)
         ---
     ---
+    # AD: keep tree walk — owner-scoped walk
     return: msg_find(rt, to)
 end: msg_dest_from_src
 
@@ -634,6 +638,7 @@ fn: msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     if: m != 0 && m\addr = addr && m\state != c.LMX_MSG_STATE_RELEASED
         return: m
     ---
+    # AD: keep tree walk — owner-scoped walk
     return: msg_find(rt, addr)
 end: msg_self_or_find
 
@@ -2269,6 +2274,7 @@ fn: msg_maintenance_close_ok (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         return: 0
     if: c.lmx_msg_exec_is_bound(rt, who) != 0
         return: 0
+    # AD: keep tree walk — registration not drained
     m: msg_find(rt, who)
     if: m = 0
         return: 0

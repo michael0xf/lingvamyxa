@@ -78,7 +78,7 @@ fn: turn_writer (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     if: lmx_msg_recv(rt, who, got) != c.LMX_MSG_OK
         return: 2
     lmx_msg_env_release(got)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_live_lookup(rt\root, who)
     if: m = 0
         return: 3
     root: lmx_node_new_owned(@ m\blocks, @ m\ranges)
@@ -115,7 +115,7 @@ fn: turn_owner (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     if: g_owner_in_turn != 0
         g_owner_overlap: g_owner_overlap + 1
     g_owner_in_turn: g_owner_in_turn + 1
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_live_lookup(rt\root, who)
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: got = 0 || m = 0
         return: 2
