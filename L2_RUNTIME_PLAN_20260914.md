@@ -7548,3 +7548,8 @@ mixa_cell_at) plus mixa_text_rect as app_window's explicit L2Dep; a
 later ticket since it edits an accepted oracle .lm1. Next for b5: a
 proposal for gating the thirteen mixa L2 parity runners
 (MIXA_L2_PARITY_GATE.txt), doc-only.
+Stage branch d6/lock-s6-2 9fc7cfc3: "no carried destination is
+counted, for any send" (the three retains and copy_free's release
+gone in both files); design 36b460eb records step one measured, the
+imbalance and the pair-deletion rule. Next from the lead: the two
+tripwires, the window pins, the rest, the header, the tip.
