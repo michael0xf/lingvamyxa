@@ -113,6 +113,28 @@ $gates = @(
 )
 if ($L2MessageRoot) { $gates += , @('l2_message_root', 'run_l2_message_root.ps1', '', 'Historical catalog audit PASS') }
 
+# Every row carries its own bound, in seconds. Until 2026-09-16 each row ran under a bare
+# cmd /c with none, so one hung selftest (family_handoff's, 668 s on a tree without the S6-2
+# fix) held the whole chain, and only an outer bound around run_gates could end it -- without
+# naming the row.
+# MARGIN RULE: the slowest of three measured chains of this row set (build/gates/20260916_092954,
+# the S6-2 landing's 20260916_094438, and 20260916_014115), times 3, rounded up to 10 s, never
+# below 60 s. One exception: c_scanners is 150 s, above its own archive bound (120 s) plus its
+# post-throw bound (20 s), so that runner's own, more specific failure reports before this one.
+# A row with no entry stops the chain before it starts: a new row is measured and bounded, it
+# never runs unbounded by default. The bounds sum to about 2420 s; they bind only on a hang.
+$rowBoundSeconds = @{
+    lane_oracle = 200; scenario36 = 100; lmx_message = 100; history = 60; roots_stale = 60
+    visit = 60; liveness = 60; send_local = 100; family_handoff = 100; c_scanners = 150
+    entry_turn = 60; port_array_owned = 60; port_array_ref_owned = 60; port_branch_owned = 60
+    port_chars_owned = 60; port_graph_copy = 70; port_merge_owned = 60; port_msg_graph_copy = 60
+    port_msg_blocks = 60; port_history = 60; port_liveness = 60; port_mail_chain = 60
+    port_roots_stale = 60; port_storage = 60; port_visit = 60; port_owned_ranges = 60
+    port_value_owned = 60; graph_abi = 310; l2_message_root = 210
+}
+$unbounded = @($gates | Where-Object { -not $rowBoundSeconds.ContainsKey($_[0]) } | ForEach-Object { $_[0] })
+if ($unbounded.Count) { throw ('run_gates: no row bound for: ' + ($unbounded -join ', ')) }
+
 # PowerShell's rendering of a thrown error around the runner's own text.
 $decoration = '^\s*(At line:|At [A-Za-z]:\\|\+ |CategoryInfo|FullyQualifiedErrorId|~+\s*$)'
 $rows = @()
@@ -126,16 +148,30 @@ foreach ($g in $gates) {
         continue
     }
     $started = Get-Date
-    cmd /c "powershell -NoProfile -ExecutionPolicy Bypass -File l2src\$($g[1]) $($g[2]) > `"$log`" 2>&1"
-    $code = $LASTEXITCODE
+    $bound = $rowBoundSeconds[$name]
+    # A process with a bounded wait, not a bare cmd /c: on expiry taskkill /T walks the tree from
+    # cmd down to the selftest's own process, and the row is recorded as a timeout by name with
+    # exit 124, the value timeout(1) uses. The redirection is still cmd's, as before.
+    $rowProc = Start-Process -FilePath 'cmd' -NoNewWindow -PassThru -ArgumentList '/c', "powershell -NoProfile -ExecutionPolicy Bypass -File l2src\$($g[1]) $($g[2]) > `"$log`" 2>&1"
+    $null = $rowProc.Handle
+    $timedOut = -not $rowProc.WaitForExit($bound * 1000)
+    if ($timedOut) {
+        cmd /c "taskkill /PID $($rowProc.Id) /T /F >nul 2>&1"
+        $null = $rowProc.WaitForExit(10000)
+        $code = 124
+    } else {
+        $code = $rowProc.ExitCode
+    }
     $seconds = [int]((Get-Date) - $started).TotalSeconds
-    $raw = @(Get-Content -LiteralPath $log)
+    # A row killed before cmd opened its log has none; that is a verdict, not an error.
+    $raw = if (Test-Path -LiteralPath $log) { @(Get-Content -LiteralPath $log) } else { @() }
     $lines = @($raw | Where-Object { $_.Trim() -and $_ -notmatch $decoration })
     $own = @($lines | Where-Object { $_ -match [regex]::Escape($g[3]) })
     $verdict = if ($own.Count) { $own[-1].Trim() } elseif ($lines.Count) { $lines[-1].Trim() } else { '(empty log)' }
     $evidenceLines = @($lines | Where-Object { $_ -match '(?i)\bevidence:?\s+\S' })
     $evidence = if ($evidenceLines.Count) { ([regex]::Match($evidenceLines[-1], '(?i)\bevidence:?\s+(.+?)\s*$')).Groups[1].Value } else { '-' }
     $state = if ($code -eq 0) { 'PASS' } else { "FAIL exit=$code" }
+    if ($timedOut) { $state = "FAIL timeout after ${seconds}s (row bound ${bound}s)" }
     # Every row's own line is required, not only that of the row which happens to carry
     # a forbidden string. Until 2026-09-16 this test sat inside the $g.Count -gt 4 guard
     # and lane_oracle is the only five-element row, so for the other 29 a runner that
