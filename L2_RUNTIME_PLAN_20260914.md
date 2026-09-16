@@ -8570,3 +8570,26 @@ the addition (the index field and the parent walk already written in
 his worktree); the arrays and the module with 18f5701d merged; the
 fixtures. d6/lock-s6-2 stays at ab2db782 until a building tip is
 named.
+The lead's status (step 1 of five, uncommitted in his worktree: the
+service mirror plus live/live_n/live_cap on LmxMsg commented as the C
+mirror of an LMX field, the four common-API declarations service_of,
+register, unregister, is_live with the stub-and-delegate contract,
+create_prepare inheriting slot\service from the parent and R0 pointing
+to itself; no build possible between step 1 and the step that stops
+the envelope carrying a record pointer). BLOCKER named, ruled as the
+ruled case, not a gap: create_prepare asserts require_turn(rt, parent),
+so a child is created on its parent's lane and registration into R0's
+live set is a cross-lane write for every Message not created in an R0
+turn; hence a LETTER to R0, asynchronous to the create. The safety
+claim becomes causal order under R0's monitor: the registration
+letter is admitted before any letter that could carry the child's
+handle to another lane, every hand-over of a handle between lanes
+being mail through that monitor. Evidence the section owes: (1)
+q_push/q_pop FIFO between push and drain (code read plus a fixture: a
+registration then a send in one turn arrive in that order); (2) no
+production site copies a record pointer into another lane's data
+except through an envelope (the selftests' host drives R0). Either
+failing stops the stage for Mikhail. A send whose handle R0 has not
+registered is refused, possible only for a handle that never went
+through mail. The registration letter's shape (a pointer field in the
+envelope) is the lead's, recorded as his.
