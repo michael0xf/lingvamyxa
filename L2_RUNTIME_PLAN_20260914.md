@@ -8924,3 +8924,17 @@ number and are verified by count, not by text anchors. The
 coordinator's falsifier corrected: "spawn child done p=1 c=1" is
 printed only in the failure branch; a pass is the line's ABSENCE
 with the selftest proceeding to the next case.
+The wait rule with the lead's exception: a wait gets R0's round
+exactly when its condition depends on a letter a worker sends after
+contexts start, it asserts a positive done, AND no mailbox monitor is
+held by the test around it (the mail-gate cases at 5970, 5989, 6117
+and 6133 deliberately hold a monitor; a drain there could deadlock the
+host against the gate it holds or change what it measures; checked
+with a control, the known gate site showing 20 references). Done: 7
+r0_round sites (rts spawn, rtf 2431, rtr 2619, rtb 3316, rti
+6821/6846/7523), inserted by a guarded awk pass that refused to write
+unless each target was Sleep(10), verified 7 above 7. Left with
+reasons: 5928/6081/7513 (standalone delays), 7141 (a delay asserting
+g_ingress_root_turns still 0), the four mail-gate cases. Counts so
+far: YIELD_UNTIL_R0 19, r0_round 7, blocking waits restructured 0,
+left alone 8. The gate reruns.
