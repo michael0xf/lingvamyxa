@@ -2192,6 +2192,37 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         behaviour those numbers stood for, asserted directly: the envelope really arrives (recv returns OK with
         KIND_BYTES) and the handle stays usable for a capability send with no hold taken on it. Both new checks
         carry their own captured status in the diagnostic, per the rule below.
+      - THE EXECUTOR SELFTEST'S COUNTER PINS ARE DONE, measured case by case on the gate (each run got further than
+        the one before, and each case names itself in its own diagnostic, so a red stays attributable even though
+        the last five were converted in one pass): the rolled-back child, the failed-branch dispose, the mapped
+        orphan's three uses, the held capability, the ctx rollback, the dispose-in-turn, the exec-maintain trio,
+        the parent's own turn, and the unbound close dispose. Two file-scope helpers replaced five copies of the
+        same walk -- settled_has and settled_n. Exactly one 'rt->n' string survives in that file and it is PROSE in
+        a case header, which I rewrote rather than left: it called the count "the oracle" because find cannot tell
+        a retained record from a freed one, and after the settle that indistinguishable state is the NORMAL case,
+        so the count could not be the oracle even if it survived. Why the restatements are stronger than what they
+        replace, and not a weakening being tolerated: the count could say "one fewer" but never WHOSE -- which is
+        precisely the blind spot the fixtures' own headers warned about. Ownership answers both at once.
+      - A SECOND POPULATION, found by the gate and then measured rather than left as a remark. The family-boundary
+        contract case asserted `km->parent_msg != 0` as its proof that an unbound child "left its family"; S6-2
+        keeps parent_msg as the owner cell on purpose, so it fired by design. It now reads `!= pm` -- the cell must
+        still NAME the owner -- which is a stronger claim than "it is zero": zero was only ever a side effect, and
+        it is the side effect that left a settled record unable to say who owned it.
+        This document had named the class in advance ("any site that reads parent_msg = 0 as released converts to
+        reading the state") and it still took a gate run to find the site, so here is the measured population,
+        counted by field and classified rather than by a count of mentions: parent_msg appears 20 times in lm1, 20
+        in lm2, 19 in exec.c and 9 in the executor selftest; of those, 6 / 6 / 10 / 3 are compared against zero.
+        But almost none are the dangerous kind:
+          * NULL-GUARDS before a dereference (lm1 587, 1416, 1447; lm2 625, 1483, 1514; exec.c 234, 1614, 2320) --
+            correct as they stand, unaffected by the stage;
+          * OWNERSHIP comparisons against a SPECIFIC parent (lm1 690, 1545; lm2 733, 1616; exec.c 2436, 2501, 2605,
+            2642, 2734; selftest 497, 4980) -- unaffected, and in fact the very shape the unlink case was
+            converted TO;
+          * genuine "zero means detached" readers: lm1:688 / lm2:731, plus exec.c:1192, which is endp_try_retire's
+            guard and goes with the refs deletion rather than separately.
+        So the class is two sites wide, not twenty, and saying "parent_msg readers" without that split would have
+        overstated the remaining work by an order of magnitude -- the same counting error as the slot pins, caught
+        this time before it was reported to anyone as a number.
       - Also added, and permanent rather than diagnostic scaffolding: the fixture now asserts in its own right that
         the rolled-back child is on its parent's settled list with state RELEASED, before it asks for the refusal.
         That splits a future red in two -- settle never happened, versus the owner's round never answered -- and it
