@@ -8815,3 +8815,19 @@ land_s6_2.sh and GATE_ARCHIVE_HANG.txt, so the hand-over is by the
 docs; the two new allowlist A paths (l2src/tools/q_alloc.c,
 l2src/tools/uaf_run.sh) and the count 29 are re-stated to whoever
 takes the role.
+(b) measured by the lead: pump's four callers are host_drain (lm1:985)
+and drive (2587), both on the host, R0's lane, which keep draining;
+end_turn (2059) and fail (2429), any Message's turn end, become
+push-only (both already push under R0's monitor before the tail
+pump); refinement: end_turn for R0 itself IS R0's round (who =
+root_addr keeps draining; root_turn enters R0's round that way).
+Fixture cost as an estimate: 43 lmx_msg_recv sites in the executor
+selftest, 40 without host_drain, drive or root_turn in the 12 lines
+before them (an upper bound, calibrated by the first run). RULED: the
+reshaping stays inside S6-2 (the stage's tip must be green on its
+own gates and (b) is what makes it safe): one selftest helper running
+R0's round, called once before each affected recv; recvs expecting
+EMPTY and worker contexts that end R0's round themselves untouched;
+the calibrated count by case in the five lines; the detector skipped;
+the section states the crash's cause as the leading reading, not
+proven.
