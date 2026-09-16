@@ -1741,6 +1741,12 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           race. My first reading of those runs called them failures -- my own grep matched "FAIL" inside the
           runner's "failures=0" line -- so the runner's verdict line is what judges a run here, not a word search,
           the same way its diagnosis and not the shell's exit code judged the earlier gate.
+        - Local gates before the second landing, the rule applied rather than promised: "gates GREEN: 31 of 31 in
+          500s" on 53a0af86, with family_handoff at PASS 25s ("checks=67 failures=0 watched_frees=4") and
+          scenario36 inside the same suite at PASS 26s over its ten fixtures. The first attempt at that run died
+          in seconds and proved nothing: run_gates.ps1 takes its baseline from its own location, so invoking it as
+          .\l2src\run_gates.ps1 while the tool's directory was another worktree ran it against that worktree and
+          failed on its missing pinned translator. Absolute path for these runners, the same trap as the probe.
         - Rules taken from this miss (the coordinator's, recorded): before every landing, run locally the gates
           whose fixtures the stage's own section names as touched, never a proxy suite (this section already
           listed family_handoff and I ran scenario36, which does not build it); and from S6-2 on, the gate impact
