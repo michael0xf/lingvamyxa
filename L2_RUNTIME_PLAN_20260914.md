@@ -7029,3 +7029,7 @@ prefix in his own prose. The 49 are sent to e9 verbatim, each checked
 to exist at 7b3a8668. Two of e9's findings recorded as landing
 savers: the gate count is 30 (port_slots' row deleted by the stage),
 and lmx_cancel stays a step beside scenario36.
+Ruled on e9's scope question (via b5): l2src/S6_2_MIXA_BASELINE.txt is
+an A path of land_s6_2.sh's allowlist (50 entries), landing with the
+stage as the measurement behind the six mixa list edits and the
+"same verdict" rule; 4409805c merges unchanged.
