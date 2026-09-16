@@ -8306,3 +8306,32 @@ but is not required for delivery, so S6-2 does not build it. The
 lead's section is rewritten on this; the refs and registry deletions
 stand; release frees by the chain; the planted red stays the
 refusal's falsifier (the refusal now comes from the hop).
+BOUNDARY RULED on the fifth ruling (the lead's measurement: today the
+address is five fields on LmxMsg, addr and parent as LmxMsgAddr scalars
+plus path, path_n, path_cap; LmxMsgAddr occurs 436 times in l2src,
+every create/bind/find/dispose/map signature takes one; path_n and
+path_seg already expose the indices): S6-2 stays landable and takes
+only what the refusal needs: refs and the registry deleted, release
+freeing by the chain, and delivery by the chain using the existing
+path: the capability is the target's path copied into the envelope,
+end_turn's relay becomes the postman step (compare the destination's
+path with the hop's own, hand down to the child whose index follows
+or up to the parent, each hop an admission under that mailbox's
+monitor, KIND_REJECTED on the hop's lane when the next index names no
+live child), R0's transport queue the carrier until Y3. STAGE AD, right
+after S6-2 and before R0P: the five fields become the one field
+Mikhail named (len, uint*), nothing around it, every LmxMsgAddr
+signature converted and the scalar id retired where the path serves;
+its own section, impact list, acceptance (a probe counting
+LmxMsgAddr and the four retired fields to 0) and landing. Order now:
+S6-2 -> AD -> R0P -> Y -> A. The lead's partial step (the settled
+machinery deleted whole, release_slot restored to drain and free
+without the refs guard, the selftest's settled assertions converted;
+five inline settled walks in the selftest found by the survivor grep
+that the helper-site count missed; the held-capability case deleted
+whole as a read of freed memory whose subject was the withdrawn
+design) is committed on d6/lock-s6-2 as explicit WIP, not building
+yet (node\dest_msg dangles until the capability is the path); the
+tip the coordinator measures must build. The coordinator's falsifier
+"postman for one step prints 1" was wrong: the phrase is in section
+2's record comment and in 19.29.7, so it prints 2.
