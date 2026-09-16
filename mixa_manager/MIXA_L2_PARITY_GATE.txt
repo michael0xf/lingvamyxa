@@ -112,3 +112,33 @@ between the other two, or after both, are both fine; putting it
 directly after run_mixa.ps1 groups "the two things that read the pinned
 translator and build/run mixa code" before the third, narrower ingress-
 specific harness.
+
+--- Accepted; run_mixa_parity_gates.ps1 written and run cold twice
+
+Proposal accepted by lingvamyxa-6f. mixa_manager/run_mixa_parity_gates.
+ps1 written per the accepted shape: the ten-row table above (script,
+args, ExpectVerdict, timeout >= 2x each runner's own cold time measured
+above), one runner at a time via `& cmd /c "powershell ... > log 2>&1"`
+inside a background job (Wait-Job -Timeout enforces the per-runner cap
+around that same proven invocation shape, not a different one),
+mismatch lines carry both the expected and actual verdict, and the
+script exits 0 only when all ten match. app_controller and audio_mp3
+stay outside, unchanged from the proposal above.
+
+Run cold twice, same tip, back to back:
+
+Run 1 (162.9s wall): OK on all ten (app_panel PASS 26.1s, app_win32
+PASS 26.4s, backend_ctors_win32 EXPECTED_CORE_BARRIER 4.2s,
+backend_win32 EXPECTED_CORE_BARRIER 5.0s, app_window PARITY_FAILURE
+19.1s, app_fmpanel PASS 29.6s, app_path PASS 12.6s, composite_glyphs
+PASS 13.9s, selection PASS 13.3s, tiles PASS 12.2s) --
+"mixa parity gates: 10 of 10 as expected (total 162.4s)"
+
+Run 2 (164.8s wall): OK on all ten again (app_panel PASS 27.0s,
+app_win32 PASS 28.0s, backend_ctors_win32 EXPECTED_CORE_BARRIER 4.5s,
+backend_win32 EXPECTED_CORE_BARRIER 5.2s, app_window PARITY_FAILURE
+19.5s, app_fmpanel PASS 29.3s, app_path PASS 11.2s, composite_glyphs
+PASS 12.8s, selection PASS 13.2s, tiles PASS 13.7s) --
+"mixa parity gates: 10 of 10 as expected (total 164.4s)"
+
+Both runs exit 0. Falsifier met both times.
