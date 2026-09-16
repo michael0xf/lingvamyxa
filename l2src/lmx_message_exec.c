@@ -328,7 +328,6 @@ static LmxMsgExec *exof(LmxMsgRuntime *rt) {
 }
 
 #if defined(LMX_MSG_EXEC_TEST)
-int lmx_msg_test_fail_retain;
 int lmx_msg_test_fail_post_dead;
 #endif
 
@@ -344,68 +343,14 @@ int lmx_msg_test_post_dead_fail(void) {
     return 0;
 }
 
-int lmx_msg_endp_retain(LmxMsg *m) {
-#if defined(LMX_MSG_EXEC_TEST)
-    if (lmx_msg_test_fail_retain > 0) {
-        lmx_msg_test_fail_retain -= 1;
-        return 0;
-    }
-#endif
-#if defined(_WIN32)
-    LONG old;
-    LONG neu;
-    if (m == 0) {
-        return 0;
-    }
-    for (;;) {
-        old = (LONG)m->refs;
-        if (old < 1 || old == 2147483647) {
-            return 0;
-        }
-        neu = old + 1;
-        if (InterlockedCompareExchange((LONG *)&m->refs, neu, old) == old) {
-            return 1;
-        }
-    }
-#else
-    if (m == 0 || m->refs < 1 || m->refs == 2147483647) {
-        return 0;
-    }
-    m->refs = m->refs + 1;
-    return 1;
-#endif
-}
-
-void lmx_msg_endp_release(LmxMsg *m) {
-#if defined(_WIN32)
-    LONG old;
-    LONG neu;
-    if (m == 0) {
-        return;
-    }
-    for (;;) {
-        old = (LONG)m->refs;
-        if (old < 1) {
-            return;
-        }
-        neu = old - 1;
-        if (InterlockedCompareExchange((LONG *)&m->refs, neu, old) == old) {
-            if (neu == 0 && m->state == LMX_MSG_STATE_RELEASED && m->owner_rt != 0) {
-                lmx_msg_endp_try_retire(m->owner_rt, m);
-            }
-            return;
-        }
-    }
-#else
-    if (m == 0 || m->refs < 1) {
-        return;
-    }
-    m->refs = m->refs - 1;
-    if (m->refs == 0 && m->state == LMX_MSG_STATE_RELEASED && m->owner_rt != 0) {
-        lmx_msg_endp_try_retire(m->owner_rt, m);
-    }
-#endif
-}
+/* S6-2 (SPEC 19.29.7, "there is no count of holders"): lmx_msg_endp_retain and
+ * lmx_msg_endp_release stood here. They were the count -- the only writers of
+ * LmxMsg.refs, and the only path that ever reached endp_try_retire, which was in
+ * turn the only thing besides runtime_delete that freed a record. All three go
+ * together: a capability is the target's mailbox handle, a closing Message settles
+ * into its parent with the rest of its storage, and nothing frees a record any
+ * more except R0's teardown. The two InterlockedCompareExchange loops that lived
+ * here were also the last cross-lane atomics on this field. */
 
 uint_fast8_t lmx_msg_running_load(const LmxMsg *m) {
     if (m == 0) {
@@ -495,7 +440,6 @@ LmxMsg *lmx_msg_slot_new(void) {
     if (m == 0) {
         return 0;
     }
-    m->refs = 1;
     m->running = 1;
     m->success = 0;
     m->tracked = 1;
@@ -890,7 +834,6 @@ static int drive_walk_list(LmxMsgRuntime *rt, LmxMsg *parent, LmxMsg *head) {
     size_t cap = 0;
     size_t n = 0;
     size_t i;
-    int pin_p = 0;
     int st = LMX_MSG_OK;
     if (rt == 0) {
         return LMX_MSG_OK;
@@ -907,25 +850,14 @@ static int drive_walk_list(LmxMsgRuntime *rt, LmxMsg *parent, LmxMsg *head) {
             return LMX_MSG_NOMEM;
         }
     }
-    if (parent != 0) {
-        pin_p = lmx_msg_endp_retain(parent);
-        if (pin_p == 0) {
-            free(tab);
-            return LMX_MSG_NOMEM;
-        }
-    }
+    /* S6-2 (SPEC 19.29.7, "there is no count of holders"): the snapshot pins
+     * nothing any more. These retains guarded exactly one thing -- "the record
+     * cannot be freed under me" across the unlocked window -- and after the settle
+     * nothing frees a record at all: a closing Message becomes its parent's
+     * storage, and only R0's teardown frees. The snapshot itself stays, because it
+     * guards against the LIST changing under the walk, which is a different
+     * question from the records' lifetime and is not answered by a count. */
     for (ch = head; ch != 0; ch = ch->next_sibling) {
-        if (lmx_msg_endp_retain(ch) == 0) {
-            while (n > 0) {
-                n -= 1;
-                lmx_msg_endp_release(tab[n]);
-            }
-            if (pin_p != 0) {
-                lmx_msg_endp_release(parent);
-            }
-            free(tab);
-            return LMX_MSG_NOMEM;
-        }
         tab[n] = ch;
         n += 1;
     }
@@ -943,15 +875,7 @@ static int drive_walk_list(LmxMsgRuntime *rt, LmxMsg *parent, LmxMsg *head) {
         if (ok != 0) {
             st = lmx_msg_drive_tree(rt, tab[i]);
         }
-        lmx_msg_endp_release(tab[i]);
         tab[i] = 0;
-    }
-    while (i < n) {
-        lmx_msg_endp_release(tab[i]);
-        i += 1;
-    }
-    if (pin_p != 0) {
-        lmx_msg_endp_release(parent);
     }
     free(tab);
     return st;
@@ -975,9 +899,9 @@ int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt) {
         return LMX_MSG_OK;
     }
     r0 = rt->root;
-    if (r0 != 0 && lmx_msg_endp_retain(r0) == 0) {
-        return LMX_MSG_NOMEM;
-    }
+    /* S6-2: R0 was pinned across the unlocked window for the same reason, and the
+     * same answer applies -- nothing frees it under us. The re-checks below (still
+     * the root, not RELEASED) are what actually matter and they stay. */
 #if defined(LMX_MSG_EXEC_TEST)
     if (lmx_msg_test_after_drive_snap != 0) {
         lmx_msg_test_after_drive_snap(rt, 0);
@@ -987,7 +911,6 @@ int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt) {
         if (rt->root == r0 && r0->state != LMX_MSG_STATE_RELEASED) {
             st = lmx_msg_drive_tree(rt, r0);
         }
-        lmx_msg_endp_release(r0);
     }
     return st;
 }
@@ -1045,17 +968,10 @@ int lmx_msg_test_stage(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, unsign
         free(node);
         return LMX_MSG_INVALID;
     }
-    if (lmx_msg_endp_retain(dest) == 0) {
-        free(node);
-        return LMX_MSG_NOMEM;
-    }
+    /* S6-2 (SPEC 19.29.7): a carried destination is a handle, not a hold, and the
+     * sender is not counted either -- the same change as send_cap's, in the
+     * test-side staging path that mirrors it. */
     node->dest_msg = dest;
-    if (lmx_msg_endp_retain(src) == 0) {
-        node->dest_msg = 0;
-        lmx_msg_endp_release(dest);
-        free(node);
-        return LMX_MSG_NOMEM;
-    }
     lmx_msg_mail_lock(src);
     node->next = 0;
     if (src->outbox_tail != 0) {
@@ -1065,7 +981,6 @@ int lmx_msg_test_stage(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, unsign
     }
     src->outbox_tail = node;
     lmx_msg_mail_unlock(src);
-    lmx_msg_endp_release(src);
     return LMX_MSG_STAGED;
 }
 #endif
@@ -1172,62 +1087,13 @@ void lmx_msg_slot_free(LmxMsg *m) {
     free(m);
 }
 
-int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
-    LmxMsgExec *e;
-    LmxMsg *prev;
-    LmxMsg *cur;
-    if (rt == 0 || m == 0) {
-        return 0;
-    }
-    e = exof(rt);
-    if (e != 0 && __atomic_load_n(&e->no_retire, __ATOMIC_RELAXED) != 0) {
-        return 0;
-    }
-    if (e != 0 && __atomic_load_n(&e->no_retire, __ATOMIC_RELAXED) != 0) {
-        return 0;
-    }
-    if (m->owner_rt != rt || m->refs != 0 || m->state != LMX_MSG_STATE_RELEASED) {
-        return 0;
-    }
-    if (lmx_msg_mail_inbox_empty(m) == 0 || lmx_msg_mail_outbox_empty(m) == 0 || m->parent_msg != 0
-        || m->first_child != 0) {
-        return 0;
-    }
-    /* S5: R0 is the one root. It leaves rt->root before its slot/storage is
-     * freed, otherwise a concurrent msg_at_addr() walks a dangling tree. */
-    if (rt->root == m) {
-        rt->root = 0;
-        m->next_sibling = 0;
-    }
-    prev = 0;
-    cur = rt->slots;
-    while (cur != 0) {
-        if (cur == m) {
-            if (prev != 0) {
-                prev->alloc_next = m->alloc_next;
-            } else {
-                rt->slots = m->alloc_next;
-            }
-            m->alloc_next = 0;
-            if (rt->n > 0) {
-                rt->n -= 1;
-            }
-            break;
-        }
-        prev = cur;
-        cur = cur->alloc_next;
-    }
-    if (m->path != 0) {
-        free(m->path);
-        m->path = 0;
-    }
-    if (m->init != 0) {
-        free(m->init);
-        m->init = 0;
-    }
-    lmx_msg_slot_free(m);
-    return 1;
-}
+/* S6-2: lmx_msg_endp_try_retire stood here, and it is the reason this stage's
+ * three deletions could not be done separately. It was gated on refs == 0 AND
+ * parent_msg == 0 -- the count this stage removes and the owner cell this stage
+ * deliberately keeps -- so from the moment the settle landed it refused every
+ * record and freed nothing. It was also the only walker of rt->slots besides
+ * runtime_delete, and the only caller of lmx_msg_slot_free outside it. With it
+ * gone, one free path remains: R0's teardown, walking what it owns. */
 
 int lmx_msg_exec_attach(LmxMsgRuntime *rt) {
     LmxMsgExec *e;
@@ -1579,7 +1445,6 @@ static void unbind_slot_locked(LmxMsgExec *e, LmxMsgExecBind *rec) {
         /* M: the retired worker leaves on its next round, so the Message is no longer
          * mapped; a rebind lets its parent map it again (a worker for the new record). */
         old->mapped = 0;
-        lmx_msg_endp_release(old);
     }
     rec->in_table = 0;
 }
@@ -1685,9 +1550,7 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
     rec->addr = addr;
     rec->turn = turn;
     rec->ctx = ctx;
-    if (lmx_msg_endp_retain(m) == 0) {
-        return LMX_MSG_NOMEM;
-    }
+    /* S6-2: the bind record holds the Message by pointer, not by count. */
     rec->msg = m;
     m->turn = turn;
     m->turn_ctx = ctx;

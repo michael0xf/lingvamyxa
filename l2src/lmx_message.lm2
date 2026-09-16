@@ -956,7 +956,6 @@ fn: msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv env
     @: LmxMsgCopy entry
     @: uchar bytes
     @: LmxMsg root
-    int: pin 0
     if: rt = 0 || env = 0 || dest = 0U
         return: c.LMX_MSG_INVALID
     if: env\n != 0U && env\bytes = 0
@@ -967,22 +966,18 @@ fn: msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv env
         return: c.LMX_MSG_STOPPED
     if: c.lmx_msg_host_test_get_nomem() != 0
         return: c.LMX_MSG_NOMEM
+    # S6-2, SPEC 19.29.7: R0 was pinned across this window so it could not be freed
+    # under the post. Nothing frees a record any more except R0's own teardown, and
+    # a post cannot outlive R0's teardown by construction.
     root: msg_ingress_root(rt)
-    if: root != 0
-        pin: c.lmx_msg_endp_retain(root)
-    ---
     if: root = 0
         return: c.LMX_MSG_GONE
-    if: pin = 0
-        return: c.LMX_MSG_NOMEM
     entry: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
     if: entry = 0
-        c.lmx_msg_endp_release(root)
         return: c.LMX_MSG_NOMEM
     bytes: msg_copy_bytes(env\bytes, env\n)
     if: env\n != 0U && bytes = 0
         c.free((cast: (@: void) entry))
-        c.lmx_msg_endp_release(root)
         return: c.LMX_MSG_NOMEM
     entry\id: env\id
     entry\correlation: env\correlation
@@ -1000,11 +995,9 @@ fn: msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv env
     if: c.lmx_msg_host_is_shutdown(rt) != 0
         c.lmx_msg_mail_unlock(root)
         msg_copy_free(entry)
-        c.lmx_msg_endp_release(root)
         return: c.LMX_MSG_STOPPED
     msg_q_push(@ root\inbox, @ root\inbox_tail, entry)
     c.lmx_msg_mail_unlock(root)
-    c.lmx_msg_endp_release(root)
     return: c.LMX_MSG_STAGED
 end: msg_host_post
 
@@ -1017,18 +1010,12 @@ fn: msg_host_drain (@: LmxMsgRuntime rt) int
     @: LmxMsg root
     @: LmxMsgCopy n 0
     @: LmxMsgCopy nxt
-    int: pin 0
     if: msg_require_owner(rt) != c.LMX_MSG_OK || c.lmx_msg_exec_holding_any(rt) != 0
         return: c.LMX_MSG_INVALID
+    # S6-2: the drain's pin on R0 goes for the same reason as the post's.
     root: msg_ingress_root(rt)
     if: root != 0
-        pin: c.lmx_msg_endp_retain(root)
-    ---
-    if: root != 0 && pin = 0
-        return: c.LMX_MSG_NOMEM
-    if: root != 0
         c.lmx_msg_mail_inbox_take_ingress(root, @ n)
-        c.lmx_msg_endp_release(root)
     ---
     # S6 (a): the transport is R0's own relay hop (root's inbox -> here -> pump ->
     # the real destination's inbox), so it is ordered under R0's mailbox monitor --
@@ -1295,14 +1282,11 @@ fn: msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @(Lm
     if: destn != 0
         entry\dest_msg: destn
     ---
-    if: c.lmx_msg_endp_retain(src) = 0
-        msg_copy_free(entry)
-        return: c.LMX_MSG_NOMEM
-    ---
+    # S6-2: the sender is not counted either. It is inside its own turn for the
+    # whole of this staging, so it cannot be freed under itself.
     c.lmx_msg_mail_lock(src)
     msg_q_push(@ src\outbox, @ src\outbox_tail, entry)
     c.lmx_msg_mail_unlock(src)
-    c.lmx_msg_endp_release(src)
     return: c.LMX_MSG_STAGED
 end: msg_send
 
@@ -1351,14 +1335,11 @@ fn: msg_send_graph (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const
     if: destn != 0
         entry\dest_msg: destn
     ---
-    if: c.lmx_msg_endp_retain(src) = 0
-        msg_copy_free(entry)
-        return: c.LMX_MSG_NOMEM
-    ---
+    # S6-2: the sender is not counted either. It is inside its own turn for the
+    # whole of this staging, so it cannot be freed under itself.
     c.lmx_msg_mail_lock(src)
     msg_q_push(@ src\outbox, @ src\outbox_tail, entry)
     c.lmx_msg_mail_unlock(src)
-    c.lmx_msg_endp_release(src)
     return: c.LMX_MSG_STAGED
 end: msg_send_graph
 
@@ -1407,17 +1388,10 @@ fn: msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @: Lm
         # S6-2: the carried destination is a handle, not a hold (as above).
         entry\dest_msg: destn
     ---
-    if: c.lmx_msg_endp_retain(src) = 0
-        env\bytes: entry\bytes
-        env\n: entry\n
-        entry\bytes: 0
-        msg_copy_free(entry)
-        return: c.LMX_MSG_NOMEM
-    ---
+    # S6-2: as above -- the sender is in its own turn and is not counted.
     c.lmx_msg_mail_lock(src)
     msg_q_push(@ src\outbox, @ src\outbox_tail, entry)
     c.lmx_msg_mail_unlock(src)
-    c.lmx_msg_endp_release(src)
     return: c.LMX_MSG_STAGED
 end: msg_send_owned
 
@@ -1515,7 +1489,6 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
         msg_settled_move(m\parent_msg, m)
         msg_settled_push(m\parent_msg, m)
     ---
-    c.lmx_msg_endp_release(m)
 end: msg_release_slot
 
 # Decision 17 with spec 19.29.8: settling a direct child into its parent,
@@ -1727,9 +1700,9 @@ fn: msg_orphan_sweep (@: LmxMsgRuntime rt; unsigned: now) int
                     m\orphan_until: msg_orphan_deadline(rt, now)
                 ---
                 if: c.lmx_msg_success_load(m) != 0 || now >= m\orphan_until
-                    if: c.lmx_msg_endp_retain(m) != 0
-                        hit: m
-                    ---
+                    # S6-2: the sweep took a pin so the orphan could not be freed
+                    # between choosing it and reclaiming it. Nothing frees it now.
+                    hit: m
                 ---
             ---
             m: m\next_sibling
@@ -1738,7 +1711,6 @@ fn: msg_orphan_sweep (@: LmxMsgRuntime rt; unsigned: now) int
             more: 0
         else:
             st: msg_reclaim_orphan(rt, hit)
-            c.lmx_msg_endp_release(hit)
             if: st != c.LMX_MSG_OK
                 return: st
             ---
@@ -1794,19 +1766,14 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     @: LmxMsg root
     @: LmxMsgCopy n
     @: LmxMsgCopy outb 0
-    int: pinned 0
     if: msg_require_turn(rt, who) != c.LMX_MSG_OK && msg_maintenance_close_ok(rt, who) = 0
         return: c.LMX_MSG_INVALID
     m: msg_self_or_find(rt, who)
     if: m = 0
         return: c.LMX_MSG_INVALID
     if: m\state = c.LMX_MSG_STATE_DEAD
-        pinned: c.lmx_msg_endp_retain(m)
         c.lmx_msg_mail_outbox_take(m, @ outb)
         msg_copy_free(outb)
-        if: pinned != 0
-            c.lmx_msg_endp_release(m)
-        ---
         return: c.LMX_MSG_DEAD
     m\exec_live: 0
     m\last_beat: c.lmx_msg_now(rt)
@@ -1824,12 +1791,8 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     ---
     if: success = 0
         m\live_query_pend_id: 0U
-        pinned: c.lmx_msg_endp_retain(m)
         c.lmx_msg_mail_outbox_take(m, @ outb)
         msg_copy_free(outb)
-        if: pinned != 0
-            c.lmx_msg_endp_release(m)
-        ---
         ch: m\first_child
         while: ch != 0
             nxt: ch\next_sibling
@@ -1869,12 +1832,9 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         m\live_query_at: c.lmx_msg_now(rt)
         m\live_query_pend_id: 0U
     ---
-    pinned: c.lmx_msg_endp_retain(m)
+    # S6-2: this Message is inside its own end-turn; nothing can free it here.
     c.lmx_msg_mail_outbox_take(m, @ outb)
     c.lmx_msg_after_outbox_xfer(rt, m, outb)
-    if: pinned != 0
-        c.lmx_msg_endp_release(m)
-    ---
     # S6 (a): this Message's own outbox was taken and released above under its own
     # monitor; the relay onto R0's queue is a second, sequential hold.
     root: msg_ingress_root(rt)
@@ -2018,15 +1978,12 @@ fn: msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy entry) int
         msg_copy_free(entry)
         return: c.LMX_MSG_OK
     ---
+    # S6-2: the destination was pinned from here until the push below, so it could
+    # not be freed between the checks and the admission. Nothing frees it now.
     dest_addr: dest\addr
-    if: c.lmx_msg_endp_retain(dest) = 0
-        msg_copy_free(entry)
-        return: c.LMX_MSG_NOMEM
-    ---
     if: entry\owned != 0 || entry\delivered != 0
         if: entry\id != 0U && msg_done_add(dest, entry\from, entry\id) != 0
             msg_copy_free(entry)
-            c.lmx_msg_endp_release(dest)
             return: c.LMX_MSG_NOMEM
         ---
         put: entry
@@ -2034,12 +1991,10 @@ fn: msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy entry) int
         fresh: msg_copy_dup(entry)
         msg_copy_free(entry)
         if: fresh = 0
-            c.lmx_msg_endp_release(dest)
             return: c.LMX_MSG_NOMEM
         ---
         if: fresh\id != 0U && msg_done_add(dest, fresh\from, fresh\id) != 0
             msg_copy_free(fresh)
-            c.lmx_msg_endp_release(dest)
             return: c.LMX_MSG_NOMEM
         ---
         put: fresh
@@ -2048,9 +2003,9 @@ fn: msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy entry) int
     msg_q_push(@ dest\inbox, @ dest\inbox_tail, put)
     c.lmx_msg_mail_unlock(dest)
     c.lmx_msg_test_on_admit(dest_addr, put)
-    # S2: dest is pinned until the release below; ready it by its record.
+    # S2/S6-2: ready it by its record. The record is reached directly, not through
+    # a pin: the address lookup it replaced is what the pin used to protect.
     msg_exec_ready_msg(rt, dest)
-    c.lmx_msg_endp_release(dest)
     return: c.LMX_MSG_OK
 end: msg_admit_one
 
@@ -2083,7 +2038,6 @@ end: msg_pump
 fn: msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m
     @: LmxMsgCopy n
-    int: pinned 0
     if: msg_require_turn(rt, who) != c.LMX_MSG_OK || out = 0
         return: c.LMX_MSG_INVALID
     m: c.lmx_msg_turn_self(rt)
@@ -2117,15 +2071,11 @@ fn: msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     m: msg_self_or_find(rt, who)
     if: m = 0
         return: c.LMX_MSG_INVALID
-    pinned: c.lmx_msg_endp_retain(m)
-    if: pinned != 0
-        c.lmx_msg_after_recv_pin(rt, m)
-    ---
+    # S6-2: recv pinned the receiver across the pop. The hook stays -- it is the
+    # test's window into this point -- but it is no longer conditional on a count.
+    c.lmx_msg_after_recv_pin(rt, m)
     n: c.lmx_msg_mail_inbox_pop_input(m)
     if: n = 0
-        if: pinned != 0
-            c.lmx_msg_endp_release(m)
-        ---
         return: c.LMX_MSG_EMPTY
     ---
     out\id: n\id
@@ -2139,9 +2089,6 @@ fn: msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     out\graph: 0
     if: msg_delivery_receive(m, n, out) != c.LMX_MSG_OK
         msg_copy_free(n)
-        if: pinned != 0
-            c.lmx_msg_endp_release(m)
-        ---
         return: c.LMX_MSG_INVALID
     ---
     m\exec_id: n\id
@@ -2151,9 +2098,6 @@ fn: msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     m\exec_live: 1
     m\last_beat: c.lmx_msg_now(rt)
     msg_copy_free(n)
-    if: pinned != 0
-        c.lmx_msg_endp_release(m)
-    ---
     return: c.LMX_MSG_OK
 end: msg_recv
 
@@ -2205,7 +2149,6 @@ fn: msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsgCopy prev 0
     unsigned: parent
     unsigned: req
-    int: pinned 0
     if: msg_require_turn(rt, who) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
     m: msg_self_or_find(rt, who)
@@ -2214,12 +2157,10 @@ fn: msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     m\state: c.LMX_MSG_STATE_DEAD
     parent: m\parent
     req: m\exec_id
-    pinned: c.lmx_msg_endp_retain(m)
+    # S6-2: fail pinned m across its post_dead calls and its mailbox work. Nothing
+    # frees a record now, and m is this turn's own Message throughout.
     if: m\exec_live != 0 && m\exec_reply != 0U && m\exec_reply != parent
         if: msg_post_dead(rt, who, m\exec_reply, req) = c.LMX_MSG_NOMEM
-            if: pinned != 0
-                c.lmx_msg_endp_release(m)
-            ---
             return: c.LMX_MSG_NOMEM
         ---
     ---
@@ -2239,9 +2180,6 @@ fn: msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
                 ---
                 msg_copy_free(inb)
                 c.lmx_msg_mail_inbox_prepend(m, n)
-                if: pinned != 0
-                    c.lmx_msg_endp_release(m)
-                ---
                 return: c.LMX_MSG_NOMEM
             ---
         ---
@@ -2252,14 +2190,8 @@ fn: msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     m\exec_live: 0
     if: parent != 0U
         if: msg_post_dead(rt, who, parent, m\exec_id) = c.LMX_MSG_NOMEM
-            if: pinned != 0
-                c.lmx_msg_endp_release(m)
-            ---
             return: c.LMX_MSG_NOMEM
         ---
-    ---
-    if: pinned != 0
-        c.lmx_msg_endp_release(m)
     ---
     return: msg_pump(rt)
 end: msg_fail
@@ -2367,24 +2299,19 @@ end: msg_drive_should_close
 fn: msg_drive_one (@: LmxMsgRuntime rt; @: LmxMsg m) int
     unsigned: a 0U
     int: st
-    int: pin 0
     if: m = 0
         return: c.LMX_MSG_OK
-    pin: c.lmx_msg_endp_retain(m)
-    if: pin = 0
-        return: c.LMX_MSG_NOMEM
-    ---
+    # S6-2: drive_one pinned m across its unlocked checks. The re-checks below --
+    # still closing, inbox still empty, same address, not RELEASED -- are what
+    # actually guard the decision, and they stay.
     if: msg_drive_should_close(m) = 0
-        c.lmx_msg_endp_release(m)
         return: c.LMX_MSG_OK
     ---
     a: m\addr
     if: c.lmx_msg_mail_inbox_empty(m) = 0
-        c.lmx_msg_endp_release(m)
         return: c.LMX_MSG_OK
     ---
     if: msg_drive_should_close(m) = 0 || m\addr != a || m\state = c.LMX_MSG_STATE_RELEASED
-        c.lmx_msg_endp_release(m)
         return: c.LMX_MSG_OK
     ---
     if: c.lmx_msg_exec_is_bound(rt, a) != 0
@@ -2393,11 +2320,9 @@ fn: msg_drive_one (@: LmxMsgRuntime rt; @: LmxMsg m) int
     if: c.lmx_msg_exec_is_bound(rt, a) = 0
         st: c.lmx_msg_exec_unbound_close(rt, a)
         if: st != c.LMX_MSG_OK
-            c.lmx_msg_endp_release(m)
             return: st
         ---
     ---
-    c.lmx_msg_endp_release(m)
     return: c.LMX_MSG_OK
 end: msg_drive_one
 
@@ -2461,7 +2386,6 @@ end: msg_state
 fn: msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: cnt 0
-    int: pin 0
     m: msg_turn_slot(rt, who)
     if: m != 0
         return: c.lmx_msg_mail_inbox_n(m)
@@ -2472,11 +2396,7 @@ fn: msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     m: msg_self_or_find(rt, who)
     if: m = 0
         return: -1
-    pin: c.lmx_msg_endp_retain(m)
     cnt: c.lmx_msg_mail_inbox_n(m)
-    if: pin != 0
-        c.lmx_msg_endp_release(m)
-    ---
     return: cnt
 end: msg_inbox_n
 
@@ -2894,18 +2814,6 @@ fn: msg_tracked (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     return: t
 end: msg_tracked
 
-fn: msg_endp_refs (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
-    @: LmxMsg m
-    int: r 0
-    if: rt = 0 || who = 0U
-        return: -1
-    m: msg_self_or_find(rt, who)
-    if: m = 0
-        return: -1
-    r: m\refs
-    return: r
-end: msg_endp_refs
-
 fn: msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; const: @(LmxMsgEnv env)) int
     @: LmxMsg src
     @: LmxMsgCopy entry
@@ -2947,13 +2855,10 @@ fn: msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; const: 
     # handle was refused by the count before the mechanism could answer it. Measured:
     # the planted red failed with send_cap=NOMEM, nothing staged at all.
     entry\dest_msg: dest
-    if: c.lmx_msg_endp_retain(src) = 0
-        msg_copy_free(entry)
-        return: c.LMX_MSG_NOMEM
-    ---
+    # S6-2: the sender is not counted either. It is inside its own turn for the
+    # whole of this staging, so it cannot be freed under itself.
     c.lmx_msg_mail_lock(src)
     msg_q_push(@ src\outbox, @ src\outbox_tail, entry)
     c.lmx_msg_mail_unlock(src)
-    c.lmx_msg_endp_release(src)
     return: c.LMX_MSG_STAGED
 end: msg_send_cap

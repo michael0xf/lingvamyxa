@@ -154,7 +154,6 @@ typedef struct LmxMsg {
      * this Message's own state; the executor's table only indexes it. */
     struct LmxMsgExecBind *exec_bind;
     int mapped;
-    int refs;
     uint_fast8_t running;
     uint_fast8_t success;
     int tracked;
@@ -313,11 +312,12 @@ int lmx_msg_set_orphan_retain(LmxMsgRuntime *rt, unsigned retain);
 unsigned lmx_msg_now(LmxMsgRuntime *rt);
 /* S5: the next Message address from the runtime's order-free atomic counter. */
 LmxMsgAddr lmx_msg_addr_take(LmxMsgRuntime *rt);
-int lmx_msg_endp_retain(LmxMsg *m);
-void lmx_msg_endp_release(LmxMsg *m);
+/* S6-2 (SPEC 19.29.7, "there is no count of holders"): endp_retain, endp_release,
+ * endp_try_retire and endp_refs are deleted, and so is LmxMsg.refs itself. The
+ * count answered exactly one question -- "can this record be freed under me?" --
+ * and the settle answers it instead: a closing Message becomes its parent's
+ * storage, and nothing frees a record except R0's teardown. */
 int lmx_msg_child_unlink(LmxMsg *parent, LmxMsg *child);
-int lmx_msg_endp_refs(LmxMsgRuntime *rt, LmxMsgAddr who);
-int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_send_cap(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsg *dest, const LmxMsgEnv *env);
 void lmx_msg_mail_lock(LmxMsg *m);
 void lmx_msg_mail_unlock(LmxMsg *m);

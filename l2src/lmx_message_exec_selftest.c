@@ -426,13 +426,6 @@ static void mail_gate_hook(LmxMsg *m) {
     SetEvent(g_mail_entered);
     (void)WaitForSingleObject(g_mail_go, 5000);
 }
-static void dest_pin_fail_after_outbox(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
-    (void)rt;
-    (void)src;
-    (void)outb;
-    lmx_msg_test_after_outbox_xfer = 0;
-    lmx_msg_test_fail_retain = 1;
-}
 static void dest_stop_after_outbox(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
     LmxMsg *d;
     (void)src;
@@ -4521,7 +4514,7 @@ int main(int argc, char **argv) {
         }
         if (lmx_owned_ranges_find(ma->ranges, ints) != 0
             || lmx_owned_ranges_find(ma->ranges, int_back) != 0) {
-            fprintf(stderr, "unrooted primitive array immortal beside refs\n");
+            fprintf(stderr, "unrooted primitive array immortal beside a rooted one\n");
             lmx_msg_runtime_delete(rtr);
             return 1;
         }
@@ -6080,7 +6073,6 @@ int main(int argc, char **argv) {
         seen_new(rti);
         {
             LmxMsgAddr p = 0, a = 0, d = 0;
-            int refs0;
             int st;
             memset(&any_ctx, 0, sizeof(any_ctx));
             if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
@@ -6096,7 +6088,6 @@ int main(int argc, char **argv) {
                 return 1;
             }
             g_mail_dest = d;
-            refs0 = lmx_msg_endp_refs(rti, d);
             if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
                 fprintf(stderr, "exec mail-oom post\n");
@@ -6106,15 +6097,17 @@ int main(int argc, char **argv) {
             lmx_msg_test_set_copy_fail(1);
             st = own_turn(rti, a);
             lmx_msg_test_set_copy_fail(0);
-            if (st != LMX_MSG_OK || lmx_msg_endp_refs(rti, d) != refs0
-                || lmx_msg_inbox_n(rti, d) != 0) {
-                fprintf(stderr, "exec mail-oom st=%d refs=%d refs0=%d inbox=%d\n",
-                    st, lmx_msg_endp_refs(rti, d), refs0, lmx_msg_inbox_n(rti, d));
+            /* S6-2: the refs pair that framed this case is gone with the count. What
+             * it was actually about -- a copy-allocation failure leaving no residue
+             * at the destination -- is the inbox, and that is asserted directly. */
+            if (st != LMX_MSG_OK || lmx_msg_inbox_n(rti, d) != 0) {
+                fprintf(stderr, "exec mail-oom st=%d inbox=%d\n",
+                    st, lmx_msg_inbox_n(rti, d));
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
             g_mail_dest = 0;
-            fprintf(stderr, "exec wait: send copy OOM leaves dest refs and inbox unchanged\n");
+            fprintf(stderr, "exec wait: send copy OOM leaves the dest inbox unchanged\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
@@ -6220,8 +6213,6 @@ int main(int argc, char **argv) {
         seen_new(rti);
         {
             LmxMsgAddr p = 0, a = 0, d = 0;
-            int refs0;
-            int refs1;
             memset(&any_ctx, 0, sizeof(any_ctx));
             if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
@@ -6236,7 +6227,6 @@ int main(int argc, char **argv) {
                 return 1;
             }
             g_mail_dest = d;
-            refs0 = lmx_msg_endp_refs(rti, d);
             if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
                 fprintf(stderr, "exec outbox-gone post\n");
@@ -6251,75 +6241,17 @@ int main(int argc, char **argv) {
                 return 1;
             }
             lmx_msg_test_after_outbox_xfer = 0;
-            refs1 = lmx_msg_endp_refs(rti, d);
             g_mail_dest = 0;
-            if (lmx_msg_inbox_n(rti, d) != 0 || refs1 > refs0 + 1) {
-                fprintf(stderr, "exec outbox-gone inbox n=%d refs0=%d refs1=%d\n",
-                    lmx_msg_inbox_n(rti, d), refs0, refs1);
+            /* S6-2: the refs bound goes with the count. What this case is about --
+             * a destination stopped after the outbox take admits nothing -- is the
+             * inbox, and that is asserted directly. */
+            if (lmx_msg_inbox_n(rti, d) != 0) {
+                fprintf(stderr, "exec outbox-gone inbox n=%d\n",
+                    lmx_msg_inbox_n(rti, d));
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
             fprintf(stderr, "exec wait: dest stop after outbox take drops GONE; inbox empty\n");
-            lmx_msg_runtime_delete(rti);
-        }
-        rti = lmx_msg_runtime_new();
-        seen_new(rti);
-        {
-            LmxMsgAddr p = 0, a = 0, d = 0;
-            int refs0;
-            LmxMsgEnv got;
-            memset(&any_ctx, 0, sizeof(any_ctx));
-            memset(&got, 0, sizeof(got));
-            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, &ini, 1, &d) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, a, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
-                fprintf(stderr, "exec pin-oom create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            g_mail_dest = d;
-            refs0 = lmx_msg_endp_refs(rti, d);
-            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec pin-oom post\n");
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            lmx_msg_test_after_outbox_xfer = dest_pin_fail_after_outbox;
-            (void)own_turn(rti, a);
-            lmx_msg_test_after_outbox_xfer = 0;
-            lmx_msg_test_fail_retain = 0;
-            if (lmx_msg_inbox_n(rti, d) != 0 || lmx_msg_endp_refs(rti, d) != refs0) {
-                fprintf(stderr, "exec pin-oom residue inbox=%d refs=%d refs0=%d fail=%d\n",
-                    lmx_msg_inbox_n(rti, d), lmx_msg_endp_refs(rti, d), refs0, lmx_msg_test_fail_retain);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_drain(rti) != LMX_MSG_OK
-                || own_turn(rti, a) != LMX_MSG_OK
-                || lmx_msg_inbox_n(rti, d) != 1) {
-                fprintf(stderr, "exec pin-oom retry inbox=%d\n", lmx_msg_inbox_n(rti, d));
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            memset(&ui_ctx, 0, sizeof(ui_ctx));
-            if (lmx_msg_exec_bind(rti, d, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || own_turn(rti, d) != LMX_MSG_OK
-                || lmx_msg_inbox_n(rti, d) != 0
-                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1) {
-                fprintf(stderr, "exec pin-oom second copy inbox=%d done=%ld\n",
-                    lmx_msg_inbox_n(rti, d), (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0));
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            g_mail_dest = 0;
-            fprintf(stderr, "exec wait: dest pin OOM rolls back; retry admits exactly once\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
@@ -6678,40 +6610,6 @@ int main(int argc, char **argv) {
             lmx_msg_test_after_recv_pin = 0;
             lmx_msg_env_release(&got);
             fprintf(stderr, "exec wait: unbind between pin and pop; recv still owns the node\n");
-            lmx_msg_runtime_delete(rti);
-        }
-        rti = lmx_msg_runtime_new();
-        {
-            LmxMsgAddr p = 0, a = 0;
-            LmxMsgEnv got;
-            int refs0;
-            memset(&got, 0, sizeof(got));
-            if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec nself-pin create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            refs0 = lmx_msg_endp_refs(rti, a);
-            lmx_msg_test_fail_retain = 1;
-            if (lmx_msg_recv(rti, a, &got) != LMX_MSG_OK || lmx_msg_inbox_n(rti, a) != 0
-                || lmx_msg_endp_refs(rti, a) != refs0) {
-                fprintf(stderr, "exec nself-pin st inbox=%d refs=%d refs0=%d\n",
-                    lmx_msg_inbox_n(rti, a), lmx_msg_endp_refs(rti, a), refs0);
-                lmx_msg_test_fail_retain = 0;
-                lmx_msg_env_release(&got);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            lmx_msg_test_fail_retain = 0;
-            lmx_msg_env_release(&got);
-            fprintf(stderr, "exec wait: non-self recv retain fail still pops; pin released\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

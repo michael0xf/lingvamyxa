@@ -72,7 +72,6 @@ extern void (*lmx_msg_test_mail_locked)(LmxMsg *m);
 extern void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 extern void (*lmx_msg_test_after_recv_pin)(LmxMsgRuntime *rt, LmxMsg *m);
 extern void (*lmx_msg_test_after_drive_snap)(LmxMsgRuntime *rt, LmxMsg *p);
-extern int lmx_msg_test_fail_retain;
 extern int lmx_msg_test_fail_post_dead;
 int lmx_msg_test_stage(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, unsigned id);
 int lmx_msg_exec_bind_n(LmxMsgRuntime *rt);
