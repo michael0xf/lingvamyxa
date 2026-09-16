@@ -8708,3 +8708,19 @@ Stage branch d6/lock-s6-2 4ffacf05 ("S6-2 step 3, PARTIAL: the
 unregister-and-free letter, the teardown sweep, the live set's
 free-partner, and the getAddress wrappers -- service step complete in
 both cores, not yet built"); the first build and its verdict follow.
+First build of the service step RED (the lead, verbatim): "lmx_message.c:
+1665:5: error: implicit declaration of function 'lmx_msg_post_unregister'"
+and "2218:6: warning: conflicting types for 'lmx_msg_live_sweep' ...
+previous implicit declaration" under -Werror=implicit-function-declaration.
+Diagnosis: placement, not logic: L1 emits functions in source order
+without hoisting, so a call earlier than its definition is an implicit
+declaration; release_slot (1665) calls post_unregister (defined about
+2306), runtime_delete (1106) calls live_sweep (about 2218);
+post_register escaped only because create_prepare sits after it. Fix:
+lm1's forward-declaration block at the top (the one drain_settled left)
+gains the new names; lm2 has no such block, so there the functions
+move before their callers; both cores measured for every forward use,
+not the two the compiler reached first. The lead's own wrapper note: his
+invocation ended in echo/tee, so the harness printed "exit code 0"
+while the gate's exit.txt said 1, the shape e9's bounded-runner work
+exists to stop. Nothing pushed past 4ffacf05.
