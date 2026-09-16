@@ -3476,6 +3476,19 @@ A1-A3. The arena (19.29.2), after S6 or interleaved where a stage touches the sa
           build/ names only their two declarations (exec.h:61-62) and two definitions (exec.c:2401, :2634)
           plus prose; positive control, the `_msg` forms, one call each per core (lm1:1826/1828,
           lm2:1948/1950). b5's claim holds.
+        * B5'S LIST IS FOUR FILES; THE POPULATION IS THE TREE. The acceptance probe (d6/lock-ad-red) counts
+          lines naming msg_find( over every tracked l2src source at d3bde8b5: 210 lines in 28 files, of which
+          b5's four hold 112 (lm1 5 and lm2 4 -- definitions and prototypes included -- exec_selftest.c 102,
+          lmx_message.h 1). The other 98 lines in 24 files, each read (not inferred from the needle): the L1
+          selftests (lmx_message_selftest.lm1 12, the model/delivery/send_local/family_handoff/entry_turn/
+          graph_copy/adopt_unrooted fixtures), three generated-array collect drivers (.c), cancel_spin_host.c,
+          the c_scanners parse driver -- AND THE TRANSLATOR: l2trans.lm1:12033 emits into every generated
+          library unit's l2_library_open "process_message: c.lmx_msg_find(process_runtime, process_addr)"
+          (three committed generated units carry it: tests/generated/unit_for_own_arrays.lm1,
+          unit_own_array_index.lm1, unit_own_array_char_index.lm1). So AD changes what l2trans EMITS, which
+          is a self-build input: l2_library_open must keep the pair create returned (create's out_msg), and
+          the fixed point is re-established by run_self_build in the same commit. A migration list of four
+          files would have landed a translator that emits a call to a deleted function.
         IF MIKHAIL ANSWERS YES to the question above, only the owner-lane introspection class changes: those
         keep their id-only signatures and resolve through a bounded-time lookup in R0's live set, which then
         needs an id order next to its pointer order (ids are minted monotonically, so an id-sorted array is an
