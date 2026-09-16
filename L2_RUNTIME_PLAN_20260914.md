@@ -8970,3 +8970,17 @@ in-scope option. The verified work is committed as a labelled partial
 (the drain ruling, the found-and-removed guard and its hook, is_live
 before any dereference, YIELD_UNTIL_R0 at 19 sites, own_turn's drain,
 r0_round at 7; the gate red at admit-gate pending the restatement).
+S6-2 STEP 3 GREEN: d6/lock-s6-2 b9a148f2, run_port_message exit 0
+once (four cold repeats running): admit-gate restated as ruled (the
+host holds d's monitor, A and B send STAGED and end their turns, d's
+inbox reads 0 while held and 2 after the unlock and R0's round; 0
+references to mail_gate_hook in the case, 2 in the file as the
+control); two more drain-ruling costs after it: "exec fail-oom
+recipients" fixed with r0_round before the recv, and "exec ingress
+recv behind" fixed with lmx_msg_pump rather than host_drain (host_drain
+would forward the INGRESS the case keeps pending; the reason at the
+site). Counts for the five lines: YIELD_UNTIL_R0 19, r0_round 8,
+pump-only round 1, blocking waits restructured 0, waits left alone 8,
+restated 1 (admit-gate). Evidence build/port_message/20260916_081513_951.
+Next: get_address's callers and the path deletion (steps 4 and 5); the
+hash to the engineer once the repeats are clean.
