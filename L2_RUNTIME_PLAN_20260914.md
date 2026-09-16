@@ -7660,3 +7660,18 @@ Stage branch d6/lock-s6-2 2e2f492c: l2src/tripwire_s6_2.sh committed
 (85 lines), kept in the tree for later stages; e9 adds it to
 land_s6_2.sh's allowlist as an A path (51). e9's row at 5c75aea9 takes
 the tripwired items.
+b5's two diagnoses on sonnet/mixa-module-list 832ca88a (doc only):
+audio_mp3 THROWs at run_mixa_audio_mp3_l2_parity.ps1:57 expecting a
+scratch, gitignored candidate l1trans built to dodge the old 16-import
+cap ("Evidence, not a stable promotion", L1_IMPORT_CAPACITY_20260912.md);
+the cap no longer exists in l1src/l1trans.lm1 and the current pin
+translates the real 22-import mixa_audio_mp3.lm1 cold, exit 0, so the
+candidate mechanism is obsolete: retire it and use $L1Trans like every
+other module (a code edit, ticketed). app_controller at
+mixa_app_controller.lm2:14:5 unchanged (ExpectVerdict
+UNEXPECTED_FAILURE); its opaque-header design exists because an
+earlier draft's full predef chain hit the same now-gone "import path
+table full" error: re-attempting that chain against the current pin
+is the condition that lifts it (ticketed). RULED: both are b5's next
+code tickets on the same branch; each runner enters the parity gate's
+table with the verdict its run then produces.
