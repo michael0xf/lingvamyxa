@@ -1736,7 +1736,15 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           before checking. A yield_until_handoff_ready helper sits beside yield_until_stopped and is used at the
           three sites that read handoff_ready right after a stop (K, G after its unbind and drive, C before its
           own check). No wait, lock or signal is added to the runtime.
-        - Bar: five cold runs of run_msg_family_handoff.ps1, since one green run says nothing about a race.
+        - Bar met: five cold runs of run_msg_family_handoff.ps1, each "O2 family handoff checks=67 failures=0
+          watched_frees=4"; committed as 53a0af86 on d6/lock-s6. One green run would have said nothing about a
+          race. My first reading of those runs called them failures -- my own grep matched "FAIL" inside the
+          runner's "failures=0" line -- so the runner's verdict line is what judges a run here, not a word search,
+          the same way its diagnosis and not the shell's exit code judged the earlier gate.
+        - Rules taken from this miss (the coordinator's, recorded): before every landing, run locally the gates
+          whose fixtures the stage's own section names as touched, never a proxy suite (this section already
+          listed family_handoff and I ran scenario36, which does not build it); and from S6-2 on, the gate impact
+          list comes from e9 as it did for M and S2.
         - The rest of the union base on that merge was green: self-build PASS 8 of 8 (tag selfbuild/8f290ad6, log
           line cbfbb930, landing branch d6/lock-s6-landing-8f290ad6 pushed), port_message plain and -LaneCheck both
           parity PASS with 103 methods in 45 s each. Nothing was pushed to integration.
