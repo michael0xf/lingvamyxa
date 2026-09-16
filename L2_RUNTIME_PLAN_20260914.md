@@ -7862,3 +7862,13 @@ text before writing its three assertions), then scenario36,
 port_message, run_lmx, entry_turn, l2trans, port_parser; then the
 push and the name-status to e9; then the measuring merge with
 96a754e0, the probe -Part 2 and the five lines at the tip.
+Stage branch d6/lock-s6-2 51b73274: THE RUNTIME'S SLOT REGISTRY IS
+DELETED (design 0f905d84 the wrappers re-pointed, 9b6d5086 graph_abi
+green on the registry group, the re-pointed assertions read off the
+emitted L1). Coordinator's measurement on 51b73274 merged with
+96a754e0: refs=0 runtime_lists=3, the three being comment lines that
+spell the deleted fields (lmx_message_exec.c:1093,
+lmx_message_exec.h:59, tests/unit_msg_cursor.lm2:4); ruled: the probe
+counts comment text by its header, agreed at design time, and these
+needles measure the mechanism, so the comments are reworded to name
+the registry without spelling the field; then the tip reads 0/0.
