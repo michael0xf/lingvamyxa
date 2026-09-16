@@ -98,29 +98,62 @@ function Flush-New {
   Invoke-WebhookWake $names
 }
 
+# The watcher is built by a function rather than inline, because the 30-minute
+# reconcile proves it is still alive and rebuilds it in place when it is not: a
+# disposed or muted FileSystemWatcher raises no events and looks exactly like a
+# quiet channel, which is a failure this channel cannot afford.
+function New-OutboxWatcher {
+  if ($script:watcher) {
+    try { $script:watcher.EnableRaisingEvents = $false; $script:watcher.Dispose() } catch {}
+    $script:watcher = $null
+  }
+  Get-EventSubscriber -ErrorAction SilentlyContinue |
+    Where-Object { $_.SourceIdentifier -like "GrokBotOutbox*" } |
+    Unregister-Event -Force -ErrorAction SilentlyContinue
+  $w = New-Object System.IO.FileSystemWatcher $WatchPath, "*.txt"
+  $w.IncludeSubdirectories = $false
+  $w.NotifyFilter = [IO.NotifyFilters]"FileName, LastWrite, Size"
+  # A reply is written in chunks, and every chunk is an event: with the default
+  # 8 KB buffer a large answer (305 KB was the first one seen) overflows it and
+  # the events are DROPPED silently, so the flush never runs. 64 KB is the
+  # documented maximum for this filter set; the Error event is registered and
+  # logged, so an overflow is visible rather than silent, and the 30-minute
+  # reconcile remains the backstop.
+  $w.InternalBufferSize = 65536
+  $script:sidC = "GrokBotOutboxCreated_" + [Guid]::NewGuid().ToString("N")
+  $script:sidH = "GrokBotOutboxChanged_" + [Guid]::NewGuid().ToString("N")
+  $script:sidR = "GrokBotOutboxRenamed_" + [Guid]::NewGuid().ToString("N")
+  $script:sidE = "GrokBotOutboxError_" + [Guid]::NewGuid().ToString("N")
+  Register-ObjectEvent -InputObject $w -EventName Created -SourceIdentifier $script:sidC | Out-Null
+  Register-ObjectEvent -InputObject $w -EventName Changed -SourceIdentifier $script:sidH | Out-Null
+  Register-ObjectEvent -InputObject $w -EventName Renamed -SourceIdentifier $script:sidR | Out-Null
+  Register-ObjectEvent -InputObject $w -EventName Error -SourceIdentifier $script:sidE | Out-Null
+  $w.EnableRaisingEvents = $true
+  return $w
+}
+
+# The reconcile's second duty: prove the watcher is still watching. Each state
+# checked here is one in which no event will ever arrive again while the channel
+# looks quiet -- never built, muted (EnableRaisingEvents false), or the watched
+# directory gone or renamed. The rebuild keeps the run's state: the seen set and
+# the flush bookkeeping live outside the watcher object.
+function Test-OutboxWatcher {
+  $why = ""
+  if (-not $script:watcher) { $why = "not built" }
+  elseif (-not $script:watcher.EnableRaisingEvents) { $why = "muted (EnableRaisingEvents false)" }
+  elseif (-not (Test-Path -LiteralPath $WatchPath)) { $why = "watch path missing: $WatchPath" }
+  if ($why.Length -eq 0) { Log-Line "fsw alive check ok"; return }
+  Log-Line ("fsw DEAD: " + $why + " -- rebuilding")
+  try { $script:watcher = New-OutboxWatcher; Log-Line "fsw rebuilt" }
+  catch { Log-Line ("fsw rebuild failed: " + $_.Exception.Message) }
+}
+
 if (-not (AcquireMutex)) { throw "Grok Bot outbox watcher already running" }
 try {
   Log-Line "start pid=$PID"
   Write-Heartbeat "start"
-  $watcher = New-Object System.IO.FileSystemWatcher $WatchPath, "*.txt"
-  $watcher.IncludeSubdirectories = $false
-  $watcher.NotifyFilter = [IO.NotifyFilters]"FileName, LastWrite, Size"
-  # A reply is written in chunks, and every chunk is an event: with the default
-  # 8 KB buffer a large answer (305 KB was the first one seen) overflows it and
-  # the events are DROPPED silently, so the flush never runs. 64 KB is the
-  # documented maximum for this filter set; the Error handler below still makes
-  # an overflow visible rather than silent, and the 30-minute reconcile remains
-  # the backstop.
-  $watcher.InternalBufferSize = 65536
-  $watcher.EnableRaisingEvents = $true
-  $sidC = "GrokBotOutboxCreated_" + [Guid]::NewGuid().ToString("N")
-  $sidH = "GrokBotOutboxChanged_" + [Guid]::NewGuid().ToString("N")
-  $sidR = "GrokBotOutboxRenamed_" + [Guid]::NewGuid().ToString("N")
-  $sidE = "GrokBotOutboxError_" + [Guid]::NewGuid().ToString("N")
-  Register-ObjectEvent -InputObject $watcher -EventName Created -SourceIdentifier $sidC | Out-Null
-  Register-ObjectEvent -InputObject $watcher -EventName Changed -SourceIdentifier $sidH | Out-Null
-  Register-ObjectEvent -InputObject $watcher -EventName Renamed -SourceIdentifier $sidR | Out-Null
-  Register-ObjectEvent -InputObject $watcher -EventName Error -SourceIdentifier $sidE | Out-Null
+  $script:watcher = $null
+  $script:watcher = New-OutboxWatcher
 
   $lastEvent = [DateTime]::MinValue
   $lastReconcile = [DateTime]::UtcNow
@@ -146,7 +179,7 @@ try {
     while ($true) {
       $ev = Get-Event -ErrorAction SilentlyContinue | Select-Object -First 1
       if (-not $ev) { break }
-      if ($ev.SourceIdentifier -eq $sidE) { Log-Line "watcher error event (a dropped event, likely a buffer overflow): flushing what is on disk" }
+      if ($ev.SourceIdentifier -eq $script:sidE) { Log-Line "watcher error event (a dropped event, likely a buffer overflow): flushing what is on disk" }
       Remove-Event -EventIdentifier $ev.EventIdentifier -ErrorAction SilentlyContinue
       $lastEvent = $now
       $pending = $true
@@ -157,6 +190,9 @@ try {
     }
     if (($now - $lastReconcile).TotalSeconds -ge $PollSeconds) {
       Flush-New
+      # The 30-minute tick proves the watcher itself, not only the directory:
+      # a dead FSW is silence, and silence is what a quiet channel looks like.
+      Test-OutboxWatcher
       $lastReconcile = $now
       Write-Heartbeat "reconcile"
     }
@@ -168,7 +204,7 @@ try {
   }
 } finally {
   Get-EventSubscriber -ErrorAction SilentlyContinue | Unregister-Event -Force -ErrorAction SilentlyContinue
-  if ($watcher) { $watcher.EnableRaisingEvents = $false; $watcher.Dispose() }
+  if ($script:watcher) { $script:watcher.EnableRaisingEvents = $false; $script:watcher.Dispose() }
   ReleaseMutex
   Write-Heartbeat "stopped"
   Log-Line "stop"
