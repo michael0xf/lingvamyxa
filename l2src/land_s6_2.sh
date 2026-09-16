@@ -53,6 +53,10 @@ ALLOW="$ALLOW"'|lmx_msg_slots\.h\.lm1|lmx_msg_slots\.lm1|lmx_msg_slots\.lm2|LMX_
 # merges into the stage. Here on his word, asked for rather than assumed -- an allowlist widened by the
 # script's author is how a landing admits a path nobody meant to land.
 ALLOW="$ALLOW"'|S6_2_MIXA_BASELINE\.txt'
+# Added (A) at 2e2f492c: the lead's mutation harness, kept in the tree for later stages. It is a build
+# input to nothing and a gate to nothing -- it exists so a tripwire can be repeated by someone who was not
+# there. Here on the coordinator's word, like the baseline document, not on mine.
+ALLOW="$ALLOW"'|tripwire_s6_2\.sh'
 ALLOW="$ALLOW"'|run_port_msg_slots\.ps1|run_msg_slots\.ps1|run_gates\.ps1'
 ALLOW="$ALLOW"'|run_port_message\.ps1|run_model_scenario36\.ps1|run_lmx\.ps1|run_graph_abi\.ps1'
 ALLOW="$ALLOW"'|run_port_array_owned\.ps1|run_port_array_ref_owned\.ps1|run_port_branch_owned\.ps1'

@@ -144,6 +144,28 @@ echo "exit=$? (expect 0); dirty=$(git status --porcelain | wc -l) (expect 0)"
 while proving nothing; that has happened here before, which is why `--numstat` is in the sequence and why
 the mechanism was proven before this file was written.
 
+### The reusable shape for any mutation like this
+
+The lead's S6-2 tripwire script is the worked form of the same discipline, and every rule in it exists
+because an earlier attempt broke that rule. Borrow the shape, not just the command:
+
+1. **Locate with `grep -F`** — a pattern carrying a backslash under-matches here, and one beginning `->` is
+   taken as an option, so a located-by-regex line is a line you have not actually found.
+2. **Edit by line number**, not by pattern substitution — a substitution that matches nothing edits nothing
+   and still exits 0.
+3. **Refuse to run on an already-modified file** — otherwise a leftover mutation is measured as the result.
+4. **Verify `+0 -1` (or the exact expected shape) before building** — the check that the mutation is real
+   must happen before the expensive step, not after the red.
+5. **Restore in a trap**, and assert `dirty=0` afterwards — a tripwire that leaves the tree dirty has
+   contaminated whatever runs next.
+
+Its two S6-2 uses also show what a tripwire pair should prove: deleting `lmx_message.lm1:1449` (the settled
+push in `release_slot`) reds `run_port_message` with "not settled into its parent", while deleting
+`lmx_message.lm1:1829` (`drain_settled`, the owner's round) reds `run_lmx -Suite Message` with the planted
+case. They fail **differently**, each firing its own named assertion — which is how you tell two halves of
+one mechanism from one mechanism carrying a redundant check. A pair that reds the same assertion has tested
+one thing twice.
+
 Proven by 0c on the red tree at 4189dea0, 2026-09-15, since no green tree exists yet, and proven with this
 exact line rather than inherited from an earlier draft that used a comment: appending
 `git show 7b3a8668:l2src/lmx_message.lm1 | sed -n '1237p'` took `refs` **342 -> 343**,
