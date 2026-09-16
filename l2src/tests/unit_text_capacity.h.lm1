@@ -1,0 +1,49 @@
+include: "<stddef.h>"
+
+struct: ProbeTextCtx
+    int: probe_text_capacity_field_00
+    int: probe_text_capacity_field_01
+    int: probe_text_capacity_field_02
+    int: probe_text_capacity_field_03
+    int: probe_text_capacity_field_04
+    int: probe_text_capacity_field_05
+    int: probe_text_capacity_field_06
+    int: probe_text_capacity_field_07
+    int: probe_text_capacity_field_08
+    int: probe_text_capacity_field_09
+    int: probe_text_capacity_field_10
+    int: probe_text_capacity_field_11
+    int: probe_text_capacity_field_12
+    int: probe_text_capacity_field_13
+    int: probe_text_capacity_field_14
+    int: probe_text_capacity_field_15
+    int: probe_text_capacity_field_16
+    int: probe_text_capacity_field_17
+    int: probe_text_capacity_field_18
+    int: probe_text_capacity_field_19
+    int: probe_text_capacity_field_20
+    int: probe_text_capacity_field_21
+    int: probe_text_capacity_field_22
+    int: probe_text_capacity_field_23
+    int: probe_text_capacity_field_24
+    int: probe_text_capacity_field_25
+    int: probe_text_capacity_field_26
+    int: probe_text_capacity_field_27
+    int: probe_text_capacity_field_28
+    int: probe_text_capacity_field_29
+    int: probe_text_capacity_field_30
+    int: probe_text_capacity_field_31
+    int: probe_text_capacity_field_32
+    int: probe_text_capacity_field_33
+    int: probe_text_capacity_field_34
+    int: probe_text_capacity_field_35
+    int: probe_text_capacity_field_36
+    int: probe_text_capacity_field_37
+    int: probe_text_capacity_field_38
+    int: probe_text_capacity_field_39
+end: ProbeTextCtx
+
+prototype:
+    fn: probe_text_take12 (int: a00; int: a01; int: a02; int: a03; int: a04; int: a05; int: a06; int: a07; int: a08; int: a09; int: a10; int: a11) int
+    fn: probe_text_take40 (int: a00; int: a01; int: a02; int: a03; int: a04; int: a05; int: a06; int: a07; int: a08; int: a09; int: a10; int: a11; int: a12; int: a13; int: a14; int: a15; int: a16; int: a17; int: a18; int: a19; int: a20; int: a21; int: a22; int: a23; int: a24; int: a25; int: a26; int: a27; int: a28; int: a29; int: a30; int: a31; int: a32; int: a33; int: a34; int: a35; int: a36; int: a37; int: a38; int: a39) int
+end: prototype

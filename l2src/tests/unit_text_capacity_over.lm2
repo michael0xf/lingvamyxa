@@ -1,0 +1,13 @@
+predef: "l2src/tests/unit_text_capacity.h.lm1"
+
+# Forty field-path actuals emit about 1500 bytes, past the translator's text
+# capacity: the failure must be located at the statement, never the generic
+# "no located diagnostic" fallback.
+
+fn: probe_text_over (@: ProbeTextCtx ctx) int
+    return: probe_text_take40(ctx\probe_text_capacity_field_00, ctx\probe_text_capacity_field_01, ctx\probe_text_capacity_field_02, ctx\probe_text_capacity_field_03, ctx\probe_text_capacity_field_04, ctx\probe_text_capacity_field_05, ctx\probe_text_capacity_field_06, ctx\probe_text_capacity_field_07, ctx\probe_text_capacity_field_08, ctx\probe_text_capacity_field_09, ctx\probe_text_capacity_field_10, ctx\probe_text_capacity_field_11, ctx\probe_text_capacity_field_12, ctx\probe_text_capacity_field_13, ctx\probe_text_capacity_field_14, ctx\probe_text_capacity_field_15, ctx\probe_text_capacity_field_16, ctx\probe_text_capacity_field_17, ctx\probe_text_capacity_field_18, ctx\probe_text_capacity_field_19, ctx\probe_text_capacity_field_20, ctx\probe_text_capacity_field_21, ctx\probe_text_capacity_field_22, ctx\probe_text_capacity_field_23, ctx\probe_text_capacity_field_24, ctx\probe_text_capacity_field_25, ctx\probe_text_capacity_field_26, ctx\probe_text_capacity_field_27, ctx\probe_text_capacity_field_28, ctx\probe_text_capacity_field_29, ctx\probe_text_capacity_field_30, ctx\probe_text_capacity_field_31, ctx\probe_text_capacity_field_32, ctx\probe_text_capacity_field_33, ctx\probe_text_capacity_field_34, ctx\probe_text_capacity_field_35, ctx\probe_text_capacity_field_36, ctx\probe_text_capacity_field_37, ctx\probe_text_capacity_field_38, ctx\probe_text_capacity_field_39)
+end: probe_text_over
+
+fn: main () int
+    return: 0
+end: main
