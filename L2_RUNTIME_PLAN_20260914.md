@@ -7033,3 +7033,12 @@ Ruled on e9's scope question (via b5): l2src/S6_2_MIXA_BASELINE.txt is
 an A path of land_s6_2.sh's allowlist (50 entries), landing with the
 stage as the measurement behind the six mixa list edits and the
 "same verdict" rule; 4409805c merges unchanged.
+e9: land_s6_2.sh at claude-0c/land-s6-2 a22bb431: the allowlist is
+the lead's 49 verbatim plus l2src/S6_2_MIXA_BASELINE.txt as an A (50),
+dry-run over three sources (the 50 paths, the real diff
+7b3a8668...4409805c accepted path by path, the four decoys refused);
+the test-side bullet at 90c6cbbe names no file outside the 49. Noted
+by e9: the lead's merge 6e2ea936 of 4409805c into d6/lock-s6-2 is
+local (visible in the shared store, on no remote ref); the pushed
+stage is still b78f743e, so the dry run over the stage tip is re-run
+when the merge is pushed. Not launched.
