@@ -1784,6 +1784,62 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         scenario36 joins land_base3.sh's fixed base rather than staying a per-stage extra.
       - Acceptance, all three legs measured: red at 695d54fc, green at baa8ec23 (probe -Part 1 all four counts 0),
         falsifier one hold put back giving exec_lock_calls=2 and S6-1 RED.
+
+  S6-2: the reference count and the runtime's slot list (design before code, on the landed tip 7b3a8668)
+    - What goes: LmxMsg.refs with lmx_msg_endp_retain / lmx_msg_endp_release / lmx_msg_endp_refs and the two
+      InterlockedCompareExchange inside them, lmx_msg_endp_try_retire, and LmxMsgRuntime.slots / .n with
+      LmxMsg.alloc_next, the lmx_msg_slots port module and its runner.
+    - Why, from the spec rather than from the code (19.29.7 Message Boundary, the phrase "there is no count of
+      holders", origin/main 077ee6fd, today line 12909; agreed with Mikhail 2026-09-15, "давай так"): a capability
+      is the target's mailbox handle; a closing Message's mailbox is settled into its parent with the rest of its
+      storage, so a late send lands in a mailbox the parent owns and is refused there, on the parent's lane, with a
+      status to the sender; there is no count of holders. "No count of holders" is exactly refs. For the slot list,
+      19.28 Revision 2, the phrase "the slot list served only the L1 delete loop and its address lookup and goes
+      without replacement" (today 11635-11637).
+    - Both of the slot list's duties are already served without it, measured on the landed tree: the address
+      lookup is the family-tree walk (lmx_msg_find -> lmx_msg_find_tree(rt\root, addr), and msg_find_any_locked
+      walks first_child/next_sibling/parent_msg), and the delete loop is R0's own subtree, since S5 made R0 the
+      one root.
+    - What refs actually does today, measured, not assumed (52 sites in lm1, 55 in lm2, 28 in exec.c, 30 in the
+      executor selftest, 4 in the header):
+      - a pin across an unlocked window, in host_post, host_drain, end_turn (three), recv, fail, drive_one,
+        inbox_n and orphan_sweep: retain, drop the hold, do the mailbox work, take it again, release. With the
+        executor lock gone in S6-1, what these now guard is only "the record cannot be freed under me";
+      - a lifetime hold, in copy_dup / copy_free (a staged copy's dest_msg), send / send_graph / send_owned /
+        send_cap (retain dest, retain src, release src), admit_one (retain dest through the inbox push), and
+        release_slot's closing release;
+      - the free itself: release_slot unbinds, unlinks from the family, drains both mailboxes, frees init and
+        path, sets RELEASED and releases; endp_release at zero calls endp_try_retire, which requires refs == 0,
+        both mailboxes empty, no parent and no children, then unlinks the record from rt->slots, decrements
+        rt->n and calls lmx_msg_slot_free -- which destroys m->mail, the mailbox monitor itself.
+    - The design, on the spec's sentence: a child's storage is never freed while its parent lives, because the
+      close settles it into the parent; the mailbox settles with it, so a handle stays valid and a late send is
+      refused on the parent's lane with a status. Then nothing needs counting: the settle is the single lane that
+      ends a record's life, and the pins above have nothing to guard against. The per-site replacement comes from
+      b5's pre-read (sonnet/s6-2-preread), site by site, not by a blanket deletion.
+    - Gate impact, from e9 (claude-0c/s6-2-gate-impact 16335e9b; 92c7bc45 is superseded): six gates assert refs,
+      retain/release, the slots API or rt\n -- lane_oracle (the executor selftest's 31 rt\n reads and its six
+      endp_ lines at 3172-3202), scenario36 (family_release_17's pins at 212, 303, 304 and orphan_mapped_17's at
+      149), lmx_message (lmx_message_selftest.lm1 924/934/964/982), entry_turn (84), port_slots (the whole gate)
+      and graph_abi (531-539). The finding that shapes the allowlist: 22 of the 31 name lmx_msg_slots as a support
+      module to translate and link, so dropping the module without those runner lines is red at BUILD time, not at
+      a check; only run_entry_turn.ps1:69 is guarded by Test-Path and survives untouched.
+    - The tests' replacement property already exists in the fixtures and needs no invention: family_release_17's
+      own helper gone(rt, a) is lmx_msg_find(rt, a) = 0, and it stands beside every rt\n pin there; entry_turn's
+      line 84 pairs rt\n = 1 with find(1U) != 0 && find(2U) = 0; the executor selftest pairs on1 = on0 - 1 with
+      find(p) != 0. What each pin asserts is "the record was reclaimed", which the tree walk says without a
+      runtime-wide counter.
+    - Acceptance (the coordinator re-measures all three cold): the S6 probe -Part 2.
+      - Red, measured by him on the landed tree with 695d54fc's probe: refs=342, runtime_lists=36 at 7b3a8668.
+        (The 349 first written here predated S6-1, which removed seven refs lines; corrected on his measurement.)
+      - The base is fable/s6-2-acceptance 4189dea0 = 7b3a8668 merged with d6/lock-s6-red 695d54fc. The green is
+        measured by merging the stage tip with that base on a MEASURING branch; the probe is never folded into
+        d6/lock-s6-2's own history, as in every stage here.
+      - Green: -Part 2 prints 0 / 0 on that merge, with the union base green on it.
+      - Falsifier: one retain put back on that merge, which must take refs above 0 and turn -Part 2 red.
+      - Before landing, the gates whose fixtures this section names are run locally by name, never a proxy suite.
+    - Stop condition, as for every stage here: if settling the mailbox into the parent turns out to need a lock, a
+      wait or a signal, the stage stops and the question goes to Mikhail through the coordinator.
       - Falsifier, the acceptance's third leg, measured on d6/lock-s6 at baa8ec23: from zero lock lines, one
           lock/unlock pair put back around a census site (lmx_message.lm1:1650) gave "exec_lock_calls=2
           exec_lock_decl=0 host_lock=0 exec_fields=0", "S6-1 RED", probe exit 1; the file was restored from git in
