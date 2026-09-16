@@ -919,3 +919,43 @@ mixa_core.h nor tiles_l2.h.lm1 from app_controller_l2.h.lm1 at all,
 sidestepping the conflict instead of resolving it. Not implemented
 here (code, out of this note's own doc-only scope) -- a candidate for
 whoever picks up app_controller's own ticket next.
+
+--- Implemented: the prototype: declarations for app_controller's
+    fmpanel calls (two corrections to the recommendation above, found
+    while implementing, both cited exactly)
+
+Correction 1, the count: app_controller.lm2 calls EIGHT distinct
+mixa_app_fmpanel_* functions, not nine -- the design note's own prose
+said "nine" but its own listed names were only eight (close, open,
+render, report_copy_result, hit, wheel, release, key); re-verified
+twice independently just now (PowerShell regex match + unique, and a
+second full-file grep for every `mixa_app_fmpanel_` occurrence) --
+both give the same eight, no ninth function anywhere, including no
+separate constructor (mixa_app_fmpanel_open's own out-param, `@@:
+MixaAppFmPanel out`, already fills that role). `grep -c "prototype:"`
+on the edited file after this commit prints 8.
+
+Correction 2, "replacing" the opaque #include: the real `include:
+"mixa_manager/mixa_app_fmpanel.h"` cannot simply be removed -- tried
+first, and it broke the C side too: gcc reported `unknown type name
+'MixaAppFmPanel'` at every one of the eight prototype: sites and the
+struct field itself, because that real header is what supplies
+`typedef struct MixaAppFmPanel MixaAppFmPanel;`, l1trans/gcc's own
+plain forward-declaration requirement for using the name as a bare
+pointer type -- a need the eight `prototype:` blocks do not cover
+(they give l2trans an L2-visible callable declaration, a completely
+separate requirement l1trans/gcc never had). Fix: keep the real
+`include:` AND add the eight prototype: blocks alongside it, not in
+its place -- both needs, same file, two different translators reading
+it two different ways.
+
+Before: UNEXPECTED_FAILURE at mixa_app_controller.lm2:14:5 (frame=
+mixa_app_fmpanel_close). After: UNEXPECTED_FAILURE still, but moved
+past every fmpanel call entirely -- the new first failure is
+mixa_app_controller.lm2:16:5, frame=mixa_file_close, a DIFFERENT
+function with the exact same shape of gap (`grep -rn mixa_file_close
+mixa_manager/*.h.lm1` finds nothing -- only the real mixa_file.h:32
+prototype, no L2-visible declaration, same class of fix as fmpanel's
+own, just not this ticket's own scope). Real progress, not a pass --
+this ticket's own fix is confirmed working for exactly what it targets
+and nothing past it, reported rather than chased.
