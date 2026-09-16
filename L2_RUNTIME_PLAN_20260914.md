@@ -9399,3 +9399,32 @@ exited 127) and still exited 0; it was caught by its 9-second duration,
 fixed (local loop variable; the script exits with its failure count) and
 rerun; only the rerun is evidence.  The landing waits on the engineer's cold
 chain on the candidate 3d4eb0be.
+
+MIXA MERGE PREVIEW (b5, build-free), recorded 09:37: sonnet/mixa-module-list
+ff0b2c24 onto the S6-2 candidate 3d4eb0be, merge base 7b3a8668: 8 conflict
+markers in 6 files (lib_l2_runtime_support.ps1 1, run_mixa_app_fmpanel 1,
+app_path 1, composite_glyphs 2, selection 1, tiles 2), control 18f5701d vs
+dfc10d08 = 9 (b5: an anchored count reads 0 on merge-tree's +-prefixed marker
+lines; count unanchored or with the + in the pattern).  Rules, as corrected
+by the coordinator: (1) every module-name list resolves to the base's names
+minus the union of both sides' deletions (lmx_msg_path_storage and
+lmx_msg_slots from S6-2; lmx_msg_sched_ready from b5's f7382804, a module
+deleted at f391fb27 that the candidate's lists still name -- b5's reading
+"the candidate side added sched_ready" had the direction backwards: 1 at
+7b3a8668, 1 at 3d4eb0be, 0 at ff0b2c24, git log -S finds only f7382804) plus
+any name either side added; (2) every build-mechanism conflict takes b5's
+shared Add-L2RuntimeSupport call.  After the landing: every resolved name
+must have its l2src module file at the new integration head.
+COMPILER TICKET 2 PATCHED on fable/l2trans-text-cap (on top of d17eefc3, not
+yet committed): define: L2_TEXT_CAP 1024U used by all 27 text arrays, 38
+256U and 9 255U sites (0 left; the two bare "ch + 256" byte fixes untouched);
+l2_cat and l2_tok_text set l2_text_over; l2_emit_body records l2_text_at and
+clears the flag per statement; l2_translate reports "this statement's emitted
+text exceeds the translator's text capacity (L2_TEXT_CAP)" at the statement
+before the document is destroyed.  Sized at 1024 from the binary's 2 MB
+stack reserve (l2_emit_body and l2_prep recurse with five buffers each).
+Fixtures: unit_text_capacity (twelve field-path actuals, about 460 bytes)
+translates with the call whole; unit_text_capacity_over (forty, about 1500
+bytes) fails at 8:5 with that message.  Both were red before the patch
+(generic fallback).  gcc warnings identical to the unpatched build (18, same
+texts).  run_l2trans and the chain wait for the S6-2 landing chain to finish.
