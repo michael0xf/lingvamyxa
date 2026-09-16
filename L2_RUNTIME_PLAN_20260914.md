@@ -8024,3 +8024,19 @@ AND the runner exits, with a tripwire (the reproduction ends under
 the landing. Watchdog rule from the lead's two instrument errors: no
 head/tail on a listing one then reasons from; times compared as epoch
 seconds.
+The lead's third line: the kill of 7964 preceded the coordinator's
+hold; run_gates concluded "gates RED: stopped at c_scanners after
+2008s"; the capture that survives: the process tree with start times
+(4520 run_gates, 20452 cmd, 7964 the runner, the last two at 00:46:05),
+the timeline, evidence.json verbatim (archiveMs 120029, "Archive timed
+out after 120 s (git pid 11216, started 00:46:15.542)"), no git.exe at
+inspection; the nine rows before c_scanners are not cited as a
+partial result. Agreed course: nothing further killed; e9's
+whole-step bound fix on claude-0c/archive-timeout-2 off 2d8f2b6a with
+the deterministic reproduction as its tripwire; the lead merges it
+into d6/lock-s6-2, sends the new tip's name-status to e9, re-runs
+run_gates -L2MessageRoot whole, then port_parser, then the five lines;
+the coordinator re-runs the six gates on the new tip's measuring
+merge. STANDING RULE (the lead's words, adopted): when a peer is
+actively watching the same hang, say what you are about to do before
+doing it, not after.
