@@ -8384,3 +8384,22 @@ slot\path[p\path_n]; R0's path is [1]), so the arrays were a
 materialized cache of the parent walk and getAddress is the same
 computation unmaterialized. The section follows with
 lmx_msg_get_address and lmx_msg_send_to.
+
+MIKHAIL, 2026-09-16, verbatim, on the coordinator's "the sender derives
+the route (hops up to the common ancestor, then the destination's
+remaining indices)": "НЕТ!!! ЗАЧЕМ?!!! Отправителю достаточно один раз где-то в коде получить адрес и сохранить. Адрес перед отправкой никто не проверяет. Я же описал алгоритм -- письмо дается родителю который решает передать своем родителю или ребенку. Где здесь поиск пути?" WITHDRAWN: the
+sender-computed route and the envelope's hop counter and position
+(the plan's sixth-line ruling and the message to the lead that
+carried them). THE ALGORITHM AS HE DESCRIBED IT, entered in spec
+19.29.7 and the model: the sender obtains the destination's address
+once, anywhere in its code (getAddress on a Message it holds, or by
+mail), and keeps it; nothing is checked before a send; the letter
+carries the destination address only and is given to the sender's
+parent; each Message holding the letter decides alone, by comparing
+the destination address with its own (its own from getAddress, the
+walk up to the root): the destination equal to its own address, the
+letter is for it; its own address a prefix of the destination, hand
+down to the child whose index follows the prefix; otherwise hand up to
+its parent; no such child (or no parent above R0), the letter falls
+off with a refusal status to the sender. No search, no route, no
+extra fields in the letter.
