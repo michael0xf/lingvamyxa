@@ -1850,6 +1850,25 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       The half that could have been a real surprise was measured and is clean: run_msg_family_handoff stays at
       "checks=67 failures=0 watched_frees=4", so not draining the mailbox did not move that runner's block-free
       count -- the numeric side effect I went looking for is not there.
+    - The slot-count pins cannot be restated as find-based "gone", and the reason is written in the fixtures
+      themselves: family_release_17 says "'Gone' is measured by the runtime's slot count rt\n, not by
+      lmx_msg_find: find walks only what rt->root reaches, so a subtree released from its parent but still
+      retained (the very state decision 17 forbids) would read as gone", and orphan_mapped_17 says "find cannot
+      tell a retained unreachable". Both were written against the spec's "A released branch is never retained ...
+      the branch's slots and arenas are freed by that chain, never at process end" (077ee6fd, the phrase "never
+      at process end") and "the branch is drained, not retained". My own first plan -- swap the counter for
+      gone() -- would have put back exactly the blind spot those lines exist to close.
+      The reconciliation, found by reading both sentences rather than by stopping the stage: 19.29.7 has a closing
+      Message's mailbox "settled into its parent with the rest of its storage", so after the settle the memory is
+      no longer "the branch's slots and arenas" but the PARENT's storage, and freeing it when the owner closes is
+      ordinary ownership rather than a branch retained to process end. The forbidden state is a subtree left
+      hanging, unowned, waiting for teardown; the settled state is owned by a live parent from the moment of the
+      settle. Both sentences hold under that reading, which is the one the coordinator's own correction adopted.
+      What it costs: the six pins in family_release_17 (212, 222, 248, 270, 303, 304, with their n0 captures at
+      209, 219, 245, 267, 290), the eight sites in orphan_mapped_17 and the one in entry_turn are restated as
+      OWNERSHIP and STATE checks -- the record is the parent's data, its state is RELEASED, it is out of its
+      parent's child list -- and never as "find says gone", which after S6-2 is true of a settled record by
+      construction and therefore asserts nothing.
     - Counting method, so two honest counts are not read later as a contradiction in the code: my numbers are
       CALL sites (git grep -o of "lmx_msg_endp_retain(" and its siblings), which at 7b3a8668 give 51 / 82 / 16 over
       l2src and 52 / 82 / 16 over the whole tree; e9's 53 / 84 / 20 come from a pattern that also catches the field
