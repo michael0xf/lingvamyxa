@@ -6482,3 +6482,30 @@ keeping the storage, the refusal on the parent's lane, R0's tree walk
 at runtime_delete); any site whose replacement would need a lock,
 wait, signal or a count flagged as a contradiction to stop on; counts
 at the top.
+S6-1 landing #1 red, not pushed (the lead, 2026-09-15): the gates stopped
+at family_handoff after 141 s, "FAIL K settled successfully"
+(lmx_msg_family_handoff_selftest.lm1); a test race the executor lock
+hid: end_turn writes STOPPED and handoff_ready is written by the turn's
+last step, native_leave_addr, which run_one calls after end_turn
+returns; the fixture waited only for STOPPED (yield_until_stopped) and
+read handoff_ready at once, so the host could read inside the window
+(the lock used to order that read against the worker's writes); every
+other fixture already spins on handoff_ready (family_release_17,
+orphan_mapped_17, scenario36; the lesson b5 met on the M conversions).
+The lead's miss, named by him: family_handoff was on his list of
+fixtures reading handoff_ready after a stop and he ran scenario36
+(which does not build it) rather than its gate before landing. Fix,
+test only, no wait, lock or signal in the runtime: a
+yield_until_handoff_ready helper beside yield_until_stopped at the
+three sites reading handoff_ready after a stop (K's successful branch,
+G after its unbind and drive, C before its own check); the bar five
+cold runs of run_msg_family_handoff.ps1 (one green run says nothing
+about a race). The rest of the union base green so far on the merge
+(self-build 8 of 8 tagged selfbuild/8f290ad6, port_message plain and
+-LaneCheck PASS 103 methods in 45 s each; l2trans, port_parser, mixa,
+ingress, lmx_cancel running); the script left to finish for the whole
+picture, then the fixture fix committed to d6/lock-s6 and a fresh
+merge landed. Rule from it (coordinator): before every landing the
+lead runs locally the gates whose fixtures the stage's section names
+as touched, and e9's gate impact list is made for every stage (S6-2
+next), not only for M and S2.
