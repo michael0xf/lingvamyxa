@@ -8040,3 +8040,25 @@ the coordinator re-runs the six gates on the new tip's measuring
 merge. STANDING RULE (the lead's words, adopted): when a peer is
 actively watching the same hang, say what you are about to do before
 doing it, not after.
+CORRECTION of the coordinator's line-76 reading, settled by the
+artefact: evidence.json carries the timeout branch's own payload
+(result FAIL, failure "Archive timed out after 120 s (git pid 11216,
+started 00:46:15.542)", archiveMs 120029, the two zero-byte archive
+files), which line 63 writes before the throw; a run reaching line 76
+would have written the success-path shape. So the ARCHIVE ITSELF
+HUNG AGAIN (the third real occurrence, this time in the lead's stage
+tree, the git process force-killed by the bound with no capture), the
+bound fired to the millisecond, and the runner did not exit after its
+throw: the hang after the throw sits between the timeout branch and
+process exit (the outer try/finally unwinding, Set-Location, or
+whatever holds the redirected handles of a force-killed child). Two
+defects now: the intermittent archive hang (unexplained, 1030 clean
+isolation runs, three hangs in gate chains) and the runner not exiting
+after its own FAIL (new, reproducible by design). The chain's nine
+rows before c_scanners passed (lane_oracle 51 s, scenario36 25 s,
+lmx_message 20 s, history, roots_stale, visit, liveness, send_local
+26 s, family_handoff 28 s), c_scanners FAIL exit=1 after 1852 s, twenty
+rows not run; not cited as the stage's verdict. 4520 and 20452 gone,
+by Win32_Process. core.zip's presence or absence in that run dir is
+the one artefact deciding "archive completed" independently of JSON
+(the lead reports it).
