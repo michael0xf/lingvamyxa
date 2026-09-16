@@ -9360,3 +9360,21 @@ each); an overflow always reported as a located diagnostic naming the
 statement; red first with a fixture call longer than 255 bytes; the
 capacity itself recorded as a limitation to remove (dynamic text), not a
 bound.
+
+COMPILER TICKET 1 VERIFIED END TO END by b5, recorded 09:30: on a local
+scratch merge 99f38397 (sonnet/mixa-module-list ff0b2c24 + d17eefc3, clean,
+never pushed), run_mixa_l2_parity.ps1 -Module app_window went from
+PARITY_FAILURE (before, at ff0b2c24: oracle 162/162, L2 harness
+STATUS_ACCESS_VIOLATION right after check 15, reproduced outside the harness
+too) to PASS (162/162, oracle and L2 traces byte-identical); the other eleven
+parity rows unchanged (app_controller still UNEXPECTED_FAILURE: ticket 2);
+gcc's two -Wint-conversion lines in app_window_l2.c gone.  Evidence:
+C:\Nyasha_Planet\wtb5_mbase (run_20260916_092006_109_4a28c49f,
+r20260916_092122_774_6ede639e) and C:\Nyasha_Planet\wtb5_mscratch
+(run_20260916_092558_387_ab713b93, r20260916_092525_026_c22949a1).
+S6-2 candidate: claude-0c/archive-timeout-3 3d4eb0be (parents a1fb483d and
+4888a7ae; patch-id of 4888a7ae..3d4eb0be e923bfd6; 77 paths over 7b3a8668;
+the 8 new ones are the R0-round fixtures of 3e1cec49..4888a7ae, admitted by
+the coordinator); family_handoff's hazard is bounded by land_s6_2.sh:198
+(run_gates under T_GATES=1200 through run() at :173; run_gates.ps1:129 has
+no per-gate bound), with the engineer's kill-reaches-children probe.
