@@ -9784,3 +9784,33 @@ tripwire_gate_bounds PASS (all parts), with the control at d3bde8b5 hanging --
 "control (d3bde8b5): exited=False wall=40s selftest alive at window end=1",
 "fixed: exited=True wall=11s leftover=0 :: tripwire_hang FAIL timeout after 10s
 (row bound 10s)". The full gate chain on the re-cut branch is running.
+
+THE SHARED CHECKOUT IS ON AN OLD COMMIT, found 2026-09-16 15:00 by the coordinator
+(lingvamyxa-08): C:/Nyasha_Planet/lingvamyxa -- the path every agent is pointed
+at by habit -- sits on a stale main (its working tree has NO l2src/ at all and
+still carries stg/l1_baseline, retired 2026-09-15). grok_bot's first task was an
+audit of l2/ locks and it audited stg/l1_baseline and the vendored ingress copy,
+because those were the only sources visible there; the answer is a correct audit
+of a retired tree. Two consequences recorded: (i) a read-only copy of main now
+exists at C:/Nyasha_Planet/wt_ref_main for such readers, and the corrected task
+is in grok_bot's inbox; (ii) every instruction to an external agent must name the
+tree it reads, not the workspace root. The shared checkout itself is left as it
+is (nobody resets it), and doc commits continue through a worktree at main.
+
+THE OUTBOX WATCHER DROPPED A REAL REPLY, found and fixed the same hour: the
+first answer grok_bot published was 305 KB, written in chunks; a FileSystemWatcher
+with the default 8 KB buffer loses events silently, so the flush never ran and
+pending_new.txt stayed empty. Fixed: InternalBufferSize 64 KB (the documented
+maximum for this filter set) and the Error event registered and logged by the
+loop, so an overflow is visible rather than silent; the 30-minute reconcile stays
+the backstop. The watcher was restarted and its baseline marked the one pending
+reply seen -- it had already been read by hand.
+
+ROW-BOUNDS: the first full gate chain on the re-cut branch (76331f43) was RED at
+lane_oracle -- "FAIL timeout after 207s (row bound 200s) 207s | (empty log)" --
+i.e. the rare hang of the executor selftest, caught by the very bound the branch
+adds, and not a regression: the same row passes in 68 s on a quiet machine. The
+chain was re-run to confirm; the branch's own tripwire already passes.
+
+GROK_BOT'S FIRST TASK ANSWERED (audit), second task in its inbox (the same audit
+over wt_ref_main/l2src).
