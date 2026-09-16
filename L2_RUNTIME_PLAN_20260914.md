@@ -7788,3 +7788,6 @@ remains). The acceptance base is now fable/s6-2-acceptance 6b15d8e8
 (7b3a8668 plus the probe at 695d54fc plus the two narrowing commits);
 the falsifier's arithmetic is 163 to 164 on the red tree and 0 to 1 on
 the green; MEASURE_S6_2.md's red leg is updated by e9 to 163.
+The acceptance base's final hash after the header note: fable/s6-2-acceptance
+96a754e0 (6b15d8e8 the needle change, 96a754e0 the header stating it);
+red re-confirmed there: refs=163 runtime_lists=36.
