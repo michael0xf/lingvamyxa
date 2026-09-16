@@ -953,21 +953,22 @@ fn: main () int
     unsigned: rs3 0U
     unsigned: rc3 0U
     @: LmxMsg held3
-    int: n3 0
     rrt3: lmx_msg_runtime_new()
     st: lmx_msg_create(rrt3, 0U, payload, 4U, @ rp3)
     st: lmx_msg_create(rrt3, rp3, payload, 4U, @ rs3)
     st: lmx_msg_end_turn(rrt3, rp3, 1)
     st: lmx_msg_create(rrt3, rp3, payload, 4U, @ rc3)
-    n3: rrt3\n
+    # S6-2, SPEC 19.29.7: the capability is the target's mailbox handle, and a
+    # closing Message's mailbox is settled into its parent with the rest of its
+    # storage, so a late send lands in a mailbox the parent owns and "is refused
+    # there, on the parent's lane, with a status to the sender". This case used to
+    # assert the same scenario through the reference count (a held retain kept the
+    # slot from retiring, the last release retired it); with no count of holders,
+    # what it asserts is the refusal status instead. The handle stays usable
+    # because the storage settles upward rather than being freed.
     held3: lmx_msg_find(rrt3, rc3)
-    if: held3 = 0 || c.lmx_msg_endp_retain(held3) = 0
-        c.printf("retire retain\n")
-        fail: fail + 1
-    ---
-    st: lmx_msg_send_cap(rrt3, rp3, held3, env)
-    if: st != c.LMX_MSG_STAGED
-        c.printf("retire send_cap\n")
+    if: held3 = 0
+        c.printf("no handle to the child before the rollback\n")
         fail: fail + 1
     ---
     st: lmx_msg_end_turn(rrt3, rp3, 0)
@@ -975,14 +976,17 @@ fn: main () int
         c.printf("rolled-back child still findable\n")
         fail: fail + 1
     ---
-    if: rrt3\n != n3
-        c.printf("held cap retired early\n")
+    # The send goes through the handle kept from before the rollback. Its own
+    # return is not the refusal: staging succeeds and the refusal comes back as a
+    # status, which is why this reads the sender's inbox rather than st.
+    st: lmx_msg_send_cap(rrt3, rp3, held3, env)
+    st: lmx_msg_end_turn(rrt3, rp3, 1)
+    st: lmx_msg_recv(rrt3, rp3, got)
+    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_REJECTED
+        c.printf("no refusal status for a send through a settled capability\n")
         fail: fail + 1
-    ---
-    c.lmx_msg_endp_release(held3)
-    if: rrt3\n != n3 - 1
-        c.printf("final held-cap did not retire\n")
-        fail: fail + 1
+    else:
+        lmx_msg_env_release(got)
     ---
     if: lmx_msg_find(rrt3, rs3) = 0
         c.printf("sibling retired with child\n")
