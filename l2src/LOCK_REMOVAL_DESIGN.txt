@@ -2220,6 +2220,13 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         the mutation is exactly +0 -1 BEFORE building; and the restore is a trap, so it runs even if the gate
         hangs or the timeout fires. Kept at l2src/tripwire_s6_2.sh's scratch path for tripwire 2 and for the
         stage's later steps.
+      - TRIPWIRE 2 PASSED, so the refusal is evidence too: deleting lmx_message.lm1:1829,
+        `lmx_msg_drain_settled(rt, m)` -- the owner's round, one line -- turned run_lmx -Suite Message red with
+        exactly the planted case, "no refusal status for a send through a settled capability", and the tree
+        restored to dirty=0. Both halves of S6-2's mechanism have now been shown able to fail for their own
+        reason: remove the settled push and ownership stops being true; remove the owner's round and the sender
+        stops being answered. Two greens that can each be broken by one line, each breaking a DIFFERENT named
+        assertion -- which is what distinguishes a mechanism from a coincidence.
       - The refs deletion's step two, inventoried in the files that tripwire could not be touching (lm1 and lm2
         deliberately not read while a mutation was live in them -- their line numbers would have been shifted and
         one site missing, which is the wrong-inventory failure this document keeps recording):
