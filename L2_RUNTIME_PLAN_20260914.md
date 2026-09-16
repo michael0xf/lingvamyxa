@@ -6693,3 +6693,9 @@ wt0c_landed_7b3a8668 and wt0c_landed_8eeb094f as D's -LoadTree; the
 first hang ends the isolation, a moved ref voids the stage, 60 min hard
 stop); the window opens once the lead's merge of integration into main
 is on origin.
+S6-1 ON MAIN: the lead's merge a3c8d970 of integration 7b3a8668 into
+main ("S6-1, the executor lock is gone"). GIT-FREEZE WINDOW opened by
+the coordinator at that moment (2026-09-15) for e9's archive-hang
+isolation: all sessions told no pushes, fetches, checkouts, worktree
+adds, tags or builds until the one-line lift; local edits and commits
+allowed; this note is committed locally and pushed at the lift.
