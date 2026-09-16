@@ -10088,3 +10088,16 @@ its 200 s timeout twin, while 100+ direct runs of the same binary stayed clean.
 That is the strongest argument yet for (d)(3) as the fix rather than a retry
 policy -- and the chain was re-run after this record, as the landing practice for
 a documented flake allows.
+
+THE MERGED STAGE TIP VERIFIED, 2026-09-16 17:11: d6/lock-ad 58ec1235 passes run_port_message
+(GREEN), run_lmx ("l2 lmx gen2 ok", exit 0) and run_model_scenario36 ("core tests
+PASS": 51/0, 27/0, 32/0, 76/0 and the rest, exit 0), with the probe reading
+find=200 find_tree=8 dest_from_src=8 self_or_find_fallback=2 id_marks=0
+parent_field=0. Those three cover every file the two merges touched (the cores,
+exec.c, the selftests and the ~387 call sites). The FULL gate chain could not be
+completed for a machine reason, not a code one: it was killed twice by the OS for
+low memory while desktop applications held ~1.2 GB (three ChatGPT processes,
+slack, two claude processes) with 2.5 GB free of 15.8, and each chain run needs
+gcc in parallel. The chain is therefore recorded as UNRUN on this tip, not as
+green -- to be re-run the moment the machine has room; until then the three
+runners above are the evidence, and they are the ones that touch what changed.
