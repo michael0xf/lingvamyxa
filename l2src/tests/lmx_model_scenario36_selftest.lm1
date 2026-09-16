@@ -139,6 +139,9 @@ fn: turn_a (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     reply\correlation: got\id
     reply\reply_to: who
     reply\number: value
+    reply\from_msg: c.lmx_msg_turn_self(rt)
+    reply\reply_to_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle (letter id only; recv fills no reply_to_msg)
     st: lmx_msg_send_graph(rt, who, got\reply_to, reply, observed_reply_root)
     lmx_msg_env_release(got)
     c.free((cast: (@: void) got))
@@ -169,6 +172,9 @@ fn: turn_b (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     reply\reply_to: who
     reply\kind: c.LMX_MSG_KIND_NUMBER
     reply\number: 999
+    reply\from_msg: c.lmx_msg_turn_self(rt)
+    reply\reply_to_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle (letter id only; recv fills no reply_to_msg)
     st: lmx_msg_send(rt, who, got\reply_to, reply)
     ran\id: 201U
     ran\kind: c.LMX_MSG_KIND_NUMBER
@@ -214,6 +220,8 @@ fn: turn_p_create_b (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         return: 1
     g_create_st: lmx_msg_create_graph(rt, who, g_root, g_pm\ranges, lmx_msg_eternal_ranges(g_pm), lmx_msg_method_ranges(g_pm), @ g_ini, 1U, @ g_b)
     if: g_create_st = c.LMX_MSG_OK
+        g_env\from_msg: c.lmx_msg_turn_self(rt)
+        g_env\to_msg: lmx_msg_find(rt, g_b)
         g_send_st: lmx_msg_send(rt, who, g_b, g_env)
     ---
     return: lmx_msg_end_turn(rt, who, 1)
@@ -328,6 +336,8 @@ fn: main () int
     env\reply_to: p
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: 5
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     check(lmx_msg_send(rt, p, a, env) = c.LMX_MSG_STAGED && lmx_msg_inbox_n(rt, a) = 0, "P stages an input for A; staging admits nothing")
 
     # --- P ends its turn successfully: creation and outbox are published.

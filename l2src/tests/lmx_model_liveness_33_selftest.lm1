@@ -65,6 +65,8 @@ fn: report (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         return: c.LMX_MSG_NOMEM
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: (cast: (int) who)
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — id from configuration
     st: lmx_msg_send(rt, who, g_sink, env)
     c.free((cast: (@: void) env))
     return: st
@@ -241,6 +243,8 @@ fn: turn_p_script (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         ---
     ---
     if: op[0] = 3U
+        g_env\from_msg: c.lmx_msg_turn_self(rt)
+        # AD pair: to_msg CANNOT — id from configuration
         g_st1: lmx_msg_send(rt, who, g_to, g_env)
     ---
     if: op[0] = 4U
@@ -270,6 +274,8 @@ fn: turn_p_script (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
             env\number: 9
             g_st1: lmx_msg_create(rt, who, @ g_ini, 1U, @ g_x)
             if: g_st1 = c.LMX_MSG_OK
+                env\from_msg: c.lmx_msg_turn_self(rt)
+                env\to_msg: lmx_msg_find(rt, g_x)
                 g_st2: lmx_msg_send(rt, who, g_x, env)
                 g_st3: lmx_msg_stop(rt, who, g_x)
             ---
@@ -279,6 +285,8 @@ fn: turn_p_script (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
             env\number: 1
             g_st1: lmx_msg_create(rt, who, @ g_ini, 1U, @ g_q)
             if: g_st1 = c.LMX_MSG_OK
+                env\from_msg: c.lmx_msg_turn_self(rt)
+                env\to_msg: lmx_msg_find(rt, g_q)
                 g_st2: lmx_msg_send(rt, who, g_q, env)
             ---
         ---
@@ -389,6 +397,8 @@ fn: main () int
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: 5
     env\reply_to: p
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, c1) = 1, "P gives C one input")
     check(lmx_msg_inbox_n(rt, p) = 0, "P's turn sent no probe of its own")
     g_to: c1

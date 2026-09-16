@@ -156,6 +156,8 @@ fn: main () int
         return: 2
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: 7
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle (create+send same expr; capture needs split)
     check(lmx_msg_create(rt, p, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_send(rt, p, cc, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "C created by P with one input staged; P published")
     c.free((cast: (@: void) env))
     check(lmx_msg_exec_bind(rt, p, turn_parent_fail, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, cc, turn_orphan_fail, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "P and C bound")

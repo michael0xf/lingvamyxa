@@ -91,6 +91,8 @@ fn: turn_writer (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     env\id: (cast: (unsigned) k)
     env\reply_to: who
     env\number: k
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — id from configuration
     st: lmx_msg_send_graph(rt, who, g_owner, env, root)
     c.free((cast: (@: void) got))
     c.free((cast: (@: void) env))
@@ -266,12 +268,18 @@ fn: main () int
     k: 1
     while: k <= 4
         env\id: (cast: (unsigned) (30 + k))
+        env\from_msg: c.lmx_msg_turn_self(rt)
+        # AD pair: to_msg CANNOT — no handle
         check(lmx_msg_send(rt, p, writers[k], env) = c.LMX_MSG_STAGED, "input for a writer staged")
         k: k + 1
     ---
     env\id: 40U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     check(lmx_msg_send(rt, p, a, env) = c.LMX_MSG_STAGED, "input for A staged")
     env\id: 41U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     check(lmx_msg_send(rt, p, b, env) = c.LMX_MSG_STAGED, "input for B staged")
     check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P publishes the inputs")
     # S6-2 (the drain ruling): P's end-turn pushes; R0's round (the host's pump) admits.

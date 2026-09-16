@@ -544,8 +544,12 @@ static int turn_send_two(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     e.n = 1;
     e.bytes = &b;
     e.id = 11U;
+    e.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — id from configuration */
     (void)lmx_msg_send(rt, who, g_mail_dest, &e);
     e.id = 22U;
+    e.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — id from configuration */
     (void)lmx_msg_send(rt, who, g_mail_dest, &e);
     InterlockedIncrement(&c->done);
     return lmx_msg_end_turn(rt, who, 1);
@@ -563,6 +567,8 @@ static int turn_send_once(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     e.bytes = &b;
     e.id = 7U;
     InterlockedExchange(&g_mail_in_send, 1);
+    e.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — id from configuration */
     (void)lmx_msg_send(rt, who, g_mail_dest, &e);
     InterlockedExchange(&g_mail_in_send, 0);
     InterlockedIncrement(&c->done);
@@ -587,6 +593,8 @@ static int turn_send_to_held(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     e.n = 1;
     e.bytes = &b;
     e.id = 7U;
+    e.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — id from configuration */
     c->send_ui_st = lmx_msg_send(rt, who, g_mail_dest, &e);
     InterlockedIncrement(&c->done);
     return lmx_msg_end_turn(rt, who, 1);
@@ -698,17 +706,23 @@ static int turn_owned_send(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     env.kind = LMX_MSG_KIND_BYTES;
     env.n = 4;
     env.bytes = 0;
+    env.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — no handle */
     if (lmx_msg_send_owned(rt, who, o->dest, &env) != LMX_MSG_INVALID || env.n != 4 || env.bytes != 0) {
         return 1;
     }
     env.kind = 99;
     env.n = 0;
+    env.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — no handle */
     if (lmx_msg_send_owned(rt, who, o->dest, &env) != LMX_MSG_INVALID) {
         return 1;
     }
     env.kind = LMX_MSG_KIND_BYTES;
     env.n = 4;
     env.bytes = b;
+    env.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — no handle */
     if (lmx_msg_send_owned(rt, who, o->dest, &env) != LMX_MSG_STAGED || env.bytes != 0) {
         return 1;
     }
@@ -799,6 +813,8 @@ static int turn_fast(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
         to_ui.kind = LMX_MSG_KIND_BYTES;
         to_ui.n = 1;
         to_ui.bytes = &b;
+        to_ui.from_msg = lmx_msg_turn_self(rt);
+        /* AD pair: to_msg CANNOT — no handle */
         c->send_ui_st = lmx_msg_send(rt, who, c->ui, &to_ui);
         if (c->send_ui_st != LMX_MSG_STAGED) {
             lmx_msg_env_release(&got);
@@ -807,6 +823,8 @@ static int turn_fast(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
         if (c->peer != 0) {
             uchar p = 42;
             to_ui.bytes = &p;
+            to_ui.from_msg = lmx_msg_turn_self(rt);
+            /* AD pair: to_msg CANNOT — no handle */
             c->send_peer_st = lmx_msg_send(rt, who, c->peer, &to_ui);
             if (c->send_peer_st != LMX_MSG_STAGED) {
                 lmx_msg_env_release(&got);
@@ -913,6 +931,8 @@ static int turn_send_delta(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     out.kind = LMX_MSG_KIND_BYTES;
     out.n = 1;
     out.bytes = &a->delta;
+    out.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — no handle */
     if (lmx_msg_send(rt, who, a->m0, &out) != LMX_MSG_STAGED) {
         return 1;
     }
@@ -990,7 +1010,13 @@ static int turn_mix_parent(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     env.kind = LMX_MSG_KIND_BYTES;
     env.n = 1;
     env.bytes = &ini;
-    if (lmx_msg_send(rt, who, c1, &env) != LMX_MSG_STAGED || lmx_msg_send(rt, who, c2, &env) != LMX_MSG_STAGED) {
+    env.from_msg = lmx_msg_turn_self(rt);
+    env.to_msg = lmx_msg_find(rt, c1);
+    if (lmx_msg_send(rt, who, c1, &env) != LMX_MSG_STAGED) {
+        return 1;
+    }
+    env.to_msg = lmx_msg_find(rt, c2);
+    if (lmx_msg_send(rt, who, c2, &env) != LMX_MSG_STAGED) {
         return 1;
     }
     InterlockedIncrement(&m->done);
@@ -1073,6 +1099,8 @@ static int turn_spawn(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     env.kind = LMX_MSG_KIND_BYTES;
     env.n = 1;
     env.bytes = &b;
+    env.from_msg = lmx_msg_turn_self(rt);
+    env.to_msg = lmx_msg_find(rt, s->child);
     if (lmx_msg_send(rt, who, s->child, &env) != LMX_MSG_STAGED) {
         return 1;
     }
@@ -1122,6 +1150,8 @@ static int turn_spawn_race(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
         env.kind = LMX_MSG_KIND_BYTES;
         env.n = 1;
         env.bytes = &b;
+        env.from_msg = lmx_msg_turn_self(rt);
+        env.to_msg = lmx_msg_find(rt, s->child);
         if (lmx_msg_send(rt, who, s->child, &env) != LMX_MSG_STAGED) {
             return 1;
         }
@@ -1519,12 +1549,18 @@ int main(int argc, char **argv) {
     env.n = 1;
     env.bytes = init;
     env.id = 0;
+    env.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — no handle */
     lmx_msg_send(rt, parent, w1, &env);
     {
         uchar a = 10, b = 20;
         env.bytes = &a;
+        env.from_msg = lmx_msg_turn_self(rt);
+        /* AD pair: to_msg CANNOT — no handle */
         lmx_msg_send(rt, parent, w2, &env);
         env.bytes = &b;
+        env.from_msg = lmx_msg_turn_self(rt);
+        /* AD pair: to_msg CANNOT — no handle */
         lmx_msg_send(rt, parent, w2, &env);
         env.bytes = init;
     }
@@ -1548,6 +1584,8 @@ int main(int argc, char **argv) {
                 return 1;
             }
             env.bytes = &payload[k];
+            env.from_msg = lmx_msg_turn_self(rt);
+            /* AD pair: to_msg CANNOT — no handle */
             if (lmx_msg_send(rt, parent, extra, &env) != LMX_MSG_STAGED) {
                 fprintf(stderr, "mass send %d\n", k);
                 return 1;
@@ -1661,8 +1699,12 @@ int main(int argc, char **argv) {
         e2.kind = LMX_MSG_KIND_BYTES;
         e2.n = 1;
         e2.bytes = &p31;
+        e2.from_msg = lmx_msg_turn_self(rtf);
+        /* AD pair: to_msg CANNOT — no handle */
         lmx_msg_send(rtf, pf, wf, &e2);
         e2.bytes = &p32;
+        e2.from_msg = lmx_msg_turn_self(rtf);
+        /* AD pair: to_msg CANNOT — no handle */
         lmx_msg_send(rtf, pf, wf, &e2);
         lmx_msg_end_turn(rtf, pf, 1);
         lmx_msg_pump(rtf);
@@ -1768,6 +1810,8 @@ int main(int argc, char **argv) {
         ee.kind = LMX_MSG_KIND_BYTES;
         ee.n = 1;
         ee.bytes = &b;
+        ee.from_msg = lmx_msg_turn_self(rte);
+        /* AD pair: to_msg CANNOT — no handle */
         lmx_msg_send(rte, pe, we, &ee);
         lmx_msg_end_turn(rte, pe, 1);
         lmx_msg_pump(rte);
@@ -1809,6 +1853,8 @@ int main(int argc, char **argv) {
         eo.kind = LMX_MSG_KIND_BYTES;
         eo.n = 1;
         eo.bytes = &b;
+        eo.from_msg = lmx_msg_turn_self(rto);
+        /* AD pair: to_msg CANNOT — no handle */
         lmx_msg_send(rto, po, wo, &eo);
         lmx_msg_end_turn(rto, po, 1);
         lmx_msg_pump(rto);
@@ -2091,12 +2137,18 @@ int main(int argc, char **argv) {
         el.kind = LMX_MSG_KIND_BYTES;
         el.n = 1;
         el.bytes = &ini;
+        el.from_msg = lmx_msg_turn_self(rtl);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtl, rl, pl, &el) != LMX_MSG_STAGED) {
             return 1;
         }
+        el.from_msg = lmx_msg_turn_self(rtl);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtl, rl, cl, &el) != LMX_MSG_STAGED) {
             return 1;
         }
+        el.from_msg = lmx_msg_turn_self(rtl);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtl, rl, fl, &el) != LMX_MSG_STAGED) {
             return 1;
         }
@@ -2244,11 +2296,15 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &pa;
+        e.from_msg = lmx_msg_turn_self(rtc);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtc, p, a, &e) != LMX_MSG_STAGED) {
             fprintf(stderr, "ctx send a\n");
             return 1;
         }
         e.bytes = &pb;
+        e.from_msg = lmx_msg_turn_self(rtc);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtc, p, b, &e) != LMX_MSG_STAGED) {
             fprintf(stderr, "ctx send b\n");
             return 1;
@@ -2282,6 +2338,8 @@ int main(int argc, char **argv) {
         ResetEvent(ra.entered);
         ResetEvent(rb.entered);
         e.bytes = &pa;
+        e.from_msg = lmx_msg_turn_self(rtc);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtc, p, a, &e) != LMX_MSG_STAGED || (e.bytes = &pb, lmx_msg_send(rtc, p, b, &e) != LMX_MSG_STAGED)) {
             fprintf(stderr, "ctx restart send\n");
             lmx_msg_runtime_delete(rtc);
@@ -2319,11 +2377,15 @@ int main(int argc, char **argv) {
         {
             uchar s1 = 4, s2 = 4;
             e.bytes = &s1;
+            e.from_msg = lmx_msg_turn_self(rtc);
+            /* AD pair: to_msg CANNOT — no handle */
             if (lmx_msg_send(rtc, p, a, &e) != LMX_MSG_STAGED) {
                 fprintf(stderr, "ctx serial send1\n");
                 return 1;
             }
             e.bytes = &s2;
+            e.from_msg = lmx_msg_turn_self(rtc);
+            /* AD pair: to_msg CANNOT — no handle */
             if (lmx_msg_send(rtc, p, a, &e) != LMX_MSG_STAGED) {
                 fprintf(stderr, "ctx serial send2\n");
                 return 1;
@@ -2387,6 +2449,8 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &ini;
+        e.from_msg = lmx_msg_turn_self(rts);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rts, p, parent, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rts, p, 1) != LMX_MSG_OK) {
             fprintf(stderr, "spawn send\n");
             return 1;
@@ -2445,10 +2509,14 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &pa;
+        e.from_msg = lmx_msg_turn_self(rtf);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtf, p, a, &e) != LMX_MSG_STAGED) {
             return 1;
         }
         e.bytes = &pb;
+        e.from_msg = lmx_msg_turn_self(rtf);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtf, p, b, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtf, p, 1) != LMX_MSG_OK) {
             return 1;
         }
@@ -2519,6 +2587,8 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &ini;
+        e.from_msg = lmx_msg_turn_self(rta);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rta, p, a, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rta, p, 1) != LMX_MSG_OK) {
             return 1;
         }
@@ -2644,6 +2714,8 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &ini;
+        e.from_msg = lmx_msg_turn_self(rtr);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtr, p, parent, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {
             return 1;
         }
@@ -2709,6 +2781,8 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &ini;
+        e.from_msg = lmx_msg_turn_self(rtp);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtp, p, a, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
             return 1;
         }
@@ -2772,6 +2846,8 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &ini;
+        e.from_msg = lmx_msg_turn_self(rtm);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtm, p, c, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtm, p, 1) != LMX_MSG_OK) {
             return 1;
         }
@@ -2831,6 +2907,8 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &ini;
+        e.from_msg = lmx_msg_turn_self(rtl);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtl, p, c, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtl, p, 1) != LMX_MSG_OK) {
             return 1;
         }
@@ -2888,6 +2966,8 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &ini;
+        e.from_msg = lmx_msg_turn_self(rtr);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtr, p, c, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {
             return 1;
         }
@@ -2953,6 +3033,8 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &ini;
+        e.from_msg = lmx_msg_turn_self(rtb);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtb, p, c2, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
             fprintf(stderr, "sibling after rollback\n");
             lmx_msg_runtime_delete(rtb);
@@ -3061,6 +3143,8 @@ int main(int argc, char **argv) {
             venv.bytes = &ini;
             rtv = lmx_msg_runtime_new();
             seen_new(rtv);
+            venv.from_msg = lmx_msg_turn_self(rtv);
+            /* AD pair: to_msg CANNOT — no handle */
             if (rtv == 0 || lmx_msg_create(rtv, 0, &ini, 1, &vp) != LMX_MSG_OK
                 || lmx_msg_create(rtv, 0, &ini, 1, &vq) != LMX_MSG_OK
                 || lmx_msg_create(rtv, vp, &ini, 1, &vc) != LMX_MSG_OK
@@ -3210,6 +3294,8 @@ int main(int argc, char **argv) {
             oe.n = 1;
             oe.bytes = &ini;
             rto = lmx_msg_runtime_new();
+            oe.from_msg = lmx_msg_turn_self(rto);
+            /* AD pair: to_msg CANNOT — no handle */
             if (rto == 0 || (r0 = lmx_msg_root_addr(rto)) == 0U
                 || lmx_msg_create(rto, 0, &ini, 1, &op) != LMX_MSG_OK
                 || lmx_msg_create(rto, op, &ini, 1, &oc) != LMX_MSG_OK
@@ -3351,6 +3437,8 @@ int main(int argc, char **argv) {
             e.kind = LMX_MSG_KIND_BYTES;
             e.n = 1;
             e.bytes = &ini;
+            e.from_msg = lmx_msg_turn_self(rtb);
+            e.to_msg = e.from_msg;
             if (lmx_msg_send(rtb, p, p, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "rollback ctx publish\n");
                 lmx_msg_runtime_delete(rtb);
@@ -3389,6 +3477,8 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rtb);
                 return 1;
             }
+            e.from_msg = lmx_msg_turn_self(rtb);
+            /* AD pair: to_msg CANNOT — no handle */
             if (lmx_msg_send(rtb, p, c2, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "sibling after ctx rollback\n");
                 lmx_msg_runtime_delete(rtb);
@@ -3442,6 +3532,8 @@ int main(int argc, char **argv) {
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
         e.bytes = &ini;
+        e.from_msg = lmx_msg_turn_self(rtb);
+        /* AD pair: to_msg CANNOT — no handle */
         if (lmx_msg_send(rtb, p, c2, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
             fprintf(stderr, "idle-rollback sibling\n");
             lmx_msg_exec_stop(rtb);
@@ -5858,6 +5950,8 @@ int main(int argc, char **argv) {
         any = 0;
         memset(&ui_ctx, 0, sizeof(ui_ctx));
         memset(&any_ctx, 0, sizeof(any_ctx));
+        env.from_msg = lmx_msg_turn_self(rti);
+        /* AD pair: to_msg CANNOT — no handle */
         if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rti, dummy, &ini, 1, &ui) != LMX_MSG_OK
             || lmx_msg_create(rti, dummy, &ini, 1, &any) != LMX_MSG_OK
@@ -5898,6 +5992,8 @@ int main(int argc, char **argv) {
         any = 0;
         memset(&ui_ctx, 0, sizeof(ui_ctx));
         memset(&any_ctx, 0, sizeof(any_ctx));
+        env.from_msg = lmx_msg_turn_self(rti);
+        /* AD pair: to_msg CANNOT — no handle */
         if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &dummy) != LMX_MSG_OK
             || lmx_msg_create(rti, dummy, &ini, 1, &ui) != LMX_MSG_OK
             || lmx_msg_create(rti, 0, &ini, 1, &any) != LMX_MSG_OK
@@ -6220,6 +6316,8 @@ int main(int argc, char **argv) {
             se.kind = LMX_MSG_KIND_NUMBER;
             se.number = 5;
             se.correlation = 31U;
+            se.from_msg = lmx_msg_turn_self(rti);
+            /* AD pair: to_msg n/a — address path */
             st = lmx_msg_send_address(rti, a, baddr, bn, &se);
             r0_round(rti);
             if (bn != 3 || st != LMX_MSG_UNDELIVERABLE || lmx_msg_inbox_n(rti, b) != 0
@@ -6264,6 +6362,8 @@ int main(int argc, char **argv) {
             pe.kind = LMX_MSG_KIND_NUMBER;
             pe.number = 3;
             pe.id = 61U;
+            pe.from_msg = lmx_msg_turn_self(rti);
+            /* AD pair: to_msg CANNOT — no handle */
             if (lmx_msg_send(rti, p, q, &pe) != LMX_MSG_STAGED
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
@@ -6715,6 +6815,8 @@ int main(int argc, char **argv) {
             LmxMsg *km;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             memset(&any_ctx, 0, sizeof(any_ctx));
+            env.from_msg = lmx_msg_turn_self(rti);
+            /* AD pair: to_msg CANNOT — no handle */
             if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, &ini, 1, &sib) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
@@ -7232,6 +7334,8 @@ int main(int argc, char **argv) {
              * inbox in R0's round. The round here is lmx_msg_pump -- the transport half
              * only -- and NOT r0_round: host_drain would also forward the pending INGRESS
              * that this case exists to keep in front of the letter. */
+            sent.from_msg = lmx_msg_turn_self(rti);
+            /* AD pair: to_msg CANNOT — no handle */
             if (lmx_msg_send(rti, c, r, &sent) != LMX_MSG_STAGED || lmx_msg_end_turn(rti, c, 1) != LMX_MSG_OK
                 || lmx_msg_pump(rti) != LMX_MSG_OK
                 || lmx_msg_inbox_n(rti, r) != 2) {

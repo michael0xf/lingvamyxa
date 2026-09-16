@@ -109,6 +109,7 @@ static void *off_owner(void *arg)
     if (lmx_msg_create(g_rt, 0, &b, 1, &a) != LMX_MSG_INVALID) {
         *fail += 1;
     }
+    /* AD pair: from_msg CANNOT — no handle; to_msg CANNOT — id from configuration */
     if (lmx_msg_send(g_rt, 1, 1, &env) != LMX_MSG_INVALID) {
         *fail += 1;
     }
