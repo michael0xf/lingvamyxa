@@ -2013,6 +2013,15 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           any count. The LmxMsg record itself stays allocated until its owner frees it (2), because the sender's
           capability is the mailbox handle and 19.29.7's "not a graph reference into another Message's mutable
           arena" (today 12922) means the handle must stay addressable while the parent lives.
+      (1a) A constraint the code turned up that the mechanism above did not anticipate: a settled record loses its
+          way back to its owner. lmx_msg_release_slot calls lmx_msg_child_unlink, and child_unlink clears
+          child\parent_msg whenever the removal from the chain succeeds (lmx_message.lm1:662). So after today's
+          release_slot the record has state RELEASED, no place in the family chain and parent_msg 0 -- nothing in
+          it names the parent that now owns its storage, which is precisely what a late sender must follow to be
+          refused "on the parent's lane". S6-2 therefore either stops clearing parent_msg on the settle path (the
+          unlink removes it from the chain, but the cell keeps naming its owner) or carries the owner in a cell of
+          its own. Recorded here before the code chooses, because it changes the mechanism the coordinator
+          approved: the sender's handle is the record, and the record must be able to say who owns it now.
       (2) Who frees them and when, corrected by the coordinator before any code and checked against the text: a
           parent's own close does NOT free its settled children's records and mailboxes. They are settled upward
           with the rest of its storage, recursively -- storage_move_all carries them and each mailbox's owner cell
