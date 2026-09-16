@@ -6529,3 +6529,16 @@ unpushed, so the whole union base is measured on that merge; then a
 fresh merge of the new tip with its own selfbuild tag and landing
 branch, scenario36 on the merge before "landed", five lines with the
 five-run count and scenario36's verdict. Both rules taken by the lead.
+S6-1 re-landing (the lead, 2026-09-15): the gates run locally first on
+d6/lock-s6 53a0af86, "gates GREEN: 31 of 31 in 500s", family_handoff PASS
+(checks=67 failures=0 watched_frees=4), scenario36 PASS over its ten
+fixtures inside the same suite; the re-land running: 53a0af86 onto
+11f581e0, gate count 31, the allowlist the eleven S6-1 paths with the
+family_handoff fixture, EXTRA lmx_cancel, its own selfbuild tag and
+landing branch per merge. The first attempt's other steps were green
+on its merge (self-build 8 of 8, port_message both modes 45 s each,
+l2trans 279 s, port_parser 310 s, mixa, ingress, lmx_cancel), only the
+gates line red. Runner trap recorded: run_gates.ps1 takes its baseline
+from its own location, so invoking it by a relative path from another
+worktree silently runs against that worktree and dies on its missing
+pinned translator; absolute paths always, as with the probe.
