@@ -6792,3 +6792,31 @@ lmx_message_exec_selftest.c that e9's pattern did not search
 (reported to e9 as a method gap): run_port_message's allowlist entry
 in the S6-2 section therefore carries the exec selftest's edits. The
 lead folds both lists into the section's allowlist before code.
+The lead's S6-2 section is pushed (d6/lock-removal bb082d37: the
+refs and slots deletion on 19.29.7 "there is no count of holders" and
+19.28 "goes without replacement"; the 24 sites from b5's pre-read; the
+allowlist by reason from e9's 16335e9b with the 22 runner support
+lines, run_l2trans.ps1:90 and run_port_parser.ps1:127 outside the
+default set, the assertions to convert and graph_abi's pinned code
+shape; the c_scanners corpus measured as captures, not pins; the
+redirect-and-refuse red-first check, today's behaviour read: a send to
+a closed sibling returns STAGED and is dropped silently at admission;
+the acceptance on fable/s6-2-acceptance 4189dea0, red 342/36, green
+0/0, falsifier one retain). Coordinator's review: accepted with one
+addition before code, the settle mechanics paragraph: where a closed
+child's slot and mailbox live after release_slot (the parent's own
+settled data, the mailbox's owner rewritten to the parent under its
+own monitor), who frees them and when (with the parent's storage at
+the parent's own close, never earlier, which is what keeps a sibling's
+handle valid with no count; the two-cycle balance gates hold because
+each cycle closes R0), and the reconciliation with 19.29.6 "a
+successful orphan is settled at its end-turn and reclaimed, arena and
+slot, by the settling lane at the root's next maintenance point"
+(12755 today, the 2026-09-14 clarification): if "reclaimed" there is a
+free while R0 lives, a sibling's handle to the orphan's mailbox
+dangles and the two sentences conflict; the lead searches first
+(19.29.8, 12922) and, if the docs do not settle it, formulates one
+paragraph for Mikhail, holding the orphan path's code while the
+normal path proceeds. wti is lent to e9 now (a3c8d970, clean, the
+tree where both hangs happened) for stages A and B under a short
+freeze announced on e9's "ready".
