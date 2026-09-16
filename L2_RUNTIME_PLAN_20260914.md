@@ -7675,3 +7675,18 @@ table full" error: re-attempting that chain against the current pin
 is the condition that lifts it (ticketed). RULED: both are b5's next
 code tickets on the same branch; each runner enters the parity gate's
 table with the verdict its run then produces.
+S6-2 step two under way (the lead): on the exec.c side drive_walk_list
+no longer pins its snapshot and drive_walk_roots no longer pins R0
+(each retain guarded "the record cannot be freed under me" across the
+unlocked window, which the settle answers); the snapshot itself stays
+(it guards the list changing under the walk, a different question),
+as do walk_roots' re-checks (still the root, not RELEASED). Next: the
+test-side staging helper, the bind retire's release and the bind
+add's retain, the three function bodies with slot_new's refs = 1 and
+try_retire's guard, the header, then the lm1/lm2 scatter: 47 sites
+each, identically distributed across 14 functions (the two files have
+not drifted). The tripwire script derives its worktree from its own
+location (the land_base3.sh wart not copied forward). Coordinator's
+falsifier corrected by the lead: git ls-tree without -r lists the
+directory entry, so "ls-tree <ref> l2src | grep tripwire" cannot
+pass; the working form is git ls-tree -r <ref> -- l2src/tripwire_s6_2.sh.
