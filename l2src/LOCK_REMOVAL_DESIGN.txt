@@ -1876,22 +1876,34 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       because the number looks measured. The loop condition at orphan_mapped_17:163 escaped BOTH passes, because
       it is neither a mention-in-prose nor a pin -- and it is the one site that does not even compile once the
       field goes.
-      The rule caught me again within the hour, which is why it is a rule and not an anecdote: I sent both peers
-      "39 reads of ->n" for lmx_message_exec_selftest.c, counting env->n together with rt->n -- the very confusion
-      I had just warned 0c about. Measured with two agreeing patterns: 52 lines contain the STRING '->n' (the
-      superset, swallowing ->next and ->number); 36 contain the FIELD; and of those 36 only 32 have a runtime
-      receiver (rti 16, rtb 8, rto 4, rtq 3, rt 1). The remaining four -- fresh->n, block->n, pb->n, cb->n -- are
-      an envelope's byte count and a block's length, untouched by this stage. Split by role over the 32: 9
-      captures, 1 loop condition (3152), ~10 in an if, ~11 inside an fprintf, 1 in a comment; the if/fprintf halves
-      are PROVISIONAL (truncated lines, confirmed per site while converting) and labelled rather than smoothed.
-      The eleven diagnostics are the population an assertion-only inventory misses for the second time: they PRINT
-      the counter, so they convert with their assertions or they print a field that no longer exists.
-    - A constraint on the ORDER of this file's restatements, found by the compiler rather than by reading: n0 is
-      declared once for the whole exec_selftest_main, not per case. Removing its declaration along with the first
-      restated case broke the build at 3182 ("'n0' undeclared"), because five later cases capture into the same
-      variable. So the six cases cannot be converted one at a time with a tidy-up afterwards -- the shared capture
-      stays until the last of them lands, and until then the file carries a declaration whose only purpose is the
-      unconverted cases. Written here so the leftover reads as deliberate rather than as an oversight.
+      The rule caught me TWICE more within the hour, and the second time it added a clause it did not have.
+      (i) I sent both peers "39 reads of ->n" for lmx_message_exec_selftest.c, counting env->n together with rt->n
+      -- the very confusion I had just warned 0c about. (ii) I then sent a correction, "36 reads, 32 runtime",
+      which did not reproduce for 0c. Neither of us was wrong: I had measured my WORKING TREE, which already
+      carried the settled list and the first restatement, and 0c measured the landed base. Measured at both, by
+      hash:
+        * 7b3a8668 (base): 55 lines contain the string '->n'; 39 contain the FIELD; 35 have a runtime receiver
+          (rti 16, rtb 11, rto 4, rtq 3, rt 1); 4 are a different field entirely (fresh->n, block->n, pb->n,
+          cb->n -- an envelope's byte count and a block's length), untouched by this stage.
+        * 18c35299 (mine): 52 / 36 / 32 runtime + the same 4. The difference is EXACTLY the three rtb->n reads the
+          first restatement deleted (its capture, its condition and its diagnostic).
+      So the clause the rule was missing: name the COMMIT as well as the population. A count without a hash is not
+      a measurement of anything that another reader can check, and two people can be exactly right and appear to
+      contradict each other. 0c had already pushed my wrong 39 into the gate-impact row as measured fact and is
+      correcting it; that is the second-order cost of an unlabelled number -- it propagates before it is checked.
+      The diagnostics population is 7 fprintf lines naming the counter at the base, not the "~11" I eyeballed off
+      truncated terminal output; it is still the population an assertion-only inventory misses, since those lines
+      PRINT the counter and must convert with their assertions or print a field that no longer exists.
+    - A constraint on the ORDER of this file's restatements, found by the compiler and then CORRECTED by 0c, who
+      could not reproduce my account of it. What I wrote first -- "n0 is declared once for the whole
+      exec_selftest_main" -- is false, and false on my own tree too: it is declared SIX times (2480, 2834, 7066,
+      7276, 7358, 7399), at both the base and my head. The true fact, which is narrower and still binding:
+      removing the declaration at 2834 broke the build at 3182 ("'n0' undeclared"), so THAT declaration's block
+      reaches past 3182 and covers later cases that capture into it. A restatement may therefore not delete the
+      declaration belonging to the case it converts, because a case 300 lines below may be leaning on it; each
+      conversion drops its own capture and leaves the declaration until the last case in that block is done.
+      I had generalised one compiler error into a structural claim about the file, which is the same failure as
+      counting without naming the population -- an unmeasured "therefore" on top of a real observation.
     - The slot-count pins cannot be restated as find-based "gone", and the reason is written in the fixtures
       themselves: family_release_17 says "'Gone' is measured by the runtime's slot count rt\n, not by
       lmx_msg_find: find walks only what rt->root reaches, so a subtree released from its parent but still
