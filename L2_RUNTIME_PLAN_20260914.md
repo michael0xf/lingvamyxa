@@ -8878,3 +8878,15 @@ host, a no-op when empty), substituted per site (19 YIELD_UNTIL sites,
 a textual 7 after exec_start_contexts, plus about three hand-rolled
 waits, read by scope); the hang under the 300 s watchdog, not a
 crash, is evidence the runner bound works.
+The lead: all 19 YIELD_UNTIL sites converted to YIELD_UNTIL_R0 (0
+plain left; by runtime: rt 1, rtc 2, rta 2, rtp 2, rtm 1, rtl 2, rtr
+2, rti 7), plus own_turn's hand-rolled loop now draining (the
+orphan-mapped loop already drives, the m0 loop already pumps); the
+full set accepted as a harmless superset (every site waits for
+something to happen; a drain on an empty transport is a no-op); each
+site's runtime resolved by the variable its condition observes, since
+the textual "nearest exec_start_contexts" rule was wrong twice (rtm's
+map retry; the rtl/rtr/rtc/rtp cases starting contexts through
+own_turn), the rti seven confirmed by two signals each; both macros
+emit a byte-identical "reading:" line for the stderr comparison. The
+gate reruns.
