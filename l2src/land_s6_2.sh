@@ -100,6 +100,15 @@ ALLOW="$ALLOW"'|l2src/(lmx_message_host_selftest\.c|tests/lmx_msg_send_local_sel
 # proves both of that branch's changes against a control (A). Added on the coordinator's word, not the
 # author's -- the author of these two paths is also the author of this script.
 ALLOW="$ALLOW"'|l2src/(run_candidate_c_scanners\.ps1|tripwire_gate_bounds\.ps1)'
+# The R0-round reshape (3e1cec49..4888a7ae: only R0's own lane drains the transport, in R0's round; every
+# other lane only pushes), which rewrote these eight fixtures' waits onto R0-round helper calls. Found by the
+# dry run over the merged candidate 7b3a8668...3d4eb0be (77 paths, these 8 outside) and added on the
+# coordinator's word. lmx_msg_family_handoff_selftest.lm1 is the fixture whose selftest hung for 668 s on a
+# tree without the fix; this landing bounds it only chain-wide (run gates under T_GATES), not per gate.
+ALLOW="$ALLOW"'|l2src/tests/(lmx_model_checks_19_29_6_selftest\.lm1|lmx_model_family_close_32_selftest\.lm1'
+ALLOW="$ALLOW"'|lmx_model_liveness_33_selftest\.lm1|lmx_model_root_ingress_5b_selftest\.lm1'
+ALLOW="$ALLOW"'|lmx_model_root_record_5e_selftest\.lm1|lmx_model_scenario36_selftest\.lm1'
+ALLOW="$ALLOW"'|lmx_msg_delivery_selftest\.lm1|lmx_msg_family_handoff_selftest\.lm1)'
 ALLOW="$ALLOW"'|mixa_manager/(lib_l2_runtime_support\.ps1|run_mixa_app_fmpanel_l2_parity\.ps1'
 ALLOW="$ALLOW"'|run_mixa_app_path_l2_parity\.ps1|run_mixa_composite_glyphs_l2_parity\.ps1'
 ALLOW="$ALLOW"'|run_mixa_selection_l2_parity\.ps1|run_mixa_tiles_l2_parity\.ps1))$'
