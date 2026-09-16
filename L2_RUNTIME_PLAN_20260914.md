@@ -7904,3 +7904,18 @@ coordinator's green-leg runner half is running cold on the measuring
 merge (port_message plain and -LaneCheck, run_lmx -Suite Message,
 scenario36, entry_turn, graph_abi, the port_slots absence), the pin
 re-installed before each.
+S6-2 GREEN LEG, the runner half, measured cold by the coordinator on
+fable/s6-2-measure-2d8f2b6a (44adbac9, the stage's 2d8f2b6a merged with
+96a754e0; the pin re-installed before each runner, exit 0 each time;
+each step under its timeout; tree dirty=0 after): run_port_message
+plain exit 0 in 52 s (parity PASS); run_port_message -LaneCheck exit 0
+in 59 s (parity PASS, 0 lines matching LANE MAP/WRITE/WAKE FAIL);
+run_lmx -Suite Message exit 0 in 26 s (selected=Message);
+run_model_scenario36 exit 0 in 27 s (core tests PASS); run_entry_turn
+exit 0 in 15 s (entry turn PASS); run_graph_abi exit 0 in 75 s (graph
+ABI runner PASS); port_slots' absence: the runner gone, the module
+gone, no gate row (the token survives in two header prose lines that
+explain the count, which the row check does not count). With the
+probe's three legs above, the S6-2 acceptance is measured in full on
+2d8f2b6a: red 163/36, green 0/0 plus six gates, falsifier 0 to 1. The
+landing launches on the lead's five lines naming 2d8f2b6a.
