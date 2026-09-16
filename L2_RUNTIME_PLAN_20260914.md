@@ -9605,3 +9605,46 @@ themselves; a statement call's text has its own buffer, and an overflow is
 reported at its statement".  Then one selfbuild tag, the log line branch, the
 coordinator's integration fast-forward and main merge; the row-bounds branch
 re-cut off the new integration head.
+
+L2TRANS LANDING FAILED AT THE LANE CHECK, recorded 2026-09-16 13:58 by the coordinator
+(lingvamyxa-08): the landing ran every step and stopped before its push; the
+engineer's session ended mid-landing.  Evidence -- the landing's own log
+directory C:/Users/mtkra/AppData/Local/Temp/land_l2trans_logs/5ba818b7 and the
+worktree build/fable/wti (detached, clean, HEAD d5f6c8b1 = 5ba818b7 merged onto
+d3bde8b5): merge_msg.txt 10:38; self_build.log 10:39 "self-build PASS: fixed
+point 8 of 8 ... committed generated C 8 of 8"; gates.log 10:47 "gates GREEN:
+29 of 29"; port_message.log 10:48 "lmx_message parity PASS"; port_message_lane.log
+10:48 RED -- its first line is "the executor selftest failed against the
+handwritten modules on run 1: exit 1" and the marker "parity PASS" is absent, so
+the script's own has-check failed and it did not push (origin
+integration/main-absorbs-core is still d3bde8b5, main 0b8703ef); l2trans.log
+10:53 "l2trans gen2 ok" with both acceptance headers written 10:50:29 during the
+step; port_parser.log 11:04 "run_port_parser ok" (stage e_appenders 36/36);
+mixa.log 11:04 backend table ok; ingress.log 11:04 fail_keep_runtime path ok;
+scenario36.log 11:05 "core tests PASS" (11 selftests); lmx_cancel.log 11:05
+"selected=Cancel ok".  Nothing in the landing worktree changed after 10:30; no
+landing process is alive.  The plain run_port_message on the same tree is green;
+only -LaneCheck is red, on its first run, in the executor selftest against the
+handwritten modules.  The candidate is NOT landed.  Next: reproduce -LaneCheck
+cold and symbolize before naming a cause; the 2026-09-15 note "removing waits
+surfaces test races" is the leading reading, not yet evidence.  Ticket 2 to
+lingvamyxa-5c asks for exactly that repetition, measurement only.
+
+AD BRANCH PROTECTED, same hour: the lead's AD (c) commit 948d38da ("LmxMsg.parent
+retired as a duplicate of parent_msg; readers take the id from the record
+parent_msg names, lmx_msg_parent_id / msg_parent_id, both cores; probe
+parent_field 38 -> 0") existed only in the local worktree build/fable/wad; pushed
+as d6/lock-ad (d3bde8b5..948d38da).  Its gates are pending, as its own message
+says.
+
+TICKETS to lingvamyxa-5c (mixa_manager) the same hour: (1) the L2-side link list
+of run_mixa_app_controller_l2_parity.ps1 -- app_controller stops at link with 14
+undefined references, first verbatim "undefined reference to
+'mixa_app_loop_close'"; match it to the oracle side's list and test on a scratch
+of main ec481911 + 5ba818b7; (2) the cold repetition of run_port_message
+-LaneCheck above.
+
+DOCUMENT PRECEDENCE, Mikhail 2026-09-16: the architecture documents are
+last_step_claude.txt, Lingvamyxa_spec.txt and
+L2_CORE_AND_MESSAGE_MODEL_20260912.md; where they disagree, the one edited last
+wins.
