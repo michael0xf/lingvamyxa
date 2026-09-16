@@ -8960,3 +8960,13 @@ monitor), then releases, runs R0's round and asserts both letters in
 d's inbox; the parking hook dropped from this case; the reason in the
 case's header; counted as "restated: 1 (admit-gate, contention removed
 by design)". Option (b), R0's round on another thread, not pursued.
+The lead measured option (b) for admit-gate: lmx_msg_host_is_owner
+compares h->owner, recorded once at attach, with the current thread,
+so ownership is bound to the test's main thread; a helper thread's
+host_drain fails require_owner and pump's turn fallback fails too (R0
+is not a bound turn), so R0's round on another thread would need an
+ownership-semantics change, outside S6-2: (a) confirmed as the only
+in-scope option. The verified work is committed as a labelled partial
+(the drain ruling, the found-and-removed guard and its hook, is_live
+before any dereference, YIELD_UNTIL_R0 at 19 sites, own_turn's drain,
+r0_round at 7; the gate red at admit-gate pending the restatement).
