@@ -9309,3 +9309,31 @@ with lanes, 10 internal to the four-function cluster; findings for AD: the
 id-taking adopt_mark/dispose_mark have no live caller (to be confirmed by a
 caller grep over both cores), and admit_one's self_or_find fires only when
 send found no dest_msg, so it folds into the refusal path.
+
+S6-2 BUILDING TIP, reported by the lead, recorded 09:27: d6/lock-s6-2
+4888a7ae (ls-remote 4888a7ae1f7a), nine commits from b9a148f2 (1763827c step
+4; 18f5701d and its merge 3e0bff87; 3e1cec49 step 5; 0e4dbf94 fixtures;
+066fb5a1 orphan index and bounded fill; 25b962d4 pump guard; bdd72730
+family_handoff; 4888a7ae entry_turn).  The lead's chain cold on it, clean
+tree, pin 0B3D85B3: run_gates -L2MessageRoot "gates GREEN: 29 of 29 in 518s",
+exit 0, build/gates/20260916_090632; run_l2trans, run_msg_mail_chain,
+run_port_parser exit 0.  Probe on 3f85c36b (4888a7ae + 96a754e0): refs=0
+runtime_lists=0 GREEN; module grep 0 files; 28 literal rows.  Falsifiers,
+each restored with identical hashes: planted retain -> refs=1; release_slot's
+unregister withheld -> family_release_17 and orphan_mapped_17 red; orphan
+minting as no-ops -> the C4 address case red; pump fallback restored -> exec
+pump-guard red (st=0, transport drained); send-address body STAGED -> exec
+send-address red.  Runners of the new cases: run_port_message (exec
+admit-gate restated, send-address, pump-guard, handoff [1,1,1]->[1,2,1]);
+run_model_scenario36 (C4's unique address after orphaning).  Counts:
+YIELD_UNTIL_R0 19, r0_round 8, pump-only 1, restated 1 in the C selftest;
+109 R0 rounds added across the L1 selftests (lmx_message_selftest 69);
+settled-list readers restated 3 (family_release_17, orphan_mapped_17,
+entry_turn).  Coordinator's checks at origin: 9 commits, contains 3e1cec49,
+merge-tree conflicts 0 against a1fb483d (base 3e1cec49), 28 rows.  Hazard
+from the lead: run_msg_family_handoff's selftest hung 668 s with no timeout on
+a tree without the fix; the engineer shows or adds its bound before the
+landing chain.  Now: the coordinator's acceptance legs on 4888a7ae +
+96a754e0 (probe, six gates cold, falsifier, rows); the engineer merges
+4888a7ae into archive-timeout-3 (patch-id e923bfd6, dry run 0 outside) and
+runs one cold chain there; "launch" after both.
