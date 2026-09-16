@@ -6820,3 +6820,27 @@ paragraph for Mikhail, holding the orphan path's code while the
 normal path proceeds. wti is lent to e9 now (a3c8d970, clean, the
 tree where both hangs happened) for stages A and B under a short
 freeze announced on e9's "ready".
+b5's R0P pre-read landed on sonnet/r0p-preread b4e7d038
+(l2src/LOCK_REMOVAL_R0P_PREREAD.txt, off 7b3a8668): 9 sites, 6 in
+production lm1 (none in exec.c or host.c), 2 host-side shutdown paths,
+1 test. create_prepare's two parent==0 branches (1086, 1179) and
+release_slot (1400) stay: the stub is not a Message they build or
+unlink. The three that become live traffic once R0 has a parent:
+lmx_msg_parent_gone (2074, a parentless Message passes vacuously),
+lmx_msg_poll_mark (skips any parent==0 target), lmx_msg_live_query
+(2430/2444, refuses a parentless Message). No timeout-driven process
+exit exists today (host.c and exec.c grep clean): the stub's exit is
+new host-loop behaviour. The test lmx_model_liveness_33_selftest.lm1:372
+asserts live_query(R0) == INVALID ("R0 has no parent to poll") and
+inverts under the stub. Open in the pre-read: lmx_msg_poll's top-level
+sweep (who=0U, 2130) calls poll_kids(R0) and never poll_mark(R0), so
+R0's own liveness is absent from the general poll. RULED (the
+coordinator, 2026-09-15, from Mikhail's sentence recorded in the spec's
+liveness paragraph, "R0 polls it as any child polls its parent"): R0
+is folded into the same poll, poll_mark(R0) with the stub as its
+parent, the stub answering as a live parent while the process lives;
+the stub's own poll of R0, the parent's side with the parent's timeout,
+runs in the host loop at a host setting ("host settings, not language
+constants", 13190-13191), and on expiry leaves the OS process; the
+liveness_33 line 372 becomes live_query(R0) == the stub's answer. For
+the lead's R0P section after S6-2.
