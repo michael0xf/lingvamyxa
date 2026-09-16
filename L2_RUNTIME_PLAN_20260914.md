@@ -8484,3 +8484,22 @@ at 2d8f2b6a; the lead's quoted line carried 'lmx_msg_slots', which
 dfc10d08 removed from the mixa lists, so it came from an older tree).
 Rule kept: a zero from a grep is a claim about the instrument until a
 positive control on the same file prints a known count.
+MIKHAIL, 2026-09-16, verbatim (eleventh line): "то есть поле адреса в
+письме нет, адрес вычисляется динамически по индексам как в том
+алгоритме -- есть getAddress, а доставку сейчас по адресу памяти
+делает почтовый сервис, только ссылка на него не глобальная где-то
+лежит, а приходит от родителя". The coordinator's reading, put back to
+him for confirmation before the spec changes: the letter carries no
+address field; the sender hands the service the target's memory
+address (the handle it holds) and the service admits the letter into
+the target's inbox under its monitor; getAddress computes a.b.c.d
+dynamically from the indices up the chain when a string address is
+needed (and for the future map); the service reference comes from the
+parent at creation, never a global; the postman chain by string
+address stays an addition, not the main path. The one thing direct
+delivery by memory address needs without a holder count: the service
+knows whether that address is still live, by its own set of live
+records (registration at create, removal at release, R0's own acts on
+its lane or letters to it; membership in bounded time), refusing an
+unknown address rather than dereferencing it. Awaiting his yes or a
+correction; the lead is not moved until then.
