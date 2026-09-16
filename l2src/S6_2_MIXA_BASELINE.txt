@@ -1,0 +1,103 @@
+S6_2_MIXA_BASELINE: cold verdicts at 7b3a8668 (unedited: run against this
+session's own sonnet/s6-2-mixa-lists checkout, whose only diff from
+7b3a8668 is the six list edits removing lmx_msg_slots -- none of the
+seven runners below are among those six edited files, so their own
+bodies are byte-identical to 7b3a8668's), for the seven runners in
+mixa_manager that call Add-L2RuntimeSupport, measured one at a time,
+each cold, before S6-2's own module deletion lands (sonnet/s6-2-mixa-
+lists, 2026-09-15). A red today is a finding, not a fix -- none of the
+seven below were touched.
+
+Count correction: the ticket named "the eight callers of Add-
+L2RuntimeSupport," listing seven names plus "the five list runners."
+Direct grep (`grep -rl Add-L2RuntimeSupport mixa_manager/*.ps1`) finds
+exactly the same seven runner files the ticket names, plus lib_l2_
+runtime_support.ps1 itself (the function's own definition, not a
+runner with its own verdict) and l2_parity_module_table.ps1 (a data
+table, not a runner either). The "five list runners" are the five
+files among this same branch's own six edits (fmpanel, app_path,
+composite_glyphs, selection, tiles -- lib_l2_runtime_support.ps1 being
+the sixth, the shared function, not a sixth list-runner); per the
+ticket's own explicit "do not run the edited runners yet," none of
+those five is measured here. Seven runners baselined, not eight.
+
+--- Verdicts (7 runners, all measured under 3 minutes)
+
+run_mixa_app_controller_l2_parity.ps1: UNEXPECTED_FAILURE (exit 1).
+  Oracle harness ran clean ("mixa app controller parity harness ok",
+  no failure line; its own individual CHK lines were not all captured
+  in this pass's own truncated output, not re-counted from a fresh
+  full capture, so no check count is asserted here). L2 translation:
+  "l2trans error: mixa_manager\mixa_app_controller.lm2:14:5: unsupported
+  body, frame=mixa_app_fmpanel_close." Unrelated to lmx_msg_slots or
+  Add-L2RuntimeSupport; fails inside the module's own translation.
+
+run_mixa_app_panel_l2_parity.ps1: THROW, before any oracle/L2 step.
+  "L2 runtime header lmx_msg_sched_ready translation failed"
+  (lib_l2_runtime_support.ps1:104's own throw). The runtime-support
+  header list's own translation is already red today on a DIFFERENT
+  module (lmx_msg_sched_ready, not lmx_msg_slots) -- a pre-existing
+  failure this ticket's own edit does not touch or cause.
+
+run_mixa_app_win32_l2_parity.ps1: UNEXPECTED_FAILURE (exit 1). Oracle
+  harness ran clean (58 checks, 0 failures). L2 translation: "l2trans
+  error: mixa_manager\mixa_app_win32.lm2:463:50: address of an Array
+  element needs an explicit adapter, atom=@." Unrelated to lmx_msg_
+  slots.
+
+run_mixa_audio_mp3_l2_parity.ps1: THROW, before any translation step.
+  "missing candidate L1 translator (ticket 20260912-084943, read-only,
+  not modified by this script): ...\build\codex\l1-import-capacity\
+  build\import_capacity\run_20260912_084844\l1trans.exe" -- a missing
+  local build artifact from an unrelated, earlier ticket's own
+  candidate-translator infrastructure, not present in this worktree at
+  all. Pre-existing, unrelated to lmx_msg_slots.
+
+run_mixa_backend_ctors_win32_l2_parity.ps1: EXPECTED_CORE_BARRIER
+  (exit 2, the runner's own documented non-pass verdict, distinct from
+  UNEXPECTED_FAILURE). Oracle harness ran clean (7 checks, 0 failures).
+  L2 translation: "l2trans error: mixa_manager\mixa_backend_ctors_
+  win32.lm2:10:1: incompatible entry signature, frame=fn" -- the
+  runner's own comment names this as an already-known barrier (the
+  integrated frontend not yet on main), not a new finding.
+
+run_mixa_backend_win32_l2_parity.ps1: EXPECTED_CORE_BARRIER (exit 2).
+  Oracle harness ran clean ("mixa backend win32 parity harness ok", no
+  failure line; individual CHK lines observed but not re-counted with
+  confidence from this pass's own truncated capture, so no check count
+  is asserted here). L2 translation:
+  "l2trans error: mixa_manager\mixa_backend_win32.lm2:121:5: unsupported
+  own array declaration, frame=[]" -- same already-known-barrier
+  category as backend_ctors_win32.
+
+run_mixa_l2_parity.ps1 -Module app_window (the dispatcher; run with one
+  representative module, since -Module is mandatory and app_main/app_
+  controller/audio_mp3 are deliberately excluded from its own table --
+  a full sweep of every module in l2_parity_module_table.ps1 was not
+  attempted this pass, one representative module chosen to baseline the
+  shared codepath): THROW, before any translation step, identical
+  failure to app_panel's own -- "L2 runtime header lmx_msg_sched_ready
+  translation failed." Confirms app_panel's own finding is this shared
+  helper's own state, not specific to that one runner.
+
+--- Reading across the seven
+
+Five of seven never reach a point where lmx_msg_slots itself would be
+exercised: two throw earlier, inside lib_l2_runtime_support.ps1's own
+translation of a DIFFERENT header (lmx_msg_sched_ready, already red);
+one throws even earlier, on a missing local build artifact unrelated to
+any L2 runtime header at all. Of the two that do reach their own
+module's L2 translation, both fail on their own module's own code
+(unsupported body / an Array adapter), not inside the runtime-support
+header list. The two EXPECTED_CORE_BARRIER verdicts are the runners'
+own documented non-pass state, already known before this ticket.
+None of the seven is red because of lmx_msg_slots specifically, and
+none is green today either -- all seven are already off the pass line,
+for reasons this ticket's own six-file edit does not touch.
+
+--- Falsifier
+Each verdict above re-measured directly this pass (not inferred from a
+prior run), one runner at a time, none exceeding 3 minutes (longest
+observed: run_mixa_app_win32_l2_parity.ps1, still under 2 minutes).
+The count correction (seven, not eight) verified by direct grep, not
+assumed from the ticket's own wording.
