@@ -6567,3 +6567,15 @@ every verbatim entry, so a spec citation names the section and a
 quoted phrase ("there is no count of holders", 19.29.7) with the
 commit, never a bare line number; e9's behaviour search found the
 right paragraphs.
+e9's S6-2 gate impact list advanced to claude-0c/s6-2-gate-impact 16335e9b
+(the plan's earlier 92c7bc45 superseded; same single file): its three
+spec citations now by section and quoted phrase with the commit read:
+refs, 19.29.7 Message Boundary, "there is no count of holders" (the
+ruling for LmxMsg.refs with endp_retain/release going); slots and n,
+19.28 Runtime Operators (Revision 2), "the slot list served only the L1
+delete loop ... goes without replacement; the retire queue goes";
+release, 19.29.6 Running Message, "reclaimed, arena and slot" (the
+accounting scenario36's rt\n pins express today); the 6/0/25
+classification, the 22-of-31 support-list table and the handoff_ready
+column unchanged at baa8ec23. The phrases each occur once on main
+(checked by the coordinator).
