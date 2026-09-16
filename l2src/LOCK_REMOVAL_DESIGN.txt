@@ -1012,6 +1012,12 @@ S5 on 5.1, answered (Mikhail "1 - -да" to the coordinator's wording): there is
     its children an ordinary child list in R0's arena); there is no walk at deletion (the close is R0's own closing
     end-turn); the slot list goes without replacement; the retire queue goes (a closed child's storage is its
     parent's settle write); a lane's own queue is that Message's mailbox. S5 no longer waits.
+    [WITHDRAWN 2026-09-16 -- READ S6-2's "RESPECIFIED BY MIKHAIL" BULLET BEFORE ACTING ON THE NEXT THREE LINES.
+     Mikhail removed this sentence from spec 19.29.7 (origin/main 9f744435) with "У вас проблема без id найти
+     Message?", and 774c8d34 then made the resolution a mail service, R0 with a sorted address list. A capability
+     is the target's ID; a closed Message's slot and arena are freed by the release chain; a late send resolves the
+     id at the service and is refused with a status. The record below is kept as the history of an answered
+     question, not as a live answer, because three lock-removal inventories cite this file's 5.6 by its owner code.]
     5.6, answered ("давай так"): a capability is the target's mailbox handle; a closing Message's mailbox settles
     into its parent with the rest of its storage; a late send lands in the parent's mailbox and is refused there on
     the parent's lane with a status to the sender; no holder count. S4's C3/C4 no longer wait.
@@ -1524,6 +1530,9 @@ S6. The lock deleted (L4, L7, L8 and what remains).
     - Ruled (the coordinator, 2026-09-15): 5.6 is not open. The spec carries Mikhail's agreed wording at
       Lingvamyxa_spec.txt, 19.29.7, the sentence carrying "there is no count of holders" (origin/main 077ee6fd,
       today line 12909; the coordinator's correction -- his own "12885-12891" was a line at an earlier main, and a
+      [WITHDRAWN 2026-09-16: the sentence quoted below is no longer in the spec -- see S6-2's "RESPECIFIED BY
+      MIKHAIL" bullet. The ruling that 5.6 is not open still stands; what it ruled on has been replaced by the id
+      and the mail service. This paragraph is history, including the line-citation lesson it was making.]
       bare line rots as the spec grows): a capability is the target's mailbox handle; a closing Message's mailbox is
       settled into its parent with the rest of its storage, so a late send lands in a mailbox the parent owns and
       is refused there, on the parent's lane, with a status to the sender; there is no count of holders. (d) is
@@ -1821,7 +1830,14 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         round and the whole leak hole at (2a) stop existing rather than being solved. The old shape answered "who
         may free this" with machinery; the new one answers it by removing every holder.
       - WHAT AN ID IS, measured on the tree at 013c4be2, not assumed: LmxMsgAddr is unsigned (lmx_message.h:73),
-        minted from rt\next_addr, which starts at 1U (lm1:877) and is incremented once per create (lm1:1193-1194).
+        minted monotonically and never reused. CITATION CORRECTED within the hour of writing it, and the error is
+        the carry rule catching its own author: I first cited "rt\next_addr, incremented once per create
+        (lm1:877, 1193-1194)", which is what the DESIGN worktree holds -- an older tree. At the stage tip 2d8f2b6a
+        the mint is c.lmx_msg_addr_take(rt) (lmx_message.lm1:1190) over
+        __atomic_fetch_add_4(&rt->next_addr, 1U, __ATOMIC_RELAXED) (lmx_message_exec.c:412), with the counter
+        initialised at lm1:848 -- S5's order-free atomic counter, taken on no owner's lane. The claim is unchanged
+        and in fact stronger than I stated it. Measured where the code will be written, not where I happened to be
+        standing: that is the whole of the rule, and I broke it on my own file first.
         It is never decremented and there is no free list, so an id is NEVER REUSED and a late send cannot resolve
         onto a different Message that took the dead one's place. The one caveat, stated rather than hidden: reuse is
         possible only by 32-bit wraparound after 2^32 creates, which is a property of the counter's width and not of
