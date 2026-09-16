@@ -6965,3 +6965,17 @@ open, flagged not guessed: whether port_msg_blocks' frees=/callbacks=
 pin counts LmxMsgBlock or graph-level blocks (the stage confirms); no
 "block-base" pin by that name exists. The lead updates the A section's
 line citations to 70c9ba5a's before A1's design.
+The lead: d6/lock-removal 50a282c9 (part (2) rewritten: settled
+records and mailboxes go upward with the rest of a closing parent's
+storage, recursively, each owner cell rewritten under its own monitor,
+only R0's runtime_delete frees; e9's fail_retain finding cited) and
+42dfeaec (l2src/land_base3.sh committed byte-identical to the S6-1
+run, sha256 compared, bash -n clean; its L= absolute scratchpad path
+named as the wart e9 parameterises). Code started on d6/lock-s6-2 off
+7b3a8668, red first: the "retire retain" case restated as the
+redirect-and-refuse check, the sender reading a status envelope from
+its inbox (19.29.7 "with a status to the sender"), against post_dead's
+relay kind if no refusal kind exists. b5 prepares the six
+mixa_manager build-list edits on sonnet/s6-2-mixa-lists and the cold
+baselines of the thirteen runners those lists feed (S6_2_MIXA_BASELINE.txt);
+the lead merges the branch into the stage.
