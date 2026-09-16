@@ -1090,8 +1090,9 @@ void lmx_msg_slot_free(LmxMsg *m) {
  * three deletions could not be done separately. It was gated on refs == 0 AND
  * parent_msg == 0 -- the count this stage removes and the owner cell this stage
  * deliberately keeps -- so from the moment the settle landed it refused every
- * record and freed nothing. It was also the only walker of rt->slots besides
- * runtime_delete, and the only caller of lmx_msg_slot_free outside it. With it
+ * record and freed nothing. It was also the only walker of the runtime's
+ * allocation registry besides runtime_delete, and the only caller of
+ * lmx_msg_slot_free outside it. With it
  * gone, one free path remains: R0's teardown, walking what it owns. */
 
 int lmx_msg_exec_attach(LmxMsgRuntime *rt) {

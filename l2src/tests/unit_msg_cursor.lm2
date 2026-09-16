@@ -1,8 +1,8 @@
 # A const cursor over Message records: the const LmxMsg activation local, the
 # LmxMsgAddr result, and a walk along the approved adapter fields.
 #
-# S6-2 deleted the runtime's slot list (rt\slots, rt\n, alloc_next), which is what
-# this unit used to walk. The case is NOT about the slot list: it pins translator
+# S6-2 deleted the runtime's allocation registry and its per-record link, which is
+# what this unit used to walk. The case is NOT about that registry: it pins translator
 # behaviour that happens to use a record walk as its subject -- a const pointee as
 # an activation local rather than a file scope or an address slot, adapter fields
 # read directly rather than resolved by name at run time, an unsigned LmxMsgAddr
