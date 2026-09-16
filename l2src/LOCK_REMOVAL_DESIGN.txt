@@ -3401,6 +3401,135 @@ A1-A3. The arena (19.29.2), after S6 or interleaved where a stage touches the sa
       heap. It is red while any such record comes from malloc, and green once the arena's blocks are the only heap
       allocations.
 
+  AD: the handle is the pair; no id is resolved by scanning; parent retired; walker cells and the free grace
+      (design before code, on integration d3bde8b5 = S6-2 landed at 07cd6901 plus its self-build log line)
+      - INPUTS, each measured, not recalled:
+        * main 277437fe, L2_RUNTIME_PLAN_20260914.md, "STAGE AD RESTATED" and "AD (c)'s spec basis"; the stage
+          order phrase "S6-2 -> AD -> R0P -> Y -> A" counts 1 there (control: "S6-2" counts 120).
+        * b5's impact list, sonnet/ad-preread 5348280e, l2src/AD_IMPACT_FIND_DELETION.md: 209 matches at
+          3e1cec49 (199 external, classified HOLDS-POINTER or ID-ONLY with lanes; 10 internal to the deleted
+          cluster).
+        * spec on main 277437fe, section 19.29.7 and 19.29 closing, cited by phrase (each counted once in the
+          spec with its line breaks removed; the wrapped text reads 0 with a plain grep, which is why the
+          flattened count is the one quoted): "never by scanning one by one", "every send resolves there",
+          "the handle it holds", "slot and arena are freed by the release chain", "must outlive possible
+          observers".
+      - A CONTRADICTION BETWEEN SENTENCES, raised before any decision rests on it (to Mikhail through the
+        coordinator; nothing below is coded until it is answered):
+        * 19.29.7, earlier paragraph: "A capability is the target's id, and a Message is found by its id"
+          (Mikhail: "У вас проблема без id найти Message?"), and the resolution is R0's "sorted list of
+          addresses ... answers membership in bounded time, never by scanning one by one; every send resolves
+          there".
+        * 19.29.7, the settled shape, later the same day: "the sender hands the service the target's memory
+          address, the handle it holds", and a letter carries no address field.
+        * AD RESTATED (a), the coordinator's text, not Mikhail's: "nothing resolves an id by scanning, so
+          lmx_msg_find, find_tree, dest_from_src and self_or_find's find fallback are deleted".
+        The first sentence ALLOWS a lookup from id to record, provided it is bounded time on R0's lane; it
+        forbids only the scan. The restatement deletes every lookup. Both readings keep delivery by handle,
+        and both delete today's depth-first scan. They differ at the ID-ONLY sites below: under the first, an
+        owner-lane query holding only an id may ask R0's live set for the record in bounded time; under the
+        second, every such caller must already hold the pair. THE QUESTION: may an id be resolved to its
+        record by R0, in bounded time, on R0's lane -- yes or no? The design below is written for NO (the
+        stricter reading, which is what the ticket states), with the one change YES would make named at (b).
+      - (a) THE HANDLE: TWO PARAMETERS, NOT A STRUCT. Wherever a signature names a target Message it carries
+        `@: LmxMsg <name>` and `LmxMsgAddr: <name>_id` side by side; create returns the pair through two out
+        parameters, the id where it is returned today and the record through a new `@@: LmxMsg out_msg`.
+        Why not a two-field struct: the handle crosses the kernel's C ABI (the executor, the host, the
+        selftests' C driver), and a new by-value struct there is a new kernel type -- "in C build only the
+        kernel" -- where two parameters are types the kernel already has. The L2 translator would pass a
+        by-value foreign struct through for the C compiler to check (run_graph_abi's deleted msg_bad_ret note:
+        "a by-value foreign return is spelled as written"), but L1 has no such precedent in the cores, and a
+        stage whose purpose is deletion should not open one. Cost accepted: every target-naming signature
+        grows by one parameter, and a caller can mismatch the two halves -- which the service's membership
+        check already refuses, because is_live requires BOTH (a stale pointer with a fresh id, or the reverse,
+        is not a member).
+        The envelope: LmxMsgEnv's `to` stays the id and gains `to_msg`; `reply_to` gains `reply_to_msg`;
+        `from` gains `from_msg`, set by the runtime from the sender's own record (a sender never names itself
+        by scan). exec_from/exec_reply follow. LmxMsgCopy already carries dest_msg, which becomes the pointer
+        half of `to`, filled from the caller's pair instead of by dest_from_src.
+      - (b) WHERE EACH ID-ONLY SITE GETS ITS PAIR (b5's classes, sites at 3e1cec49, both cores mirror):
+        * the 12 self-turn sites (send, send_graph, send_owned, end_turn, recv, fail, send_address,
+          live_query x2, live_handle, send_cap, create_prepare's parent): turn_self, already O(1); in
+          require_turn's host-with-no-context branch, the record comes from the caller's pair (create's
+          result), since that path holds no turn.
+        * the 3 dest_from_src sites: deleted; `to`'s pointer half comes from the envelope (to_msg), i.e. from
+          whoever handed the sender the handle: create's result, or a letter that carried the pair.
+        * post_rejected, post_dead, request_children_close, admit_one's fallback: the letter being answered
+          already carries the pair (dest_msg/from_msg); admit_one's `dest_msg = 0` branch refuses exactly as
+          the is_live-false branch does, with no lookup.
+        * the 12 owner-lane introspections (state, inbox_n, get_address, child_n, child_at, init_copy,
+          live_check x2, live_test_set_seq, live_test_set_wait_th, complete, tracked), poll, and exec.c's
+          handoff_ready, native_users, adopted_n, adopted_base, transfer_adopted, transfer_graph_locked_api,
+          parent_settle, set_orphan_until, orphan_expired, exec_is_runnable_locked, exec_ready: they take the
+          pair (create's result held by the caller). Where a pointer-taking sibling already exists (`_msg`:
+          exec_is_runnable_msg, exec_ready_msg, the settle family) the id form is deleted and its callers
+          move to the sibling.
+        * handoff_supervision, child_of_caller, settle_child, dispose_child, adopt_failed: take pairs;
+          parent_settle already walks p\first_child as pointers and today degrades them to ids before calling
+          adopt_failed/dispose_child (b5's finding), so it passes the pointers.
+        * exec_selftest.c's 102 find sites and the L1 fixtures: the test keeps the pair create returned; a
+          liveness assertion that used find(addr) = 0 becomes R0's live set not holding the pair (read on the
+          host, R0's lane, after R0's round -- the gone_after_r0_round shape S6-2 already uses).
+        * DELETED OUTRIGHT, no migration: lmx_msg_find, find_tree, dest_from_src, self_or_find's find
+          fallback, and the id-taking lmx_msg_exec_adopt_mark and lmx_msg_exec_dispose_mark. Caller grep at
+          d3bde8b5's tree (ws6 at 4888a7ae, the same files): `lmx_msg_exec_(adopt|dispose)_mark\b` outside
+          build/ names only their two declarations (exec.h:61-62) and two definitions (exec.c:2401, :2634)
+          plus prose; positive control, the `_msg` forms, one call each per core (lm1:1826/1828,
+          lm2:1948/1950). b5's claim holds.
+        IF MIKHAIL ANSWERS YES to the question above, only the owner-lane introspection class changes: those
+        keep their id-only signatures and resolve through a bounded-time lookup in R0's live set, which then
+        needs an id order next to its pointer order (ids are minted monotonically, so an id-sorted array is an
+        append plus removal). Everything else in (b) stands, because the scan is gone either way.
+      - (c) LmxMsg.parent RETIRED as a duplicate of parent_msg. Field reads on any receiver at 4888a7ae
+        (`(\\|->)parent\b`): lm1 17, lm2 17, exec_selftest.c 2, send_local selftest 1 = 37; parent_msg 53. Every
+        reparenting site writes both in lockstep (b5, AD_IMPACT section 0: create, handoff, orphan_children).
+        The one reader that resolved the id, parent_gone's self_or_find(child\parent), reads child\parent_msg.
+        Where an id is still wanted (a letter's from/reply_to), it is parent_msg\addr, read on the lane that
+        holds the record.
+      - (d) CROSS-LANE WALKERS: ATOMIC LINK AND INDEX CELLS, AND THE EPOCH GRACE (not the Message-shaped
+        acknowledgement).
+        * The readers that remain across lanes: get_address's walk (parent_msg and index of every ancestor),
+          handoff_supervision's cycle check (parent_msg of the new parent's ancestors), and foreign readers of
+          running/success. The first two read link cells another lane writes (child_link runs on the settling
+          lane and the old parent's lane, orphan_children and handoff mint index): parent_msg and index become
+          atomic cells, read and written through __atomic_load_n/__atomic_store_n, the primitives running and
+          success already use (exec.c:375-396). first_child/next_sibling are read cross-lane only by the
+          walks those two functions do not make, so they stay as they are; the section names that as a claim
+          for the code step to measure, not to assume.
+        * THE GRACE, spec basis "The flag/control storage must outlive possible observers/writers even when
+          the Message's arena is freed" (19.29 closing), with 19.29.7's "slot and arena are freed by the
+          release chain": R0 frees a released record only when no walker can still hold it. EPOCH shape: R0
+          keeps a global epoch counter in an atomic cell; each lane (every context worker and the host)
+          publishes, in its own atomic cell, the epoch it read when it entered a turn or a walk, and 0 when it
+          is between turns. A record unlinked at epoch E goes on R0's pending-free list (R0's own data, R0's
+          lane); in R0's round, R0 advances the epoch and frees every pending record whose E is older than
+          every nonzero published epoch.
+        * Why epoch and not the Message-shaped acknowledgement (a running child re-linked by a letter it
+          applies in its own round, the ancestor freed after its acknowledgement): the acknowledgement needs
+          the re-linked child's own round, and the bootstrap executor cannot run the round of a Message with
+          no bound turn -- the same limitation that deferred send-by-string-address's hop chain (S6-2, ruled
+          (iii)); and it protects only the child's own chain, while get_address may walk any Message's chain
+          from the owner's lane and the cycle check walks the NEW parent's ancestors, which no single
+          acknowledgement covers. The epoch covers every walker by construction.
+        * What the epoch costs and what it does not: one atomic store at turn entry and one at turn exit per
+          lane, not per cancellation poll, so it is not "an extra fence on every cancellation poll" (19.29
+          closing); no lock, no wait (R0 never blocks on a lane, it only defers a free to a later round); and
+          it is not a count of holders -- one epoch per lane, not one counter per record, which is what
+          "there is no count of holders" (19.29.7) excludes.
+        * A TENSION TO NAME, not a contradiction I can settle: "all synchronization reduces to Message" and
+          "Messages share only immutable or order-free atomic state" (the 2026-09-15 rulings). The epoch
+          cells are order-free atomic state, so they are within the second; whether a per-lane epoch counts
+          as "reduced to Message" is Mikhail's word, and the section asks it with the question above rather
+          than assuming it.
+      - ACCEPTANCE (red first): a probe on an acceptance branch off d3bde8b5 counts, over the tracked l2src
+        sources, calls of lmx_msg_find(, find_tree(, dest_from_src(, the self_or_find find fallback (the call
+        of find inside self_or_find's body), the id-taking adopt_mark/dispose_mark, and LmxMsg's `parent`
+        field (declaration and receiver-qualified reads) -- all 0 for green; positive control: the same
+        needles report their d3bde8b5 counts on the base, and a planted `lmx_msg_find(rt, 1U)` call on the
+        green tip reads 1.
+      - CODE ORDER (after the ruling): (c) the parent field; (a)+(b) signatures with their callers, one family
+        per commit, the cores in parity; the deletions; (d) atomic cells, then the epoch and the pending-free
+        list; the fixtures; the gates one by one, then the chain cold once, then the push.
 QUESTIONS (Mikhail's; the coordinator put 5.1 and 5.3-5.6 to him directly, so they are not repeated here)
 - The design's own: for N, the 24 address queries from outside any Message (state, inbox_n, path_n/seg, init_copy,
   child_n/at, tracked, endp_refs, handoff_ready, native_users, adopted_*, exec_bind_*, is_bound, last_status,
