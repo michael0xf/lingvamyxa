@@ -7191,3 +7191,15 @@ negatives recorded: the liveness gate asserts none of this; the
 lmx_msg_poll* hits are poll_abort/poll_escape. Correction under way on
 claude-0c/s6-2-gate-impact: family_release_17's slot pins are eleven
 check lines and seven n0 captures (grep -F), not six or three.
+e9's corrected S6-2 row at claude-0c/s6-2-gate-impact 7867db9b: the
+slot-count pins by grep -F on the field, not by wording: family_release_17
+11 check lines (plus seven n0 captures at 209, 219, 245, 267, 290,
+320, 334), orphan_mapped_17 5 (149, 157, 158, 159, 167; one capture at
+148; two reads pin nothing), entry_turn 1: seventeen, not the lead's
+fifteen (his six for family_release_17 was by sentence, his eight for
+orphan_mapped_17 were mentions). Two more absolute pins in
+orphan_mapped_17 want the membership form (158: rt\n = 3 with the
+orphan present after the drive; 167: rt\n = 2 after the deadline).
+Verified by the coordinator with e9's falsifier at 7b3a8668: 5, 11, 1.
+The lead's section carries seventeen; a missed rt\n read cannot pass
+silently, since the field's deletion reds the build.
