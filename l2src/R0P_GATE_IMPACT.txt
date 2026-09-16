@@ -1,0 +1,146 @@
+R0P_GATE_IMPACT: the gate set (l2src/run_gates.ps1) against stage R0P, the root's parent stub
+Measured by 0c at integration 7b3a8668, read only: nothing was built or run, 2026-09-15.
+
+R0P gives R0 a parent. The stub is a host/system construct outside the Message model, not a Message any
+create_prepare builds; what changes for the gates is that R0 stops being a Message with nothing to poll.
+The ruling (the plan, 2026-09-15): R0 is folded into the same poll, poll_mark(R0) with the stub as its
+parent, the stub answering as a live parent while the process lives; the stub's own poll of R0 runs in the
+host loop at a host setting and, on expiry, leaves the OS process. The attribution there matters and is
+kept: "R0 polls it as any child polls its parent" is the coordinator's reading of the spec's liveness
+paragraph, not Mikhail's words; his verbatim sentences are the mutual poll and the stub itself.
+
+Counts (31 gates: the 30 default rows at 7b3a8668 plus l2_message_root with -L2MessageRoot; 30 after S6-2
+deletes the port_slots row):
+  asserts R0's parentless state directly:              1  (scenario36, through liveness_33:372)
+  captures the poll's returned count, so a changed
+  sweep could in principle move it:                    2  (lmx_message, lane_oracle) -- neither moves;
+                                                          every capture site is read below and the reason
+                                                          each is safe is given, not assumed
+  unaffected:                                         28  (27 after S6-2)
+
+== The mechanism, read at 7b3a8668 ==
+
+lmx_msg_poll_mark (lmx_message.lm1:2092-2105) is the whole of it. Its guard at 2095 is
+    if: m\parent != 0U && (m\state = RUNNING || (m\state = INACTIVE && m\committed != 0))
+so a Message with no parent is skipped entirely. Inside, it calls lmx_msg_parent_gone (2074) and only when
+that answers non-zero does it set m\closing, call exec_ready, write the address into out[] if there is
+room, and increment n (2099-2102). It returns n at 2105.
+
+  **n counts closing-requested Messages, not visited ones.** This is the single most important fact for
+  this list: folding R0 into the poll does not add to n while the stub answers as a live parent. n grows by
+  one exactly when the stub is gone or expired -- which is the new behaviour the stage introduces, not a
+  side effect on existing counts.
+
+lmx_msg_poll_kids (2107-2117) walks first_child/next_sibling recursively, poll_mark per child.
+lmx_msg_poll (2119-2133): for who != 0U it poll_marks that one Message (2126); for the sweep (who = 0U) it
+calls poll_kids(rt\root) at 2130 and never poll_mark(rt\root). So R0 is absent from the general poll today
+-- b5's open point in the pre-read, confirmed here in the code rather than taken over.
+lmx_msg_live_query (2430/2444 per the pre-read; lmx_message.h:244 exports lmx_msg_poll) refuses a
+parentless Message, which is what liveness_33:372 pins.
+
+== Asserts R0's parentless state (1) ==
+
+scenario36    run_model_scenario36.ps1, marker "core tests PASS"
+  builds: its -Tests default at run_model_scenario36.ps1:19, ten fixtures including
+    lmx_model_liveness_33_selftest
+  asserts: tests/lmx_model_liveness_33_selftest.lm1:372 --
+    check(lmx_msg_live_query(rt, lmx_msg_root_addr(rt)) = c.LMX_MSG_INVALID, "R0 has no parent to poll")
+    This is today's parentless behaviour asserted directly, and it INVERTS under the stub: R0 acquires a
+    parent to poll, so live_query stops returning INVALID and returns the stub's answer. The line is a
+    restatement, not a deletion: the property becomes "R0's parent is the stub and it answers".
+  not affected, in the same fixture: :98 (st: lmx_msg_live_query(rt, who); if: st != STAGED && st != OK)
+    queries an ordinary child, and its comment says so ("STAGED: a new query goes out with this turn's
+    outbox. OK: the previous query is still outstanding").
+
+== Captures the poll's returned count (2), and why neither moves ==
+
+Every site in the tree that keeps what lmx_msg_poll returns, with what it compares it against:
+
+  lmx_message   run_lmx.ps1 -Suite Message, marker "selected=Message"
+    lmx_message_selftest.lm1:335  st: lmx_msg_poll(rt, leaf, 0U, 0U, lmx_poll_buf, 8)
+      The value is overwritten at 336 by the end_turn call and never read: not a pin at all.
+    lmx_message_selftest.lm1:379  st: lmx_msg_poll(rt, idle, 1000U, 1U, lmx_poll_buf, 8), then 380
+      "if: st != 0" -- an EXACT ZERO, the strictest pin of the four. Safe for one reason only, and it is a
+      reason rather than a hope: this is a TARGETED poll (who = idle), which takes the 2126 branch and
+      poll_marks that Message alone. The sweep branch at 2129-2130, the one R0P changes, is never entered.
+    lmx_message_selftest.lm1:494  st: lmx_msg_poll(rt, idle, 0U, 0U, lmx_poll_buf, 8), then 495 "if: st < 1"
+      a lower bound, and targeted again.
+    Also in this gate through the exec selftest, see lane_oracle.
+
+  lane_oracle   run_port_message.ps1 -TranslatorPath <pin> -LaneCheck, marker "lmx_message parity PASS",
+                forbidden line "LANE WRITE FAIL"
+    lmx_message_exec_selftest.c:1807  lmx_msg_poll(rtc, 0, 0, 0, 0, 0) -- a SWEEP (who = 0), so R0P does
+      reach it, but the result is discarded and out is 0: nothing to move.
+    lmx_message_exec_selftest.c:2064  nclose = lmx_msg_poll(rtl, 0, 10000, 1, 0, 0), then 2065
+      "if (nclose < 1)" -- a sweep AND the one site that keeps the number. It is a LOWER BOUND: the test
+      requires at least one closing request ("timer parent-loss poll"). An extra closing request from R0
+      could only raise n, never lower it, so the bound cannot be broken by the fold.
+    lmx_message_exec_selftest.c:3023  (void)lmx_msg_poll(rtv, vc, 1000U, 0U, 0, 0) -- targeted and voided.
+
+  So no gate pins an exact positive count from the poll; the single exact pin is st != 0 on a targeted
+  call the change does not reach, and the two sweep sites are a discard and a lower bound. A changed sweep
+  cannot red any of them. If a future test pins an exact count on a SWEEP, that pin is the one to revisit.
+
+== The other numeric channel: live_seq, and why it does not spread ==
+
+live_seq is a PER-MESSAGE cell (lmx_message.h:168, unsigned live_seq), incremented on the queried Message
+at lmx_message.lm1:2439 and 2453 with a wrap guard at 2436/2450 (4294967295U). R0 gaining a parent gives R0
+its own live_seq traffic; it does not touch any other Message's sequence, so no existing count shifts.
+  The one test that names it: lmx_message_selftest.lm1:760-762, "live_seq wrap", which drives the test seam
+  lmx_msg_live_test_set_seq (the setter writes m\live_seq: v at 2637) on its own Message to reach the wrap.
+  Unaffected: it sets the value it then checks.
+Grepped and found empty, so it is recorded as absent rather than unexamined: no runner pins a literal poll
+or liveness count ("liveness checks=\d+ failures=0" at run_msg_liveness.ps1:80 captures the number, it does
+not fix it), and no test compares a poll/visited/swept/seq count against a literal.
+
+== Unaffected (28; 27 after S6-2) ==
+
+All remaining rows assert nothing about R0's parentlessness and capture no poll count. Two deserve naming
+because a reader would expect otherwise:
+
+  liveness      run_msg_liveness.ps1, marker "liveness checks=" (the runner's own check at :80 is
+                '^liveness checks=\d+ failures=0$', a capture, not a literal)
+    Named for liveness and yet unaffected: its fixture tests/lmx_msg_liveness_selftest.lm1 contains no
+    occurrence of parent, poll, live_query or root_addr at 7b3a8668. It is the liveness of the module's own
+    data structure, not the parent poll. Do not convert it by its name.
+  port_liveness run_port_msg_liveness.ps1, marker "lmx_msg_liveness parity PASS" -- the port parity of the
+    same module, same reason.
+
+  The remaining rows: history, roots_stale, visit, send_local, family_handoff, c_scanners, entry_turn,
+  port_array_owned, port_array_ref_owned, port_branch_owned, port_chars_owned, port_graph_copy,
+  port_merge_owned, port_msg_graph_copy, port_msg_blocks, port_history, port_mail_chain, port_path_storage,
+  port_roots_stale, port_slots (deleted by S6-2), port_storage, port_visit, port_owned_ranges,
+  port_value_owned, graph_abi, l2_message_root.
+
+== A false positive this list refuses, measured ==
+
+lmx_msg_poll* appears in run_graph_abi.ps1 (786-787), run_l2trans.ps1 (518, 2350), run_lmx.ps1 (467, 473),
+run_port_message.ps1 (240-241), run_candidate_indent.ps1 (40, 174, 231, 270), l2trans.lm1 (18 lines),
+lmx_poll_stub.c and several generated units -- 60-odd hits that look like the liveness poll and are not.
+Every one of them is lmx_msg_poll_abort or lmx_msg_poll_escape, the L2 checkpoint helpers (lmx_poll_stub.c:4
+defines lmx_msg_poll_abort; lmx_message.h:354 exports it), unrelated to the parent poll. A token-led sweep
+would put six more gates in this list on that evidence. Read the hit, not the name.
+
+Withdrawn from an earlier draft of this list, recorded so it is not re-derived: the seven lmx_msg_live_query
+sites in lmx_message_selftest.lm1 (686, 722, 749, 760, 788, 813, 840) are ordinary child queries -- STAGED
+checks, one live_seq wrap, four feeding end_turn/pump -- not parentless assertions. b5's pre-read was right
+that liveness_33:372 is the single test asserting today's parentless behaviour.
+
+Falsify
+  Each cited runner line contains the named token at 7b3a8668:
+    git show 7b3a8668:l2src/run_model_scenario36.ps1 | sed -n '19p'        names lmx_model_liveness_33_selftest
+    git show 7b3a8668:l2src/run_msg_liveness.ps1 | sed -n '80p'            'liveness checks=\d+ failures=0'
+    git show 7b3a8668:l2src/run_gates.ps1 | sed -n '70,101p'               every marker quoted above
+  Each cited test line:
+    git grep -n 'lmx_msg_live_query' 7b3a8668 -- l2src/tests/lmx_model_liveness_33_selftest.lm1   -> 98, 372
+    git grep -n 'lmx_msg_poll(' 7b3a8668 -- l2src/lmx_message_selftest.lm1 l2src/lmx_message_exec_selftest.c
+      -> 335, 379, 494 and 1807, 2064, 3023; read each for what it compares
+  The mechanism:
+    git show 7b3a8668:l2src/lmx_message.lm1 | sed -n '2092,2133p'          poll_mark, poll_kids, poll
+    the guard is line 2095, n increments at 2102, the sweep at 2130 calls poll_kids and not poll_mark
+  Emptiness claims (they must print nothing):
+    git grep -n -E 'liveness checks=[0-9]|polls=[0-9]' 7b3a8668 -- 'l2src/*.ps1'
+    git grep -n -E 'parent|poll|live_query|root_addr' 7b3a8668 -- l2src/tests/lmx_msg_liveness_selftest.lm1
+  Field greps must use grep -F: 'rt\n' and '->refs' through a pattern-matching grep under-match or are
+  taken as options, and a count read that way is fiction (the lead, 2026-09-15, after it cost him three
+  commands; the same trap cost this project a falsely clean tripwire once before).
