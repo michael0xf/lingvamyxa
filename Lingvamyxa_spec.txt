@@ -12920,7 +12920,16 @@ passes itself as the mail service at merge, and every Message holds the
 service's address from its creation; the service handed down the chain may
 be any Message, not only the root: the membership check by the service
 itself, the delivery by a postman Message, the list of postmen held by the
-service, and so on, everything written and optimized within Messages
+service, and so on, everything written and optimized within Messages.
+The address and the delivery, ruled the same day: every Message carries its
+hierarchical address a.b.c.d..., one string field holding a length and an
+unsigned array of indices, unbounded in count, with no further fields around
+it; when a Message changes parent its address changes, composed from the
+parent's address and its index; delivery goes through the parent's inbox,
+hop by hop along the chain, every L3 Thread a postman for one step that
+decides by the address whether to hand the Message to its parent or to one
+of its children; a mail service may exist beside this but is not required
+for delivery (Mikhail, 2026-09-16, verbatim: "В исходном коде Message-у присваивался адрес a.b.c.d... Мы его убрали вчера вместе со всем остальным-- бывает. Мое последнее объяснение можно считать верным-- никто не мешает дрежать почтовый сревис, но надо вернуть строку адреса в виде неограниченного числом индексов, только не плодить вокруг нее больше полей, поле строки которое соержит len и uint*.  При смене родителя ментть и адрес -- составлять из адреса родителя и индекса. Доставку сделать через inbox родителя -- то есть передавать по цепочке и каждый L3 Thread сделать почтальоном наодин шаг -- он уже по адресу решает отдавать Message своему родителю или ребенку. Сделайте пожалуйста так.Это понятно?"). Written and optimized within Messages
 (Mikhail, 2026-09-16, verbatim: ""Отправка — письмо R0:" -- это может быть _любой_ Message которого R0 передаёт по цепочке при создании L1 Thread. В том числе проверку наличия по списку доступных может делать сам почтовый сервис, а конкретно доставку -- специальный почтальон, список почтальонов может держать почтовый сервис  и так далее -- вы можете _всё_ написать и всё оптимизировать в этой парадигме"; and earlier the same day: "Не плодите постоянно лишних сущностей. Так как все Message порождаются из root Message (по цепочке)то он может при merge передавать себя как почтовый сервис. В чем проблема?"). The delivered storage must be independently
 transferable: a running sender cannot also keep using it through mutable aliases.
 An explicit copy, merge, materialization or transport/codec contract may allocate

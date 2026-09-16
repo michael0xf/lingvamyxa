@@ -8285,3 +8285,24 @@ ranges cite the model or exec.c, not the spec. RULED as e9
 recommended: no renumbering; a dated PIN NOTE under the map's section
 2 heading states the numbers are as of 07ad3679 and never renumbered,
 the quoted text the authoritative anchor. Pushed.
+
+MIKHAIL, 2026-09-16, verbatim: В исходном коде Message-у присваивался адрес a.b.c.d... Мы его убрали вчера вместе со всем остальным-- бывает. Мое последнее объяснение можно считать верным-- никто не мешает дрежать почтовый сревис, но надо вернуть строку адреса в виде неограниченного числом индексов, только не плодить вокруг нее больше полей, поле строки которое соержит len и uint*.  При смене родителя ментть и адрес -- составлять из адреса родителя и индекса. Доставку сделать через inbox родителя -- то есть передавать по цепочке и каждый L3 Thread сделать почтальоном наодин шаг -- он уже по адресу решает отдавать Message своему родителю или ребенку. Сделайте пожалуйста так.Это понятно? Entered in spec 19.29.7 and the
+model. RULED from it, superseding the sorted-list resolution for S6-2:
+(1) the hierarchical address a.b.c.d... returns as ONE field of the
+Message record, a string of unsigned indices with its length (len,
+uint*), unbounded in count, no other fields around it (the address
+arrays deleted with the lookups yesterday come back in this one
+shape); (2) on a parent change the address is recomposed from the
+parent's address and the child's index; (3) delivery is hop by hop
+through inboxes along the chain: every L3 Thread is a postman for one
+step and decides by the destination's address whether to hand the
+letter to its parent or to one of its children (a common-prefix
+comparison against its own address), each hop an admission under that
+mailbox's monitor, no lookup anywhere; a hop whose next index names no
+live child refuses with a status on its own lane, which answers the
+absent target and the gone parent alike without keeping anything
+alive; (4) a mail service (R0's sorted list) may exist beside this
+but is not required for delivery, so S6-2 does not build it. The
+lead's section is rewritten on this; the refs and registry deletions
+stand; release frees by the chain; the planted red stays the
+refusal's falsifier (the refusal now comes from the hop).
