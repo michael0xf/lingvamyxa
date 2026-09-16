@@ -7825,3 +7825,10 @@ kind. GATE COUNT reconciled by the coordinator: run_gates.ps1 at
 when -L2MessageRoot is set, which landings pass, hence 31 of 31; after
 port_slots goes, 29 literal plus the conditional row = 30, e9's
 parameter; the lead's "29" and the landings' "31" are both right.
+e9 confirms at 114c2c64: land_s6_2.sh passes -L2MessageRoot (line
+169, the same switch land_base3.sh:91 passes, through the run() helper
+with the bound and exit 124 as TIMEOUT), its marker "^gates GREEN: $NG
+of $NG " matches land_base3's; the header (21-24) states why the count
+is 30 and not 31; the reconciliation matched independently (30
+literal rows, the append at 101, the count printed at 159 after it).
+Holding for the registry group's name-status and the word to launch.
