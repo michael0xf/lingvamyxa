@@ -8477,3 +8477,10 @@ address to its memory location and delivers directly into its inbox,
 since block addresses do not move; the postman chain is the interim.
 For S6-2 nothing changes; for the later map stage: the service's
 table maps the address string to the record's location.
+e9 independently confirmed the seventh-file refutation at seven
+commits with a positive control (the same -F probe finds L2Runtime
+three times and lmx_ zero times in run_mixa_backend_win32_l2_parity.ps1
+at 2d8f2b6a; the lead's quoted line carried 'lmx_msg_slots', which
+dfc10d08 removed from the mixa lists, so it came from an older tree).
+Rule kept: a zero from a grep is a claim about the instrument until a
+positive control on the same file prints a known count.
