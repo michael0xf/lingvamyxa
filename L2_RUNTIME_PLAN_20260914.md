@@ -9378,3 +9378,24 @@ the 8 new ones are the R0-round fixtures of 3e1cec49..4888a7ae, admitted by
 the coordinator); family_handoff's hazard is bounded by land_s6_2.sh:198
 (run_gates under T_GATES=1200 through run() at :173; run_gates.ps1:129 has
 no per-gate bound), with the engineer's kill-reaches-children probe.
+
+S6-2 ACCEPTANCE, the coordinator's three legs cold, done 09:32 (exec-3a, pin
+0B3D85B3 re-installed and hash-checked before each gate):
+- RED on the acceptance base 96a754e0 (7b3a8668 + the probe): probe -Part 2
+  "refs=163 runtime_lists=36", S6-2 RED, exit 1; the port_slots and
+  port_path_storage rows present in row form (1 and 1).
+- GREEN on the measuring merge 456b571f = 4888a7ae + 96a754e0: probe
+  "refs=0 runtime_lists=0", S6-2 GREEN, exit 0; run_port_message exit 0
+  (09:28:54), run_port_message -LaneCheck exit 0 (09:29:48), run_lmx -Suite
+  Message exit 0 (09:30:11), run_model_scenario36 exit 0 (09:30:38),
+  run_entry_turn exit 0 (09:30:51), run_graph_abi exit 0 (09:32:20); both
+  rows absent in row form (0 and 0); 28 literal rows; lmx_msg_path_storage in
+  0 code files.
+- FALSIFIER: the base's retain line appended to lmx_message.lm1 -> "refs=1",
+  S6-2 RED; restored, tree clean.
+Log: exec-3a build/fable/measure_4888a7ae.log.  A first run of the script
+ran no gate (its pin helper clobbered the gates' loop variable, every gate
+exited 127) and still exited 0; it was caught by its 9-second duration,
+fixed (local loop variable; the script exits with its failure count) and
+rerun; only the rerun is evidence.  The landing waits on the engineer's cold
+chain on the candidate 3d4eb0be.
