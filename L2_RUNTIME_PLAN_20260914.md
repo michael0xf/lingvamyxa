@@ -7282,3 +7282,19 @@ the settled list on the owner's lane or after the run, the four
 absolute pins become wrap-watched frees at the expected moment. This
 strengthens the question put to Mikhail: the settled record is
 demonstrably the parent's data on the parent's own list.
+e9's row amended at claude-0c/s6-2-gate-impact 2974392d: the timing
+("the record's base freed exactly once by runtime_delete for R0's
+children, and at the parent's release for deeper ones"; a watched free
+expected at release would be red by design), the conditional (if
+Mikhail rules that slots are freed by the chain the moment moves, the
+shape stays), and why the assumption is load-bearing, verified at
+7b3a8668: both production routes to slot_free (exec.c:1133, 1163-1172,
+the monitor destroyed and the record freed) are closed by the stage:
+runtime_delete reaches records only through rt\slots and alloc_next
+(lm1:1025-1036, deleted), and endp_try_retire refuses unless refs == 0
+and parent_msg == 0 (exec.c:1189-1194), while the settle keeps
+parent_msg and refs is deleted; two guards, not one. The accessor
+half is resolved without Mikhail: lmx_msg_adopted_base indexes a
+Message's own block list, so a fixture captures the child's bases
+while findable and enumerates the parent's adopted blocks after the
+settle (turn_arena_o1's shape at 108-110).
