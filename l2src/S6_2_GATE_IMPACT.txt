@@ -77,8 +77,18 @@ Method
 
 lane_oracle   run_port_message.ps1 -TranslatorPath <pin> -LaneCheck
   builds: lmx_message_exec_selftest.c (L1 reference and L2 port), tests/lmx_exec_crash_report.c
-  asserts: lmx_message_exec_selftest.c reads the slot count 39 times as ->n (12 inside a condition, 10 as
-    captures) and calls the refs API 17 times --
+  asserts: lmx_message_exec_selftest.c reads the runtime's slot count 35 times as ->n and calls the refs
+    API 17 times --
+    (The 35, measured here at 7b3a8668: grep -c -E -e '->n([^A-Za-z0-9_]|$)' gives 39 lines naming a field
+    spelled ->n, of which four are a DIFFERENT field and must not be touched by this stage -- fresh->n and
+    block->n, pb->n, cb->n, an envelope's byte count and a block's length. By receiver: rti 16, rtb 11,
+    rto 4, rtq 3, rt 1. A plain grep -F -e '->n' gives 55 and is useless here: it swallows ->next and
+    ->number. The split by role -- captures, conditions, and the fprintf diagnostics that PRINT the counter
+    and so change with the assertions -- is NOT yet settled: the lead's count and mine disagree on this
+    file (his 36/32/eleven fprintf against my 39/35/seven) and two of his line citations land on other text
+    here, so one of us is measuring a different tree. Name the commit as well as the population. An earlier
+    version of this row stated his 39/12/10 as measured fact, which was my error: I recorded a peer's
+    number without reproducing it.)
     endp_retain at 3172 (if (held == 0 || lmx_msg_endp_retain(held) == 0)), endp_release at 3178, 3187,
     3192, 3198 and 3202, and the accessor endp_refs 11 times at 6017, 6027, 6030, 6157, 6172, 6204, 6215,
     6217, 6619, 6622 and 6624, across four cases and none of them inside the 3172-3202 block: they read the
@@ -291,8 +301,11 @@ pin found counts something S6-2 does not change; each is named here so the next 
   port_slots     103 captures 'slots checks=(\d+)' rather than pinning a literal, so the count itself is
                  not a pin; the literal checks=278 lives in run_msg_slots.ps1:84, which is opt-in and not a
                  row in the default set.
-  The rt\n pins that S6-2 does shift (family_release_17 212/303/304, orphan_mapped_17 149, entry_turn 84)
-  are assertions on the removed field itself and are listed under Asserts, not here.
+  The slot-count pins that S6-2 does shift are assertions on the removed field itself and are listed under
+  Asserts, not here: family_release_17's eleven check lines (212, 222, 248, 270, 303, 304, 321, 342, 344,
+  345, 346) with seven n0: captures, orphan_mapped_17's five (149, 157, 158, 159, 167) with one capture,
+  and entry_turn:84. An earlier version of this line named only 212/303/304 and 149, which was the
+  superseded figure; it is corrected here rather than left to contradict the rows above.
 
 == Fixtures reading handoff_ready right after a stop, with no spin on the flag ==
 
@@ -377,7 +390,11 @@ Falsify
   Counts are matching lines per pattern, measured at baa8ec23:
     lane_oracle   lmx_message_exec_selftest.c: ->n 39 (NOT rt\n, which matches only fprintf text in a C
                   file), endp_retain 1, endp_release 5, endp_refs 11
-    scenario36    family_release_17 rt\n 19, orphan_mapped_17 rt\n 8
+    scenario36    family_release_17: 19 rt\n lines = 11 check lines + 7 n0: captures + 1 header comment;
+                  orphan_mapped_17: 8 rt\n lines = 5 check lines + 1 capture + 1 loop (163, while: rt\n
+                  != 2, which pins nothing and still stops compiling) + 1 comment. Count the field, then
+                  split by role: a bare "19" and "8" are mentions, and mentions are not the population a
+                  restatement list needs.
     lmx_message   the same exec selftest, plus lmx_message_selftest.lm1 endp_retain 2, endp_release 2,
                   endp_refs 4
     entry_turn    lmx_entry_turn_selftest.lm1 rt\n 1
