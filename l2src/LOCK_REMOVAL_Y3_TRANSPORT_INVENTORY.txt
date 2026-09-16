@@ -1,0 +1,152 @@
+LOCK_REMOVAL_Y3_TRANSPORT_INVENTORY: every production site and every
+test/runner line touching the transport queue API at integration
+7b3a8668 (S6-1 landed, the relay already moved onto R0's mailbox
+monitor), for Y3 (sonnet/y3-transport-inventory, 2026-09-15, doc-only,
+no builds; written in the working tree ahead of the branch, per 6f's
+own instruction to create the branch and commit only after the freeze
+lifts).
+
+Design citation, by phrase: LOCK_REMOVAL_DESIGN.txt's own Y3 section
+heading, "Y3. The mailbox in L2: inbox and outbox reads and writes
+under synchronized on the mailbox object, nothing else" (9fa7952f:1074);
+its own (a2) note on why the queue is not deleted at S6-1 -- "pump is
+public (lmx_message.h:236) and about seventy fixtures pin its two-step
+shape ... so deleting the queue changes observable behaviour and stays
+Y3's with its own acceptance" (1687-1690), naming the spec's own
+sentence "admission lock is the one cross-lane synchronization the
+model permits" (verified directly against origin/main's Lingvamyxa_
+spec.txt:11570, unchanged) as why the mailbox monitor, not a runtime-
+wide lock, is the queue's own replacement; and its own hold-order
+record, "host_drain's ingress take and end_turn's outbox take are each
+entered and left before the transport hold begins, so the two monitors
+are sequential, never nested; pump releases R0's monitor before
+admit_one takes MAIL on the destination" (1699-1703).
+
+--- Counts
+
+5 production sites (all in lmx_message.lm1; lm2 mirrors it function-
+  for-function, not separately walked; none in lmx_message_exec.c or
+  lmx_message_host.c): 3 push onto rt\transport (host_drain's ingress
+  re-stage, end_turn's outbox relay, post_dead's status-envelope push),
+  1 pops and relays (pump), 1 tears the queue down (runtime_delete).
+61 fixture calls to lmx_msg_pump( across 7 test/selftest files -- close
+  to the design doc's own "about seventy" estimate, verified fresh
+  this pass, not re-quoted from the design doc unchecked (a first,
+  narrower grep over only l2src/tests/*.lm1 found 4 and undercounted
+  badly; the real total needed l2src/tests/*.c and the selftest files
+  that live directly under l2src/, not under l2src/tests/, caught by
+  widening the search before trusting the low number). Per file: lmx_
+  message_selftest.lm1 30, lmx_message_exec_selftest.c 26, cancel_spin_
+  host.c 1, lmx_model_liveness_33_selftest.lm1 1, lmx_model_orphan_
+  mapped_17_selftest.lm1 1, lmx_msg_delivery_selftest.lm1 1, lmx_
+  message_host_selftest.c 1.
+0 runner or gate.ps1 lines name lmx_msg_pump or rt\transport/rt->
+  transport at all (grep across l2src/run_*.ps1, gate.ps1 and mixa_
+  manager's own runners, checked directly): transport is not a separate
+  port module the way slots was, so there is no support-list entry to
+  remove -- it is always-built as part of lmx_message.lm1/.c itself.
+
+--- Production sites
+
+lmx_message.lm1:952-990ish, lmx_msg_host_drain (push at 987, `lmx_msg_
+  q_push(@ rt\transport, @ rt\transport_tail, n)`, inside a loop re-
+  staging every item host_post admitted into R0's own ingress inbox):
+  today, R0's between-turns maintenance takes its own ingress queue
+  (under R0's mailbox monitor) and re-stages each item onto rt\
+  transport (a second, sequential hold of the same monitor) for pump
+  to relay later. Under Y3: the queue itself goes; this loop calls
+  lmx_msg_admit_one(rt, n) directly on each item instead of q_push,
+  collapsing "take from R0's ingress, queue for later, pump relays it"
+  into "take from R0's ingress, admit it now" -- one hold sequence
+  (R0's monitor, released, then the destination's own monitor) instead
+  of two holds separated by an unbounded delay until the next pump.
+
+lmx_message.lm1:1735-1782ish, lmx_msg_end_turn (push at 1780, inside
+  the loop relaying the just-finished Message's own outbox): today, a
+  Message's own outbox (what it sent during its turn, taken and
+  released under its own mailbox monitor) is relayed onto rt\transport,
+  a second sequential hold of R0's monitor, for pump to deliver later.
+  Under Y3: each outbox envelope is admitted directly into its own
+  resolved destination's mailbox in this same loop, the same
+  collapse as host_drain's.
+
+lmx_message.lm1:1975-2003ish, lmx_msg_post_dead (push at 2001, the one
+  status-envelope site: builds a node with `node\kind: c.LMX_MSG_KIND_
+  DEAD`, then pushes it under R0's own monitor taken and released on
+  its own, since its caller lmx_msg_fail already holds no mailbox
+  monitor at this point): today, a Message's death is announced to a
+  watcher by staging a KIND_DEAD envelope on rt\transport for pump to
+  deliver. Under Y3: admit_one(rt, node) directly, same collapse; this
+  is the one site whose payload is a status envelope rather than an
+  application send, named separately since the ticket asks for it by
+  name, not because its own fate differs from the other two pushers'.
+
+lmx_message.lm1:1858-1888ish, lmx_msg_pump (pop and relay, 1878-1887,
+  its own comment "the take is under R0's mailbox monitor and is left
+  before admit_one takes MAIL on the destination"): today, the one
+  reader of rt\transport, draining it under R0's monitor (released
+  before each admit_one call, re-taken for the next iteration) and
+  admitting each item into its real destination. Under Y3: this
+  function's own queue-draining body goes; per the design doc's own
+  note, pump itself stays PUBLIC (lmx_message.h:236) because ~61
+  fixtures call it expecting a real function to exist at that name and
+  signature, but its body becomes a no-op returning LMX_MSG_OK (nothing
+  left to drain, since host_drain/end_turn/post_dead now admit
+  directly) -- the two-step "stage, then pump moves it" shape the
+  fixtures pin becomes "already delivered; pump finds nothing to do."
+  This is Y3's own design decision to make explicit when the code
+  lands, not answered here: either pump becomes this permanent no-op
+  (keeping every fixture's own call compiling and passing, since
+  inbox_n would already read the delivered count before pump runs) or
+  the ~61 call sites are edited out along with their own before/after
+  inbox_n pattern. The design doc's own words ("pump is public ... so
+  deleting the queue changes observable behaviour") read as leaning
+  toward the no-op, not the edit, but does not rule it -- flagged as
+  the one open point for Y3's own ticket.
+
+lmx_message.lm1:1010-1023ish, lmx_msg_runtime_delete (frees the queue
+  at 1020-1022, `lmx_msg_copy_free(rt\transport)` then both pointers
+  to 0, the host-only teardown path): today, the final cleanup of
+  whatever is left on the queue at shutdown. Under Y3: goes with the
+  queue -- if pump's body becomes a no-op and every push site admits
+  directly, rt\transport and rt\transport_tail (already S5/Y3-tagged
+  DEL in LOCK_REMOVAL_FIELDS.txt rows 140-141, per the design doc) have
+  nothing left to ever hold, so this teardown step is simply deleted
+  along with the two fields.
+
+--- Fixtures pinning pump's two-step shape (the numeric/observable pin
+    the queue's deletion shifts)
+
+The design doc's own canonical example, verified directly: l2src/tests/
+lmx_msg_delivery_selftest.lm1:81, `check(lmx_msg_inbox_n(rt, child) = 0
+&& lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, child) = 0,
+"the unpublished delivery never reaches C")` -- and the file's own next
+case (a successful send) checks inbox_n = 0 before pump, then = 1
+after. This is the shape all 61 lmx_msg_pump( call sites share in
+outline (not each one individually re-read this pass, given the
+count): a send/relay is asserted STAGED but not yet delivered
+(inbox_n = 0, or an equivalent not-yet-there check), pump is called,
+then the delivery is asserted present (inbox_n = 1, or the specific
+value expected). Under Y3, if pump becomes a permanent no-op (the
+design doc's own leaning, not ruled), these checks do not need editing
+at all -- inbox_n would already read the post-admission value at the
+first check, since admission is now immediate, and the pump() call in
+the middle still returns LMX_MSG_OK, doing nothing, harmlessly. The 61
+sites are therefore not necessarily 61 edits; they are 61 sites whose
+own correctness depends on Y3's single design decision (no-op pump
+versus edited-out call), not 61 independent numeric pins the way the
+slots-list rt\n pins were for S6-2. Flagged as the central finding
+this ticket's own "numeric pins the deletion shifts" question turns
+on, not resolved here.
+
+--- Falsifier
+Every file:line above re-checked directly against 7b3a8668 by grep for
+its own named token with the receiver ignored (`rt\transport`, `lmx_msg_
+pump(`, `lmx_msg_q_push(`, `lmx_msg_q_pop(`). The 61-call count re-run
+directly (grep -rc across the seven files listed, summing to 61, not
+carried over from the design doc's own "about seventy" estimate, which
+this pass's first, narrower attempt actually undershot before widening
+the search caught the missed files). The two spec/design citations
+(11570 for the admission-lock sentence, 1074/1687-1690/1699-1703 for
+the design doc's own Y3 section and hold-order record) verified
+directly, not assumed from the ticket's own wording.
