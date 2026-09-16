@@ -9674,3 +9674,32 @@ lmx_msg_exec_start_contexts' refusal (LMX_MSG_INVALID) inside own_turn: the
 own_turn line for the child is absent in the red log and present in every
 green one.  The instrumented binary is not committed; it lives only in the
 working tree of wti.
+
+AD: THE (c) TIP PASSES THE FULL GATE CHAIN, measured 2026-09-16 14:24 by the coordinator
+(lingvamyxa-08): on d6/lock-ad c2f56d60 (the lead's (c) plus the id-taking
+adopt_mark/dispose_mark deletion), run_gates.ps1 -L2MessageRoot exits 0 with
+every row green (logs build/fable/wad/build/gates/20260916_141327), pin
+0B3D85B3 unchanged and matching L1_PIN.txt. The branch is pushed and its tip is
+c2f56d60.
+
+AD: THE ID ORDER IN R0'S LIVE SET, written the same hour (not yet gated): SPEC
+19.29.7's "a Message is found by its id" with membership "in bounded time, never
+by scanning one by one" needs the service to hold its pair (record pointer, id)
+in an order an id alone can be searched in. The address order stays exactly as
+S6-2 built it -- it is the order that answers "is this handle live", and its
+same-address-replaces-stale-entry rule is what keeps the pair decisive -- and a
+second order is added beside it: byid_m/byid_id, the same pair sorted by id,
+with lmx_msg_live_find_id (binary search by id), lmx_msg_live_lookup (the
+bounded-time answer to an id), lmx_msg_live_byid_add / lmx_msg_live_byid_remove,
+and the three callers that maintain it (service_register, service_unregister,
+the teardown sweep). In lm2 the two new callees of the sweep are placed above it
+for the file's own no-forward-declaration rule. The C mirror frees the two new
+arrays beside live_m/live_id. The lookup has no caller yet: the next AD commit
+uses it where self_or_find and dest_from_src scan today.
+
+FLAKE, closed as measured: 107 consecutive green runs of the reference
+executor selftest with LMX_LANE_CHECK=1 (the exact configuration the landing's
+red run used), so the landing's one red is under 1% and sits in the selftest's
+own own_turn helper (lmx_msg_exec_start_contexts refusing), not in the
+candidate; the instrumented build was reverted from the landing worktree and
+the landing is relaunched.
