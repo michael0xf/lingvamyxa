@@ -7514,3 +7514,9 @@ then the rest (refs at 54 sites in lm1, 55 in lm2, about 25 in
 exec.c, 5 in the header, 17 and 6 in the two selftests). Method rule
 recorded: every fixture step gets its own captured status in the
 diagnostic before a red is read twice.
+Stage branch d6/lock-s6-2 3ce188dd: "the refusal is the owner's round,
+and a capability stops carrying a holder count" (admit_one delivers
+into the settled mailbox, drain_settled in end_turn between the two
+pumps, send_cap/copy_free/copy_dup without retain or release); the
+lead's five lines with the planted red's verdict and the tripwire
+follow.
