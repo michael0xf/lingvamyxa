@@ -7843,3 +7843,22 @@ ticket; 3a5de42c enters app_controller as gate row 12 with
 Expect=UNEXPECTED_FAILURE; the gate cold twice "12 of 12 as expected"
 (197.9 s, 201.0 s), exit 0. All twelve mixa L2 parity runners are now
 gated on expected verdicts. Holding for the merge after S6-2 lands.
+The lead: the gate-count reconciliation is in run_gates.ps1's header
+by switch name and printed marker, not line numbers (a line number in
+a comment about a file being edited is rot by construction); a stray
+non-ASCII character in that comment caught by his own sweep, all 43
+touched files pure ASCII. The fifth population is a RE-POINT, not a
+deletion: exec.c's lmx_msg_exec_tab_n_locked / _addr_locked delegated
+to the deleted module but are called by
+tests/l2_and_foreign_call_own_local.lm2, whose emitted L1 run_l2trans
+asserts on (a C call on the right of && must not take the condition
+temporary's name through the shared l2_tok buffer); the fixture is
+compiled, never executed, so the wrappers owe it their signatures and
+are re-implemented over R0's child chain with the signatures
+untouched (the unit_msg_cursor trap a second time: the slot list was
+the fixture's subject, never what it tested). Running now on the
+registry group: graph_abi first (to see the cursor unit's emitted
+text before writing its three assertions), then scenario36,
+port_message, run_lmx, entry_turn, l2trans, port_parser; then the
+push and the name-status to e9; then the measuring merge with
+96a754e0, the probe -Part 2 and the five lines at the tip.
