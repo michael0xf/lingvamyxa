@@ -1450,6 +1450,36 @@ fn: msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
     return: st
 end: msg_stop
 
+# S6-2, SPEC 19.29.7 ("settled into its parent with the rest of its storage"):
+# the owner's list of the records whose storage is now its own. The link cell
+# replaces alloc_next; the head belongs to the owner instead of the runtime.
+# Written only on the owner's lane, which is the lane already running the settle.
+sub: msg_settled_push (@: LmxMsg owner; @: LmxMsg m)
+    if: owner = 0 || m = 0
+        return
+    m\settled_next: owner\settled
+    owner\settled: m
+end: msg_settled_push
+
+# The settle is upward and recursive: what a record owned becomes its owner's,
+# each cell rewritten to name the new owner, exactly as storage_move_all carries
+# the blocks. Same lane, same moment, no other writer.
+sub: msg_settled_move (@: LmxMsg owner; @: LmxMsg x)
+    @: LmxMsg m
+    @: LmxMsg nxt
+    if: owner = 0 || x = 0
+        return
+    m: x\settled
+    x\settled: 0
+    while: m != 0
+        nxt: m\settled_next
+        m\parent_msg: owner
+        m\settled_next: owner\settled
+        owner\settled: m
+        m: nxt
+    ---
+end: msg_settled_move
+
 sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     int: ust
     if: m = 0
@@ -1491,6 +1521,14 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     m\path_cap: 0
     m\state: c.LMX_MSG_STATE_RELEASED
     m\committed: 0
+    # S6-2: what this record owned becomes its owner's, and then the record
+    # itself does. Done here rather than at the three call sites so no caller can
+    # miss it, and while parent_msg still names the owner (the unlink above takes
+    # the record off the chain and leaves that cell alone, by 19.29.7).
+    if: m\parent_msg != 0
+        msg_settled_move(m\parent_msg, m)
+        msg_settled_push(m\parent_msg, m)
+    ---
     c.lmx_msg_endp_release(m)
 end: msg_release_slot
 

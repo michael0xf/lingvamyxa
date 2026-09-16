@@ -175,6 +175,20 @@ typedef struct LmxMsg {
     int orphan;
     int disposed;
     struct LmxMsg *alloc_next;
+    /* S6-2 (SPEC 19.29.7): a closing Message is "settled into its parent with the
+     * rest of its storage", so the owner must be able to ENUMERATE what it now
+     * owns -- the runtime-wide slot list was the only container that could, and
+     * this stage deletes it.  These two cells are its replacement with the
+     * ownership moved from the runtime to the parent: settled is the owner's head,
+     * settled_next the per-record link that replaces alloc_next.
+     * Written only on the owner's lane -- the lane already performing the settle
+     * (dispose_mark/adopt_mark on the parent, the orphan settle on R0's
+     * maintenance) -- so there is no new writer and no new ordering.  Read by the
+     * owner and by runtime_delete, which frees R0's storage with its settled
+     * records.  A late sender follows parent_msg under the record's own mailbox
+     * monitor and never walks this list, so the list needs no lock of its own. */
+    struct LmxMsg *settled;
+    struct LmxMsg *settled_next;
     LmxMsgBlock *blocks;
     LmxOwnedRange *ranges;
     /* Message-owned, non-owning classification metadata for explicitly
