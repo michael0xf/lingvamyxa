@@ -2831,6 +2831,15 @@ int main(int argc, char **argv) {
         LmxMsgEnv e;
         LmxMsg *held;
         uchar ini = 1;
+        /* S6-2: the rolled-back child is no longer RETIRED at the release -- its
+         * storage settles into its parent (SPEC 19.29.7), so the count it used to
+         * be read by is gone. What is asserted instead is ownership and state:
+         * off the tree, on its parent's settled list, unbound. */
+        LmxMsg *pm2;
+        LmxMsg *sx;
+        int settled_ok = 0;
+        /* n0 is this whole function's, not this block's: five later cases capture
+         * into it. It stays until their own restatements land. */
         int n0;
         TurnCtx rec;
         memset(&rec, 0, sizeof(rec));
@@ -2844,7 +2853,6 @@ int main(int argc, char **argv) {
         if (lmx_msg_create(rtb, p, &ini, 1, &c1) != LMX_MSG_OK) {
             return 1;
         }
-        n0 = rtb->n;
         if (lmx_msg_exec_bind(rtb, c1, turn_just_end, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             fprintf(stderr, "rollback bind\n");
             return 1;
@@ -2852,8 +2860,14 @@ int main(int argc, char **argv) {
         if (lmx_msg_end_turn(rtb, p, 0) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_find(rtb, c1) != 0 || rtb->n != n0 - 1 || lmx_msg_exec_bind_n(rtb) != 0) {
-            fprintf(stderr, "rolled-back bound child not retired n=%d bind=%d\n", rtb->n, lmx_msg_exec_bind_n(rtb));
+        pm2 = lmx_msg_find(rtb, p);
+        for (sx = (pm2 != 0) ? pm2->settled : 0; sx != 0; sx = sx->settled_next) {
+            if (sx->addr == c1 && sx->state == LMX_MSG_STATE_RELEASED) {
+                settled_ok = 1;
+            }
+        }
+        if (lmx_msg_find(rtb, c1) != 0 || settled_ok == 0 || lmx_msg_exec_bind_n(rtb) != 0) {
+            fprintf(stderr, "rolled-back bound child not settled into its parent settled=%d bind=%d\n", settled_ok, lmx_msg_exec_bind_n(rtb));
             lmx_msg_runtime_delete(rtb);
             return 1;
         }
