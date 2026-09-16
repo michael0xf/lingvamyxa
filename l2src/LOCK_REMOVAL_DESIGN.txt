@@ -2218,11 +2218,17 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           * OWNERSHIP comparisons against a SPECIFIC parent (lm1 690, 1545; lm2 733, 1616; exec.c 2436, 2501, 2605,
             2642, 2734; selftest 497, 4980) -- unaffected, and in fact the very shape the unlink case was
             converted TO;
-          * genuine "zero means detached" readers: lm1:688 / lm2:731, plus exec.c:1192, which is endp_try_retire's
-            guard and goes with the refs deletion rather than separately.
-        So the class is two sites wide, not twenty, and saying "parent_msg readers" without that split would have
-        overstated the remaining work by an order of magnitude -- the same counting error as the slot pins, caught
-        this time before it was reported to anyone as a number.
+          * lm1:688 / lm2:731, which I first classified as "zero means detached" and which reading the code
+            refutes: it is inside lmx_msg_handoff_supervision, under the comment "A root has no parent to hand over
+            from", so parent_msg = 0 there means IS A ROOT, not IS DETACHED. R0 still has no parent under S6-2, so
+            the site is correct as it stands and needs nothing;
+          * exec.c:1192, endp_try_retire's guard, the one genuine site -- and it goes with the refs deletion rather
+            than separately, since the whole function does.
+        So the class is ONE site wide, not twenty and not the two I wrote a minute ago; I corrected my own figure
+        here rather than leave the larger one standing, because it was wrong in the direction that makes work look
+        bigger, and an inflated estimate is as unfalsifiable as a deflated one. Saying "parent_msg readers" without
+        the split would have overstated the remaining work by twenty to one -- the same counting error as the slot
+        pins, caught this time before it reached anyone as a number.
       - Also added, and permanent rather than diagnostic scaffolding: the fixture now asserts in its own right that
         the rolled-back child is on its parent's settled list with state RELEASED, before it asks for the refusal.
         That splits a future red in two -- settle never happened, versus the owner's round never answered -- and it
