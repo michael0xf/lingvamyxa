@@ -6542,3 +6542,28 @@ gates line red. Runner trap recorded: run_gates.ps1 takes its baseline
 from its own location, so invoking it by a relative path from another
 worktree silently runs against that worktree and dies on its missing
 pinned translator; absolute paths always, as with the probe.
+e9's S6-2 gate impact list landed on claude-0c/s6-2-gate-impact 92c7bc45
+(l2src/S6_2_GATE_IMPACT.txt, 286 lines, off baa8ec23, read only; checked
+by the coordinator): of the 31, 6 assert refs/retain-release/the slots
+API/rt\n with the lines named (lane_oracle: the exec selftest's 31 rt\n
+and endp_ at 3172-3202; scenario36: family_release_17's rt\n pins at
+212/303/304, orphan_mapped_17's at 149; lmx_message: selftest.lm1
+924/934/964/982; entry_turn 84; port_slots: its selftest 48-100 and
+runner 125-136; graph_abi 531-539 and two cases); 0 numeric-only pins
+(every pin listed with why S6-2 leaves it); 25 assert nothing. The part
+that matters most: 22 of the 31 name lmx_msg_slots as a support module
+to translate and link (18 port rows filed unaffected, lane_oracle,
+scenario36, graph_abi, run_lmx.ps1 125/127 for lmx_message; only
+run_entry_turn.ps1 69 guarded by Test-Path), so they go red at build
+time if the module goes without dropping the name: the link-time class,
+with its own section; S6-2's allowlist must carry those runner lines.
+The handoff_ready column: family_handoff the one exposed instance
+(fixed by the lead's helper); the exec selftest's bare reads not
+exposed (own_turn spins on the after_turn hook fired after the flag);
+family_release_17, orphan_mapped_17 and scenario36 spin on the flag.
+Citation lesson (coordinator): the coordinator's "spec 12885-12891"
+was a line number at main's commit of that hour; the spec grows with
+every verbatim entry, so a spec citation names the section and a
+quoted phrase ("there is no count of holders", 19.29.7) with the
+commit, never a bare line number; e9's behaviour search found the
+right paragraphs.
