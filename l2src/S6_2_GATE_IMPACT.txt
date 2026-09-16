@@ -1,0 +1,286 @@
+S6_2_GATE_IMPACT: the gate set (l2src/run_gates.ps1) against stage S6-2
+Measured by 0c at baa8ec23 (S6-1's tip, "S6-1 (a3): the executor lock is gone"), read only: nothing was
+built or run, 2026-09-15.
+
+S6-2 removes the Message record's reference count and the runtime's slot list:
+  refs      LmxMsg.refs, lmx_msg_endp_retain / lmx_msg_endp_release, and the two InterlockedCompareExchange
+            that carry the count inside them (lmx_message.h, lmx_message.lm1:\refs, lmx_message.lm2:\refs,
+            lmx_message_exec.c)
+  slots/n   LmxMsgRuntime's slot array and count (rt\slots, rt\n), LmxMsg.alloc_next, and the slots port
+            module lmx_msg_slots.lm1/.lm2 with its runner run_port_msg_slots.ps1
+This file is the gate side: which gate builds which of those, and what each asserts.
+
+Counts (31 gates: run_gates.ps1's $gates holds 30 rows at baa8ec23, lines 70-99; the opt-in l2_message_root
+is appended at line 101 only with -L2MessageRoot):
+  asserts refs, retain/release, the slots API or rt\n:   6  (lane_oracle, scenario36, lmx_message,
+                                                             entry_turn, port_slots, graph_abi)
+  pins a numeric side effect of them (only):             0  (grepped explicitly; every pin found is listed
+                                                             below with why S6-2 leaves it)
+  asserts nothing S6-2 removes:                         25
+  BUT also: needs a runner edit when lmx_msg_slots
+  goes, or reds at BUILD time, not at a check:          22  (the support-object lists, section below;
+                                                             18 of them are port rows filed as unaffected)
+  fixtures reading handoff_ready after a stop with no spin on it: 1 file (family_handoff), listed separately
+
+Citation, and one thing that did not resolve
+  The ticket cites "spec 12885-12891". Those lines are not this subject on any ref I can reach: at
+  origin/main (02175be1, 16213 lines) 12885-12891 is 19.29.7 Message Boundary; at baa8ec23 and
+  origin/d6/lock-s6 (both 15983 lines) they are the mailbox admission/dedup reliability profile;
+  Lingvamyxa_spec_history.txt is 6501 lines, L2_RUNTIME_PLAN_20260914.md 6518,
+  L2_CORE_AND_MESSAGE_MODEL_20260912.md 2108 and LOCK_REMOVAL_DESIGN.txt 1798 (absent at baa8ec23), so none
+  of them has a line 12885. Searched by the behaviour's words instead, the governing passages are, verbatim
+  from origin/main:
+    11634-11637  "the slot list served only the L1 delete loop and its address lookup and goes without
+                 replacement; the retire queue goes (a closed child's storage is its parent's settle write)"
+                 -- Mikhail's confirmed "da" on the runtime-level structures the L1 implementation kept
+                 under its executor's lock.
+    12748-12761  the release policy: the parent's dispose "releases the child's slot"; a successful orphan
+                 "is settled at its end-turn and reclaimed, arena and slot, by the settling lane at the
+                 root's next maintenance point".
+  The design says the same in LOCK_REMOVAL_DESIGN.txt (d6/lock-removal) 1244, 1249-1250 and 1277: slots and
+  n are the runtime-wide allocation list through LmxMsg.alloc_next, and they "wait for S6, which removes
+  refs, because until then runtime_delete needs them". The line numbers are the only part that did not
+  resolve; the ruling itself is there.
+
+Method
+  Each gate's runner and the test files it builds, at baa8ec23; git grep over those for the removed names:
+  endp_retain, endp_release, lmx_msg_slots, slots_n, slots_at, run_port_msg_slots, and, as literals because
+  they carry the L1 field-follow backslash, \refs, rt\n, rt\slots and \alloc_next. Field greps were run
+  through PowerShell: a backslash pattern through the Bash tool silently matches nothing here, which would
+  have reported every rt\n row as clean.
+  Then a second sweep the first pass did not cover: every runner that names lmx_msg_slots as a SUPPORT
+  module to translate and link. That is not an assertion, so those gates are still "unaffected" in the
+  assertion sense, but the name has to go from each list with the module, and a missed one reds the gate at
+  build. This is the link-time class the S2 list missed once; it is measured here per runner, with the line.
+  Two false-positive classes were separated by reading the hit, not the name:
+  - run_graph_abi.ps1 names a slot API 11 times (lmx_branch_slot_known, lmx_branch_store_known). That is the
+    graph slot API, not LmxMsgRuntime's slot array, and S6-2 does not touch it. graph_abi is listed as
+    asserting on its own evidence (531-539 below), not on those 11.
+  - lmx_message_exec_selftest.c names InterlockedCompareExchange 174 times. Those are the selftest's own
+    cells and its turn counters; the two the ticket removes are the ones inside endp_retain/endp_release in
+    lmx_message_exec.c. Counted as refs hits: only the 6 endp_ lines.
+
+== Asserts refs, retain/release, the slots API or rt\n (6) ==
+
+lane_oracle   run_port_message.ps1 -TranslatorPath <pin> -LaneCheck
+  builds: lmx_message_exec_selftest.c (L1 reference and L2 port), tests/lmx_exec_crash_report.c
+  asserts: lmx_message_exec_selftest.c reads rt\n 31 times and calls the refs API 6 times --
+    endp_retain at 3172 (if (held == 0 || lmx_msg_endp_retain(held) == 0)), endp_release at 3178, 3187,
+    3192, 3198 and 3202; the rt\n reads include the orphan-release block at 3128 (on1 = rto->n) checked at
+    3130 against on0 - 1.
+  So the conversion must touch this file twice: the retain/release block around 3172-3202 goes with refs,
+  and every rt\n read goes with the slot count. Support list: run_port_message.ps1:154 (see below).
+
+scenario36    run_model_scenario36.ps1
+  builds (its -Tests default): the eleven model selftests, of which two read the slot count
+  asserts: tests/lmx_model_family_release_17_selftest.lm1 reads rt\n 19 times and pins it as arithmetic --
+    212 "the runtime holds one slot fewer: C1's slot retired, not retained" (rt\n = n0 - 1), 303
+    (rt\n = n0 - 1), 304 (rt\n = n0 - 2 && rt\n = 4, "the root's next maintenance reclaims the successful
+    orphan: R0, R, P5 and C5 remain");
+    tests/lmx_model_orphan_mapped_17_selftest.lm1 reads it 8 times, pinned at 149 (rt\n = n0 - 1, "R
+    releases P at once: P's slot goes").
+  These are the spec's own release accounting (12748-12761) expressed as slot counts, so they need a
+  replacement property, not a deletion: what the test is really asserting is that the record was reclaimed.
+  Support list: run_model_scenario36.ps1:85.
+
+lmx_message   run_lmx.ps1 -Suite Message (MessageApi + Host + Exec + Production)
+  builds: lmx_message_selftest.lm1, lmx_message_host_selftest.c, lmx_message_exec_selftest.c
+  asserts: lmx_message_selftest.lm1 calls the refs API 4 times -- endp_retain at 924
+    (if: c.lmx_msg_endp_retain(rdest) = 0) and 964, endp_release at 934 and 982; plus the exec selftest's
+    31 rt\n reads and 6 endp_ lines as under lane_oracle.
+  Build side: run_lmx.ps1 translates the slots module by name and unguarded -- 125 lmx_msg_slots.h.lm1,
+    127 lmx_msg_slots.lm1, each with its own throw at 126 and 128. Those four lines go with the module.
+
+entry_turn    run_entry_turn.ps1
+  builds: tests/lmx_entry_turn_selftest.lm1, the emitted units, lmx_message_host.c and lmx_message_exec.c
+  asserts: one rt\n read, at lmx_entry_turn_selftest.lm1:84 --
+    check(rt\n = 1 && c.lmx_msg_find(rt, 1U) != 0 && c.lmx_msg_find(rt, 2U) = 0, "M: the runtime creates R0
+    alone, no UI lane"). The property is "R0 alone"; rt\n is how it is currently read.
+  Build side: run_entry_turn.ps1:69 is the ONE support list already guarded
+    (| Where-Object { Test-Path -LiteralPath "l2src/$_.lm1" }), so it survives the module's deletion with no
+    edit. Every other runner's list does not: see below.
+
+port_slots    run_port_msg_slots.ps1
+  builds: tests/lmx_msg_slots_selftest.lm1 against the L1 module and the generated L2 port
+  asserts: the whole gate is the slots module's parity. The selftest builds the list by hand and reads it
+    back: rt\slots at 52, 86, 96, 99; rt\n at 53, 82, 87, 92, 97, 100; \alloc_next at 48, 81, 91, 95.
+    The runner pins the generated shape: 125 the count returns the cached field (return: l2_p0_0\n), 128
+    throws if the count traverses the list, 133 "the enumeration does not start at the owner slot head"
+    (m: l2_p1_0\slots), 134 "does not advance along alloc_next" (m: m\alloc_next), 135 forbids the
+    enumeration reading \root, \first_child or \next_sibling, 136 requires return: m\addr; 103 matches
+    'slots checks=(\d+) failures=0' (captured, not a literal pin).
+  This gate goes with the module: when lmx_msg_slots.lm1/.lm2 and run_port_msg_slots.ps1 are removed, the
+  row at run_gates.ps1:94 is removed with them, and the header comment at 32-35 that explains port_slots'
+  relation to the opt-in run_msg_slots needs the same edit.
+
+graph_abi     run_graph_abi.ps1
+  builds: tests/lmx_graph_abi_selftest.lm1 and the unit_*.lm2 cases, including two that are about this list
+  asserts: the same generated shape as port_slots, on its own cases -- 531 "the walk does not start at the
+    owner slot head" (m: l2_p1_0\slots), 532 "does not advance along alloc_next" (m: m\alloc_next), 533
+    requires return: m\addr, 538 the count returns the cached field (return: l2_p0_0\n), 539 throws if the
+    count traverses the list. Its cases at 315 and 325 build tests/unit_msg_adapter.lm2 and
+    tests/unit_msg_cursor.lm2, with the per-case checks at 468 and 510. Those two units read the fields
+    directly: unit_msg_adapter.lm2:4 (return: rt\n, in fn slots_n) and unit_msg_cursor.lm2:7 (return: rt\n),
+    13 (m: rt\slots), 15 (m: m\alloc_next), whose own comment at 3 says "slots module port is what needs
+    these; this pins them on their own".
+  So graph_abi is not collateral: it pins the alloc_next walk as a code shape and must lose those two cases
+  and those five checks with the list. Support list: run_graph_abi.ps1:116.
+
+== Needs a runner edit when the slots module goes (22 of the 31; red at build, not at a check) ==
+
+Each line below names lmx_msg_slots as a module to translate and link. It is a build input, not an
+assertion, so these gates stay "unaffected" above -- but if the name is not removed with the module the
+runner throws before any check runs, and the gate's log names a missing file, not a property.
+Only run_entry_turn.ps1:69 is guarded by Test-Path and needs no edit.
+
+  gate                 site
+  lane_oracle          run_port_message.ps1:154
+  scenario36           run_model_scenario36.ps1:85
+  lmx_message          run_lmx.ps1:125 and 127 (explicit translate, with throws at 126 and 128)
+  graph_abi            run_graph_abi.ps1:116
+  port_array_owned     run_port_array_owned.ps1:75
+  port_array_ref_owned run_port_array_ref_owned.ps1:76
+  port_branch_owned    run_port_branch_owned.ps1:83
+  port_chars_owned     run_port_chars_owned.ps1:82
+  port_graph_copy      run_port_graph_copy_owned.ps1:80
+  port_merge_owned     run_port_merge_owned.ps1:75
+  port_msg_graph_copy  run_port_message_graph_copy.ps1:66
+  port_msg_blocks      run_port_msg_blocks.ps1:166
+  port_history         run_port_msg_history_owned.ps1:64
+  port_liveness        run_port_msg_liveness.ps1:59
+  port_mail_chain      run_port_msg_mail_chain.ps1:74 (and the comment at 10 names the module)
+  port_path_storage    run_port_msg_path_storage.ps1:83
+  port_roots_stale     run_port_msg_roots_stale.ps1:63
+  port_slots           run_port_msg_slots.ps1:62 (the row goes entirely)
+  port_storage         run_port_msg_storage.ps1:60
+  port_visit           run_port_msg_visit.ps1:61
+  port_owned_ranges    run_port_owned_ranges.ps1:158
+  port_value_owned     run_port_value_owned.ps1:83
+  (not affected: entry_turn, guarded at 69; history, roots_stale, visit and liveness, whose own L1 runners
+  do not list the module; send_local, family_handoff, c_scanners, l2_message_root: no mention at all.)
+
+== Pins a numeric side effect of refs or slots (0) ==
+
+Grepped for owned_frees, watched_frees, slot counts, check counts and the runners' pass-line literals. Every
+pin found counts something S6-2 does not change; each is named here so the next reader does not re-derive it:
+  send_local     run_msg_send_local.ps1:113 pins 'send local checks=122 failures=0 owned_frees=1'.
+                 owned_frees counts envelope releases (selftest 8, 67, 237, 245, 247, 270), not slot
+                 retirement and not refs. Unchanged by S6-2.
+  family_handoff run_msg_family_handoff.ps1:125 pins 'family handoff checks=67 failures=0 watched_frees=4'
+                 and 127 'adopt unrooted ... owned_frees=2 retained_interior=PASS'. family_watched_frees
+                 counts watched block frees at end-turn (selftest 25, 61, 66, 335, 403, 415, 417).
+                 Unchanged.
+  port_msg_blocks run_port_msg_blocks.ps1:103 captures 'blocks checks=(\d+) failures=0 frees=(\d+)
+                 callbacks=(\d+)' and 108 requires frees and callbacks non-zero: block frees, unrelated.
+  port_slots     103 captures 'slots checks=(\d+)' rather than pinning a literal, so the count itself is
+                 not a pin; the literal checks=278 lives in run_msg_slots.ps1:84, which is opt-in and not a
+                 row in the default set.
+  The rt\n pins that S6-2 does shift (family_release_17 212/303/304, orphan_mapped_17 149, entry_turn 84)
+  are assertions on the removed field itself and are listed under Asserts, not here.
+
+== Fixtures reading handoff_ready right after a stop, with no spin on the flag ==
+
+The idiom S6-1's landing hit, grepped over every file that reads the flag (reads / loops that spin on it):
+  l2src/tests/lmx_msg_family_handoff_selftest.lm1   3 / 0   EXPOSED
+    334 reads lmx_msg_handoff_ready(rt, successful) right after yield_until_stopped(rt, successful); that
+    helper (160-163) spins only on lmx_msg_state(rt, who) != LMX_MSG_STATE_STOPPED. 350 reads it after
+    lmx_msg_drive, 354 after the c_status stored from yield_until_stopped at 347. None waits on the flag.
+    Why that is a race and not a style point: STOPPED is written by the core's closing path
+    (lmx_message.lm1:1736 and 1784, mirrored in lmx_message.lm2:1815 and 1863), while handoff_ready is set
+    later, in native_leave_addr (lmx_message_exec.c:1762-1763), once the turn's native user leaves. STOPPED
+    is therefore observable before the flag, and a state-only spin can return inside that window.
+  l2src/lmx_message_exec_selftest.c                12 / 0   NOT exposed, by ordering
+    No loop names the flag, but every read follows own_turn (selftest 1206-1228), which spins on
+    g_seen_turns; that counter is incremented by the after_turn hook seen_after_turn (1161-1165), which
+    lmx_message_exec.c fires at 1769-1770 -- strictly after handoff_ready = 1 at 1762-1763, with the
+    comment "after its record is released and its settle is published". The hook is a sound guard; these 12
+    reads need no change.
+  l2src/tests/lmx_model_family_release_17_selftest.lm1  15 / 8   guarded (while: ... handoff_ready = 0)
+  l2src/tests/lmx_model_orphan_mapped_17_selftest.lm1    4 / 2   guarded
+  l2src/tests/lmx_model_scenario36_selftest.lm1          2 / 1   guarded (385-388)
+  No runner (.ps1) names handoff_ready at all: grep over l2src/*.ps1 is empty, so no gate pins it as text.
+  The second setter, lmx_msg_exec_unbound_close (lmx_message_exec.c:2192), still exists at baa8ec23; the
+  lead has since deleted it for S6-1's re-land, which does not change any row above.
+
+== Asserts nothing S6-2 removes (25) ==
+
+No removed name in an assertion in the runner or its test files. The support-list column is the edit from
+the section above, not an assertion.
+
+  gate                 runner / test files                                     support list
+  history              run_lmx_msg_history_owned.ps1, its selftest             none
+  roots_stale          run_lmx_msg_roots_stale.ps1, its selftest               none
+  visit                run_msg_visit.ps1, tests/lmx_msg_visit_selftest.lm1     none
+  liveness             run_msg_liveness.ps1, tests/lmx_msg_liveness_selftest   none
+  send_local           run_msg_send_local.ps1, its selftest                    none (pin above)
+  family_handoff       run_msg_family_handoff.ps1, its selftest                none (pin above; and the
+                                                                               handoff_ready idiom)
+  c_scanners           run_candidate_c_scanners.ps1, l2_c_scanners_parse_      none; it parses every
+                       driver.lm1                                             tests/*.lm1 as a corpus
+                                                                               (runner 316), 4 of which
+                                                                               carry a removed name as
+                                                                               text (lmx_entry_turn,
+                                                                               family_release_17,
+                                                                               orphan_mapped_17,
+                                                                               lmx_msg_slots_selftest):
+                                                                               parsed, not asserted
+  port_array_owned     run_port_array_owned.ps1 (links)                        75
+  port_array_ref_owned run_port_array_ref_owned.ps1 (links)                    76
+  port_branch_owned    run_port_branch_owned.ps1 (links)                       83
+  port_chars_owned     run_port_chars_owned.ps1 (links)                        82
+  port_graph_copy      run_port_graph_copy_owned.ps1 (links)                   80
+  port_merge_owned     run_port_merge_owned.ps1 (links)                        75
+  port_msg_graph_copy  run_port_message_graph_copy.ps1 (links)                 66
+  port_msg_blocks      run_port_msg_blocks.ps1 (links, pin above)              166
+  port_history         run_port_msg_history_owned.ps1 (links)                  64
+  port_liveness        run_port_msg_liveness.ps1 (links)                       59
+  port_mail_chain      run_port_msg_mail_chain.ps1 (links)                     74
+  port_path_storage    run_port_msg_path_storage.ps1 (links)                   83
+  port_roots_stale     run_port_msg_roots_stale.ps1 (links)                    63
+  port_storage         run_port_msg_storage.ps1 (links)                        60
+  port_visit           run_port_msg_visit.ps1 (links)                          61
+  port_owned_ranges    run_port_owned_ranges.ps1 (links)                       158
+  port_value_owned     run_port_value_owned.ps1 (links)                        83
+  l2_message_root      run_l2_message_root.ps1, l2_message_root_driver.lm1     none: 0 hits for every
+                       and its 24 owned files (opt-in row, run_gates.ps1:101)  removed name
+
+== Outside the default set, touched by S6-2 (for the lead's list, not gates) ==
+
+  run_msg_slots.ps1 with tests/lmx_msg_slots_selftest.lm1 (opt-in; pins checks=278 at 84, own lists at 15
+    and 61) goes with the slots module, together with port_slots above.
+  run_l2trans.ps1:90 and run_port_parser.ps1:127 name the module in their support lists, unguarded; neither
+    is a default row, and both red at build if the name stays.
+  tests/cancel_spin_host.c (run_lmx.ps1 -Suite Cancel, not -Suite Message): 5 InterlockedCompareExchange,
+    all its own spin cells, none of them refs. Listed only so the name is not mistaken for the removal.
+  lmx_message.h, lmx_message.lm1/.lm2 and lmx_message_exec.c are the removal itself, not gates.
+
+Falsify
+  (1) Every gate marked "asserts" has a grep hit for the named API in its runner or test files at baa8ec23:
+    git grep -c -E 'endp_retain|endp_release|lmx_msg_slots|slots_n|slots_at' baa8ec23 -- <files>
+    git grep -c -F 'rt\n' baa8ec23 -- <files>        (likewise 'rt\slots', '\alloc_next', '\refs')
+  Counts are matching lines per pattern, measured at baa8ec23:
+    lane_oracle   lmx_message_exec_selftest.c: rt\n 31, endp_retain 1, endp_release 5
+    scenario36    family_release_17 rt\n 19, orphan_mapped_17 rt\n 8
+    lmx_message   the same exec selftest, plus lmx_message_selftest.lm1 endp_retain 2, endp_release 2
+    entry_turn    lmx_entry_turn_selftest.lm1 rt\n 1
+    port_slots    lmx_msg_slots_selftest.lm1 rt\n 6, rt\slots 4, \alloc_next 4; runner \slots 1 (133),
+                  \alloc_next 1 (134)
+    graph_abi     run_graph_abi.ps1 \slots 1 (531), \alloc_next 1 (532); unit_msg_adapter.lm2 rt\n 1;
+                  unit_msg_cursor.lm2 rt\n 1, rt\slots 1, \alloc_next 1
+  (2) Each of the 25 gates in "asserts nothing" has 0 hits for those patterns over its runner and test
+  files EXCEPT the single support-list line named in its row, which is the module's name in a $names array
+  and no assertion. c_scanners is counted over its runner and driver; its parsed corpus is the note in its
+  row.
+  (3) The support-list column is exact. The bare grep
+    git grep -n -E 'lmx_msg_slots' baa8ec23 -- 'l2src/*.ps1'
+  returns every mention, which is more than the column: run_gates.ps1:94 is port_slots' own row,
+  run_lmx.ps1 has six lines, run_port_parser.ps1:127 is outside the default set, and some are comments.
+  The column is the subset whose line also names a support list ($names, $ownNames or foreach ($name):
+  25 sites in 24 runners, of which exactly one, run_entry_turn.ps1:69, carries
+  '| Where-Object { Test-Path -LiteralPath "l2src/$_.lm1" }'. That leaves the 24 unguarded sites in 23
+  runners tabulated above (run_msg_slots.ps1 holds two of them, at 15 and 61).
+  (4) The handoff_ready column: git grep -c 'handoff_ready' and
+  git grep -c -E '(while:|while \().*handoff_ready' over each file give the reads/loops pairs printed above
+  (3/0, 12/0, 15/8, 4/2, 2/1), and git grep -n 'handoff_ready' baa8ec23 -- 'l2src/*.ps1' is empty.
+  Field greps must be run with -F and outside the Bash tool: a backslash pattern through it matches nothing
+  and every rt\n row would read as clean.
