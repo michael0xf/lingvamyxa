@@ -9337,3 +9337,26 @@ landing chain.  Now: the coordinator's acceptance legs on 4888a7ae +
 96a754e0 (probe, six gates cold, falsifier, rows); the engineer merges
 4888a7ae into archive-timeout-3 (patch-id e923bfd6, dry run 0 outside) and
 runs one cold chain there; "launch" after both.
+
+COMPILER TICKET 2 LOCALIZED, 09:29 (app_controller's "translation failed
+with no located diagnostic", b5's sonnet/mixa-module-list ff0b2c24, whose
+l2trans.lm1 equals integration's).  gdb was abandoned (a 300 s bound killed
+it, as it did b5's attempt); instead a scratch copy of the generated
+l2trans.c recorded every "return 1;" (1557 sites) in a ring buffer dumped at
+the fallback.  The failure is in the emit phase: l2_cat's capacity check
+(nd + ns >= 255U) -> l2_emit_ccall (the multi-field actual's
+l2_cat(buf, piece)) -> l2_emit_body x3 -> l2_emit_unit -> l2_translate, and
+nothing on that path prints a diagnostic.  The call is
+mixa_console_window_present(ctx\view, ctx\text_rect, 0U, 0U, 7U, 0U, 0U,
+255U, ctx\upper_rect, ctx\m\text_cell_width, ... ctx\rgba, ...): its emitted
+text reached 253 bytes before the next ", ".  The limit is the translator's
+fixed 256-byte text buffers: 27 [256]: char buffers (l2_prep 5, l2_emit_body
+5, l2_emit_ccall 3, ...), 38 lines with 256U, 9 with 255U (some may be byte
+masks, reviewed per site), 37 l2_cat calls.  Plan (after the S6-2 landing
+chains finish, to keep their timeouts clean): one named text capacity used
+by every text buffer, memcpy/snprintf size and l2_cat's check, sized with a
+stack measurement (l2_emit_body and l2_prep recurse with five buffers
+each); an overflow always reported as a located diagnostic naming the
+statement; red first with a fixture call longer than 255 bytes; the
+capacity itself recorded as a limitation to remove (dynamic text), not a
+bound.
