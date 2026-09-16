@@ -6579,3 +6579,22 @@ accounting scenario36's rt\n pins express today); the 6/0/25
 classification, the 22-of-31 support-list table and the handoff_ready
 column unchanged at baa8ec23. The phrases each occur once on main
 (checked by the coordinator).
+S6-1 LANDED (seen on origin by the coordinator's monitor, 2026-09-15, ahead
+of the lead's five lines): integration/main-absorbs-core 7b3a8668 =
+"SELF-BUILD OK e6b94f04: fixed point 8 of 8, pin 0B3D85B3" over the
+merge e6b94f04 of d6/lock-s6 53a0af86 ("S6-1: the executor lock is
+gone, the transport relay ordered under R0 mailbox monitor"); 11 M
+files against 11f581e0; lmx_msg_exec_lock( 0 in the sources at the
+tip; 18 selfbuild tags on origin. The lead's scenario36 verdict on the
+merge and his five lines follow. The lock half's state: S3, M, D2, S2,
+S4, S5 and S6-1 landed: no wake, wait, join or signal; no sequential
+mapping or core UI lane; no address lookup on the C1/C2 paths; the
+owner-lane guard; no runtime lists but slots/n; no executor lock and
+no host lock; the mailbox's monitor is the one lock, holding the
+transport relay too. Remaining: S6-2 (refs and slots/n on "there is no
+count of holders"), R0P (the root's parent stub), Y (the mailbox
+monitor's shape, the pump's atomic publication choice, the POSIX
+reentrancy), A (the arena stages). Now: e9's cold gate record on
+7b3a8668, then the git-freeze window for the archive-hang isolation;
+b5's S6-2 pre-read at 7b3a8668; the lead's S6-2 section on 16335e9b's
+gate list and the pre-read.
