@@ -9540,3 +9540,30 @@ surviving R0's round while a walker's lane is inside its turn and freed after.
 The lead's finding: b5's 209 find sites covered four files; the tree has 210
 find lines in 28 files, the rest in L1 selftests, three generated-array collect
 drivers, cancel_spin_host.c, the c_scanners driver and the l2trans emission.
+
+MIXA MODULE LIST IN MAIN, recorded 10:24: b5 merged integration d3bde8b5 into
+sonnet/mixa-module-list as 97fb90e9 (8 markers in 6 files resolved by the
+restated rules; the module list 15 names, 15 present in l2src; run_mixa "mixa
+backend table ok", run_ingress_harness "mixa ingress fail_keep_runtime path ok";
+the twelve parity rows equal to the ff0b2c24 baseline); the coordinator merged
+it into main as ec481911 (0 conflicts over base d3bde8b5, the branch's 15
+paths).
+COMPILER TICKET 2 REWORKED on fable/l2trans-text-cap c9c9a405 (the withdrawn
+0cf2475d superseded; l2trans.lm1 = d17eefc3 plus the narrow change): l2_emit_ccall
+wraps l2_emit_ccall_text with a heap buffer of L2_CALL_TEXT_CAP 4096 bytes
+freed on one exit; l2_cat_cap for it; l2_cat and l2_tok_text set l2_text_over; a
+call inside an expression is copied into its consumer's 256 bytes only if it
+fits; l2_emit_body records l2_text_at; l2_translate reports the overflow at the
+statement.  Evidence: all three fixtures red at d17eefc3 (generic fallback);
+run_l2trans exit 0 in 324 s; the depth probe equal to d17eefc3 (located up to
+600 at the same columns, crash at 1000 in both); 942 translations compared, 939
+identical, the 3 differences the three fixtures; gcc warnings identical (18);
+falsifiers through run_l2trans: capacity 256 -> exit 1 "l2trans failed:
+l2src/tests/unit_text_capacity.lm2"; report disabled -> exit 1 "missing
+diagnostic 'exceeds the translator's text capacity'"; restored, cmp identical.
+Landing candidate: fable/l2trans-text-cap 5ba818b7 = d3bde8b5 merged (0
+conflicts; 8 paths over integration).  The engineer builds land_l2trans.sh
+(allowlist the 8 paths, union base runners) and runs the candidate's cold chain
+before "launch"; b5 checks app_window and app_controller end to end on a scratch
+merge of main ec481911 with 5ba818b7.  The engineer's row bounds follow that
+landing.
