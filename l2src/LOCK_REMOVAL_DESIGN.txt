@@ -2073,6 +2073,108 @@ S6. The lock deleted (L4, L7, L8 and what remains).
             conclusion would have been the same and would have been worthless.
             IF EITHER HAD FAILED the stage stops for Mikhail rather than being papered over; both hold, so the
             claim stands on measurement.
+        * THE LIVE SET'S ENTRY IS A PAIR -- the record POINTER and its ID -- and membership requires both to match.
+          The reason is malloc: an address is reused, so a handle that outlived its record can name a NEW record at
+          the same address and would otherwise pass the check. The id (LmxMsgAddr) is minted monotonically and
+          never reused (c.lmx_msg_addr_take over __atomic_fetch_add_4, exec.c:412), which is what makes the pair
+          decisive, and it is why stage AD keeps the id rather than retiring it with the rest of the scalar
+          address. The coordinator's addition, and it closed a hole I had not seen.
+          HELD AS TWO PARALLEL ARRAYS, live_m and live_id, not an array of structs -- a measurement, not a
+          preference: name[i]\field has ZERO occurrences in either core against a control of 18 plain subscripts,
+          so that spelling has no neighbour to copy and would be verifiable only by a build. Sized as the tree
+          already sizes this exact pair of element types (done_from / done_id, lm1:792-794): c.sizeof(@: void) for
+          the pointer array and c.sizeof(unsigned) for the id array. The coordinator proposed c.sizeof(@:
+          LmxMsgAddr), which would have sized a POINTER to the id; corrected before it was written.
+        * THE RECORD IS FREED BY ITS SERVICE, not by the releasing lane, which is the removal ruling and began as a
+          gap I raised rather than coded around. release_slot runs on the RELEASING lane -- the parent's dispose or
+          the Message's own end-turn -- so it can do neither obvious thing: writing the service's live set is the
+          cross-lane write this stage exists to delete, and freeing the record itself would leave the service
+          holding an entry naming freed memory until it next drains, which is strictly worse than the refs hazard
+          it replaces, because refs at least made the free conditional.
+          SO: release_slot keeps unbind, unlink, the drain of both mailboxes, the free of init and path and the
+          RELEASED state, then POSTS an unregister-and-free letter carrying the record and its id; the service
+          removes the entry and calls slot_free, IN THAT ORDER, on its own lane. A service releasing itself does
+          both directly. "Freed by the release chain" stays true with the chain ending at a Message rather than at
+          a lane reaching into another Message's data.
+          THE WINDOW BETWEEN THE RELEASE AND THAT FREE is closed by what release_slot already does, and this is the
+          coordinator's observation rather than mine: the state is RELEASED, written under the mailbox's own
+          monitor, and admit_one refuses a RELEASED destination under that same monitor. A send arriving in the
+          window is refused, not admitted. The cost is memory, never safety.
+          ACCEPTED COST, recorded beside the one-hop-later free: the record outlives its release until the
+          service's next drain, and on a FAILED post (calloc under pressure, the only real failure mode) it is left
+          RELEASED and unfreed for the teardown sweep to collect. Under memory pressure a released record survives
+          until runtime_delete -- a bounded leak, never a use-after-free, and the two alternatives are the hazard
+          above and the cross-lane write.
+        * THE TEARDOWN SWEEP, mine, and it exists because reading teardown turned up a hole in the ruling itself:
+          release_slot unlinks the record BEFORE posting, teardown_free walks first_child recursively and so never
+          reaches an unlinked record, and runtime_delete drains and FREES rt\transport before calling teardown_free.
+          A record whose letter was still queued therefore has that letter dropped with the transport and is never
+          freed at all -- not leaked until close, leaked past it. Same outcome when the letter could not be
+          allocated.
+          lmx_msg_live_sweep walks R0's live set and frees every entry whose record is RELEASED. No new state is
+          needed: RELEASED plus presence in the set is exactly "released but not yet freed", since release_slot
+          unlinks before setting the state, so RELEASED implies out of the tree.
+          THE ORDER IS LOAD-BEARING: the sweep runs BEFORE teardown_free, because teardown_free frees R0 and R0's
+          slot_free takes live_m and live_id with it -- sweeping afterwards would walk freed arrays. R0 itself is
+          skipped in the sweep for the same reason, since freeing it there would leave the walk reading a freed
+          record.
+        * TWO OMISSIONS OF MINE IN THIS STEP, both found by reading and neither by a build, recorded because the
+          pattern is more useful than the fixes:
+          (1) live_m and live_id were added to the record with NO FREE-PARTNER. I wrote the rule out to the
+              coordinator when the envelope gained an address field and broke it in my own code an hour later.
+              They are now freed in slot_free beside done_from and done_id, which are the identical shape.
+          (2) the header declared lmx_msg_get_address and NEITHER core defined it: I had written the internal
+              helper (address_of, taking a record) and never the public function taking a runtime and an address.
+              Nothing called it yet, so it was an unfulfilled promise rather than a live link failure -- but the
+              first caller, or the re-pointing of path_n/path_seg, would have failed at LINK, which is the one
+              place l1trans gives no warning because it links by name.
+        * ONLY R0'S LANE DRAINS THE TRANSPORT (the coordinator's ruling (b), and the model's own answer rather
+          than a new question): the transport is R0's INBOX, and a Message's own data is touched only on its own
+          lane. So only R0's round drains it; every other lane only PUSHES, under R0's monitor, which is a mailbox
+          write any lane may make. Delivery, both live-set handlers and the is_live read all run there.
+          THE DEFECT IT FIXES, found by the gate rather than by design review: lmx_msg_pump pops a letter under
+          R0's monitor, UNLOCKS, and calls admit_one with no lock held; pump had four callers at the ends of
+          different Messages' turns. So service_register / service_unregister -- which realloc and shift live_m
+          and live_id -- could run on two lanes at once. The ruled design said the live set was "the service's own
+          data on its own lane"; the code ran the drain on whichever lane ended a turn. The defect stands whether
+          or not it caused the crash below, which is why the change proceeded regardless.
+          THE CRASH, AND WHAT IS AND IS NOT KNOWN ABOUT IT: run_port_message compiled, then failed at run time with
+          0xC0000374 STATUS_HEAP_CORRUPTION, deterministically at "live-cascade start" on both captured runs --
+          the case that starts worker contexts and drives closes and sends concurrently. The UAF kit
+          (l2src/tools), rebuilt from that crashing evidence directory, ran 2 of 2 CLEAN. That pattern fits the
+          race above: the kit's allocator serialises every allocation behind its own lock and shifts all timing.
+          It equally fits an overflow past a block's end, which that allocator has no canary for. So THE RACE IS
+          THE LEADING READING OF THE CRASH'S CAUSE, NOT A PROVEN ONE. No detector was built to settle it -- the
+          coordinator allowed one only if it took minutes, and the fix no longer depends on the answer.
+          WHERE IT CHANGED: end_turn and fail no longer end in pump; they return OK having already pushed. They
+          still drain in one case, flagged as a refinement and accepted: when who = lmx_msg_root_addr(rt), because
+          R0 ending its own turn IS R0's round. host_drain and drive are untouched -- both already run on the host,
+          which is R0's lane. root_turn (exec.c:2314) is run_entry_turn on rt->root->addr, so R0's round entered
+          that way ends in end_turn(R0) and still drains.
+          ACCEPTED COST: delivery latency becomes R0's round. Fixtures that send and then recv with no R0 round in
+          between break, and are reshaped mechanically -- one selftest helper that runs R0's round, called once
+          before each affected recv, leaving the property each asserts untouched; recvs expecting EMPTY and recvs
+          on worker contexts that end R0's round themselves are left alone. The coordinator ruled this stays inside
+          S6-2, since a separate step would leave a tip that is either unsafe or red. My first estimate was "up to
+          ~40" from a crude 12-line window over 43 recv sites; the calibrated count, by case, is reported at the
+          tip rather than taken from that window.
+        * THE FOUND-AND-REMOVED GUARD (ruled): service_unregister now returns OK only when THIS call removed the
+          entry, and GONE on every miss -- not found, or found at that address with a different id. Before, all
+          three outcomes returned OK, and the unregister handler freed the record even when nothing was removed:
+          a record freed while the set still named it, which the teardown sweep could then free a second time
+          because freed memory still reads RELEASED. Both free paths -- the UNREGISTER handler and release_slot's
+          self-service path -- now free only on OK and otherwise call lmx_msg_test_unregister_absent, which
+          follows the existing hook contract (declared in exec.h's LMX_MSG_EXEC_TEST block with a no-op macro in
+          its #else, defined in exec.c beside unbind_refused). It aborts under the lane check and is silent
+          otherwise, never freeing either way: the worst case is a leak, never a double free. It takes the id
+          rather than reading the record, so reporting a fault never touches what it reports on.
+        * IS_LIVE BEFORE ANY DEREFERENCE (step 3): the check sits immediately after dest: node\dest_msg and before
+          the first dest\owner_rt read. It uses rt\root as the service, never dest\service -- reading dest\service
+          would be the dereference the check exists to prevent, and in R0's drain the service IS R0. It applies
+          only to the handle path: self_or_find walks the live tree and returns only a live record. The REGISTER
+          and UNREGISTER branches return before it, which matters, because a registration letter's record is not
+          registered yet and would otherwise be refused. A REJECTED letter is never itself refused: pump keeps
+          popping while post_rejected pushes, so refusing a refusal to a vanished sender would loop forever.
         * CODE ORDER, as the coordinator gave it: the service field and the live set with registration and
           removal; the send through the service with the check and the refusal; get_address and the chain as the
           addition; the arrays and the module; the fixtures.
