@@ -12950,8 +12950,9 @@ The shape for now, until the map algorithm of include_languages/com.mtk.map
 Message: every Message receives from the root, at its creation, the reference
 to the mail service; getAddress and the hop-by-hop delivery below are an
 addition to that service, its delivery mechanism today, since the map
-algorithm is not easily rewritten as event-driven at once (Mikhail,
-2026-09-16, verbatim: "в общем смотри, вот этот алгоритм мы будем потом переписывать на Messge: C:\Nyasha_Planet\lingvamyxa\include_languages\com.mtk.map\com\mtk\map\ Так как пока это сложно -- оставьте пока getAddress и второй описнный механизм доставки, но сделайте его дополнением к почтовому сервису ссылка на который передаётся от root. Так как алгоритм выше вы вряд ли сразу легко перепишите на event-driven").
+algorithm is not easily rewritten as event-driven at once; the service, once
+it has the map, delivers directly by the memory address of the target, since
+addresses do not move (Mikhail, 2026-09-16, verbatim: "Почтовый сервис будет доставлять сразу по адресу в памяти так как адреса не двигаются"; and: "в общем смотри, вот этот алгоритм мы будем потом переписывать на Messge: C:\Nyasha_Planet\lingvamyxa\include_languages\com.mtk.map\com\mtk\map\ Так как пока это сложно -- оставьте пока getAddress и второй описнный механизм доставки, но сделайте его дополнением к почтовому сервису ссылка на который передаётся от root. Так как алгоритм выше вы вряд ли сразу легко перепишите на event-driven").
 No route is computed and nothing is checked before a send: the sender
 obtains the destination's address once, anywhere in its code, and keeps it;
 the letter is given to the sender's parent, and each Message that holds the

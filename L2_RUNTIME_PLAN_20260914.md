@@ -8470,3 +8470,10 @@ stage. So the lead's section keeps its mechanism and adds one
 sentence: send_to is the service's operation, reached through the
 reference from root, and the postman chain is how the service
 delivers today.
+
+MIKHAIL, 2026-09-16, verbatim (tenth line): "Почтовый сервис будет доставлять сразу по адресу в памяти так как адреса не двигаются" Entered in spec
+19.29.7 and the model: the service with the map resolves a Message's
+address to its memory location and delivers directly into its inbox,
+since block addresses do not move; the postman chain is the interim.
+For S6-2 nothing changes; for the later map stage: the service's
+table maps the address string to the record's location.
