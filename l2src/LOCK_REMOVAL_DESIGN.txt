@@ -1838,6 +1838,41 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       - Green: -Part 2 prints 0 / 0 on that merge, with the union base green on it.
       - Falsifier: one retain put back on that merge, which must take refs above 0 and turn -Part 2 red.
       - Before landing, the gates whose fixtures this section names are run locally by name, never a proxy suite.
+    - Allowlist for the landing, built from e9's list (claude-0c/s6-2-gate-impact 16335e9b) rather than from a
+      grep of my own, and grouped by why each path is in it:
+      - the removal itself: l2src/lmx_message.h, lmx_message.lm1, lmx_message.lm2, lmx_message_exec.c,
+        lmx_message_exec.h;
+      - the module that goes with it: l2src/lmx_msg_slots.h.lm1, lmx_msg_slots.lm1, lmx_msg_slots.lm2,
+        LMX_MSG_SLOTS.txt, run_port_msg_slots.ps1, run_msg_slots.ps1 (opt-in, pins checks=278 at 84 and holds two
+        support-list sites of its own at 15 and 61), tests/lmx_msg_slots_selftest.lm1;
+      - the gate set: l2src/run_gates.ps1, its port_slots row at 94 and the header comment at 32-35 that explains
+        port_slots' relation to run_msg_slots;
+      - the 22 runner support lines that name lmx_msg_slots as a module to translate and link -- a build input,
+        not an assertion, so each gate stays "unaffected" in the assertion sense but reds at BUILD if the name
+        stays: run_port_message.ps1:154, run_model_scenario36.ps1:85, run_lmx.ps1:125 and 127 (with its throws at
+        126 and 128), run_graph_abi.ps1:116, run_port_array_owned.ps1:75, run_port_array_ref_owned.ps1:76,
+        run_port_branch_owned.ps1:83, run_port_chars_owned.ps1:82, run_port_graph_copy_owned.ps1:80,
+        run_port_merge_owned.ps1:75, run_port_message_graph_copy.ps1:66, run_port_msg_blocks.ps1:166,
+        run_port_msg_history_owned.ps1:64, run_port_msg_liveness.ps1:59, run_port_msg_mail_chain.ps1:74 (its
+        comment at 10 names the module too), run_port_msg_path_storage.ps1:83, run_port_msg_roots_stale.ps1:63,
+        run_port_msg_storage.ps1:60, run_port_msg_visit.ps1:61, run_port_owned_ranges.ps1:158,
+        run_port_value_owned.ps1:83. run_entry_turn.ps1:69 is the one guarded by Test-Path and needs no edit;
+      - outside the default gate set but inside my union base, so they must be in the allowlist or the landing
+        reds at build: run_l2trans.ps1:90 and run_port_parser.ps1:127;
+      - the assertions to convert, each to the property the test is really making (the record was reclaimed, which
+        the family-tree walk states without a runtime-wide counter): tests/lmx_model_family_release_17_selftest.lm1
+        (212, 303, 304), tests/lmx_model_orphan_mapped_17_selftest.lm1 (149), tests/lmx_entry_turn_selftest.lm1
+        (84), lmx_message_selftest.lm1 (924, 934, 964, 982), lmx_message_exec_selftest.c (the 31 rt->n reads and
+        the endp_ block at 3172-3202);
+      - the code shape graph_abi pins on its own cases: run_graph_abi.ps1 (531-533 and 538-539, the cases at 315
+        and 325 with their checks at 468 and 510) with tests/unit_msg_adapter.lm2 and tests/unit_msg_cursor.lm2.
+    - The c_scanners corpus, checked in the runner rather than left as a worry: run_candidate_c_scanners.ps1
+      builds its corpus by scanning the directory (316: Get-ChildItem tests -Recurse -Filter *.lm1), so deleting
+      tests/lmx_msg_slots_selftest.lm1 does shrink it and the recorded case count moves. Its pass lines are
+      CAPTURES, not literal pins -- 345/348 match 'cases=(\d+)' and 'cases=(\d+) freed=(\d+)' and 346/349 store
+      the numbers into the evidence -- and no literal 130 appears anywhere in the file. So the count changes in the
+      evidence and no assertion compares it: the gate stays green on the deletion. Recorded as measured, since a
+      deletion's numeric side effects have bitten this project twice and the cheap check settles it either way.
     - Stop condition, as for every stage here: if settling the mailbox into the parent turns out to need a lock, a
       wait or a signal, the stage stops and the question goes to Mikhail through the coordinator.
       - Falsifier, the acceptance's third leg, measured on d6/lock-s6 at baa8ec23: from zero lock lines, one
