@@ -10055,3 +10055,24 @@ before, the result no longer depends on l2src/LOCK_REMOVAL_SPEC_MAP.txt's
 presence either way, and run_l2trans is green -- with the missing initialization
 named, not zeroed defensively, and the frame's neighbouring fields checked for
 the same hole.
+
+TWO MIGRATIONS MERGED INTO THE STAGE, 2026-09-16 16:59 by the coordinator (lingvamyxa-08):
+d6/lock-ad is 58ec1235, after two clean no-conflict merges -- the atomic cells
+(grok/ad-atomic-cells 711fa3a8: four C accessors lmx_msg_parent_load/store and
+lmx_msg_index_load/store in the running/success pattern, and every read and write
+of parent_msg and index in both cores, exec.c and the selftest going through
+them; probe counts unchanged, which is what a refactor must show) and the
+create-out callers (grok/ad-create-out-callers d30243d4: ~387 sites over 29 files,
+~372 of them appending 0 and ~15 converting their post-create find into the
+capture, including the three generated units' process_message, plus the R0
+create_prepare call, the wrap/real arity in l2_message_root_driver and the public
+signature pin in run_port_message). Verified on the merge: probe reads "find=200
+find_tree=8 dest_from_src=8 self_or_find_fallback=2 id_marks=0 parent_field=0"
+-- find is DOWN 17 from the pair-callers merge's 217 -- and run_port_message is
+GREEN. The full gate chain is running on the merge.
+
+The stage's remaining scan population is thus the fixtures' own oracle calls:
+find=200, and the analysis of which of them name a REGISTERED record at that
+point already exists (grok_bot's first answer, its YES/NO column). Those that do
+may resolve through the live set's id order; those that do not need the pair from
+create's out or a drain. That migration is the next ticket.
