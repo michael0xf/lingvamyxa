@@ -7802,3 +7802,26 @@ narrowing preceded the green leg; land_s6_2.sh takes
 ACCEPT_EXPECT=96a754e0 (the old base in a comment), 201 lines, the
 allowlist 16 paths 0 outside at the stage's 95de9bf4. Holding for the
 registry group's name-status and the word to launch.
+Design 86991760 (the lead): the registry group written: runtime_delete's
+two rt\slots walks became one recursive traversal used twice (R0's
+tree by first_child/next_sibling plus each record's settled list), in
+the old order (drain every mailbox first since slot_free destroys the
+monitor, the transport teardown under R0's monitor between the
+passes, then free bottom-up); the create site registers nothing;
+rt\slots, rt\n and alloc_next out of both cores and the header; the
+module's seven files (unit_slots6.lm2 kept), run_gates' port_slots
+row and header note, 23 runner list entries, run_lmx's two variables
+plus four translate lines plus its support-objects foreach, and the
+fixtures (entry_turn's pin, family_release_17's eleven with seven
+captures and its header rationale, orphan_mapped_17's five with its
+capture, header and the loop wait). A FIFTH REFERENCE POPULATION
+found by the build: lmx_message_exec.c includes the deleted module's
+generated header and calls lmx_msg_slots_n / lmx_msg_slots_at through
+two wrappers; RULE recorded: a module's deletion enumerates the kinds
+of reference (runner-list name, field, generated-header include,
+exported symbol call, prose precedent), not the occurrences of one
+kind. GATE COUNT reconciled by the coordinator: run_gates.ps1 at
+7b3a8668 has 30 literal rows and appends l2_message_root (line 101)
+when -L2MessageRoot is set, which landings pass, hence 31 of 31; after
+port_slots goes, 29 literal plus the conditional row = 30, e9's
+parameter; the lead's "29" and the landings' "31" are both right.
