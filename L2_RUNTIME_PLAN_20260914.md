@@ -9173,3 +9173,37 @@ only after a grace (every lane past a quiescent point since the unlink)
 impact list for (a), every call classified HOLDS-POINTER or ID-ONLY with
 its lane, totals equal to the baseline.  AD's code starts after S6-2
 lands; its acceptance names the counts to 0 with a positive control.
+
+S6-2 LANDING PREPARATION, 2026-09-16 09:35 (the engineer's two reports,
+checked by the coordinator at the refs):
+- claude-0c/land-s6-2 5d22b108 (fast-forward from 502deb03): allowlist
+  54 -> 67; dry run over the script's own diff (line 125:
+  origin/integration/main-absorbs-core...$BR) at 3e1cec49 reads 67 paths
+  (M 49, A 4, D 14), 0 outside; falsifier with uaf_run.sh removed: "outside
+  the allowlist: A l2src/tools/uaf_run.sh", 1; 28 literal rows, 29/29
+  with -L2MessageRoot; MEASURE_S6_2.md: port_path_storage absence in row
+  form (bare grep reads 1 at the tip because a comment records the
+  deletion; the row form reads 0, and 1 at 2d8f2b6a), prose 30 -> 29;
+  ACCEPT_EXPECT 96a754e0.  New reference kind found: two fixtures
+  (lmx_message_host_selftest.c, tests/lmx_msg_send_local_selftest.lm1)
+  call the deleted field's accessors (lmx_msg_path_n, lmx_msg_path_seg)
+  and name neither the module nor its symbol; they land (coordinator's
+  word).  The script blob is CRLF on all 225 lines despite eol=lf; this
+  bash runs it to its usage exit, so not a blocker.
+- claude-0c/archive-timeout-3 a1fb483d = 3e1cec49 + 53ba86bd re-cut, the
+  LANDING CANDIDATE: contains 3e1cec49; patch-id --stable e923bfd6 equal
+  to 2d8f2b6a..53ba86bd's; guards (a)=1 (b)=3 against 0/0 at the tip; 28
+  rows.  Its diff over 7b3a8668 is 69 paths, and the engineer's dry run of
+  the candidate found 2 outside the allowlist (M
+  run_candidate_c_scanners.ps1, A tripwire_gate_bounds.ps1) -- report 1's
+  "0 outside" was true of the stage tip, not of what lands.  The
+  coordinator said yes to adding both (the engineer declined to widen his
+  own script for his own paths without a word).
+- When the lead names the building tip: no new re-cut; the tip is merged
+  into archive-timeout-3 as a merge commit (fast-forward push), the
+  diff tip..archive-timeout-3 must keep patch-id e923bfd6, a three-argument
+  merge-tree conflict count (0; positive control 18f5701d vs dfc10d08
+  prints 9) precedes the merge, the dry run is redone over
+  7b3a8668...archive-timeout-3, and the one cold chain runs on it.  The
+  coordinator's --write-tree falsifier did not exist in git 2.37 and was
+  corrected before use.
