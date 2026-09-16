@@ -7756,3 +7756,17 @@ sites); RULED on its one design piece: runtime_delete's two passes
 R0's settled lists plus whatever is still attached to its tree, in
 that order: freeing the owner's storage, not the runtime-wide walk
 5.1 forbids, written in the section in those words.
+b5's canonical-struct note on sonnet/mixa-module-list 542b31c7 (doc
+only): MixaCell and MixaTextRect have exactly two sources
+(mixa_core.h:17/26 and mixa_tiles_l2.h.lm1:35/44; mixa_backend.h:208 is
+MixaCellMetrics); no accepted translation unit combines the two
+chains (traced by predef:/include: lines), the conflict lives only in
+the reverted app_controller attempt; candidate (a) breaks field-level
+L2 access tree-wide, (b) inverts the oracle/L2 dependency of a
+foundational header; recommended neither: app_controller.lm2 only
+passes or returns c\fmpanel bare (nine mixa_app_fmpanel_* calls,
+never a field), so nine prototype: declarations in the existing
+"declare then link" convention (mixa_cell_at's) reach neither header
+and sidestep the conflict. RULED: implement it (b5's next ticket);
+app_controller enters the parity gate with the verdict its run then
+produces.
