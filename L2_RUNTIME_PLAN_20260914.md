@@ -8354,3 +8354,13 @@ of the destination path and advance; when no live child has that
 index, refuse with KIND_REJECTED on the hop's own lane (the letter
 falls off). Stage AD shrinks to retiring the scalar id where the
 composed address serves and converting the signatures.
+
+MIKHAIL, 2026-09-16, verbatim (seventh line): То есть сделать метод getAddress который отдаёт адрес проверяя дерево до корня, и пото метод который посылает по какому-то адресу Entered in spec
+19.29.7 and the model. For the code: lmx_msg_get_address (walk the
+parent links up to the root, return the index string, len and uint*,
+in the caller's storage) and lmx_msg_send_to (a letter to a full
+address: the sender composes its own address with get_address, derives
+the route (hops up to the common ancestor, then the destination's
+remaining indices), and posts; the postman step per hop as ruled
+above). send_cap and the envelope's dest carry the destination's
+address string in place of the record pointer.
