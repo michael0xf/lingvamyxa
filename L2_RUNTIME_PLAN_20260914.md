@@ -8245,3 +8245,12 @@ resolution happens at the service (dest_from_src's foreign walk and
 S2's turn_other walks go). A site fitting none needs a hold, wait or
 signal and stops the stage for Mikhail; no fourth answer is invented.
 The planted red stands as planted; the acceptance is unchanged.
+
+MIKHAIL, 2026-09-16, verbatim: "Отправка — письмо R0:" -- это может быть _любой_ Message которого R0 передаёт по цепочке при создании L1 Thread. В том числе проверку наличия по списку доступных может делать сам почтовый сервис, а конкретно доставку -- специальный почтальон, список почтальонов может держать почтовый сервис  и так далее -- вы можете _всё_ написать и всё оптимизировать в этой парадигме Entered in spec 19.29.7 and
+the model. Read by the coordinator: the mail service is a role handed
+down the creation chain, filled by any Message (R0 today); membership
+at the service, delivery by postman Messages the service may list;
+the whole send path is Messages and may be optimized as such later.
+For S6-2 nothing changes: the service is R0, the resolution in its
+drain is the seed; postmen are a later optimization within the same
+paradigm, not a stage item.

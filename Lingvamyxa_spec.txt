@@ -12917,7 +12917,11 @@ already gone: ""родитель отвечает отправителю отк�
 refused by the service, not by any parent). The service is not a new entity:
 every Message is created from the root Message by the chain, so the root
 passes itself as the mail service at merge, and every Message holds the
-service's address from its creation (Mikhail, 2026-09-16, verbatim: "Не плодите постоянно лишних сущностей. Так как все Message порождаются из root Message (по цепочке)то он может при merge передавать себя как почтовый сервис. В чем проблема?"). The delivered storage must be independently
+service's address from its creation; the service handed down the chain may
+be any Message, not only the root: the membership check by the service
+itself, the delivery by a postman Message, the list of postmen held by the
+service, and so on, everything written and optimized within Messages
+(Mikhail, 2026-09-16, verbatim: ""Отправка — письмо R0:" -- это может быть _любой_ Message которого R0 передаёт по цепочке при создании L1 Thread. В том числе проверку наличия по списку доступных может делать сам почтовый сервис, а конкретно доставку -- специальный почтальон, список почтальонов может держать почтовый сервис  и так далее -- вы можете _всё_ написать и всё оптимизировать в этой парадигме"; and earlier the same day: "Не плодите постоянно лишних сущностей. Так как все Message порождаются из root Message (по цепочке)то он может при merge передавать себя как почтовый сервис. В чем проблема?"). The delivered storage must be independently
 transferable: a running sender cannot also keep using it through mutable aliases.
 An explicit copy, merge, materialization or transport/codec contract may allocate
 fresh state; this is not a runtime choice to clone ordinary delivery. Activation preserves
