@@ -1796,7 +1796,9 @@ S6. The lock deleted (L4, L7, L8 and what remains).
   S6-2: the reference count and the runtime's slot list (design before code, on the landed tip 7b3a8668)
     - What goes: LmxMsg.refs with lmx_msg_endp_retain / lmx_msg_endp_release / lmx_msg_endp_refs and the two
       InterlockedCompareExchange inside them, lmx_msg_endp_try_retire, and LmxMsgRuntime.slots / .n with
-      LmxMsg.alloc_next, the lmx_msg_slots port module and its runner.
+      LmxMsg.alloc_next, the lmx_msg_slots port module and its runner. NOTE, found in the code after this list was
+      written: alloc_next is REPLACED, not simply removed -- see (2a). A record taken off the family chain and off
+      the runtime list hangs on nothing at all, and the stage that deletes the list must give the parent its own.
     - Why, from the spec rather than from the code (19.29.7 Message Boundary, the phrase "there is no count of
       holders", origin/main 077ee6fd, today line 12909; agreed with Mikhail 2026-09-15, "давай так"): a capability
       is the target's mailbox handle; a closing Message's mailbox is settled into its parent with the rest of its
@@ -2087,6 +2089,89 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           guarantee I stated -- the memory outlives every sender that could still address it -- holds only for the
           COMMON ANCESTOR of sender and target, and it is the upward settle that makes the common ancestor the
           owner by the time any of them closes.
+      (2a) A hole in (2) that the code showed and my own wording hid. Measured on the landed tip 7b3a8668, reading
+          the free path end to end rather than reasoning from the sentence:
+            * release_slot takes the child off the family chain (lmx_message.lm1:1400 lmx_msg_child_unlink), and
+              under S6-2 it keeps parent_msg but nothing puts the record back on any chain;
+            * the only other thing holding a record is rt\slots through LmxMsg.alloc_next (the create site,
+              lmx_message.lm1:1180-1182);
+            * both free paths walk that list and nothing else -- endp_try_retire unlinks from rt->slots
+              (lmx_message_exec.c:1202-1218) and runtime_delete walks rt\slots calling slot_free
+              (lmx_message.lm1:1029-1040) -- and slot_free is the real free: it destroys m->mail (the mailbox
+              monitor, DeleteCriticalSection / pthread_mutex_destroy) and calls free(m) (exec.c:1163-1172).
+          So with rt\slots and alloc_next deleted and nothing in their place, a settled record is reachable from
+          NOTHING: R0's tree walk at runtime_delete never meets it, slot_free is never called on it, its monitor is
+          never destroyed. Every released Message would leak, with its mailbox. Two details 0c added on checking the
+          chain independently, both of which tighten it: the retire route is closed TWICE over, since
+          endp_try_retire refuses unless refs == 0 AND parent_msg == 0 (exec.c:1189-1194) -- refs is what the stage
+          deletes and parent_msg is what the settle deliberately keeps, which is precisely the 10-failure
+          intermediate red already measured above; and slot_free has exactly two production callers
+          (runtime_delete's walk and endp_try_retire; the five in lm1:1122-1155 are create-failure unwind after
+          slot_new), so with both closed nothing calls it at all. The monitor leak is therefore not a corollary but
+          the primary consequence: release_slot frees init, path and the queued copies and never the record, so
+          every released Message would keep a CRITICAL_SECTION nobody destroys. (2) as I wrote it -- "only R0's
+          runtime_delete frees anything" -- named as its vehicle the very list this stage removes; the intent was
+          right and the sentence cut its own branch. It is written here as a hole I put there, not as a surprise.
+          DECIDED (mine, and recorded rather than asked, because it adds no lock, no wait and no signal): the
+          parent keeps its settled children on a list of its own -- one link cell per record, alloc_next's
+          replacement with the ownership changed from the runtime to the parent -- written only by the settling
+          lane, which is the lane already performing the settle, so no new writer and no new ordering; and the
+          upward settle carries that list to the new owner exactly as it carries the blocks. This is the literal
+          reading of the sentence the whole stage rests on: settled into its parent WITH THE REST OF ITS STORAGE.
+          Storage a parent owns is storage a parent can enumerate; a record owned by nobody's list was never a
+          coherent reading of it. runtime_delete then frees by walking R0's storage with its settled children,
+          which is what (2) meant. If Mikhail rules for the letter of "never retained" (the tension the coordinator
+          put to him), the list survives that ruling unchanged -- only the moment of the free moves.
+      (2b) What the tests can then honestly say, which is where the slot-pin restatement lands (0c's finding, taken
+          after my own membership plan was refuted by the fixtures' own headers):
+            * "this storage is never retained" = the record's own base freed once by teardown, NOT at the release.
+              The timing is the coordinator's correction to my first wording and it matters: under (2a) the record
+              is the owner's storage until the owner closes, so a watched free EXPECTED AT THE RELEASE would be red
+              by design rather than by defect. The check therefore sits at the end of the run -- each watched base
+              freed exactly once by the time the fixture ends, at R0's runtime_delete for R0's children and at the
+              owning parent's own free for deeper ones -- which keeps decision 17's real property (nothing survives
+              to process end unfreed) while the letter-level question sits with Mikhail. If he rules for the letter
+              and the fallback applies, only the EXPECTED MOMENT moves, not the check's shape.
+              What is watched is the record pointer the fixture already holds (cm: lmx_msg_find(...) before the
+              release) -- the handle itself -- not the arena blocks, which are moved by storage_move_all and become
+              the owner's, to be watched at the owner's close if at all. The mechanism is the suite's own:
+              lmx_model_turn_arena_o1's __wrap_free at 62-73 requires each watched base freed exactly once, and
+              run_model_scenario36.ps1:127-135 scans each test for __wrap_NAME and links -Wl,--wrap=NAME for every
+              one it finds, so a converted family_release_17 or orphan_mapped_17 needs NO runner change. free(m)
+              lives in slot_free in exec.c, inside the same link, so the wrap sees it.
+              0c flagged one part as possibly needing a question to Mikhail -- whether a released child's bases are
+              reachable when the test must watch them. They are, and no new accessor is needed: the record pointer
+              is held from before the release, and for arena blocks lmx_msg_adopted_base takes an ADDRESS and
+              indexes the Message's own block list (lmx_message.h:361, exec.c:2569-2587), so the owner's adopted
+              blocks enumerate after the settle. No stage-level question there.
+            * "this storage moved to its owner" = the record is on its owner's settled list, stated directly by
+              (2a)'s list instead of inferred from an absence.
+          So every pin splits into two halves rather than moving wholesale to one measure, and the five lines say
+          which site got which:
+            * AT THE SITE, all seventeen: ownership and state -- the record is the owner's data (on its settled
+              list, parent_msg naming the owner), state RELEASED, off the child list. The four absolute pins
+              (family_release_17 270 and 344, orphan_mapped_17 158 and 167) state this as "exactly these are the
+              owner's and exactly these still run", which is what their "who remains" wording meant.
+            * ONCE PER RUN, at the end: every watched record base freed exactly once by teardown. That is the half
+              carrying decision 17's leak property, and it is the half that the letter-level ruling could move.
+          Neither half is find-based, which is what the fixtures' headers forbid, and neither is a runtime-wide
+          counter, which is what the stage deletes.
+      (2c) The settled list's terms, set with the coordinator when he read (2a), so it is not mistaken later for a
+          re-introduction of the thing S5 removed. It is the parent's OWN data in the sense of the spec's "Parent
+          supervision uses its own child list, not a scan of a shared process-wide Message table" -- one list per
+          Message, not one per runtime:
+            * WRITERS: only the owner's lane, which is where the settle already runs (dispose_mark / adopt_mark on
+              the parent, the orphan settle on R0's maintenance), never the closing child's own lane. No new
+              writer, so S4's owner-lane rule holds unchanged; the upward settle carries the list as it carries
+              the blocks; the link cell is alloc_next's replacement, not an addition.
+            * READERS: the owner and runtime_delete, nobody else. A late sender follows parent_msg under the
+              record's own mailbox monitor and never walks this list, so the list needs no synchronization of its
+              own -- which is the whole reason it is admissible in a stage whose purpose is removing locks.
+            * TESTS: the restated delta pins read the list on the owner's lane (inside R0's turn, or the host that
+              drives R0 in these selftests) or after the run -- never from a foreign lane mid-run. Flagged as the
+              one thing to check per site while converting: in family_release_17 the host thread calls
+              dispose_child directly, so which lane performs each settle is a per-site fact to read off the code,
+              not an assumption, and any site where the host would be foreign gets the after-the-run form instead.
       (3) Reconciliation with 19.29.6, searched before asking rather than raised as a conflict. The sentence "a
           successful orphan is settled at its end-turn and reclaimed, arena and slot, by the settling lane at the
           root's next maintenance point" (today 12755) reads with the same paragraph's own definitions: an orphan
