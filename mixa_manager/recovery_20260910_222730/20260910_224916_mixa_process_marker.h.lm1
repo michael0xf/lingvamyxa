@@ -1,0 +1,21 @@
+include: "<stddef.h>" "<stdint.h>"
+
+enum: MixaProcessMarkerStatus
+    MIXA_PROCESS_MARKER_OK 0
+    MIXA_PROCESS_MARKER_NO_MATCH 1
+    MIXA_PROCESS_MARKER_MALFORMED 2
+end: MixaProcessMarkerStatus
+
+struct: MixaProcessMarkerResult
+    i32: exit_code
+    size_t: cwd_offset
+    size_t: cwd_length
+end: MixaProcessMarkerResult
+
+prototype:
+    fn: mixa_process_marker_parse (const: @(char expected_marker); size_t: marker_len; const: @(char payload); size_t: payload_len; @: MixaProcessMarkerResult result) int
+end: prototype
+
+
+
+

@@ -1,0 +1,508 @@
+predef: "mixa_manager/mixa_process_marker.h.lm1"
+predef: "mixa_manager/mixa_process_marker.lm1"
+include: "<stdio.h>"
+
+fn: main () int
+    MixaProcessMarkerResult: result_storage
+    @: MixaProcessMarkerResult result
+    MixaProcessMarkerResult: initial_storage
+    @: MixaProcessMarkerResult initial
+    int: rc
+    int: failures
+    int: checks
+    
+    result: @ result_storage
+    initial: @ initial_storage
+    failures: 0
+    checks: 0
+    
+    const: @(char marker) "MARKER_1"
+    
+    # Test 1: zero exit - ORIGINAL BASELINE CASE
+    # "MARKER_1\t0\t/home/user" = 21 bytes, offset=11, cwd_len=10
+    result\exit_code: 0
+    result\cwd_offset: 0
+    result\cwd_length: 0
+    const: @(char p1) "MARKER_1\t0\t/home/user"
+    rc: mixa_process_marker_parse(marker, 8, p1, 21, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_OK
+        c.printf("t1-rc: got %d want %d\n", rc, MIXA_PROCESS_MARKER_OK)
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != 0
+        c.printf("t1-exit_code: got %d want 0\n", result\exit_code)
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != 11
+        c.printf("t1-cwd_offset: got %zu want 11\n", result\cwd_offset)
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != 10
+        c.printf("t1-cwd_length: got %zu want 10\n", result\cwd_length)
+        failures: failures + 1
+    
+    # Test 2: +5 exit - 14 bytes, offset=12, cwd_len=2
+    result\exit_code: 0
+    result\cwd_offset: 0
+    result\cwd_length: 0
+    const: @(char p2) "MARKER_1\t+5\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p2, 14, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_OK
+        c.printf("t2-rc: got %d want %d\n", rc, MIXA_PROCESS_MARKER_OK)
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != 5
+        c.printf("t2-exit_code: got %d want 5\n", result\exit_code)
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != 12
+        c.printf("t2-cwd_offset: got %zu want 12\n", result\cwd_offset)
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != 2
+        c.printf("t2-cwd_length: got %zu want 2\n", result\cwd_length)
+        failures: failures + 1
+    
+    # Test 3: -5 exit - 14 bytes, offset=12, cwd_len=2
+    result\exit_code: 0
+    result\cwd_offset: 0
+    result\cwd_length: 0
+    const: @(char p3) "MARKER_1\t-5\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p3, 14, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_OK
+        c.printf("t3-rc: got %d want %d\n", rc, MIXA_PROCESS_MARKER_OK)
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != -5
+        c.printf("t3-exit_code: got %d want -5\n", result\exit_code)
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != 12
+        c.printf("t3-cwd_offset: got %zu want 12\n", result\cwd_offset)
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != 2
+        c.printf("t3-cwd_length: got %zu want 2\n", result\cwd_length)
+        failures: failures + 1
+    
+    # Test 4: INT32_MAX (2147483647) - 22 bytes, offset=20, cwd_len=2
+    result\exit_code: 0
+    result\cwd_offset: 0
+    result\cwd_length: 0
+    const: @(char p4) "MARKER_1\t2147483647\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p4, 22, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_OK
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != 2147483647
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != 20
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != 2
+        failures: failures + 1
+    
+    # Test 5: INT32_MIN (-2147483648) - 23 bytes, offset=21, cwd_len=2
+    result\exit_code: 0
+    result\cwd_offset: 0
+    result\cwd_length: 0
+    const: @(char p5) "MARKER_1\t-2147483648\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p5, 23, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_OK
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != -2147483648
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != 21
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != 2
+        failures: failures + 1
+    
+    # Test 6: overflow 2147483648 - independent sentinels
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p6) "MARKER_1\t2147483648\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p6, 22, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 7: underflow -2147483649 - independent sentinels
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p7) "MARKER_1\t-2147483649\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p7, 23, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 8: empty exit (malformed) - independent sentinels
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p8) "MARKER_1\t\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p8, 12, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 9: result=NULL with valid inputs - should return MALFORMED
+    const: @(char p9) "MARKER_1\t0\t/home/user"
+    rc: mixa_process_marker_parse(marker, 8, p9, 21, 0)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        c.printf("t9-rc: got %d want %d\n", rc, MIXA_PROCESS_MARKER_MALFORMED)
+        failures: failures + 1
+    
+    # Test 10: expected_marker=NULL - independent sentinels
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p10) "MARKER_1\t0\t/x"
+    rc: mixa_process_marker_parse(0, 8, p10, 12, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 11: marker_len=0 - independent sentinels
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p11) "MARKER_1\t0\t/x"
+    rc: mixa_process_marker_parse(marker, 0, p11, 12, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 12: payload=NULL, payload_len=0 - should return NO_MATCH
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    rc: mixa_process_marker_parse(marker, 8, 0, 0, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_NO_MATCH
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 13: payload=NULL, payload_len=1 - should return MALFORMED
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    rc: mixa_process_marker_parse(marker, 8, 0, 1, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 14: wrong marker (MARKER_2) - NO_MATCH
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p14) "MARKER_2\t0\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p14, 13, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_NO_MATCH
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 15: marker only, missing separators/fields - MALFORMED
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p15) "MARKER_1"
+    rc: mixa_process_marker_parse(marker, 8, p15, 8, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 16: sign only (no digits) - MALFORMED
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p16) "MARKER_1\t+\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p16, 13, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 17: nondigit in exit (1x) - MALFORMED
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p17) "MARKER_1\t1x\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p17, 14, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 18: empty cwd - MALFORMED
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p18) "MARKER_1\t0\t"
+    rc: mixa_process_marker_parse(marker, 8, p18, 11, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 19: missing second tab - MALFORMED
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p19) "MARKER_1\t0/x"
+    rc: mixa_process_marker_parse(marker, 8, p19, 12, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 20: counted buffer - full 13 bytes "MARKER_1\t0\t/x"
+    result\exit_code: 0
+    result\cwd_offset: 0
+    result\cwd_length: 0
+    const: @(char p20) "MARKER_1\t0\t/x"
+    rc: mixa_process_marker_parse(marker, 8, p20, 13, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_OK
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != 0
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != 11
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != 2
+        failures: failures + 1
+    
+    # Test 21: same payload but payload_len=12 (truncate final x, keep slash only)
+    result\exit_code: 0
+    result\cwd_offset: 0
+    result\cwd_length: 0
+    rc: mixa_process_marker_parse(marker, 8, p20, 12, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_OK
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != 0
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != 11
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != 1
+        failures: failures + 1
+    
+    # Test 22: payload shorter than first TAB - MALFORMED
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p22) "MARKER_1\0"
+    rc: mixa_process_marker_parse(marker, 8, p22, 13, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_MALFORMED
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Test 23: payload shorter than marker length - NO_MATCH
+    result\exit_code: -999
+    result\cwd_offset: 123
+    result\cwd_length: 456
+    initial\exit_code: -999
+    initial\cwd_offset: 123
+    initial\cwd_length: 456
+    const: @(char p23) "MARKER_"
+    rc: mixa_process_marker_parse(marker, 8, p23, 7, result)
+    checks: checks + 1
+    if: rc != MIXA_PROCESS_MARKER_NO_MATCH
+        failures: failures + 1
+    checks: checks + 1
+    if: result\exit_code != initial\exit_code
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_offset != initial\cwd_offset
+        failures: failures + 1
+    checks: checks + 1
+    if: result\cwd_length != initial\cwd_length
+        failures: failures + 1
+    
+    # Report actual counters
+    if: failures = 0
+        c.printf("%d cases %d checks %d failures\n", 23, checks, failures)
+        return: 0
+    else:
+        c.printf("FAILED: %d failures out of %d checks\n", failures, checks)
+        return: 1

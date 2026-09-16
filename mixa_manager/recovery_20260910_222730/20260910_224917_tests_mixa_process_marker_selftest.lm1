@@ -1,0 +1,176 @@
+include: "mixa_manager/mixa_process_marker.h"
+include: "<stdio.h>" "<string.h>"
+
+fn: expect_status (int: got; int: want; const: @(char label); @: int failures; @: int checks) int
+    checks[0]: checks[0] + 1
+    if: got != want
+        c.printf("mixa_process_marker: %s got=%d want=%d\n", label, got, want)
+        failures[0]: failures[0] + 1
+        return: 1
+    return: 0
+
+fn: expect_exit (i32: got; i32: want; const: @(char label); @: int failures; @: int checks) int
+    checks[0]: checks[0] + 1
+    if: got != want
+        c.printf("mixa_process_marker: %s got=%d want=%d\n", label, got, want)
+        failures[0]: failures[0] + 1
+        return: 1
+    return: 0
+
+fn: expect_cwd_offset (size_t: got; size_t: want; const: @(char label); @: int failures; @: int checks) int
+    checks[0]: checks[0] + 1
+    if: got != want
+        c.printf("mixa_process_marker: %s got=%zu want=%zu\n", label, got, want)
+        failures[0]: failures[0] + 1
+        return: 1
+    return: 0
+
+fn: expect_cwd_length (size_t: got; size_t: want; const: @(char label); @: int failures; @: int checks) int
+    checks[0]: checks[0] + 1
+    if: got != want
+        c.printf("mixa_process_marker: %s got=%zu want=%zu\n", label, got, want)
+        failures[0]: failures[0] + 1
+        return: 1
+    return: 0
+
+fn: main () int
+    @: MixaProcessMarkerResult result
+    @: MixaProcessMarkerResult initial_result
+    int: failures
+    int: checks
+    int: rc
+    
+    failures: 0
+    checks: 0
+    
+    const: @(char marker_1) "MARKER_1"
+    const: @(char marker_2) "__CLEAR_SHELL_001_12345__"
+    
+    # Save initial result to verify it's unchanged on error
+    initial_result\status: -999
+    initial_result\exit_code: -999
+    initial_result\cwd_offset: 999999
+    initial_result\cwd_length: 999999
+    
+    # Test 1: Valid with positive exit code and simple cwd
+    result: initial_result
+    const: @(char payload_1) "MARKER_1\t0\t/home/user"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_1, (cast: (size_t) 17), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_OK, "test1-status", @ failures, @ checks)
+    expect_exit(result\exit_code, 0, "test1-exit", @ failures, @ checks)
+    expect_cwd_offset(result\cwd_offset, 10, "test1-offset", @ failures, @ checks)
+    expect_cwd_length(result\cwd_length, 7, "test1-length", @ failures, @ checks)
+    
+    # Test 2: Negative exit code
+    result: initial_result
+    const: @(char payload_2) "MARKER_1\t-5\t/tmp"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_2, (cast: (size_t) 16), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_OK, "test2-status", @ failures, @ checks)
+    expect_exit(result\exit_code, -5, "test2-exit", @ failures, @ checks)
+    expect_cwd_offset(result\cwd_offset, 12, "test2-offset", @ failures, @ checks)
+    
+    # Test 3: INT32_MAX
+    result: initial_result
+    const: @(char payload_3) "MARKER_1\t2147483647\t/x"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_3, (cast: (size_t) 23), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_OK, "test3-status", @ failures, @ checks)
+    expect_exit(result\exit_code, 2147483647, "test3-exit", @ failures, @ checks)
+    
+    # Test 4: INT32_MIN
+    result: initial_result
+    const: @(char payload_4) "MARKER_1\t-2147483648\t/y"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_4, (cast: (size_t) 24), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_OK, "test4-status", @ failures, @ checks)
+    expect_exit(result\exit_code, -2147483648, "test4-exit", @ failures, @ checks)
+    
+    # Test 5: Optional + sign
+    result: initial_result
+    const: @(char payload_5) "MARKER_1\t+42\t/z"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_5, (cast: (size_t) 16), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_OK, "test5-status", @ failures, @ checks)
+    expect_exit(result\exit_code, 42, "test5-exit", @ failures, @ checks)
+    
+    # Test 6: Wrong marker prefix - NO_MATCH
+    result: initial_result
+    const: @(char payload_6) "WRONG\t0\t/cwd"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_6, (cast: (size_t) 12), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_NO_MATCH, "test6-status", @ failures, @ checks)
+    expect_status(result\status, -999, "test6-result-unchanged", @ failures, @ checks)
+    
+    # Test 7: Marker too long for payload - NO_MATCH
+    result: initial_result
+    const: @(char payload_7) "SHORT\t0\t/x"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_7, (cast: (size_t) 11), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_NO_MATCH, "test7-status", @ failures, @ checks)
+    
+    # Test 8: Missing first TAB - MALFORMED
+    result: initial_result
+    const: @(char payload_8) "MARKER_10\t/cwd"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_8, (cast: (size_t) 14), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_MALFORMED, "test8-status", @ failures, @ checks)
+    
+    # Test 9: Empty exit code - MALFORMED
+    result: initial_result
+    const: @(char payload_9) "MARKER_1\t\t/cwd"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_9, (cast: (size_t) 14), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_MALFORMED, "test9-status", @ failures, @ checks)
+    
+    # Test 10: Missing second TAB - MALFORMED
+    result: initial_result
+    const: @(char payload_10) "MARKER_1\t0/cwd"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_10, (cast: (size_t) 14), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_MALFORMED, "test10-status", @ failures, @ checks)
+    
+    # Test 11: Empty cwd - MALFORMED
+    result: initial_result
+    const: @(char payload_11) "MARKER_1\t0\t"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_11, (cast: (size_t) 11), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_MALFORMED, "test11-status", @ failures, @ checks)
+    
+    # Test 12: Invalid digit in exit code - MALFORMED
+    result: initial_result
+    const: @(char payload_12) "MARKER_1\t1a\t/cwd"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_12, (cast: (size_t) 16), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_MALFORMED, "test12-status", @ failures, @ checks)
+    
+    # Test 13: Sign only - MALFORMED
+    result: initial_result
+    const: @(char payload_13) "MARKER_1\t-\t/cwd"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_13, (cast: (size_t) 15), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_MALFORMED, "test13-status", @ failures, @ checks)
+    
+    # Test 14: Exit code overflow - MALFORMED
+    result: initial_result
+    const: @(char payload_14) "MARKER_1\t2147483648\t/cwd"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_14, (cast: (size_t) 24), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_MALFORMED, "test14-status", @ failures, @ checks)
+    
+    # Test 15: CWD with UTF-8, spaces, tabs preserved
+    result: initial_result
+    const: @(char payload_15) "MARKER_1\t0\t/path with\tspaces and UTF8: café"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_15, (cast: (size_t) 45), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_OK, "test15-status", @ failures, @ checks)
+    expect_cwd_offset(result\cwd_offset, 10, "test15-offset", @ failures, @ checks)
+    expect_cwd_length(result\cwd_length, 35, "test15-length", @ failures, @ checks)
+    
+    # Test 16: Different marker pattern
+    result: initial_result
+    const: @(char payload_16) "__CLEAR_SHELL_001_12345__\t127\t/out"
+    rc: mixa_process_marker_parse(marker_2, (cast: (size_t) 25), payload_16, (cast: (size_t) 35), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_OK, "test16-status", @ failures, @ checks)
+    expect_exit(result\exit_code, 127, "test16-exit", @ failures, @ checks)
+    
+    # Test 17: Result struct unchanged on any error
+    result: initial_result
+    const: @(char payload_17) "BAD"
+    rc: mixa_process_marker_parse(marker_1, (cast: (size_t) 8), payload_17, (cast: (size_t) 3), @ result)
+    expect_status(rc, MIXA_PROCESS_MARKER_NO_MATCH, "test17-status", @ failures, @ checks)
+    expect_status(result\status, -999, "test17-unchanged-status", @ failures, @ checks)
+    expect_exit(result\exit_code, -999, "test17-unchanged-exit", @ failures, @ checks)
+    
+    if: failures = 0
+        c.printf("mixa_process_marker_selftest: checks=%d failures=0\n", checks)
+        c.printf("mixa_process_marker_selftest OK\n")
+        return: 0
+    c.printf("mixa_process_marker_selftest FAILED: %d check(s)\n", failures)
+    return: 1
