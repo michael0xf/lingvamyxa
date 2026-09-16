@@ -3571,3 +3571,49 @@ QUESTIONS (Mikhail's; the coordinator put 5.1 and 5.3-5.6 to him directly, so th
   child_n/at, tracked, endp_refs, handoff_ready, native_users, adopted_*, exec_bind_*, is_bound, last_status,
   map_queued, test_*), does each query become a read on the owner's lane (the test runs it inside that Message's
   turn or its parent's), or is it deleted with the property it checked named? Proposed per query in S4's commit.
+
+== (d) IMPLEMENTATION ORDER, WRITTEN 2026-09-16 BY THE COORDINATOR (lingvamyxa-08) ==
+
+The design's (d) is "atomic cells, then the epoch and the pending-free list". Its
+FIRST CUSTOMER IS NO LONGER HYPOTHETICAL: the executor flake that reddened two
+landings and two gate chains is a cross-lane read of a bind record -- its three
+faces (LMX_MSG_INVALID from launch_ctx_thread_rec, a wait that never ends, and a
+null r->wait at lmx_message_exec.c:1901) are one defect: bind_wait_retire_locked
+frees the wait record on its own lane while the host's launch path still holds
+the record it read from the table. Measured population: 8 readers of r->wait,
+6 readers of r->msg, 1 writer (5c's static pass); the regression detector is the
+UAF kit (q_alloc), which caught it 2 of 40 runs before and must read 0 of N after.
+
+Order, one commit each, both cores in parity, each measured by run_port_message
+and the stage probe:
+
+  (1) THE BIND RECORD'S CELLS. Treat r->wait / r->msg / r->in_table as the
+      parent lane's data, and make every retirement OBSERVABLE-SAFE rather than
+      merely correct on the retiring lane: either the epoch grace below lands
+      first and the retire goes through the pending list, or the launch path
+      re-resolves and re-validates its record after allocating the wait and
+      treats a vanished record as "not launchable now" (which is what the walk
+      meant), never as INVALID-for-the-caller. No lock, no wait.
+
+  (2) parent_msg AND index AS ATOMIC CELLS. Four C accessors in the pattern the
+      running/success flags already use (exec.c:375-396), declared in
+      exec.h: lmx_msg_parent_load/store, lmx_msg_index_load/store, tolerating
+      m == 0. Every read of the two fields in lmx_message.lm1, lmx_message.lm2,
+      lmx_message_exec.c and the selftest goes through the load accessor and
+      every write through the store accessor -- a mixed access on one cell is
+      what this step exists to prevent. Comments are prose and stay.
+
+  (3) THE EPOCH GRACE. One global epoch counter in an atomic cell; each lane
+      publishes in ITS OWN atomic cell the epoch it read when it entered a turn
+      or a walk, and 0 between turns; R0 frees an unlinked record only when its
+      unlink epoch is older than every nonzero published epoch, and keeps the
+      pending-free list as its own data on its own lane. Four conditions stand
+      as the design records them: R0 never blocks on the grace; a lane outside a
+      turn counts as past every epoch; the pending list is R0's own data; and a
+      deterministic tripwire shows a record surviving R0's round while a
+      walker's lane is inside its turn and freed after it.
+
+  (4) ACCEPTANCE. The AD probe's counters to 0 (find, find_tree, dest_from_src,
+      self_or_find_fallback, id_marks, parent_field) with its positive control,
+      the full gate chain cold, and the UAF kit as the flake's detector: 0
+      unclean runs of 40 where the parent tree gave 2.
