@@ -7389,3 +7389,13 @@ The gate now fails at the next counter pin, "settle branch st=0 n=4
 n0=4" (the dispose of a failed branch bottom-up), restated in the same
 two-part shape (both records on R's settled list with state RELEASED,
 adoption unchanged in direction); the tripwire for both runs next.
+e9's row at claude-0c/s6-2-gate-impact 9fe5cb42 carries the exec
+selftest figure by commit (7b3a8668: 39 field / 35 runtime; 18c35299:
+36 / 32, the three rtb->n reads of the first restatement: capture,
+condition, diagnostic), the four must-not-touch non-runtime reads,
+the per-declaration n0 rule stated locally (the declaration at 2834
+serves a use at 3182; cases convert one at a time), the by-role split
+as the lead's to confirm per site, and the fprintf population
+measured at 7 (not the eyeballed 11). The 1cbf01a2 figure (a peer's
+count published unreproduced) is superseded. e9 holds: land_s6_2.sh
+at 96f35613, R0P_GATE_IMPACT at 05d96cb0.
