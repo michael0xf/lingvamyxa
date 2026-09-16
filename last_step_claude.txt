@@ -109,15 +109,25 @@
 - инженер (ворота, посадки): lingvamyxa-12, ветки claude-0c/*;
 - mixa_manager: lingvamyxa-b5, ветки sonnet/*.
 
-6. ДОКУМЕНТЫ ИЗ КОРНЯ (ЧУЖИЕ ТОЖЕ) - В GIT
-По слову Михаила закоммичены в main (f1d40861) 107 документов и записок, которые
-лежали в корне неотслеживаемыми: work_chat/opencode (PROTOCOL, RUNBOOK, ASSIGNMENT,
-83 письма outbox), work_chat/monitor (POLICY, mikhail_last_variation, 11 писем),
-work_chat/antigravity (3), work_chat/grok_bot (.progress, записка тикета),
-.grok/skills/lingvamyxa-grok/SKILL.md, mixa_manager/PROCESS_FILE_PREP_INVENTORY.txt.
-Перед пушем проверены на ключи и пароли - совпадений нет. В корне они поставлены
-в индекс с теми же blob, что в main; рабочие файлы не менялись.
-Не документы и потому не закоммичены: состояние старого наблюдателя
-(Nyasha_Planetlingvamyxabuildfable_watch), код и скрипты (.c .h .lm1 .lmx .ps1 .py
-.cmd), данные (.hex .b64 .json), mixa_manager/recovery_20260910_222730 (копии кода),
+6. ДОКУМЕНТЫ, КОД И СКРИПТЫ ИЗ КОРНЯ (ЧУЖИЕ ТОЖЕ) - В GIT
+По слову Михаила закоммичено в main то, что лежало в корне неотслеживаемым:
+- f1d40861: 107 документов и записок - work_chat/opencode (PROTOCOL, RUNBOOK,
+  ASSIGNMENT, MODEL_CONTROL, 83 письма outbox), work_chat/monitor (POLICY,
+  mikhail_last_variation, 11 писем), work_chat/antigravity (3),
+  work_chat/grok_bot (.progress, записка тикета), .grok/skills/lingvamyxa-grok/SKILL.md,
+  mixa_manager/PROCESS_FILE_PREP_INVENTORY.txt;
+- e6eef67b: 27 файлов кода и скриптов - mixa_manager (mixa_console_window.c, test.c,
+  три run_*.ps1, два tests/*.lm1), четыре tests/return_*.lmx (лишние копии в tests/;
+  прогоны читают только tests/p0_tree_contract, так что на ворота не влияют),
+  work_chat/antigravity (.cmd, два .ps1), work_chat/grok_bot/_ticket_scratch
+  (append_hex.ps1 и шесть .py), work_chat/monitor (два .ps1),
+  work_chat/opencode/scripts (четыре .ps1).
+Перед пушем всё проверено на ключи и пароли: значений нет; скрипты opencode лишь
+ссылаются на server_password.txt, а он исключён .gitignore и в git не попал.
+В корне эти файлы поставлены в индекс с теми же blob, что в main; рабочие файлы
+не менялись.
+Осталось неотслеживаемым (43 файла, не документы и не код проекта): состояние
+старого наблюдателя (Nyasha_Planetlingvamyxabuildfable_watch), копии кода в
+mixa_manager/recovery_20260910_222730 (22), данные и состояние ботов в
+work_chat (.hex, .b64, .json, pid, heartbeat, inbox/seen), opencode.json,
 grep.exe.stackdump.
