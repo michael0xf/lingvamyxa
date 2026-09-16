@@ -7,6 +7,6 @@
     "quietSeconds":  20,
     "pollSeconds":  1800,
     "mutexName":  "GrokBot_Inbox_Watcher_Mutex",
-    "webhookSenderKey":  "",
-    "webhookUrl":  ""
+    "webhookSenderKey":  "crsr_ee6f6261caf3551a1e342a72f10dcacd96ead5598dcfb3e05fda351d358bf5c8",
+    "webhookUrl":  "https://api2.cursor.sh/automations/webhook/b225a0a9-f670-5c36-9177-f3d153a63f81"
 }

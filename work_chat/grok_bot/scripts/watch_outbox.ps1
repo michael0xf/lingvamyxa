@@ -105,13 +105,22 @@ try {
   $watcher = New-Object System.IO.FileSystemWatcher $WatchPath, "*.txt"
   $watcher.IncludeSubdirectories = $false
   $watcher.NotifyFilter = [IO.NotifyFilters]"FileName, LastWrite, Size"
+  # A reply is written in chunks, and every chunk is an event: with the default
+  # 8 KB buffer a large answer (305 KB was the first one seen) overflows it and
+  # the events are DROPPED silently, so the flush never runs. 64 KB is the
+  # documented maximum for this filter set; the Error handler below still makes
+  # an overflow visible rather than silent, and the 30-minute reconcile remains
+  # the backstop.
+  $watcher.InternalBufferSize = 65536
   $watcher.EnableRaisingEvents = $true
   $sidC = "GrokBotOutboxCreated_" + [Guid]::NewGuid().ToString("N")
   $sidH = "GrokBotOutboxChanged_" + [Guid]::NewGuid().ToString("N")
   $sidR = "GrokBotOutboxRenamed_" + [Guid]::NewGuid().ToString("N")
+  $sidE = "GrokBotOutboxError_" + [Guid]::NewGuid().ToString("N")
   Register-ObjectEvent -InputObject $watcher -EventName Created -SourceIdentifier $sidC | Out-Null
   Register-ObjectEvent -InputObject $watcher -EventName Changed -SourceIdentifier $sidH | Out-Null
   Register-ObjectEvent -InputObject $watcher -EventName Renamed -SourceIdentifier $sidR | Out-Null
+  Register-ObjectEvent -InputObject $watcher -EventName Error -SourceIdentifier $sidE | Out-Null
 
   $lastEvent = [DateTime]::MinValue
   $lastReconcile = [DateTime]::UtcNow
@@ -137,6 +146,7 @@ try {
     while ($true) {
       $ev = Get-Event -ErrorAction SilentlyContinue | Select-Object -First 1
       if (-not $ev) { break }
+      if ($ev.SourceIdentifier -eq $sidE) { Log-Line "watcher error event (a dropped event, likely a buffer overflow): flushing what is on disk" }
       Remove-Event -EventIdentifier $ev.EventIdentifier -ErrorAction SilentlyContinue
       $lastEvent = $now
       $pending = $true
