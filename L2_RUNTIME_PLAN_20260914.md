@@ -6624,3 +6624,13 @@ it must be checked unique at the cited commit ("requests its own
 orderly close" occurs three times, 11528, 13180 and 13237: cite the
 section and add a second phrase from the same sentence). The line
 number stays as "today" only.
+S6 probe run by the coordinator on the landed tree 7b3a8668 (d6/lock-s6-red
+695d54fc's runner over the tree, no build): exec_lock_calls=0
+exec_lock_decl=0 host_lock=0 exec_fields=0 (S6-1 GREEN, the lead's
+falsifying line confirmed) | refs=342 runtime_lists=36 (S6-2 RED). So
+S6-2's red baseline is 342/36 at 7b3a8668 (the plan's earlier 349/36
+was measured before S6-1 removed seven refs lines); the green is 0/0 on
+the stage tip merged with 695d54fc, the falsifier one retain put back.
+e9's cold self-build of 7b3a8668 is on origin (tag selfbuild/7b3a8668,
+log branch claude-0c/selfbuild-log-7b3a8668 b522e078); the cold gate
+follows.
