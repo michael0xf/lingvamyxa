@@ -8984,3 +8984,22 @@ pump-only round 1, blocking waits restructured 0, waits left alone 8,
 restated 1 (admit-gate). Evidence build/port_message/20260916_081513_951.
 Next: get_address's callers and the path deletion (steps 4 and 5); the
 hash to the engineer once the repeats are clean.
+The lead's question before step 4: which lane event runs a holder's
+postman step for the string-address chain (the spec and design name
+no event; after (b) an idle intermediate with no bound turn never
+forwards, and the letter stalls). RULED (iii), from Mikhail's
+fourteenth line ("заготовки ... сейчас должна быть заглушка"): in S6-2
+send by string address is the common API's second entry on every L3
+Thread, the default body delegating to the service, R0's body refusing
+with KIND_REJECTED and a named status ("string address not deliverable
+yet", the lead's constant), so callers are fixed now and a later
+stage swaps the body; the hop event is that stage's question, the
+model's answer being (i): each L3 Thread's own loop checks its mail
+every round, so a hop letter is looked at in the holder's own round
+and forwarded through its outbox; (ii), R0 reading other Messages'
+tree links, is excluded by the no-cross-lane-read rule; the bootstrap
+executor cannot run the round of a Message with no bound turn, which
+is why the chain waits for its stage; (i) goes to Mikhail for
+confirmation when that stage opens. Steps 4a (path_n/path_seg callers
+onto get_address) and 5 proceed without dependence on it; the cold
+repeats of b9a148f2 read 3 of 3 PASS so far.
