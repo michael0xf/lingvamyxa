@@ -9095,7 +9095,7 @@ needs (l2src/tools/uaf_run.sh), the dry run naming exactly that path
 OUTSIDE with count 1, then 0 after the restore.  No check for unused
 entries.  The engineer holds until ls-remote shows a push of the stage.
 
-S6-2 COORDINATOR REVIEW of the pushed red tip 3e1cec49, 2026-09-16 08:55.
+S6-2 COORDINATOR REVIEW of the pushed red tip 3e1cec49, 2026-09-16 08:48.
 Light legs on the measuring merge e3e727f8 (3e1cec49 + 96a754e0): probe
 -Part 2 "refs=0 runtime_lists=0" GREEN; falsifier refs=1 RED, restored;
 run_gates.ps1 28 literal rows (29/29 with -L2MessageRoot); the module
@@ -9144,7 +9144,7 @@ assertions on them are on the emitted text (the named field read reaching
 C as itself), so the coverage is kept; the host selftest's off-lane
 refusal moved from path_n/path_seg to get_address with the same -1.
 
-STAGE AD RESTATED, 2026-09-16 09:20 (coordinator, on b5's pre-read
+STAGE AD RESTATED, 2026-09-16 08:53 (coordinator, on b5's pre-read
 78bae3d8 and a read of the red tip): the plan's AD text was written before
 the settled shape and never restated after it.  (0) The "436 LmxMsgAddr
 sites" figure does not reproduce under any unit (629-656 occurrences,
@@ -9174,7 +9174,7 @@ impact list for (a), every call classified HOLDS-POINTER or ID-ONLY with
 its lane, totals equal to the baseline.  AD's code starts after S6-2
 lands; its acceptance names the counts to 0 with a positive control.
 
-S6-2 LANDING PREPARATION, 2026-09-16 09:35 (the engineer's two reports,
+S6-2 LANDING PREPARATION, 2026-09-16 08:55 (the engineer's two reports,
 checked by the coordinator at the refs):
 - claude-0c/land-s6-2 5d22b108 (fast-forward from 502deb03): allowlist
   54 -> 67; dry run over the script's own diff (line 125:
@@ -9224,7 +9224,7 @@ acknowledgement, so a walker's own chain never names a freeable record).
 
 S6-2, the lead's fixes at local 066fb5a1 (not pushed; a non-stopping sweep
 of the 28 rows running at 0e4dbf94), read by the coordinator 2026-09-16
-10:05: (1) orphan_children mints g\index from rt\root\child_seq as handoff
+08:58: (1) orphan_children mints g\index from rt\root\child_seq as handoff
 does (0 when the counter would wrap; 0 is never minted), the case
 address_unique_under_r0 in family_release_17 scenario 4 (runner
 run_model_scenario36), falsifier the two minting lines as no-ops ->
@@ -9266,7 +9266,7 @@ the live set is written and read on the owner's lane alone, which is the
 host that runs R0's turns.
 
 COMPILER TICKET 1 (coordinator's, queued after the S6-2 landing), read
-2026-09-16 10:25 without building: app_window's L2 crash (b5's diagnosis on
+2026-09-16 09:00 without building: app_window's L2 crash (b5's diagnosis on
 sonnet/mixa-module-list, L2_RUNTIME_MODULE_LIST_AUDIT.txt, "why app_window's
 L2 trace stops silently": a define:'d char* constant staged through an int
 temporary, truncated, SIGSEGV in strlen inside mixa_button_panel_add).
@@ -9286,3 +9286,6 @@ app_window's parity run.  COMPILER TICKET 2: app_controller's "translation
 failed with no located diagnostic" after its twenty prototypes (10c46bde),
 unlocalized; method: a -g l2trans with gdb entry logging (not
 finish/rbreak), the last entered function before the generic fallback.
+(Correction, 2026-09-16 09:04: five clock times in the entries above from
+08:48 to 09:00 were written as guesses, up to 85 minutes ahead; they now
+read the commit times, which are authoritative.)
