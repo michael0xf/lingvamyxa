@@ -7943,3 +7943,22 @@ the gate count 30 (29 rows plus the conditional one); e9's hygiene
 gate blocked the commit on one non-ASCII byte, the third catch since
 it enforces. land_s6_2.sh unlaunched, the allowlist 54 paths 0 outside
 over 51b73274 and 2d8f2b6a; "launch" on the lead's five lines.
+b5's class-of-gap inventory on sonnet/mixa-module-list a29c7f76 (doc
+only, every block added, tested, reverted): 20 functions app_controller
+calls with only a real-header prototype and no L2-visible declaration,
+across five headers (mixa_file.h 2, mixa_app_path.h 1,
+mixa_cmdline_dispatch.h 4, mixa_cmdline.h 11, mixa_help.h 2), each
+with its call line and prototype: block, all pointer-only types;
+traced empirically: declaring them moves the first failure through
+the predicted order (:16 to :496; at :487 an undeclared call as a
+comparison operand reports "unknown method", the same cause). With
+all twenty declared, l2trans fails with its own fallback "translation
+failed with no located diagnostic" (l2trans.lm1:14837-14838) after
+emitting a 177 KB .lm1.tmp: an internal l2trans defect, unlocalized
+(a gdb backtrace did not return in reasonable time), outside b5's
+lane. TICKETS: b5 lands the twenty prototype blocks as one commit (the
+runner's first line becomes the compiler's); the coordinator's l2trans
+ticket after S6-2 now has two items: the define:'d char* call-actual
+typed int (app_window) and the silent failure with no located
+diagnostic on app_controller (the trace-silent-l2trans-failures
+method: entry-logging on a -g build).
