@@ -59,10 +59,14 @@ $Gates = @(
     # 2026-09-16, commit 8e094e98: app_controller's opaque fmpanel
     # #include gained eight prototype: declarations (declare-then-link,
     # not full predef -- sidesteps the MixaCell/MixaTextRect conflict).
-    # Moved past every fmpanel call; still UNEXPECTED_FAILURE, now at
-    # mixa_app_controller.lm2:16:5 (frame=mixa_file_close), a different,
-    # out-of-scope gap. Re-measured cold at 15.0s.
-    @{ Script = "run_mixa_app_controller_l2_parity.ps1"; Args = @(); Expect = "UNEXPECTED_FAILURE"; TimeoutSec = 40 }
+    # 2026-09-16, commit 10c46bde: landed the remaining twenty
+    # prototype: declarations from the class-of-gap inventory
+    # (a29c7f76). Moved past every declaration gap this file has;
+    # still UNEXPECTED_FAILURE, now l2trans's own internal `translation
+    # failed with no located diagnostic` (no line number -- an
+    # l2trans compiler defect, lingvamyxa-6f's own ticket after S6-2),
+    # not a further missing declaration. Re-measured cold at 24.7s.
+    @{ Script = "run_mixa_app_controller_l2_parity.ps1"; Args = @(); Expect = "UNEXPECTED_FAILURE"; TimeoutSec = 60 }
 )
 
 function Get-Verdict([string]$LogPath) {

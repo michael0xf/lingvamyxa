@@ -179,3 +179,27 @@ FAILURE 16.4s, same as run 1) -- "mixa parity gates: 12 of 12 as
 expected (total 201.0s)"
 
 Both runs exit 0.
+
+--- 2026-09-16: app_controller's twenty remaining prototype:
+    declarations landed (commit 10c46bde)
+
+Landed the twenty blocks from the class-of-gap inventory (a29c7f76),
+already tested and reverted there. Moves app_controller past every
+declaration gap in the file; still UNEXPECTED_FAILURE, now l2trans's
+own internal `translation failed with no located diagnostic` (no line
+number) -- an l2trans compiler defect, lingvamyxa-6f's own ticket after
+S6-2, not a further missing declaration. Gate row's own Expect stays
+"UNEXPECTED_FAILURE" (unchanged verdict name); dated comment updated to
+record the new diagnostic text in place of a line number, TimeoutSec
+raised 40 -> 60 (re-measured cold at 22.6s/22.5s across the two runs
+below, up from 15-16s before this commit).
+
+Run 1 (202.2s wall): OK on all twelve (the same eleven as above, plus
+app_controller UNEXPECTED_FAILURE 22.6s) -- "mixa parity gates: 12 of
+12 as expected (total 201.7s)"
+
+Run 2 (203.2s wall): OK on all twelve again (app_controller UNEXPECTED_
+FAILURE 22.5s, same as run 1) -- "mixa parity gates: 12 of 12 as
+expected (total 202.9s)"
+
+Both runs exit 0.
