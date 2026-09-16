@@ -1070,6 +1070,18 @@ void lmx_msg_slot_free(LmxMsg *m) {
     m->done_id = 0;
     m->done_n = 0;
     m->done_cap = 0;
+    /* S6-2 (SPEC 19.29.7): a mail service's live set, freed here beside
+     * done_from/done_id because it is the identical shape -- a pointer array and
+     * an unsigned array owned by the record.  Every Message that is not a service
+     * has these 0, and free(0) is a no-op.  The records the set POINTS AT are not
+     * freed here: they belong to the tree, and teardown frees them.  This is the
+     * free-partner for the two allocations lmx_msg_live_grow makes. */
+    free(m->live_m);
+    free(m->live_id);
+    m->live_m = 0;
+    m->live_id = 0;
+    m->live_n = 0;
+    m->live_cap = 0;
     free(m->exec_bind);
     m->exec_bind = 0;
     drop_ranges_locked(m);

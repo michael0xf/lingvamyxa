@@ -47,6 +47,28 @@ typedef unsigned char uchar;
  * own kind. recv never hands it out and readiness never counts it; lifecycle
  * reads (retire, close) do. */
 #define LMX_MSG_KIND_INGRESS 11
+/* S6-2 (SPEC 19.29.7): a registration letter to the mail service.  A child is
+ * created on its PARENT's lane, so it cannot write the service's live set
+ * itself; it posts this instead, carrying the new record in dest_msg, and the
+ * service registers the address when it drains.  Kinds 0-11 were all taken, so
+ * this is a new constant rather than a reused slot -- recorded as my choice,
+ * the same way LMX_MSG_KIND_REJECTED's use was.
+ * The letter is pushed BEFORE create returns the address, which with the FIFO
+ * transport is what makes a registration precede any send that could have
+ * learned the handle. */
+#define LMX_MSG_KIND_REGISTER 12
+/* S6-2 (SPEC 19.29.7, the removal ruling): an unregister-and-free letter to the
+ * mail service, carrying the record in dest_msg and its id in to.  release_slot
+ * runs on the RELEASING lane -- the parent's dispose, or the Message's own
+ * end-turn -- so it can neither write the service's live set (a cross-lane write)
+ * nor free the record itself (which would leave a live-set entry naming freed
+ * memory until the service next drains).  It posts this instead; the service
+ * removes the entry and calls slot_free, in that order, on its own lane.
+ * The window between the release and that free is closed by what release_slot
+ * already does: the state is RELEASED, written under the mailbox's monitor, and
+ * admit_one refuses a RELEASED destination under that same monitor, so a send
+ * arriving in the window is refused rather than admitted. */
+#define LMX_MSG_KIND_UNREGISTER 13
 /* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data.
  * Implementation-only liveness profile on KIND_PROGRESS. Not language KINDs.
  * Ordinary progress number 1/2 must not match these. */
@@ -132,8 +154,21 @@ typedef struct LmxMsg {
      * makes delivery by memory address safe with no count of holders, and is this
      * stage's replacement for refs: one owner's data on one lane, instead of a
      * counter on every record written from every lane.  Only the service reads or
-     * writes these; they are 0 on every Message that is not one. */
-    struct LmxMsg **live;
+     * writes these; they are 0 on every Message that is not one.
+     * EACH ENTRY IS A PAIR, the record pointer AND its id, and membership requires
+     * BOTH to match: malloc reuses addresses, so a handle that outlived its record
+     * could otherwise name a NEW record at the same address and pass the check.
+     * The id (LmxMsgAddr) is minted monotonically and never reused, which is what
+     * makes the pair decisive; stage AD keeps it for exactly this reason.
+     * The pair is held as TWO PARALLEL ARRAYS rather than an array of structs, and
+     * the reason is a measurement rather than a preference: neither core indexes an
+     * array of structs and follows a field through the subscript anywhere (0 sites
+     * against a control of 18 plain subscripts), so that spelling has no neighbour
+     * to copy and would be verifiable only by a build.  live[i] and live_id[i] are
+     * both forms the cores already use.  They are grown and shifted together and
+     * always have the same length; live_n and live_cap describe both. */
+    struct LmxMsg **live_m;
+    LmxMsgAddr *live_id;
     int live_n;
     int live_cap;
     /* S6-2 (SPEC 19.29.7, Mikhail 2026-09-16): this Message's index at its parent
@@ -295,9 +330,11 @@ int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt);
  * lmx_msg_service_of returns the service a Message delegates to (itself, when it
  * is the service). */
 LmxMsg *lmx_msg_service_of(LmxMsg *m);
-int lmx_msg_service_register(LmxMsg *svc, LmxMsg *m);
-int lmx_msg_service_unregister(LmxMsg *svc, LmxMsg *m);
-int lmx_msg_service_is_live(LmxMsg *svc, LmxMsg *m);
+int lmx_msg_service_register(LmxMsg *svc, LmxMsg *m, LmxMsgAddr id);
+int lmx_msg_service_unregister(LmxMsg *svc, LmxMsg *m, LmxMsgAddr id);
+/* Membership requires BOTH the pointer and the id: a reused address with a
+ * different id is not the record the sender meant, and is refused. */
+int lmx_msg_service_is_live(LmxMsg *svc, LmxMsg *m, LmxMsgAddr id);
 /* S6-2 (SPEC 19.29.7): compose a Message's hierarchical address by walking the
  * parent links to the root.  Returns the number of indices, or -1 if the Message
  * is not reachable.  Fills out[0..n-1] root-first when out is non-zero and cap is

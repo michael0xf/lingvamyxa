@@ -1047,6 +1047,16 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     rt\transport: 0
     rt\transport_tail: 0
     c.lmx_msg_mail_unlock(root)
+    # S6-2: sweep R0's live set before the tree is freed. A record whose
+    # unregister-and-free letter was still queued when the runtime is deleted has
+    # that letter dropped with the transport just above, and release_slot already
+    # unlinked it from its parent, so teardown_free's walk over first_child never
+    # reaches it; the same happens when the letter could not be allocated at all.
+    # Its only remaining referent is this set. RELEASED plus presence in the set is
+    # exactly the "released but not yet freed" condition and needs no new state.
+    # It must run BEFORE teardown_free, which frees R0 and takes live_m and
+    # live_id with it.
+    lmx_msg_live_sweep(rt\root)
     lmx_msg_teardown_free(rt\root)
     rt\root: 0
     c.lmx_msg_exec_set_no_retire(rt, 0)
@@ -1120,11 +1130,11 @@ fn: lmx_msg_live_find (@: LmxMsg svc; @: LmxMsg m; @: int at) int
     hi: svc\live_n
     while: lo < hi
         mid: lo + ((hi - lo) / 2)
-        if: (cast: (uintptr_t) svc\live[mid]) = (cast: (uintptr_t) m)
+        if: (cast: (uintptr_t) svc\live_m[mid]) = (cast: (uintptr_t) m)
             \at: mid
             return: 1
         ---
-        if: (cast: (uintptr_t) svc\live[mid]) < (cast: (uintptr_t) m)
+        if: (cast: (uintptr_t) svc\live_m[mid]) < (cast: (uintptr_t) m)
             lo: mid + 1
         else:
             hi: mid
@@ -1137,9 +1147,19 @@ return: 0
 # stage deletes), kept because its two guards are exactly what a leaner version
 # drops: the capacity doubling cannot overflow int, and the byte count cannot
 # overflow size_t. c.realloc is the tree's growth idiom.
+# Both arrays grow together and always have the same length, which is the one
+# risk two parallel arrays carry and the reason live_cap describes both. If the
+# second realloc fails after the first succeeded, live_cap is NOT advanced: the
+# pointer array is merely larger than claimed, which wastes a little memory and
+# stays correct, and the next growth retries from the recorded cap.
+# Sizes follow the tree's own precedent for these two element types: c.sizeof(@:
+# void) for a pointer array, and c.sizeof(unsigned) for an LmxMsgAddr array,
+# exactly as the done_from / done_id arrays are sized at lmx_message.lm1:792-794.
+# (c.sizeof(@: LmxMsgAddr) would size a POINTER to the id, not the id.)
 fn: lmx_msg_live_grow (@: LmxMsg svc; int: need) int
     int: cap
-    @@: LmxMsg grown
+    @@: LmxMsg grown_m
+    @: unsigned grown_id
     if: svc = 0 || need < 1
         return: c.LMX_MSG_INVALID
     if: svc\live_cap >= need
@@ -1154,10 +1174,14 @@ fn: lmx_msg_live_grow (@: LmxMsg svc; int: need) int
     ---
     if: (cast: (size_t) cap) > ((cast: (size_t) -1) / c.sizeof(@: void))
         return: c.LMX_MSG_NOMEM
-    grown: (cast: (@@: LmxMsg) c.realloc((cast: (@: void) svc\live), (cast: (size_t) cap) * c.sizeof(@: void)))
-    if: grown = 0
+    grown_m: (cast: (@@: LmxMsg) c.realloc((cast: (@: void) svc\live_m), (cast: (size_t) cap) * c.sizeof(@: void)))
+    if: grown_m = 0
         return: c.LMX_MSG_NOMEM
-    svc\live: grown
+    svc\live_m: grown_m
+    grown_id: (cast: (@: unsigned) c.realloc((cast: (@: void) svc\live_id), (cast: (size_t) cap) * c.sizeof(unsigned)))
+    if: grown_id = 0
+        return: c.LMX_MSG_NOMEM
+    svc\live_id: grown_id
     svc\live_cap: cap
 return: c.LMX_MSG_OK
 
@@ -1168,23 +1192,29 @@ return: c.LMX_MSG_OK
 # on its PARENT's lane, so registration is asynchronous to the create and its
 # safety is the causal order under R0's monitor, recorded in the section).
 # Idempotent: registering a record already in the set is OK, not a second entry.
-fn: lmx_msg_service_register (@: LmxMsg svc; @: LmxMsg m) int
+fn: lmx_msg_service_register (@: LmxMsg svc; @: LmxMsg m; LmxMsgAddr: id) int
     int: at 0
     int: i
     int: st
     if: svc = 0 || m = 0
         return: c.LMX_MSG_INVALID
     if: lmx_msg_live_find(svc, m, @ at) != 0
+        # Already live at this address. If the id differs the entry is a stale one
+        # for a freed record whose address was reused, so it is REPLACED rather
+        # than duplicated: the new record is the live one at that address now.
+        svc\live_id[at]: id
         return: c.LMX_MSG_OK
     st: lmx_msg_live_grow(svc, svc\live_n + 1)
     if: st != c.LMX_MSG_OK
         return: st
     i: svc\live_n
     while: i > at
-        svc\live[i]: svc\live[i - 1]
+        svc\live_m[i]: svc\live_m[i - 1]
+        svc\live_id[i]: svc\live_id[i - 1]
         i: i - 1
     ---
-    svc\live[at]: m
+    svc\live_m[at]: m
+    svc\live_id[at]: id
     svc\live_n: svc\live_n + 1
 return: c.LMX_MSG_OK
 
@@ -1193,31 +1223,46 @@ return: c.LMX_MSG_OK
 # removal must happen BEFORE the record is freed, not after.
 # Removing a record that is not in the set is OK: a release may run for a Message
 # whose registration letter never arrived (a create that failed downstream).
-fn: lmx_msg_service_unregister (@: LmxMsg svc; @: LmxMsg m) int
+fn: lmx_msg_service_unregister (@: LmxMsg svc; @: LmxMsg m; LmxMsgAddr: id) int
     int: at 0
     int: i
     if: svc = 0 || m = 0
         return: c.LMX_MSG_INVALID
     if: lmx_msg_live_find(svc, m, @ at) = 0
         return: c.LMX_MSG_OK
+    # The id must match: an entry at this address belonging to a DIFFERENT record
+    # is not ours to remove, and removing it would unregister a live Message
+    # because its predecessor's address was reused.
+    if: svc\live_id[at] != id
+        return: c.LMX_MSG_OK
     i: at
     while: i < svc\live_n - 1
-        svc\live[i]: svc\live[i + 1]
+        svc\live_m[i]: svc\live_m[i + 1]
+        svc\live_id[i]: svc\live_id[i + 1]
         i: i + 1
     ---
     svc\live_n: svc\live_n - 1
-    svc\live[svc\live_n]: 0
+    svc\live_m[svc\live_n]: 0
+    svc\live_id[svc\live_n]: 0U
 return: c.LMX_MSG_OK
 
 # The membership test the send path uses: an address absent from the live set is
 # REFUSED, never dereferenced. This is the whole of what replaces refs -- the
 # question refs answered with a counter on the record, written from every lane,
 # is answered here by one owner's data on one lane.
-fn: lmx_msg_service_is_live (@: LmxMsg svc; @: LmxMsg m) int
+fn: lmx_msg_service_is_live (@: LmxMsg svc; @: LmxMsg m; LmxMsgAddr: id) int
     int: at 0
     if: svc = 0 || m = 0
         return: 0
-return: lmx_msg_live_find(svc, m, @ at)
+    if: lmx_msg_live_find(svc, m, @ at) = 0
+        return: 0
+    # BOTH must match. The address alone is not enough: malloc reuses addresses,
+    # so a handle that outlived its record can name a new record at the same
+    # address, and the id -- minted monotonically and never reused -- is what
+    # tells them apart. A mismatch is refused, not dereferenced.
+    if: svc\live_id[at] != id
+        return: 0
+return: 1
 
 # S6-2 (SPEC 19.29.7, Mikhail 2026-09-16: "метод getAddress который отдаёт адрес
 # проверяя дерево до корня"): compose an address by walking the parent links and
@@ -1364,6 +1409,24 @@ fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx sour
     ---
     if: p != 0
         lmx_msg_child_link(p, slot)
+    ---
+    # S6-2 (SPEC 19.29.7): register the new record with its service. A child is
+    # created on its PARENT's lane (require_turn above), so this cannot write the
+    # service's live set directly -- that would be the cross-lane write this stage
+    # exists to delete. It is a letter, and it is pushed HERE, BEFORE the address
+    # leaves in \out below: the caller holds the handle the moment create returns,
+    # and with the FIFO transport (q_push at the tail, q_pop at the head) any send
+    # it then makes is pushed after this and drains after it. That ordering is the
+    # whole of what makes delivery by memory address safe without a holder count.
+    # A service that is its own record registers directly: R0's creation runs on
+    # the owner's lane and there is no letter to send to itself.
+    if: slot\service = slot
+        lmx_msg_service_register(slot, slot, slot\addr)
+    else:
+        st: lmx_msg_post_register(rt, slot)
+        if: st != c.LMX_MSG_OK
+            return: st
+        ---
     ---
     \out: slot\addr
 return: c.LMX_MSG_OK
@@ -1600,14 +1663,33 @@ sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     m\path_cap: 0
     m\state: c.LMX_MSG_STATE_RELEASED
     m\committed: 0
-    # The free itself, with no holder count standing between the release and it:
-    # slot_free destroys this record's mailbox monitor and frees the record. The
-    # arena has already moved to the owner before every call site that marks
+    # S6-2 (the removal ruling): the record is freed by its SERVICE, not here.
+    # release_slot runs on the RELEASING lane -- the parent's dispose, or this
+    # Message's own end-turn -- so it can do neither of the two obvious things:
+    # writing the service's live set would be the cross-lane write this stage
+    # exists to delete, and freeing the record here would leave the service
+    # holding an entry that names freed memory until it next drains, which is
+    # strictly worse than the refs hazard it replaces.
+    # The window until the service acts is closed by the RELEASED state set just
+    # above: admit_one refuses a RELEASED destination under the mailbox's own
+    # monitor, so a send arriving meanwhile is refused, not admitted.
+    # The arena has already moved to the owner before every call site that marks
     # (adopt_mark, dispose_mark, reclaim_mark), and lmx_msg_blocks_move_all clears
     # the source owner, so the dispose inside slot_free walks an empty list; the
     # one site with no mark before it releases an uncommitted INACTIVE child,
     # which never received blocks in create_prepare.
-    c.lmx_msg_slot_free(m)
+    # A service releasing ITSELF has no letter to send and does both directly.
+    if: m\service = m
+        lmx_msg_service_unregister(m, m, m\addr)
+        c.lmx_msg_slot_free(m)
+    else:
+        # A failed post (calloc under pressure) leaves the record RELEASED and
+        # unfreed rather than freed behind the service's back. It is out of the
+        # family chain and its only referent is the service's live set, so the
+        # teardown sweep collects it: an OOM becomes a bounded leak until the
+        # runtime closes, never a use-after-free. Recorded as an accepted cost.
+        lmx_msg_post_unregister(rt, m)
+    ---
 end: lmx_msg_release_slot
 
 # Decision 17 with spec 19.29.8: settling a direct child into its parent,
@@ -2005,6 +2087,34 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     if: rt = 0 || node = 0
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_INVALID
+    # S6-2 (SPEC 19.29.7): a registration letter, intercepted BEFORE the
+    # destination resolution below. Its dest_msg is the PAYLOAD -- the record
+    # being registered -- not a delivery target, so letting it fall through would
+    # admit a Message's own handle into its own inbox. This runs on the drain's
+    # lane, which is the service's, so the live set is written by its owner.
+    if: node\kind = c.LMX_MSG_KIND_REGISTER
+        if: node\dest_msg != 0
+            # The id travels in to, which post_register sets to the record's own
+            # address for exactly this: the drain must register the pair without
+            # dereferencing the record to ask it what its id is.
+            lmx_msg_service_register(lmx_msg_service_of(node\dest_msg), node\dest_msg, node\to)
+        ---
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_OK
+    ---
+    # S6-2 (the removal ruling): unregister-and-free, the opposite act, and the
+    # ORDER is the point -- the entry goes first, then the record is freed, both
+    # on this lane, so there is never a moment when the set names freed memory.
+    # The record is still readable here: release_slot left it RELEASED and unfreed
+    # precisely so that this lane could be the one to free it.
+    if: node\kind = c.LMX_MSG_KIND_UNREGISTER
+        if: node\dest_msg != 0
+            lmx_msg_service_unregister(lmx_msg_service_of(node\dest_msg), node\dest_msg, node\to)
+            c.lmx_msg_slot_free(node\dest_msg)
+        ---
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_OK
+    ---
     dest: node\dest_msg
     if: dest = 0
         dest: lmx_msg_self_or_find(rt, node\to)
@@ -2161,6 +2271,73 @@ sub: lmx_msg_env_release (@: LmxMsgEnv env)
     # A received graph already belongs to the handler's arena.
     env\graph: 0
 end: lmx_msg_env_release
+
+# S6-2 (SPEC 19.29.7): the registration letter, modelled on post_dead -- the same
+# shape of unsolicited notice, with R0's monitor taken and left on its own. It
+# carries the record itself in dest_msg, which for this kind is the payload and
+# not a delivery target, and the id in to; admit_one intercepts it before any
+# destination is resolved. Posted by the creating lane, drained by the service's,
+# which is what keeps the live set single-writer.
+# S6-2: teardown's collector for records the service never got to free -- see the
+# call in runtime_delete for why they exist and why this runs before teardown_free.
+# R0 itself is skipped: teardown_free frees it, and freeing it here would leave the
+# walk below reading a freed record.
+sub: lmx_msg_live_sweep (@: LmxMsg svc)
+    int: i 0
+    @: LmxMsg m
+    if: svc = 0
+        return
+    while: i < svc\live_n
+        m: svc\live_m[i]
+        if: m != 0 && m != svc && m\state = c.LMX_MSG_STATE_RELEASED
+            c.lmx_msg_slot_free(m)
+            svc\live_m[i]: 0
+        ---
+        i: i + 1
+    ---
+end: lmx_msg_live_sweep
+
+# S6-2 (SPEC 19.29.7, the removal ruling): the unregister-and-free letter. Same
+# shape as post_register, opposite act: the service removes the entry and then
+# calls slot_free, in that order, on its own lane. release_slot cannot do either
+# itself -- writing the live set would be a cross-lane write, and freeing the
+# record would leave the service holding an entry that names freed memory until
+# it next drains.
+fn: lmx_msg_post_unregister (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    @: LmxMsgCopy node
+    @: LmxMsg root
+    if: rt = 0 || m = 0
+        return: c.LMX_MSG_INVALID
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\from: m\addr
+    node\to: m\addr
+    node\kind: c.LMX_MSG_KIND_UNREGISTER
+    node\dest_msg: m
+    root: lmx_msg_ingress_root(rt)
+    c.lmx_msg_mail_lock(root)
+    lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, node)
+    c.lmx_msg_mail_unlock(root)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_post_register (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    @: LmxMsgCopy node
+    @: LmxMsg root
+    if: rt = 0 || m = 0
+        return: c.LMX_MSG_INVALID
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\from: m\addr
+    node\to: m\addr
+    node\kind: c.LMX_MSG_KIND_REGISTER
+    node\dest_msg: m
+    root: lmx_msg_ingress_root(rt)
+    c.lmx_msg_mail_lock(root)
+    lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, node)
+    c.lmx_msg_mail_unlock(root)
+return: c.LMX_MSG_OK
 
 fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
     @: LmxMsgCopy node
@@ -2435,6 +2612,28 @@ fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         return: -1
     cnt: c.lmx_msg_mail_inbox_n(m)
 return: cnt
+
+# S6-2 (SPEC 19.29.7, Mikhail's getAddress): the public address composer. It
+# resolves the Message the way lmx_msg_path_n already does -- the turn's own slot
+# first, otherwise the owner's lane and a find -- and then walks the parent links.
+# Returns the number of indices, or -1 when the Message is not reachable; fills
+# out[0..n-1] root-first when out is non-zero and cap is at least n, and otherwise
+# returns the count while writing nothing, so a caller can size its buffer first.
+# Nothing is allocated, so there is no free-partner to owe.
+fn: lmx_msg_get_address (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: unsigned out; int: cap) int
+    @: LmxMsg m
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        return: lmx_msg_address_of(m, out, cap)
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: -1
+    ---
+    m: lmx_msg_self_or_find(rt, who)
+    if: m = 0
+        return: -1
+    ---
+return: lmx_msg_address_of(m, out, cap)
 
 fn: lmx_msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
