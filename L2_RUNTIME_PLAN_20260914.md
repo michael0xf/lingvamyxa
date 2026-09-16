@@ -9264,3 +9264,25 @@ caller is pump (0 callers outside the cores); exec.c touches the arrays
 only to free them in slot_free.  So with pump's any-turn fallback deleted,
 the live set is written and read on the owner's lane alone, which is the
 host that runs R0's turns.
+
+COMPILER TICKET 1 (coordinator's, queued after the S6-2 landing), read
+2026-09-16 10:25 without building: app_window's L2 crash (b5's diagnosis on
+sonnet/mixa-module-list, L2_RUNTIME_MODULE_LIST_AUDIT.txt, "why app_window's
+L2 trace stops silently": a define:'d char* constant staged through an int
+temporary, truncated, SIGSEGV in strlen inside mixa_button_panel_add).
+Located at integration 7b3a8668: l2trans.lm1 l2_ccall_box_int decides
+whether l2_emit_ccall stages a call actual into an int temp; it returns 0
+for quoted text, numbers, c. names, typed entry/method locals, formals, own
+fields and slots, methods and prototype functions, and reaches its final
+`return: 1` for any other atom -- a define: name among them.  The fix: a
+define:'d name (the unit's own l2_def entries, then the predef chain via
+l2_predef_file_define, the search l2_define_count already makes but
+without its literal-count filter) returns 0 and is passed as itself, as
+l1trans passes it; a constant has nothing to stage.  Red first: a
+graph_abi Positive fixture with `define: LABEL "text"` passed to a
+prototype function taking const char*, asserting no `l2_tN: LABEL` line
+and a gcc -c with -Werror=int-conversion; HEAD must fail it.  Then
+app_window's parity run.  COMPILER TICKET 2: app_controller's "translation
+failed with no located diagnostic" after its twenty prototypes (10c46bde),
+unlocalized; method: a -g l2trans with gdb entry logging (not
+finish/rbreak), the last entered function before the generic fallback.
