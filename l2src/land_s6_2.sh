@@ -93,8 +93,13 @@ ALLOW="$ALLOW"'|tests/lmx_msg_path_storage_selftest\.lm1|tools/(q_alloc\.c|uaf_r
 # Two fixtures NOT in the pre-measured population, named rather than folded in: both call the deleted
 # path accessors (lmx_msg_path_n, lmx_msg_path_seg) and step 5 rewrites them onto lmx_msg_get_address.
 # They name neither lmx_msg_path_storage nor lmx_msg_path_grow, so no module-name or exported-symbol grep
-# finds them -- the accessor API is a reference kind of its own. Remove on the coordinator's word.
+# finds them -- the accessor API is a reference kind of its own.
 ALLOW="$ALLOW"'|l2src/(lmx_message_host_selftest\.c|tests/lmx_msg_send_local_selftest\.lm1)'
+# The landing candidate is claude-0c/archive-timeout-3 (= the stage tip + 53ba86bd re-cut), not the bare
+# tip, so its own two paths belong here: the c_scanners runner's whole-step bound (M) and the tripwire that
+# proves both of that branch's changes against a control (A). Added on the coordinator's word, not the
+# author's -- the author of these two paths is also the author of this script.
+ALLOW="$ALLOW"'|l2src/(run_candidate_c_scanners\.ps1|tripwire_gate_bounds\.ps1)'
 ALLOW="$ALLOW"'|mixa_manager/(lib_l2_runtime_support\.ps1|run_mixa_app_fmpanel_l2_parity\.ps1'
 ALLOW="$ALLOW"'|run_mixa_app_path_l2_parity\.ps1|run_mixa_composite_glyphs_l2_parity\.ps1'
 ALLOW="$ALLOW"'|run_mixa_selection_l2_parity\.ps1|run_mixa_tiles_l2_parity\.ps1))$'
