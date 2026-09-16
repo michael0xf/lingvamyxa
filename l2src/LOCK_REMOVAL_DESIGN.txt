@@ -1794,6 +1794,188 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         falsifier one hold put back giving exec_lock_calls=2 and S6-1 RED.
 
   S6-2: the reference count and the runtime's slot list (design before code, on the landed tip 7b3a8668)
+    - RESPECIFIED BY MIKHAIL, 2026-09-16. READ THIS BULLET FIRST: everything below it that rests on a closing
+      Message's mailbox SETTLING into its parent is superseded, including code that was written, measured green and
+      tripwired. Those passages are kept as the history of a withdrawn design, not as instructions. The stage tip
+      carrying that code is 2d8f2b6a and nothing of it is landed.
+      - THE SPEC, verified by me on origin/main rather than taken from the relay: head 9f744435 (2026-09-16 01:38,
+        "Spec 19.29.7: the settled-mailbox sentence removed on Mikhail's instruction; a capability is the target's
+        id"). Counted in that file by phrase, since a bare line rots: "settled into its parent with the rest of its
+        storage" 0, "the target's mailbox handle" 0, "found by its id" 1, "there is no count of holders" 1. The
+        2026-09-15 sentence this whole section was designed on is GONE from the spec.
+      - 19.29.7 now reads, anchored on the phrases "found by its id" and "there is no count of holders": a
+        capability is the target's id, and a Message is found by its id; a closed Message's slot and arena are freed
+        by the release chain as 19.29.6 says; a late send resolves the id and is refused with a status when the
+        target is not found or closed; there is no count of holders. Mikhail's words on removing the old sentence
+        (2026-09-16): "У вас проблема без id найти Message?"
+      - WHAT IT SETTLES THAT I HAD PARKED AS A TENSION. (2b) below left a question with him -- whether a released
+        record's base is freed at the release or at its owner's close, the "letter of 'never retained'" tension.
+        He has answered by deleting the sentence that created it: the release chain frees, as 19.29.6 always said,
+        and 19.29.6 now stands in full with nothing suspending it. (3)'s reconciliation and the "never retained"
+        paragraph are moot -- there is no settled state left for them to reconcile.
+      - WHY THE CORRECTION IS LOAD-BEARING AND NOT A PREFERENCE, stated because I want the reason in the file rather
+        than the ruling alone: the withdrawn design had to keep a closed record alive because the SENDER POINTED AT
+        IT -- send_cap took @: LmxMsg dest (lmx_message.lm1:2930) and the envelope carried node\dest_msg (2768), so
+        freeing the record would have dangled both. Carrying the ID instead is what makes freeing at release safe:
+        nothing holds a pointer, so nothing has to be kept alive, so the settled list, the owner cell, the owner's
+        round and the whole leak hole at (2a) stop existing rather than being solved. The old shape answered "who
+        may free this" with machinery; the new one answers it by removing every holder.
+      - WHAT AN ID IS, measured on the tree at 013c4be2, not assumed: LmxMsgAddr is unsigned (lmx_message.h:73),
+        minted from rt\next_addr, which starts at 1U (lm1:877) and is incremented once per create (lm1:1193-1194).
+        It is never decremented and there is no free list, so an id is NEVER REUSED and a late send cannot resolve
+        onto a different Message that took the dead one's place. The one caveat, stated rather than hidden: reuse is
+        possible only by 32-bit wraparound after 2^32 creates, which is a property of the counter's width and not of
+        this stage. WHERE an id is resolved is settled by the second ruling below and not by these functions:
+        today's resolvers are lmx_msg_find(rt, addr) (lm1:579) over lmx_msg_find_tree (563), and
+        lmx_msg_dest_from_src (593), which walks the sender's subtree, then its parent by address, then R0's tree.
+        All three are scans one by one, which the service sentence forbids for a send, so the send path leaves them
+        for R0's sorted list; they stay only where they already serve something else.
+      - WHAT STANDS, unchanged, already measured, and not re-opened by the respec:
+        * The refs deletion in full -- LmxMsg.refs, endp_retain / endp_release / endp_refs / endp_try_retire, the
+          field, 46 call sites per core across 14 functions, the C-side pins, and the two whole executor-selftest
+          cases that went with the fail_retain hook. "There is no count of holders" is the one sentence the respec
+          did not touch, and the pair-deletion rule and its four misses stand with it.
+        * The runtime registry deletion -- rt\slots, rt\n, LmxMsg.alloc_next, the module's seven files (unit_slots6
+          kept), run_gates' port_slots row, the gate count 31 -> 30, the 23 runner list entries. The DELETION
+          stands; where its lookup duty goes is corrected by the second ruling below, and I record the correction
+          against myself rather than quietly restating it: I wrote here, minutes before that ruling, that the duty
+          is "the tree walk by id, lmx_msg_find, promoted to the spec's own words". That is now WRONG in its second
+          half. The service "answers membership in bounded time, never by scanning one by one", and
+          lmx_msg_find_tree IS a scan one by one (lm1:563, first_child/next_sibling recursion). So the send path's
+          resolution moves to R0's sorted list, not to the tree walk; the tree walk keeps only what it already
+          serves elsewhere (the family queries and the fixtures' own find calls), and no send resolves through it.
+        * The exec.c wrapper re-point (tab_n_locked / tab_addr_locked over R0's child chain) with graph_abi 157/157,
+          and the fifth-population lesson that found it. Neither touched the settle.
+        * Every method rule this section earned: name the population, the unit and the COMMIT; grep the partner
+          before deleting one side of a pair; the five kinds of reference a module deletion must enumerate; the
+          carry rule (--name-only decides, never what a commit was about); the three watchdog instrument errors;
+          and the tripwire discipline (locate by grep -F, edit BY LINE NUMBER, refuse a dirty file, verify +0 -1
+          before building, restore in a trap). l2src/tripwire_s6_2.sh stands and is reused.
+      - WHAT GOES, with the code that implements it:
+        * LmxMsg.settled and LmxMsg.settled_next; lmx_msg_settled_push; lmx_msg_drain_settled; end_turn's
+          three-step pump -> drain_settled -> pump; admit_one's "deliver into the settled mailbox" branch; the
+          settled-list leg of runtime_delete's recursive traversal (R0's tree alone reaches everything again, since
+          nothing is off-tree-and-alive any more); the settled_has / settled_n helpers in the executor selftest.
+        * (1) and (1a): release_slot stops suspending the drain and the destroy -- it drains both mailboxes,
+          destroys the monitor and frees the record, which is 19.29.6's release chain running as written.
+          child_unlink may clear parent_msg at unlink again, and (1a)'s ruling that parent_msg is the owner cell is
+          void with the state it was invented for.
+        * (2), (2a), (2b) and (2c) entire: the upward settle of records, the leak hole, the settled list's terms
+          and the two-half test restatement. The hole at (2a) was real against the withdrawn design and is not a
+          defect carried forward -- what it reported was that deleting rt\slots left settled records reachable from
+          nothing, and there are no settled records now.
+        * TRIPWIRE 1 and TRIPWIRE 2 stop being evidence for anything in this stage. They proved a mechanism that no
+          longer exists. They are kept below as the method that produced them, and the stage owes two NEW tripwires
+          against whatever the new code's two load-bearing lines turn out to be.
+      - SECOND RULING, THE SAME NIGHT, and it replaces the resolution half of the first. Verified by me on
+        origin/main and not taken from the relay: head 774c8d34 (2026-09-16 01:44, "the mail service is R0 with a
+        sorted address list"), touching Lingvamyxa_spec.txt, L2_CORE_AND_MESSAGE_MODEL_20260912.md and
+        L2_RUNTIME_PLAN_20260914.md. Phrase counts in that spec: "mail service" 1, "passes itself as the mail
+        service" 1, and the first ruling's two anchors unchanged at 1 each. 19.29.7 now continues: "The resolution
+        is a mail service, itself a Message, R0: it keeps a sorted list of addresses as its own data on its own lane
+        and answers membership in bounded time, never by scanning one by one; every send resolves there and is
+        refused with a status when the address is absent, whether the target or its whole parent chain is gone".
+        Mikhail, verbatim in the spec: "я же вам писал что всё надо свести к Message. Какая вообще проблема не
+        заводить специальный монитор, а завести почтовый сервис который будет хранить сортированный список адресов и
+        давать за конечное время (только не перебором по одному) вхождение?!!!! Тот же самый R0."; on a parent
+        already gone: "а если родителя уже нет?", answered by the service rather than by any parent; and on adding
+        nothing for it: "Не плодите постоянно лишних сущностей. Так как все Message порождаются из root Message (по
+        цепочке) то он может при merge передавать себя как почтовый сервис. В чем проблема?"
+      - THE MECHANISM ON THE NEW FOOTING, in the order the code will take it:
+        * release_slot: unbind, unlink from the family chain, drain both mailboxes, free init and path, set
+          RELEASED, destroy the mailbox monitor and free the record -- unconditionally, with no refs guard and no
+          endp_try_retire between it and the free. slot_free's two production callers collapse to one.
+        * send_cap takes the target's ID, not @: LmxMsg dest; the envelope's dest is the id it already carries in
+          LmxMsgEnv.to (lmx_message.h:105) and node\dest_msg goes. That is a signature change on a method
+          run_port_message pins, so the pin list moves with it. This is also what makes the free at release safe:
+          with no pointer held by a sender or an envelope, there is nothing left to keep alive.
+        * THE SERVICE IS R0 AND NOTHING IS ADDED FOR IT, which I checked against the tree rather than transcribed
+          from the ruling, and the check corrected one detail of it. There is no root field on LmxMsg -- the struct
+          carries running and success (lmx_message.h:178-179) and handoff_ready, not "handoff_safe/root". What it
+          does carry is owner_rt, and R0's address accessor already exists: lmx_msg_root_addr(rt) returns
+          rt\root\addr (lm1:909-914, Stage 5 (d1)), over lmx_msg_ingress_root(rt) = rt\root (lm1:906). So every
+          Message can already name the service from its creation with no new field and no new entity, which is the
+          ruling's own point landing more exactly than its wording.
+        * THE SERVICE'S DATA, with its precedent in the tree rather than invented here: a sorted list of live
+          addresses, R0's OWN data on R0's lane. The shape already exists one field away -- rt\root_record is "R0's
+          policy record ... Structure data in R0's arena ... written only on R0's lane" (lmx_message.h:219-228,
+          l2src/lmx_root_record.lm2). The address list follows that pattern exactly, which is why it is not the
+          process-wide table S5 removed: one Message's own data, one writer, one lane, no monitor of its own. The
+          lookup is a binary search over the sorted array (the spec forbids only a scan one by one and names no
+          structure), which is O(log n) on a run of addresses that are minted monotonically (rt\next_addr, lm1:877
+          and 1193-1194) and therefore arrive ALREADY SORTED -- an append, not an insert, at every create.
+        * REGISTRATION AND REMOVAL are R0's own acts or letters, at exactly the two points that exist today:
+          create_prepare, which appends to rt\slots at lm1:1180-1182 (the registry this stage deletes -- the
+          registration replaces it and is not an addition), and release_slot, which removes the address as the
+          record is freed. Where each runs on R0's lane it is R0's own act; where it runs on another lane it is a
+          letter to R0, which is the same route every send already takes.
+        * THE SEND PATH, end to end, with what I have measured and what must be read before coding marked apart.
+          Measured: a send stages a transport-owned copy (lm1:372) and pushes it on rt\transport under R0's mailbox
+          monitor (q_push at lm1:1006, 1831 and 2063, all between mail_lock(root) and mail_unlock(root), with
+          ingress_root at 906); the pump drains rt\transport (lm1:1936-1937) and admit_one enqueues a fresh copy in
+          the destination's inbox under that destination's own monitor. So today's transport queue IS letters to R0,
+          drained on R0's lane -- the service's seed, exactly as the coordinator said, and the reason this is a
+          re-pointing rather than a new mechanism. On that seed: the resolution moves INTO that drain (R0 looks the
+          address up in its sorted list), admission stays where it is (into the target's inbox under the target's
+          monitor), and an absent address is answered with a refusal instead of the silent GONE drop. To be read
+          before coding, not assumed here: each Message's own outbox/outbox_tail cells and which lane moves a copy
+          from an outbox into rt\transport, since the section's send-path wording must match the code and not the
+          other way round.
+        * THE REFUSAL is the service's act and has one path, not two. Every send resolves at R0, so a send whose
+          address is absent -- target closed, never created, or its whole parent chain gone -- is answered by R0
+          with a status envelope to the sender. lmx_msg_post_rejected already does this and keeps its shape and its
+          guard that a REJECTED envelope is never itself refused; what changes is its trigger, from the withdrawn
+          owner's round to the service's failed lookup. The earlier "two refusal paths" wording of mine, written on
+          the dest_from_src footing forty minutes before the second ruling, is withdrawn with it: there is no
+          send-time resolution on the sender's lane any more, so there is no returned-status case to distinguish.
+      - THE ONE THING THE RESPEC RE-OPENS, recorded as TO MEASURE and not as a ruling, because it is exactly the
+        kind of gap this document exists to catch: the refs pins across unlocked windows (host_post, host_drain,
+        end_turn x3, recv, fail, drive_one, inbox_n, orphan_sweep) guarded "the record cannot be freed under me".
+        The withdrawn design answered them by freeing nothing while a parent lived. The new design FREES AT THE
+        RELEASE, so that answer is gone and each of those sites needs its own: it is on the owner's lane, or it
+        holds the mailbox monitor that orders the free, or it is reachable only from a live parent's chain. This is
+        measured site by site against the code BEFORE the pin deletion is claimed safe, and if any site turns out to
+        need a hold, a wait or a signal, the stage stops and the question goes to Mikhail through the coordinator,
+        as for every stage here. It is the first of the five lines.
+        What the second ruling GIVES BACK on the same question, recorded because it narrows the measurement rather
+        than widening it: resolving at the service deletes the sender-lane foreign walk that dest_from_src performs
+        today -- the very thing S6-1's (d) note flagged as C3, "a sender resolves and pins a sibling destination on
+        another lane", and S2's 14 turn_other walks. With the resolution on R0's lane and the admission under the
+        target's own monitor, a sender touches no other Message's record at all, so several of the pin sites lose
+        their subject instead of needing an answer. Which ones is a measurement, not a claim, and it is made site by
+        site before any pin is deleted.
+      - THE FIXTURES GO BACK TO THE SHAPE THEY HAD, which is the cheapest part of the respec: the watched free
+        returns to the literal free AT THE RELEASE (lmx_model_turn_arena_o1's __wrap_free at 62-73, with
+        run_model_scenario36.ps1:127-135 linking -Wl,--wrap for every __wrap_NAME it finds, so no runner change),
+        instead of (2b)'s end-of-run form. And the fixtures' own headers -- "find cannot tell a retained
+        unreachable" -- stop being an objection to find-based "gone": they were written against a state where a
+        record could be released and still retained, and the respec deletes that state, so a record that find cannot
+        reach is a record that was freed. The ownership-and-state restatements already written stay where they are
+        honest (off the child list, state RELEASED), and the settled-list membership half of each is replaced by the
+        watched free. The waits stand unchanged: `while: lmx_msg_find(rt, cc) != 0` was always a wait on the real
+        property.
+      - THE FALSIFIER STANDS EXACTLY AS PLANTED, which is the second ruling's quietest piece of evidence in its own
+        favour: lmx_message_selftest.lm1:982-987 sends through a handle taken before the rollback and requires the
+        sender's next recv to carry KIND_REJECTED. Under the service the refusal IS a status envelope posted back to
+        the sender, so the case needs no restatement at all -- the same assertion that was red on the landed tip,
+        red again through the withdrawn settle design, and red for a third reason now (the address is absent from
+        R0's list), goes green only when the service answers. A falsifier that survives two changes of mechanism
+        untouched is measuring the behaviour and not the implementation, which is what it was planted for. It keeps
+        its captured statuses in the diagnostic -- the one edit that turned three unreadable runs into one readable
+        one -- and the second ruling's own case, an address whose whole parent chain is gone, earns a case beside
+        it, since that is the half no parent could ever have answered.
+      - WHAT MUST BE RE-MEASURED AND WHAT CARRIES, by the carry rule rather than by wholesale re-running: every
+        green measured at 2d8f2b6a on files the rewrite touches is void for what it covered -- run_port_message and
+        run_lmx -Suite Message above all, since they measured the settle. run_graph_abi's 157/157 covers the
+        registry re-point, run_l2trans's "l2trans gen2 ok" and run_port_parser's 36/36 cover the module deletion's
+        build inputs; all three are re-run only if the rewrite touches their inputs, which --name-only decides at
+        the time and not this bullet.
+      - ACCEPTANCE UNCHANGED, which is the coordinator's own instruction and is also true on the merits: the S6 probe
+        -Part 2 still prints refs=0 runtime_lists=0, and both counts are about the two deletions the respec left
+        standing. My own reading on measuring merge fa94d553 (2d8f2b6a merged with the acceptance base) was
+        exec_lock_calls=0 exec_lock_decl=0 host_lock=0 exec_fields=0 | refs=0 runtime_lists=0, S6-1 GREEN, S6-2
+        GREEN -- and that reading survives the respec unchanged, which is the clearest evidence that the probe is
+        measuring the deletions rather than the mechanism.
     - What goes: LmxMsg.refs with lmx_msg_endp_retain / lmx_msg_endp_release / lmx_msg_endp_refs and the two
       InterlockedCompareExchange inside them, lmx_msg_endp_try_retire, and LmxMsgRuntime.slots / .n with
       LmxMsg.alloc_next, the lmx_msg_slots port module and its runner. NOTE, found in the code after this list was
@@ -2088,6 +2270,15 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       - The refusal status uses the machinery already there: post_dead's relay carries a status envelope to the
         sender, and the refusal itself happens on the parent's lane under the parent's mailbox monitor. No lock,
         wait or signal is added, which is why this is new logic rather than a contradiction.
+      - PROVENANCE CORRECTED 2026-09-16, and the error is mine and instructive: on seeing the respec I counted
+        "KIND_REJECTED" in the spec, got 1, and told the coordinator my choice had been "adopted into the text".
+        Reading the line refutes it -- the single occurrence is 19.29.7.1's "KIND_REJECTED is not an emitted API",
+        a pre-existing sentence about the number/byte envelope profile and nothing to do with this refusal (and a
+        constraint in its own right: the kind must not become an emitted API surface). What DOES name the kind is
+        Mikhail's own verbatim quote at 19.29.7, where he quotes the wording he is challenging -- "родитель
+        отвечает отправителю отказом со статусом (kind REJECTED) из своего списк" -- а если родителя уже нет?" --
+        so the kind survives his correction while the refusing party changes from the parent to the service. A
+        count is not a provenance: the same failure as counting without naming the population, one level up.
       - The kind is a choice of mine, recorded as such rather than dressed as a citation: LMX_MSG_KIND_REJECTED (7)
         is declared in lmx_message.h and used nowhere in the tree (only the header and the vendor copy), and the
         spec names no kind for this refusal -- its own "rejected" hits are about source profiles. KIND_DEAD is
