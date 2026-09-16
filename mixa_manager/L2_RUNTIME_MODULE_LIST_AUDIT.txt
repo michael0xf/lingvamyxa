@@ -959,3 +959,117 @@ prototype, no L2-visible declaration, same class of fix as fmpanel's
 own, just not this ticket's own scope). Real progress, not a pass --
 this ticket's own fix is confirmed working for exactly what it targets
 and nothing past it, reported rather than chased.
+
+--- Class-of-gap inventory: every app_controller.lm2 call with only a
+    real-header prototype and no L2-visible declaration (doc only, no
+    code -- all prototype: blocks below were added, tested, and
+    reverted, never landed)
+
+Method: extracted every `mixa_[a-z0-9_]+\(` call-site identifier from
+mixa_app_controller.lm2 (51 distinct names), subtracted the 15 locally
+`fn:`-defined mixa_app_controller_* names, leaving 36 external calls.
+For each, checked whether ANY .h.lm1 file already predef's/prototypes
+it (L2-visible) or only a plain .h file does (real-only, a gap). Eight
+were already fixed (mixa_app_fmpanel_*, commit 8e094e98). Eight more
+(mixa_app_loop_close/open/running/step, mixa_console_view_init/
+recompute, mixa_console_window_present, mixa_fm_copy_here_action) are
+NOT gaps -- already L2-visible via mixa_fm_copy.h.lm1/mixa_console_
+window.h.lm1, both already predef'd. The remaining twenty are the
+inventory below, grouped by the real header that declares them, each
+with its first call site and the prototype: block it would need (the
+same shape as the eight already-landed fmpanel blocks; every type
+involved -- MixaFile, MixaCmdLine, MixaCmdDispatch, MixaHelpCtx, and
+the two FaultVTable types -- is used only by pointer here, the same
+"stays opaque" reasoning already established for MixaAppFmPanel).
+
+mixa_file.h (2):
+  mixa_file_close at :16 (the current first failure) --
+    `fn: mixa_file_close (@: MixaFile f) void`
+  mixa_file_open at :184 --
+    `fn: mixa_file_open (@@: MixaFile out; const: @(char path_utf8); int: mode) int`
+
+mixa_app_path.h (1):
+  mixa_app_path_join at :97 --
+    `fn: mixa_app_path_join (const: @(char a); const: @(char b); const: @(MixaAppPathFaultVTable fault); @@: char out) int`
+
+mixa_cmdline_dispatch.h (4):
+  mixa_cmd_dispatch_release at :39 --
+    `fn: mixa_cmd_dispatch_release (@: MixaCmdDispatch d) void`
+  mixa_cmd_dispatch_poll at :356 --
+    `fn: mixa_cmd_dispatch_poll (@: MixaCmdDispatch d; @: int out_exit_code; @@: char out_new_cwd) int`
+  mixa_cmd_dispatch_start at :490 --
+    `fn: mixa_cmd_dispatch_start (const: @(char command_utf8); const: @(char cwd_utf8); @: MixaFile console_file; @@: MixaCmdDispatch out) int`
+  mixa_cmd_dispatch_running at :547 --
+    `fn: mixa_cmd_dispatch_running (const: @(MixaCmdDispatch d)) int`
+
+mixa_cmdline.h (11):
+  mixa_cmdline_release at :41 --
+    `fn: mixa_cmdline_release (@: MixaCmdLine cl) void`
+  mixa_cmdline_init at :225 --
+    `fn: mixa_cmdline_init (@: MixaCmdLine cl) void`
+  mixa_cmdline_backspace at :467 --
+    `fn: mixa_cmdline_backspace (@: MixaCmdLine cl) void`
+  mixa_cmdline_delete_forward at :470 --
+    `fn: mixa_cmdline_delete_forward (@: MixaCmdLine cl) void`
+  mixa_cmdline_move_left at :473 --
+    `fn: mixa_cmdline_move_left (@: MixaCmdLine cl) void`
+  mixa_cmdline_move_right at :476 --
+    `fn: mixa_cmdline_move_right (@: MixaCmdLine cl) void`
+  mixa_cmdline_move_home at :479 --
+    `fn: mixa_cmdline_move_home (@: MixaCmdLine cl) void`
+  mixa_cmdline_move_end at :482 --
+    `fn: mixa_cmdline_move_end (@: MixaCmdLine cl) void`
+  mixa_cmdline_extract_to_cursor_utf8 at :487 --
+    `fn: mixa_cmdline_extract_to_cursor_utf8 (const: @(MixaCmdLine cl); const: @(MixaCmdLineFaultVTable fault); @@: char out) int`
+  mixa_cmdline_clear at :496 --
+    `fn: mixa_cmdline_clear (@: MixaCmdLine cl) void`
+  mixa_cmdline_insert at :500 --
+    `fn: mixa_cmdline_insert (@: MixaCmdLine cl; const: @(MixaCmdLineFaultVTable fault); unsigned: codepoint) int`
+
+mixa_help.h (2):
+  mixa_help_key_event at :391 --
+    `fn: mixa_help_key_event (@: MixaHelpCtx ctx; const: @(MixaEvent ev)) int`
+  mixa_help_hit at :413 --
+    `fn: mixa_help_hit (@: MixaHelpCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int`
+
+The runner's expected path, traced empirically (each of the 20 added,
+tested cold, reverted -- not a static guess): declaring them
+incrementally moves the first failure forward exactly as the inventory
+above predicts, in this actually-encountered order: :16 -> :39 -> :41
+-> :225 -> :467 -> :470 -> :473 -> :476 -> :479 -> :482 -> :487 ->
+:496, each a clean `l2trans error: ...: unsupported body` naming the
+next undeclared call, confirming the inventory both statically and
+dynamically. One wrinkle, resolved: at :487 (mixa_cmdline_extract_to_
+cursor_utf8, used as a comparison operand -- `... = MIXA_CMDLINE_OK`,
+not a bare statement) l2trans instead reports "unknown method", a
+DIFFERENT diagnostic shape for the identical cause (an undeclared call
+used as a value rather than a statement) -- confirmed by declaring
+that one function alone, which moved translation cleanly past it to
+:496. No missing `define:` was ever the actual cause here; an earlier
+guess along those lines during this same investigation was wrong and
+is corrected here rather than left standing.
+
+Declaring all twenty (verified twice, once with an accidental gap in
+the set that still reproduced the same result, once with the complete,
+correct set) does NOT reach PASS: l2trans instead fails with
+`l2trans error: mixa_manager\mixa_app_controller.lm2: translation
+failed with no located diagnostic` -- l2trans's own generic fallback
+(l2src/l2trans.lm1:14837-14838) for when its own main() sees a nonzero
+return with zero diagnostics ever recorded, not a barrier and not a
+new missing-declaration gap. A 177KB `.lm1.tmp` intermediate survives
+in the run directory (l2trans's own atomic-publish rename never
+reaches the failing path that would delete it), meaning translation
+gets very far -- past everything in this inventory -- before whatever
+fails. Attempted a live gdb backtrace on the exact failing invocation
+to localize it further; did not return within a reasonable wait and
+was not chased further, since root-causing an internal l2trans failure
+is dedicated l2trans-side debugging (gdb -x on a -g build, per this
+session's own established method for exactly this class of silent
+failure), out of this ticket's own doc-only scope and this session's
+own role. The runner's own expected path today: PASS is not reachable
+without first landing all twenty declarations above (a real, larger
+follow-up commit than this ticket's own scope), and even then the
+runner's own next own-module failure is this unlocalized internal
+l2trans error, not a further missing declaration -- reported as the
+honest answer to "PASS or its next own-module failure", which is
+neither cleanly.
