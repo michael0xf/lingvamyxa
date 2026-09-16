@@ -7298,3 +7298,22 @@ half is resolved without Mikhail: lmx_msg_adopted_base indexes a
 Message's own block list, so a fixture captures the child's bases
 while findable and enumerates the parent's adopted blocks after the
 settle (turn_arena_o1's shape at 108-110).
+e9, before the stage tip: l2src/tests/unit_slots6.lm2 is not part of
+the slots module (built by run_l2trans.ps1:1144, asserted at 1146 as
+six "@: char l2_s0_N 0" declarations in the emitted L1: STACK slots of
+l2trans's lowering, no rt\slots, alloc_next or rt\n); it stays, is
+outside the allowlist, and its deletion would drop translator coverage
+(the lead had parked it as untraced). The two paths the lead reported
+missing from the allowlist (tests/unit_msg_cursor.lm2,
+tests/unit_msg_adapter.lm2 with run_graph_abi.ps1) match the committed
+regex since the first version; land_s6_2.sh stays at 96f35613.
+Counting rule recorded (four disagreements tonight came from it):
+mentions, pins, sites, lists and gates are different numbers; the
+allowlist needs sites (27 runners name lmx_msg_slots, 25 sites in
+$names/$ownNames/foreach lists, one Test-Path guarded), e9's 22 of 31
+is gates, the lead's 17 is lists. graph_abi 510-539: translator
+coverage that used the slot list as its subject; the lead re-points
+the fixture at surviving fields, recorded in e9's row once the
+concrete field choice is sent (whether the emitted shapes still
+satisfy "not an address slot" and "cached, not a traversal" is a fact
+about l2trans output).
