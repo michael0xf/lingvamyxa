@@ -2158,6 +2158,61 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           S6-2, since a separate step would leave a tip that is either unsafe or red. My first estimate was "up to
           ~40" from a crude 12-line window over 43 recv sites; the calibrated count, by case, is reported at the
           tip rather than taken from that window.
+        * NO WORKER EVER RUNS R0'S ROUND, and the ruling had assumed otherwise. After the drain change the gate
+          compiled and then HUNG: "FAIL watchdog: the selftest has run for 300 s; a wait never returned", at the
+          very first scenario, which had passed on every earlier run. Located, not reasoned: that scenario drains
+          during setup, calls exec_start_contexts, and then waits in YIELD_UNTIL on first_scenario_done -- and
+          YIELD_UNTIL (selftest line 1191) only yields, while (!(cond)) SwitchToThread(). exec.c never calls
+          pump, host_drain or drive (control: the same pattern finds lmx_msg_drive_tree three times), and R0 is
+          never bound to a worker. So once the workers start, every Message ends its turn on a worker and only
+          PUSHES, the host sits in a loop that only yields, nothing runs R0's round, and the wait can never end.
+          The ruling's clause "a worker context that ends R0's round itself is left alone" was therefore EMPTY in
+          this executor and was withdrawn: the fixture cost includes every WAIT that silently depended on workers'
+          turn-ends delivering, not only recv sites.
+          THE FIX is the model's own shape rather than a patch. In the selftest the host IS R0's lane, and R0 as an
+          L3 Thread checks its mail every round; a host wait that only yields is the host idling instead of being
+          R0. So YIELD_UNTIL_R0(rt, what, cond) drains R0's transport before each check. It stays single-writer
+          (the drain runs only on the host) and is a no-op on an empty transport. Its "reading:" line is
+          byte-identical to YIELD_UNTIL's, because the gate compares stderr between the reference and generated
+          runs. All 19 YIELD_UNTIL sites were converted -- a harmless superset of the delivery-dependent ones --
+          plus own_turn's hand-rolled loop; the two hand-rolled waits that already called drive or pump were left.
+          THE TEXTUAL RULE FOR WHICH RUNTIME TO DRAIN WAS WRONG TWICE and was not used: "nearest preceding
+          exec_start_contexts" named another case's runtime wherever a case started its contexts through own_turn.
+          Each site's runtime was taken from the variable its own condition observes, and the seven rti sites were
+          confirmed by two independent signals each. A wrong runtime compiles cleanly and silently drains the
+          wrong queue.
+          THE HANG ITSELF IS EVIDENCE, as the coordinator noted: the selftest stopped under the runner's 300 s
+          watchdog with a named message rather than wedging the chain, which is the runner bound doing its job.
+        * WHICH WAITS NEED R0'S ROUND -- the rule, the population, and the exception. After the YIELD_UNTIL
+          conversion the gate passed the first scenario and completed live-cascade (so the 0xC0000374 no longer
+          reproduces at its deterministic location -- evidence beside the leading reading, not proof), then failed
+          at a spawn case: "spawn child done p=1 c=0 st=0 ch=4", i.e. the child was created and its turn never
+          ran. The host waited in a Sleep(10) loop against a GetTickCount deadline that never ran R0's round.
+          MY POPULATION WAS WRONG, the recurring mistake: I had enumerated hand-rolled waits by grepping
+          SwitchToThread(), which is one SPELLING of a wait. The population is "loops that wait on a condition
+          while contexts are live". By spelling: 26 Sleep( calls, 21 GetTickCount() deadlines, 23
+          WaitForSingleObject( blocking waits, beyond the 19 YIELD_UNTIL.
+          NOT EVERY NON-DRAINING WAIT IS BROKEN, measured: the Sleep-deadline loops in fail-handler, err-after and
+          omit-end have no drain and passed under the new code. A wait breaks only when its condition depends on a
+          letter a WORKER sends after contexts start; where the host sends and drains before starting them, nothing
+          needs R0's round. Since cases run in file order and every case before the failing one passed, only the
+          waits after it were candidates -- the rest are left, on that evidence.
+          THE RULE: a wait gets R0's round (r0_round(rt), a named one-line wrapper over host_drain, countable apart
+          from YIELD_UNTIL_R0) exactly when (1) its condition depends on a letter a worker sends after contexts
+          start, (2) the assertion after it requires a POSITIVE done -- a drain before a check that something did
+          NOT happen could make it happen and turn a correct test red -- and (3) THE TEST IS NOT HOLDING A MAILBOX
+          MONITOR around it. That third clause was added after I had already described the drain as harmless
+          wherever the assertion is positive, which was wrong: the mail-gate cases set lmx_msg_test_mail_locked,
+          g_mail_gate_addr and g_mail_dest to hold a mailbox's monitor on purpose, and a drain's admission takes
+          R0's monitor and the destination's, so it can deadlock the host against the gate the test holds.
+          COUNTS: YIELD_UNTIL_R0 19; r0_round 7 (the spawn case plus six waits after it, runtimes rtf, rtr, rtb and
+          rti three times); blocking WaitForSingleObject waits restructured 0 -- a drain cannot be injected into a
+          kernel wait, so they are restructured into poll-and-drain only where the gate shows one blocking, never
+          wholesale; waits left alone 8 -- three standalone Sleep delays that wait on no condition, one pure time
+          delay followed by an assertion that g_ingress_root_turns is still 0, and four sites in the two mail-gate
+          cases. Several of these loops are textually identical, so the r0_round insertions were made in one awk
+          pass keyed on original line numbers that refused to write unless every target really was Sleep(10), and
+          verified by count: 7 calls, each directly above a Sleep(10).
         * THE FOUND-AND-REMOVED GUARD (ruled): service_unregister now returns OK only when THIS call removed the
           entry, and GONE on every miss -- not found, or found at that address with a different id. Before, all
           three outcomes returned OK, and the unregister handler freed the record even when nothing was removed:
