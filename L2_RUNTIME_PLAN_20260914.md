@@ -9134,3 +9134,12 @@ record only after every lane has passed a quiescent point since its
 unlink); address_of's premise "parent_msg is written only by child_link,
 a parent is never freed before its children" is corrected to name the
 two cross-lane writers.
+Rest of the 3e1cec49 review (49 files, +150 -902 against 1763827c): the six
+mixa files differ from 7b3a8668 only by lmx_msg_path_storage and
+lmx_msg_slots (both 0 files in mixa_manager at the tip, 6 each at the
+base as the control; no other module name dropped by the merge
+resolution); unit_msg_adapter.lm2 and unit_msg_cursor.lm2 re-point their
+cached-field read from rt\root\path_n to rt\root\live_n, and graph_abi's
+assertions on them are on the emitted text (the named field read reaching
+C as itself), so the coverage is kept; the host selftest's off-lane
+refusal moved from path_n/path_seg to get_address with the same -1.
