@@ -892,13 +892,10 @@ fn: main () int
     unsigned: rp 0U
     unsigned: rc 0U
     @: LmxMsg rdest
-    int: r0 0
-    int: r1 0
     rrt: lmx_msg_runtime_new()
     st: lmx_msg_create(rrt, 0U, payload, 4U, @ rp)
     st: lmx_msg_create(rrt, rp, payload, 4U, @ rc)
     st: lmx_msg_end_turn(rrt, rp, 1)
-    r0: lmx_msg_endp_refs(rrt, rc)
     env\kind: c.LMX_MSG_KIND_BYTES
     env\n: 4U
     env\bytes: payload
@@ -908,34 +905,33 @@ fn: main () int
         fail: fail + 1
     ---
     st: lmx_msg_end_turn(rrt, rp, 1)
-    r1: lmx_msg_endp_refs(rrt, rc)
-    if: r0 != 1 || r1 != 2
-        c.printf("ref after admit\n")
-        fail: fail + 1
-    ---
+    # S6-2, SPEC 19.29.7 ("there is no count of holders"): this case used to pin the
+    # destination's reference count -- 1 before admission, 2 after, back to 1 after
+    # recv and after a discard -- as its way of saying "the carried destination does
+    # not leak". With no count of holders there is no such number to read, and
+    # leak-freedom is measured where it is actually observable, by the --wrap free
+    # balance runners, not by a field this stage deletes. What survives here is the
+    # behaviour those numbers stood for: the envelope really arrives, and the handle
+    # stays usable for a capability send without any hold being taken on it.
     st: lmx_msg_recv(rrt, rc, got)
-    lmx_msg_env_release(got)
-    if: lmx_msg_endp_refs(rrt, rc) != 1
-        c.printf("recv dest_msg leak\n")
+    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_BYTES
+        c.printf("the admitted envelope did not reach the destination: recv=%d kind=%d\n", st, got\kind)
         fail: fail + 1
+    else:
+        lmx_msg_env_release(got)
     ---
     st: lmx_msg_end_turn(rrt, rc, 1)
     rdest: lmx_msg_find(rrt, rc)
-    if: c.lmx_msg_endp_retain(rdest) = 0
-        c.printf("held cap retain\n")
+    if: rdest = 0
+        c.printf("no handle to the destination\n")
         fail: fail + 1
     ---
     st: lmx_msg_send_cap(rrt, rp, rdest, env)
     if: st != c.LMX_MSG_STAGED
-        c.printf("send_cap\n")
+        c.printf("send_cap: st=%d\n", st)
         fail: fail + 1
     ---
     st: lmx_msg_end_turn(rrt, rp, 0)
-    c.lmx_msg_endp_release(rdest)
-    if: lmx_msg_endp_refs(rrt, rc) != 1
-        c.printf("discard dest_msg leak\n")
-        fail: fail + 1
-    ---
     @: LmxMsgRuntime rrt2
     unsigned: rp2 0U
     rrt2: lmx_msg_runtime_new()

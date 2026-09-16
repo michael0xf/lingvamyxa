@@ -1288,11 +1288,11 @@ fn: msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @(Lm
         msg_copy_free(entry)
         return: c.LMX_MSG_STOPPED
     destn: msg_dest_from_src(src, to, rt)
+    # S6-2, SPEC 19.29.7: the carried destination is a handle, not a hold. No count
+    # is taken here, so nothing is released when the copy is freed -- the two go
+    # together, and removing only the release left the count rising and never
+    # falling, which the fixture's leak checks caught in one run.
     if: destn != 0
-        if: c.lmx_msg_endp_retain(destn) = 0
-            msg_copy_free(entry)
-            return: c.LMX_MSG_NOMEM
-        ---
         entry\dest_msg: destn
     ---
     if: c.lmx_msg_endp_retain(src) = 0
@@ -1344,11 +1344,11 @@ fn: msg_send_graph (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const
         msg_copy_free(entry)
         return: c.LMX_MSG_NOMEM
     destn: msg_dest_from_src(src, to, rt)
+    # S6-2, SPEC 19.29.7: the carried destination is a handle, not a hold. No count
+    # is taken here, so nothing is released when the copy is freed -- the two go
+    # together, and removing only the release left the count rising and never
+    # falling, which the fixture's leak checks caught in one run.
     if: destn != 0
-        if: c.lmx_msg_endp_retain(destn) = 0
-            msg_copy_free(entry)
-            return: c.LMX_MSG_NOMEM
-        ---
         entry\dest_msg: destn
     ---
     if: c.lmx_msg_endp_retain(src) = 0
@@ -1404,13 +1404,7 @@ fn: msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @: Lm
         return: c.LMX_MSG_STOPPED
     destn: msg_dest_from_src(src, to, rt)
     if: destn != 0
-        if: c.lmx_msg_endp_retain(destn) = 0
-            env\bytes: entry\bytes
-            env\n: entry\n
-            entry\bytes: 0
-            c.free((cast: (@: void) entry))
-            return: c.LMX_MSG_NOMEM
-        ---
+        # S6-2: the carried destination is a handle, not a hold (as above).
         entry\dest_msg: destn
     ---
     if: c.lmx_msg_endp_retain(src) = 0
