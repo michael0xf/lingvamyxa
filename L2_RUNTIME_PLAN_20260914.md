@@ -7553,3 +7553,21 @@ counted, for any send" (the three retains and copy_free's release
 gone in both files); design 36b460eb records step one measured, the
 imbalance and the pair-deletion rule. Next from the lead: the two
 tripwires, the window pins, the rest, the header, the tip.
+b5's mixa L2 parity gate proposal on sonnet/mixa-module-list 2b8268b4
+(mixa_manager/MIXA_L2_PARITY_GATE.txt): twelve runners, not the
+coordinator's thirteen (seven baseline plus five migrated; b5
+recounted rather than pad the table), all re-measured cold at the tip
+(166 s total): seven PASS (app_panel, app_win32, app_fmpanel,
+app_path, composite_glyphs, selection, tiles), two
+EXPECTED_CORE_BARRIER (backend_ctors_win32, backend_win32), app_window
+PARITY_FAILURE on the l2trans typing defect (the coordinator's
+ticket), app_controller UNEXPECTED_FAILURE and audio_mp3 THROW without
+an accepted diagnosis, left out of the gate rather than allowlisted.
+Proposed: run_mixa_parity_gates.ps1 over the ten with a known state,
+a per-runner table (script, args, ExpectVerdict, timeout), pass
+meaning the actual verdict equals ExpectVerdict, anything else its own
+finding; a step of its own after run_mixa.ps1 in the union base.
+RULED: accepted; b5 writes the runner now (no landing script changes
+mid-S6-2; it joins the union base from the R0P landing on, e9 adds
+the step to that script); a change of an ExpectVerdict is a
+documented decision in the table's comment, never a silent edit.
