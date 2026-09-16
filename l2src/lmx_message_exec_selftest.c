@@ -167,6 +167,33 @@ typedef struct DisposeInTurnRec {
     LmxMsgAddr child;
     int st;
 } DisposeInTurnRec;
+/* S6-2 (SPEC 19.29.7): a closing Message settles into its parent "with the rest
+ * of its storage", and the owner's settled list is what says so. These two are
+ * the replacement for the runtime-wide slot count this stage deletes -- that
+ * count could say "one fewer" but never WHOSE, which is why the fixtures that
+ * used it had to warn that lmx_msg_find cannot tell a retained record from a
+ * freed one. Ownership answers both questions at once. */
+static int settled_has(LmxMsgRuntime *rt, LmxMsgAddr owner, LmxMsgAddr who) {
+    LmxMsg *om = lmx_msg_find(rt, owner);
+    LmxMsg *s;
+    for (s = (om != 0) ? om->settled : 0; s != 0; s = s->settled_next) {
+        if (s->addr == who && s->state == LMX_MSG_STATE_RELEASED) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int settled_n(LmxMsgRuntime *rt, LmxMsgAddr owner) {
+    LmxMsg *om = lmx_msg_find(rt, owner);
+    LmxMsg *s;
+    int n = 0;
+    for (s = (om != 0) ? om->settled : 0; s != 0; s = s->settled_next) {
+        n += 1;
+    }
+    return n;
+}
+
 static int turn_dispose_settled(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     DisposeInTurnRec *d = (DisposeInTurnRec *)ctx;
     LmxMsgEnv got;
@@ -2838,9 +2865,6 @@ int main(int argc, char **argv) {
         LmxMsg *pm2;
         LmxMsg *sx;
         int settled_ok = 0;
-        /* n0 is this whole function's, not this block's: five later cases capture
-         * into it. It stays until their own restatements land. */
-        int n0;
         TurnCtx rec;
         memset(&rec, 0, sizeof(rec));
         rtb = lmx_msg_runtime_new();
@@ -3111,10 +3135,14 @@ int main(int argc, char **argv) {
         /* Decision 17 with spec 19.29.6 (iii) and 19.29.8: R0 releases P while P's
          * bound child C has not settled: P's end-turn requests C's close and no
          * context has run it yet (the contexts are not started). The release does
-         * not wait for C: P's slot is freed and C is re-rooted at the runtime as an
+         * not wait for C: P settles into R0 and C is re-rooted at the runtime as an
          * orphan, still bound. C completes; once the contexts start, C's own context
-         * settles it and the host's drive reclaims it with its worker. rt->n is the
-         * oracle; find cannot tell a retained unreachable subtree from a freed one. */
+         * settles it and the host's drive reclaims it with its worker.
+         * S6-2: rt->n was the oracle here for a stated reason -- find cannot tell a
+         * retained record from a freed one. After the settle that indistinguishable
+         * state is the NORMAL one rather than the forbidden one, so the count could
+         * not serve as the oracle even if it survived the stage. The owner's settled
+         * list answers what neither could: whose storage the record has become. */
         {
             LmxMsgRuntime *rto;
             LmxMsgAddr r0 = 0, op = 0, oc = 0;
@@ -3330,7 +3358,6 @@ int main(int argc, char **argv) {
             if (lmx_msg_create(rtb, p, &ini, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rtb, p, 1) != LMX_MSG_OK) {
                 return 1;
             }
-            n0 = rtb->n;
             if (lmx_msg_exec_bind(rtb, p, turn_bind_then_omit, &omit, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 fprintf(stderr, "rollback ctx parent bind\n");
                 lmx_msg_runtime_delete(rtb);
@@ -3363,9 +3390,12 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rtb);
                 return 1;
             }
-            if (lmx_msg_find(rtb, c1) != 0 || rtb->n != n0) {
-                fprintf(stderr, "ctx rolled-back child not retired n=%d find=%d\n",
-                    rtb->n, lmx_msg_find(rtb, c1) != 0);
+            /* S6-2: the rolled-back child is not "retired" -- nothing retires it.
+             * It settles into its parent, so what is asserted is ownership: off
+             * the tree and on P's settled list, RELEASED. */
+            if (lmx_msg_find(rtb, c1) != 0 || settled_has(rtb, p, c1) == 0) {
+                fprintf(stderr, "ctx rolled-back child not settled into its parent settled=%d find=%d\n",
+                    settled_has(rtb, p, c1), lmx_msg_find(rtb, c1) != 0);
                 lmx_msg_exec_stop(rtb);
                 lmx_msg_runtime_delete(rtb);
                 return 1;
@@ -7115,7 +7145,6 @@ int main(int argc, char **argv) {
             LmxMsgAddr p = 0, c = 0, g = 0;
             DisposeInTurnRec dz;
             int st;
-            int n0;
             memset(&dz, 0, sizeof(dz));
             dz.st = -1;
             if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
@@ -7145,7 +7174,6 @@ int main(int argc, char **argv) {
                 return 1;
             }
             dz.child = c;
-            n0 = rti->n;
             if (lmx_msg_exec_bind(rti, p, turn_dispose_settled, &dz, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 fprintf(stderr, "exec dispose-in-turn bind p\n");
                 lmx_msg_runtime_delete(rti);
@@ -7159,10 +7187,14 @@ int main(int argc, char **argv) {
             st = own_turn(rti, p);
             if ((st != LMX_MSG_OK && st != 1) || dz.st != LMX_MSG_OK
                 || lmx_msg_find(rti, g) != 0 || lmx_msg_find(rti, c) != 0
-                || lmx_msg_child_n(rti, p) != 0 || rti->n != n0 - 2) {
-                fprintf(stderr, "exec dispose-in-turn turn=%d dispose=%d g=%p c=%p kids=%d n=%d/%d\n",
+                || lmx_msg_child_n(rti, p) != 0
+                /* S6-2: "both slots gone" is now "both settled into P" -- G settles
+                 * into C, then C into P, and the upward move carries G with it, so
+                 * both records end as P's storage on P's settled list. */
+                || settled_has(rti, p, g) == 0 || settled_has(rti, p, c) == 0) {
+                fprintf(stderr, "exec dispose-in-turn turn=%d dispose=%d g=%p c=%p kids=%d g_settled=%d c_settled=%d\n",
                     st, dz.st, (void *)lmx_msg_find(rti, g), (void *)lmx_msg_find(rti, c),
-                    lmx_msg_child_n(rti, p), rti->n, n0);
+                    lmx_msg_child_n(rti, p), settled_has(rti, p, g), settled_has(rti, p, c));
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
@@ -7325,7 +7357,6 @@ int main(int argc, char **argv) {
             LmxMsgAddr r = 0, p = 0, c = 0;
             DriveInTurnRec dv;
             int st;
-            int n0;
             memset(&dv, 0, sizeof(dv));
             dv.st = -1;
             if (rti == 0 || (r = lmx_msg_root_addr(rti)) == 0U
@@ -7345,24 +7376,30 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            n0 = rti->n;
             if (lmx_msg_dispose_child(rti, r, p) != LMX_MSG_OK || lmx_msg_find(rti, c) == 0
                 || lmx_msg_handoff_ready(rti, c) != 0 || lmx_msg_complete(rti, c) != LMX_MSG_OK
                 || ((st = own_turn(rti, c)) != LMX_MSG_OK && st != 1)
-                || lmx_msg_find(rti, c) == 0 || lmx_msg_handoff_ready(rti, c) == 0 || lmx_msg_find(rti, p) != 0 || rti->n != n0 - 1) {
-                fprintf(stderr, "exec maintain orphan end-turn c=%p p=%p n=%d/%d\n", (void *)lmx_msg_find(rti, c), (void *)lmx_msg_find(rti, p), rti->n, n0);
+                /* S6-2: P's slot no longer "goes" at its release -- P settles into
+                 * R0, which is what owning its storage now means. */
+                || lmx_msg_find(rti, c) == 0 || lmx_msg_handoff_ready(rti, c) == 0 || lmx_msg_find(rti, p) != 0 || settled_has(rti, r, p) == 0) {
+                fprintf(stderr, "exec maintain orphan end-turn c=%p p=%p p_settled=%d\n", (void *)lmx_msg_find(rti, c), (void *)lmx_msg_find(rti, p), settled_has(rti, r, p));
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
             dv.now = lmx_msg_now(rti);
             st = lmx_msg_root_turn(rti, turn_drive_in_turn, &dv);
-            if ((st != LMX_MSG_OK && st != 1) || dv.st != LMX_MSG_INVALID || lmx_msg_find(rti, c) == 0 || rti->n != n0 - 1) {
-                fprintf(stderr, "exec maintain in-turn turn=%d drive=%d c=%p n=%d/%d\n", st, dv.st, (void *)lmx_msg_find(rti, c), rti->n, n0);
+            /* S6-2: the in-turn drive refuses, so the orphan is still waiting --
+             * not yet its owner's storage. The count said "unchanged"; ownership
+             * says it directly, and says whose it is not. */
+            if ((st != LMX_MSG_OK && st != 1) || dv.st != LMX_MSG_INVALID || lmx_msg_find(rti, c) == 0 || settled_has(rti, r, c) != 0) {
+                fprintf(stderr, "exec maintain in-turn turn=%d drive=%d c=%p c_settled=%d\n", st, dv.st, (void *)lmx_msg_find(rti, c), settled_has(rti, r, c));
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            if (lmx_msg_drive(rti, dv.now, 0U) != LMX_MSG_OK || lmx_msg_find(rti, c) != 0 || rti->n != n0 - 2) {
-                fprintf(stderr, "exec maintain outside c=%p n=%d/%d\n", (void *)lmx_msg_find(rti, c), rti->n, n0);
+            /* S6-2: the maintenance outside any turn reclaims the orphan -- which
+             * now means it becomes R0's storage rather than disappearing. */
+            if (lmx_msg_drive(rti, dv.now, 0U) != LMX_MSG_OK || lmx_msg_find(rti, c) != 0 || settled_has(rti, r, c) == 0) {
+                fprintf(stderr, "exec maintain outside c=%p c_settled=%d\n", (void *)lmx_msg_find(rti, c), settled_has(rti, r, c));
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
@@ -7407,7 +7444,6 @@ int main(int argc, char **argv) {
              * settles none of them. */
             LmxMsgAddr p = 0, a = 0, b = 0;
             int st;
-            int n0;
             if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, &ini, 1, &b) != LMX_MSG_OK
@@ -7427,13 +7463,15 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            n0 = rti->n;
             st = lmx_msg_run_entry_turn(rti, p, turn_just_end, &any_ctx);
             if ((st != LMX_MSG_OK && st != 1)
-                || lmx_msg_find(rti, a) == 0 || lmx_msg_child_n(rti, p) != 2 || rti->n != n0
+                /* S6-2: "nothing was settled" was read as an unchanged slot count;
+                 * now it is read as what it means -- P owns nothing yet, so its
+                 * settled list is still empty. */
+                || lmx_msg_find(rti, a) == 0 || lmx_msg_child_n(rti, p) != 2 || settled_n(rti, p) != 0
                 || lmx_msg_adopted_n(rti, p) != 0) {
-                fprintf(stderr, "exec parent turn settles children turn=%d a=%p kids=%d n=%d/%d adopted=%d\n",
-                    st, (void *)lmx_msg_find(rti, a), lmx_msg_child_n(rti, p), rti->n, n0,
+                fprintf(stderr, "exec parent turn settles children turn=%d a=%p kids=%d settled=%d adopted=%d\n",
+                    st, (void *)lmx_msg_find(rti, a), lmx_msg_child_n(rti, p), settled_n(rti, p),
                     lmx_msg_adopted_n(rti, p));
                 lmx_msg_runtime_delete(rti);
                 return 1;
@@ -7448,7 +7486,6 @@ int main(int argc, char **argv) {
              * its slot goes, never kept until runtime_delete. */
             LmxMsgAddr p = 0, g = 0;
             int st;
-            int n0;
             if (rti == 0 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, &ini, 1, &g) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
@@ -7465,10 +7502,11 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            n0 = rti->n;
             st = lmx_msg_dispose_child(rti, p, g);
-            if (st != LMX_MSG_OK || lmx_msg_find(rti, g) != 0 || rti->n != n0 - 1) {
-                fprintf(stderr, "exec unbound close dispose st=%d g=%p n=%d/%d\n", st, (void *)lmx_msg_find(rti, g), rti->n, n0);
+            /* S6-2: the parent's dispose settles the unbound closing child into
+             * itself; its slot does not "go", its storage changes owner. */
+            if (st != LMX_MSG_OK || lmx_msg_find(rti, g) != 0 || settled_has(rti, p, g) == 0) {
+                fprintf(stderr, "exec unbound close dispose st=%d g=%p g_settled=%d\n", st, (void *)lmx_msg_find(rti, g), settled_has(rti, p, g));
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
