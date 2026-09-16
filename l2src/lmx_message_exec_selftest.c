@@ -6831,7 +6831,14 @@ int main(int argc, char **argv) {
         {
             /* Stage 3b-8: the family boundary contract. A bound child cannot leave its
              * family (lmx_msg_child_unlink returns INVALID and nothing moves); once
-             * unbound it leaves (OK, the family links cleared). */
+             * unbound it leaves (OK, the family links cleared).
+             * S6-2 (SPEC 19.29.7): "leaving" is leaving the CHAIN. parent_msg is the
+             * owner cell now and the unlink deliberately does not clear it, so a
+             * record always names the Message whose storage it is part of -- which is
+             * what a late sender follows to be answered. Asserting the cell still
+             * points at the parent is a stronger statement than asserting it is zero:
+             * zero was only ever a side effect, and it is the side effect that made a
+             * settled record unable to say who owned it. */
             LmxMsgAddr p = 0, kid = 0;
             LmxMsg *pm, *km;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
@@ -6857,8 +6864,9 @@ int main(int argc, char **argv) {
             }
             if (lmx_msg_exec_unbind(rti, kid) != LMX_MSG_OK
                 || lmx_msg_child_unlink(pm, km) != LMX_MSG_OK
-                || pm->first_child != 0 || km->parent_msg != 0) {
-                fprintf(stderr, "exec unlink-contract unbound child did not leave\n");
+                || pm->first_child != 0 || km->parent_msg != pm) {
+                fprintf(stderr, "exec unlink-contract unbound child did not leave first_child=%p owner=%p\n",
+                    (void *)pm->first_child, (void *)km->parent_msg);
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
