@@ -43,6 +43,15 @@ sub: check (int: ok; const: @(char label))
     ---
 end: check
 
+# S6-2 (the drain ruling): only R0's lane drains the transport; a non-R0 end-turn
+# only pushes. The host is R0's lane, so where this selftest reads a delivery that
+# a non-R0 end-turn used to pump itself, it runs R0's round first. The round is
+# lmx_msg_pump -- exactly what that end-turn used to call -- so no host INGRESS is
+# forwarded that the old sequence left pending. Named so the reshaped sites count.
+sub: r0_round (@: LmxMsgRuntime rt)
+    lmx_msg_pump(rt)
+end: r0_round
+
 # f: the shared method. Its first argument is the callable occurrence it was
 # selected from; it works on that occurrence's own counter (child 1) and
 # returns the new value. The code is shared, the counter is the occurrence's.
@@ -323,6 +332,7 @@ fn: main () int
 
     # --- P ends its turn successfully: creation and outbox are published.
     check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P's turn succeeds")
+    r0_round(rt)
     check(am\committed != 0 && lmx_msg_inbox_n(rt, a) = 1 && lmx_msg_state(rt, a) = c.LMX_MSG_STATE_RUNNING, "publication commits A and admits P's input in FIFO order")
     check(lmx_msg_graph(pm) = root && lmx_int_value_known(counter) = 7, "P's own graph and counter are untouched by publication and collection")
 
@@ -336,6 +346,7 @@ fn: main () int
     check(pst = c.LMX_MSG_OK, "P's own turn maps A onto its own context")
     c.printf("reading: A's reply in P's mailbox, published by A's end-turn after its collection\n")
     while: lmx_msg_inbox_n(rt, p) < 1
+        r0_round(rt)
         c.SwitchToThread()
     ---
     check(lmx_msg_inbox_n(rt, p) = 1, "A's turn ran")
@@ -361,6 +372,7 @@ fn: main () int
     env\number: 6
     g_env: env
     pst: lmx_msg_run_entry_turn(rt, p, turn_p_create_b, 0)
+    r0_round(rt)
     b: g_b
     bm: lmx_msg_find(rt, b)
     check(pst = c.LMX_MSG_OK && g_create_st = c.LMX_MSG_OK && bm != 0, "P creates B from T")
@@ -383,6 +395,7 @@ fn: main () int
     check(lmx_msg_emergency_cancel(rt, b) = c.LMX_MSG_OK, "P requests B's stop")
     c.printf("reading: B handoff-ready after its failed turn and its stop\n")
     while: lmx_msg_handoff_ready(rt, b) = 0
+        r0_round(rt)
         c.SwitchToThread()
     ---
     check(lmx_msg_handoff_ready(rt, b) != 0, "B leaves its native activation, handoff-safe")

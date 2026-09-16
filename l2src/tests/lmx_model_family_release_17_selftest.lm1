@@ -26,11 +26,17 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # SPEC 19.29.8) and is reclaimed by the host's drive once the logical clock
 # passes its deadline; nothing waits for it, nothing keeps it past that. Red on the settled-chain runtime, which keeps the released
 # parent's slot until its running child stops and never releases the child.
-# "Gone" is measured by the runtime's
-# slot count rt\n, not by lmx_msg_find: find walks only what rt->root
-# reaches, so a subtree released from its parent but still retained (the
-# very state decision 17 forbids) would read as gone (the lead's finding on
-# the no-cascade mutation, 2026-09-14).
+# "Gone" WAS measured by the runtime's slot count rt\n, not by lmx_msg_find: find
+# walks only what rt->root reaches, so a subtree released from its parent but still
+# retained (the very state decision 17 forbids) would read as gone (the lead's
+# finding on the no-cascade mutation, 2026-09-14).
+# S6-2 deletes that count, and the finding above is exactly why these checks could
+# not simply become gone(): after the settle, "released from its parent and still
+# in memory" is the NORMAL state rather than the forbidden one, so find is even
+# less able to tell the two apart than it was. What replaces the count is stronger
+# than either: the OWNER'S SETTLED LIST, which said not just that a record left the
+# tree but WHOSE storage it became -- itself deleted later in S6-2; its successor is
+# gone_after_r0_round below (find AND R0's live set, after R0's round).
 #
 # Stage M: no Message steps another, and the runtime creates R0 alone (the
 # slot counts below have no UI lane). Each P is mapped onto its own context by
@@ -65,6 +71,36 @@ fn: turn_ok (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 # The address is gone from the runtime: no Message resolves to it any more.
 fn: gone (@: LmxMsgRuntime rt; LmxMsgAddr: a) int
     return: lmx_msg_find(rt, a) = 0
+
+# S6-2 (SPEC 19.29.7): the count this fixture was written on is deleted, and the
+# header above says exactly why it could not simply become gone(): find walks what
+# rt->root reaches, so it cannot tell a record that was reclaimed from one that was
+# released and retained -- the state decision 17 forbids. The owner's settled list
+# that first replaced the count was deleted in turn (respecified 2026-09-16 by the
+# removal ruling): a released record is freed BY ITS SERVICE in R0's round. So the
+# reading is: run R0's round (lmx_msg_pump; the host is R0's lane), then the record
+# is gone in both senses -- find no longer reaches it AND R0's live set no longer
+# holds its id. The live-set entry is removed only by the service's found-and-
+# removed unregister, immediately before its free, so a released-but-retained
+# record still fails this check, which is the property the header asks for. The
+# set is read by id, so no freed record is dereferenced. owner is kept so each site
+# still names whose storage the record was; nothing records that any more.
+fn: gone_after_r0_round (@: LmxMsgRuntime rt; LmxMsgAddr: owner; LmxMsgAddr: who) int
+    @: LmxMsg r0
+    int: i 0
+    lmx_msg_pump(rt)
+    if: lmx_msg_find(rt, who) != 0
+        return: 0
+    r0: lmx_msg_find(rt, lmx_msg_root_addr(rt))
+    if: r0 = 0
+        return: 0
+    while: i < r0\live_n
+        if: r0\live_id[i] = who
+            return: 0
+        ---
+        i: i + 1
+    ---
+return: 1
 
 # Stage M: P1's own turn maps its child C1 (named in its cell) and takes P1's
 # input; ctx is the cell, [0] the child, [1] map_child's status.
@@ -128,6 +164,44 @@ fn: turn_root_settle (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     g_settle_st: lmx_msg_parent_settle(rt, who)
     return: lmx_msg_end_turn(rt, who, 1)
 
+[]: unsigned addr_who 32
+[]: unsigned addr_other 32
+
+# S6-2 (SPEC 19.29.7, "when a Message changes parent its address changes"): an
+# orphan re-rooted under R0 must not read an address any live R0 child already
+# has. Its index was minted by its old parent, so without R0 minting a fresh one
+# C4 (P4's first child, index 1) would read [1,1] -- R's address. Reads on the
+# host, R0's lane, before C4 has a thread.
+fn: address_unique_under_r0 (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    int: n
+    int: k 0
+    int: j
+    int: kids
+    int: same
+    unsigned: other
+    n: lmx_msg_get_address(rt, who, addr_who, 32)
+    if: n != 2
+        return: 0
+    kids: lmx_msg_child_n(rt, lmx_msg_root_addr(rt))
+    while: k < kids
+        other: lmx_msg_child_at(rt, lmx_msg_root_addr(rt), k)
+        if: other != 0U && other != who && lmx_msg_get_address(rt, other, addr_other, 32) = n
+            same: 1
+            j: 0
+            while: j < n
+                if: addr_other[j] != addr_who[j]
+                    same: 0
+                ---
+                j: j + 1
+            ---
+            if: same != 0
+                return: 0
+            ---
+        ---
+        k: k + 1
+    ---
+return: 1
+
 []: unsigned c1_cell 2
 []: unsigned r_cell 3
 []: unsigned root_cell 2
@@ -141,6 +215,9 @@ fn: r_maps (@: LmxMsgRuntime rt; unsigned: p; unsigned: feed) int
     r_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
     r_cell[2]: feed
     st: lmx_msg_run_entry_turn(rt, g_r, turn_r_map, (cast: (@: void) r_cell))
+    # S6-2 (the drain ruling): R's end-turn only pushes the input for P; the host
+    # (R0's lane) runs R0's round here and in every wait below.
+    lmx_msg_pump(rt)
     if: st != c.LMX_MSG_OK
         return: st
     if: r_cell[2] = 2U
@@ -174,7 +251,6 @@ fn: main () int
     unsigned: c5 0U
     uchar: ini 1
     int: st
-    int: n0
     int: adopted0
 
     # Unbuffered: a run the runner kills still shows its reading lines and FAILs.
@@ -203,23 +279,24 @@ fn: main () int
     cm: lmx_msg_find(rt, c1)
     c.printf("reading: C1 handoff-ready, settled at its end-turn on its worker\n")
     while: cm != 0 && lmx_msg_handoff_ready(rt, c1) = 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(cm != 0 && lmx_msg_handoff_ready(rt, c1) != 0 && lmx_msg_success_load(cm) != 0 && lmx_msg_running_load(cm) = 0, "C1 settled at its own end-turn: success, not running, handoff-ready")
-    n0: rt\n
     check(lmx_msg_dispose_child(rt, p1, c1) = c.LMX_MSG_OK, "P1 disposes C1")
-    check(gone(rt, c1) != 0 && lmx_msg_child_n(rt, p1) = 0, "a disposed child leaves its family and its slot is released, not kept until runtime_delete")
-    check(rt\n = n0 - 1, "the runtime holds one slot fewer: C1's slot retired, not retained")
+    check(gone(rt, c1) != 0 && lmx_msg_child_n(rt, p1) = 0, "a disposed child leaves its family and is not kept on it")
+    check(gone_after_r0_round(rt, p1, c1) != 0, "C1 became P1's storage: on P1's settled list, RELEASED")
     check(lmx_msg_complete(rt, p1) = c.LMX_MSG_OK, "P1 marks success")
     c.printf("reading: P1 handoff-ready, settled at its end-turn on its worker\n")
     while: lmx_msg_handoff_ready(rt, p1) = 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(lmx_msg_handoff_ready(rt, p1) != 0, "P1 settled at its own end-turn")
-    n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p1) = c.LMX_MSG_OK, "R disposes P1")
     check(gone(rt, p1) != 0 && lmx_msg_child_n(rt, r) = 4, "the released parent is gone with its branch: R has four children left")
-    check(rt\n = n0 - 1, "one slot fewer: P1's slot retired")
+    # The upward settle carries C1 with P1, so both become R's storage.
+    check(gone_after_r0_round(rt, r, p1) != 0 && gone_after_r0_round(rt, r, c1) != 0, "P1 and the C1 it owned both became R's storage")
 
     # --- (2) forced: C2 still runs; R stops P2 and releases it; the chain
     # closes and releases C2 without R touching a grandchild.
@@ -232,6 +309,7 @@ fn: main () int
     # writes STOPPED; so the loop reads both.
     c.printf("reading: P2 STOPPED and handoff-ready after its closing turn on its worker\n")
     while: lmx_msg_state(rt, p2) != c.LMX_MSG_STATE_STOPPED || lmx_msg_handoff_ready(rt, p2) = 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(lmx_msg_state(rt, p2) = c.LMX_MSG_STATE_STOPPED && cm != 0 && lmx_msg_running_load(cm) = 0, "P2 stopped at its end-turn and requested C2's close: the chain, one level")
@@ -242,10 +320,9 @@ fn: main () int
     lmx_msg_exec_unbind(rt, c2)
     st: lmx_msg_drive(rt, lmx_msg_now(rt), 0U)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, c2) = c.LMX_MSG_STATE_STOPPED, "C2 stopped at its own end-turn")
-    n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p2) = c.LMX_MSG_OK, "R releases P2 without disposing C2 itself: release does not wait for the children")
-    check(gone(rt, p2) != 0 && gone(rt, c2) != 0 && lmx_msg_child_n(rt, r) = 3, "the forced release freed the whole branch: P2 and C2 are gone")
-    check(rt\n = n0 - 2, "two slots fewer: C2's and P2's slots retired by the chain, no retained subtree")
+    check(gone(rt, p2) != 0 && gone(rt, c2) != 0 && lmx_msg_child_n(rt, r) = 3, "the forced release took the whole branch off the tree: P2 and C2 are gone")
+    check(gone_after_r0_round(rt, r, p2) != 0 && gone_after_r0_round(rt, r, c2) != 0, "the chain settled the whole branch into R: both records are R's storage, neither a retained subtree")
 
     # --- (3) success with a running child: P3's own algorithm completes while
     # C3 runs; that declares C3's work unneeded, and the chain closes and
@@ -256,6 +333,7 @@ fn: main () int
     check(st = c.LMX_MSG_OK, "R's own turn maps P3: its closing turn runs on its own worker")
     c.printf("reading: P3 handoff-ready, settled at its end-turn on its worker\n")
     while: lmx_msg_handoff_ready(rt, p3) = 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(lmx_msg_handoff_ready(rt, p3) != 0 && lmx_msg_running_load(cm) = 0, "P3's end-turn closes C3: success with running children means their work is unneeded")
@@ -264,10 +342,12 @@ fn: main () int
     lmx_msg_exec_unbind(rt, c3)
     st: lmx_msg_drive(rt, lmx_msg_now(rt), 0U)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, c3) = c.LMX_MSG_STATE_STOPPED, "C3 stopped at its own end-turn")
-    n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p3) = c.LMX_MSG_OK, "R releases P3")
-    check(gone(rt, p3) != 0 && gone(rt, c3) != 0 && lmx_msg_child_n(rt, r) = 2, "the successful parent's branch is freed by the chain: R has P4 and P5 left")
-    check(rt\n = n0 - 2 && rt\n = 6, "two slots fewer: R0, R, P4, C4, P5 and C5 remain")
+    check(gone(rt, p3) != 0 && gone(rt, c3) != 0 && lmx_msg_child_n(rt, r) = 2, "the successful parent's branch left the tree by the chain: R has P4 and P5 left")
+    # An ABSOLUTE pin: it stated WHO remained, which no count could. Membership says
+    # it directly, and ownership says where the others went.
+    check(gone_after_r0_round(rt, r, p3) != 0 && gone_after_r0_round(rt, r, c3) != 0, "P3's branch became R's storage")
+    check(lmx_msg_find(rt, lmx_msg_root_addr(rt)) != 0 && lmx_msg_find(rt, r) != 0 && lmx_msg_find(rt, p4) != 0 && lmx_msg_find(rt, c4) != 0 && lmx_msg_find(rt, p5) != 0 && lmx_msg_find(rt, c5) != 0, "exactly R0, R, P4, C4, P5 and C5 are still on the tree")
 
     # --- (4) a running descendant at release time: R stops P4 and releases it
     # while C4 still runs; the release returns at once; C4 is closed by the
@@ -281,14 +361,14 @@ fn: main () int
     cm: lmx_msg_find(rt, c4)
     c.printf("reading: P4 STOPPED and handoff-ready after its closing turn on its worker\n")
     while: lmx_msg_state(rt, p4) != c.LMX_MSG_STATE_STOPPED || lmx_msg_handoff_ready(rt, p4) = 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     # C4 has no thread until R0 maps it after P4's release, so nothing runs it
     # between here and that map point: the checks on C4 up to it are
     # deterministic.
     check(lmx_msg_state(rt, p4) = c.LMX_MSG_STATE_STOPPED && cm != 0 && lmx_msg_running_load(cm) = 0 && lmx_msg_state(rt, c4) != c.LMX_MSG_STATE_STOPPED, "P4 stopped and requested C4's close; C4 has not yet run its closing turn")
-    n0: rt\n
-    check(lmx_msg_dispose_child(rt, r, p4) = c.LMX_MSG_OK && lmx_msg_child_n(rt, r) = 1, "R releases P4 at once, with C4 still to run its closing turn")
+    check(lmx_msg_dispose_child(rt, r, p4) = c.LMX_MSG_OK && lmx_msg_child_n(rt, r) = 1 && address_unique_under_r0(rt, c4) != 0, "R releases P4 at once: C4, re-rooted under R0, has an address no other R0 child has, with C4 still to run its closing turn")
     check(lmx_msg_success_load(cm) = 0 && lmx_msg_handoff_ready(rt, c4) = 0 && lmx_msg_state(rt, c4) != c.LMX_MSG_STATE_STOPPED, "the release does not wait for C4: when it returns C4 is not settled, success 0, not stopped")
     check(lmx_msg_complete(rt, c4) = c.LMX_MSG_OK, "C4's own algorithm completes before its closing turn")
     # C4 was re-rooted under R0 at P4's release, so R0's own turn is its
@@ -297,11 +377,15 @@ fn: main () int
     check(st = c.LMX_MSG_OK, "R0's own turn maps the re-rooted C4 onto its own context")
     c.printf("reading: C4 handoff-ready, settled at its closing end-turn on its worker\n")
     while: lmx_msg_handoff_ready(rt, c4) = 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(lmx_msg_handoff_ready(rt, c4) != 0, "C4 ran its closing turn as an orphan")
-    check(lmx_msg_find(rt, c4) != 0 && lmx_msg_handoff_ready(rt, c4) != 0 && gone(rt, p4) != 0 && rt\n = n0 - 1, "C4 is settled at its end-turn and still there until the root's next maintenance; P4's slot went at its release")
-    check(lmx_msg_drive(rt, lmx_msg_now(rt), 0U) = c.LMX_MSG_OK && gone(rt, c4) != 0 && rt\n = n0 - 2 && rt\n = 4, "the root's next maintenance reclaims the successful orphan: R0, R, P5 and C5 remain")
+    check(lmx_msg_find(rt, c4) != 0 && lmx_msg_handoff_ready(rt, c4) != 0 && gone(rt, p4) != 0 && gone_after_r0_round(rt, r, p4) != 0, "C4 is settled at its end-turn and still there until the root's next maintenance; P4 became R's storage at its release")
+    # The second ABSOLUTE pin: "R0, R, P5 and C5 remain". Membership states it, and
+    # the orphan's reclaim is now a change of owner rather than a disappearance.
+    check(lmx_msg_drive(rt, lmx_msg_now(rt), 0U) = c.LMX_MSG_OK && gone(rt, c4) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c4) != 0, "the root's next maintenance settles the successful orphan into R0")
+    check(lmx_msg_find(rt, lmx_msg_root_addr(rt)) != 0 && lmx_msg_find(rt, r) != 0 && lmx_msg_find(rt, p5) != 0 && lmx_msg_find(rt, c5) != 0, "exactly R0, R, P5 and C5 are still on the tree")
 
     # --- (5) a failed orphan: C5 runs, never completes; R stops P5 and
     # releases it at once; C5 is re-rooted, runs its closing turn and, having
@@ -314,24 +398,24 @@ fn: main () int
     check(st = c.LMX_MSG_OK, "R's own turn maps P5: its closing turn runs on its own worker")
     c.printf("reading: P5 STOPPED and handoff-ready after its closing turn on its worker\n")
     while: lmx_msg_state(rt, p5) != c.LMX_MSG_STATE_STOPPED || lmx_msg_handoff_ready(rt, p5) = 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(lmx_msg_state(rt, p5) = c.LMX_MSG_STATE_STOPPED, "P5 stopped and requested C5's close")
-    n0: rt\n
-    check(lmx_msg_dispose_child(rt, r, p5) = c.LMX_MSG_OK && lmx_msg_child_n(rt, r) = 0 && rt\n = n0 - 1, "R releases P5 at once; P5's slot goes, C5 is re-rooted under R0")
+    check(lmx_msg_dispose_child(rt, r, p5) = c.LMX_MSG_OK && lmx_msg_child_n(rt, r) = 0 && gone_after_r0_round(rt, r, p5) != 0, "R releases P5 at once; P5 becomes R's storage, C5 is re-rooted under R0")
     # C5 had no thread until this map point, as C4 above.
     st: root_maps(rt, c5)
     check(st = c.LMX_MSG_OK, "R0's own turn maps the re-rooted C5 onto its own context")
     cm: lmx_msg_find(rt, c5)
     c.printf("reading: C5 handoff-ready, settled at its closing end-turn on its worker\n")
     while: cm != 0 && lmx_msg_handoff_ready(rt, c5) = 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(cm != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_handoff_ready(rt, c5) != 0 && cm\parent_msg = lmx_msg_find(rt, lmx_msg_root_addr(rt)), "C5 ran its closing turn as a failed orphan: handoff-safe, re-rooted under R0, still held")
     # Spec 19.29.8: R0's own turn runs R0's settle of its settled children,
     # which never takes an orphan: a failed orphan is retained until its
     # deadline and nobody adopts its arena.
-    n0: rt\n
     # Stage 5 (e): R0's arena holds R0's policy record since the first set_now
     # above, so "not adopted" is R0's block count unchanged by the settle, not 0.
     # lmx_msg_adopted_n counts every block of the Message's arena (its own graph
@@ -339,11 +423,13 @@ fn: main () int
     # holds its policy record's five blocks by design (6f).
     adopted0: lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt))
     check(lmx_msg_root_turn(rt, turn_root_settle, 0) = c.LMX_MSG_OK && (g_settle_st = c.LMX_MSG_OK || g_settle_st = 1), "R0's own turn runs its settle of its settled children")
-    check(lmx_msg_find(rt, c5) != 0 && lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt)) = adopted0 && rt\n = n0, "R0's settle leaves the failed orphan C5 to the sweep: still found, not adopted, no slot gone")
+    check(lmx_msg_find(rt, c5) != 0 && lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt)) = adopted0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) = 0, "R0's settle leaves the failed orphan C5 to the sweep: still found, not adopted, not yet R0's storage")
     check(lmx_msg_find(rt, r) != 0, "R is still there after R0's settle")
-    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 3, "the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop")
-    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 3, "within the retention window the orphan is still retained")
-    check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5100U, 0U) = c.LMX_MSG_OK && gone(rt, c5) != 0 && rt\n = 2, "past its deadline the drive reclaims the failed orphan: only R0's and R's slots remain")
+    # The third and fourth ABSOLUTE pins (= 3, then = 2). Retention is "still on the
+    # tree and not yet anyone's storage"; the reclaim is "off the tree and now R0's".
+    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) = 0, "the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop")
+    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) = 0, "within the retention window the orphan is still retained")
+    check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5100U, 0U) = c.LMX_MSG_OK && gone(rt, c5) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), c5) != 0, "past its deadline the drive reclaims the failed orphan into R0's storage; only R0 and R are still on the tree")
     check(lmx_msg_find(rt, r) != 0 && lmx_msg_running_load(lmx_msg_find(rt, r)) != 0, "the root runs on")
 
     # exec_stop's own rounds read the worker count until every worker has left.

@@ -293,9 +293,15 @@ fn: turn_p_script (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 []: unsigned p_op 1
 
 # One of P's own turns on the host thread; returns run_entry_turn's status.
+# S6-2 (the drain ruling): P's end-turn only pushes; the host is R0's lane, so it
+# runs R0's round (lmx_msg_pump, what that end-turn used to call) after P's turn,
+# and the same round in every host wait below.
 fn: p_turn (@: LmxMsgRuntime rt; unsigned: p; unsigned: op) int
+    int: st
     p_op[0]: op
-    return: lmx_msg_run_entry_turn(rt, p, turn_p_script, (cast: (@: void) p_op))
+    st: lmx_msg_run_entry_turn(rt, p, turn_p_script, (cast: (@: void) p_op))
+    lmx_msg_pump(rt)
+    return: st
 
 # R0's own turn that creates Z as R0's child.
 fn: turn_root_create_z (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
@@ -328,6 +334,7 @@ fn: root_maps (@: LmxMsgRuntime rt; unsigned: child) int
 fn: wait_reports (@: LmxMsgRuntime rt; int: n; const: @(char what)) int
     c.printf("reading: %s (report %d in S's mailbox)\n", what, n)
     while: lmx_msg_inbox_n(rt, g_sink) < n
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     return: lmx_msg_inbox_n(rt, g_sink)
@@ -382,7 +389,7 @@ fn: main () int
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: 5
     env\reply_to: p
-    check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, c1) = 1, "P gives C one input")
+    check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, c1) = 1, "P gives C one input")
     check(lmx_msg_inbox_n(rt, p) = 0, "P's turn sent no probe of its own")
     g_to: c1
     check(p_turn(rt, p, 10U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK, "P's own turn maps C onto its own context")
@@ -396,6 +403,7 @@ fn: main () int
     # the report); native_users reaches 0 only after that.
     c.printf("reading: C's native users 0, its worker out of the turn, before the rebind\n")
     while: lmx_msg_native_users(rt, c1) != 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(lmx_msg_exec_bind(rt, c1, turn_child_handle, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C's next turn handles answers: rebound before P answers")
@@ -412,6 +420,7 @@ fn: main () int
     check(lmx_msg_set_now(rt, 2000U) = c.LMX_MSG_OK, "clock 2000")
     c.printf("reading: C's native users 0, its worker out of the turn, before the rebind\n")
     while: lmx_msg_native_users(rt, c1) != 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(lmx_msg_exec_bind(rt, c1, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C will query again")
@@ -538,6 +547,7 @@ fn: main () int
     check(lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 1, "the query reaches R0's mailbox")
     c.printf("reading: Z's native users 0, its worker out of the turn, before the rebind\n")
     while: lmx_msg_native_users(rt, z) != 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(lmx_msg_exec_bind(rt, z, turn_child_handle, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "Z rebound to take R0's answer before R0 answers")
