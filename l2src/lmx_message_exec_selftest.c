@@ -414,9 +414,9 @@ static void dest_stop_after_outbox(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *o
         return;
     }
     d = outb->dest_msg;
-    lmx_msg_exec_lock(rt);
+    /* S6-1 (a3): the hook forces the destination's state from the sender's own
+     * lane on purpose; it is the test's write, and there is no lock to take. */
     d->state = LMX_MSG_STATE_STOPPED;
-    lmx_msg_exec_unlock(rt);
 }
 typedef struct StageJob {
     LmxMsgRuntime *rt;
@@ -428,82 +428,27 @@ typedef struct StageJob {
 static LmxMsgAddr g_nself_from;
 static LmxMsg *g_drive_drop;
 static LmxMsgRuntime *g_drive_mail_rt;
-static volatile LONG g_drive_exec_ok;
+static LmxMsgAddr g_mail_other;
+static volatile LONG g_drive_other_mail_ok;
 static volatile LONG g_drive_hook_got_go;
 /* Stage 3b-9: no reader takes the exec lock inside release_slot's tree window. */
-static LmxMsgRuntime *g_rel_rt;
-static LmxMsgAddr g_rel_parent;
-static LmxMsgAddr g_rel_child;
-static volatile LONG g_rel_armed;
-static volatile LONG g_rel_reader_in_window;
-static volatile LONG g_rel_chain_ok;
-static volatile LONG g_rel_child_present;
-static volatile LONG g_rel_count;
-static HANDLE g_rel_entered;
-static HANDLE g_rel_done;
-static void release_tree_hook(LmxMsgRuntime *rt, LmxMsg *m) {
-    (void)rt;
-    if (m == 0 || m->addr != g_rel_child) {
-        return;
-    }
-    if (InterlockedCompareExchange(&g_rel_armed, 0, 1) != 1) {
-        return;
-    }
-    SetEvent(g_rel_entered);
-    InterlockedExchange(&g_rel_reader_in_window,
-        WaitForSingleObject(g_rel_done, 300) == WAIT_OBJECT_0 ? 1 : 0);
-}
-static DWORD WINAPI release_tree_reader(void *arg) {
-    LmxMsg *pm;
-    LmxMsg *ch;
-    LmxMsg *last = 0;
-    LONG n = 0;
-    LONG ok = 1;
-    LONG present = 0;
-    (void)arg;
-    if (WaitForSingleObject(g_rel_entered, 5000) != WAIT_OBJECT_0) {
-        return 1;
-    }
-    lmx_msg_exec_lock(g_rel_rt);
-    pm = lmx_msg_find(g_rel_rt, g_rel_parent);
-    if (pm == 0) {
-        ok = 0;
-    } else {
-        for (ch = pm->first_child; ch != 0; ch = ch->next_sibling) {
-            if (ch->parent_msg != pm) {
-                ok = 0;
-            }
-            if (ch->addr == g_rel_child) {
-                present = 1;
-            }
-            last = ch;
-            n += 1;
-            if (n > 64) {
-                ok = 0;
-                break;
-            }
-        }
-        if (pm->last_child != last) {
-            ok = 0;
-        }
-    }
-    InterlockedExchange(&g_rel_chain_ok, ok);
-    InterlockedExchange(&g_rel_child_present, present);
-    InterlockedExchange(&g_rel_count, n);
-    SetEvent(g_rel_done);
-    lmx_msg_exec_unlock(g_rel_rt);
-    return 0;
-}
 static DWORD WINAPI drive_mail_overlap_helper(void *arg) {
     (void)arg;
     if (WaitForSingleObject(g_mail_entered, 5000) != WAIT_OBJECT_0) {
         SetEvent(g_mail_go);
         return 1;
     }
+    /* S6-1 (a3): what this case is really about is that the monitor belongs to one
+     * mailbox and not to the runtime. While drive's close holds the closer's
+     * monitor (the hook below is called inside it), another thread takes a
+     * different Message's monitor and gets it at once. */
     if (g_drive_mail_rt != 0) {
-        lmx_msg_exec_lock(g_drive_mail_rt);
-        InterlockedExchange(&g_drive_exec_ok, 1);
-        lmx_msg_exec_unlock(g_drive_mail_rt);
+        LmxMsg *om = lmx_msg_find(g_drive_mail_rt, g_mail_other);
+        if (om != 0) {
+            lmx_msg_mail_lock(om);
+            InterlockedExchange(&g_drive_other_mail_ok, 1);
+            lmx_msg_mail_unlock(om);
+        }
     }
     SetEvent(g_mail_go);
     return 0;
@@ -1948,7 +1893,8 @@ int main(int argc, char **argv) {
         cm->closing = 1;
         g_drive_mail_rt = rtd;
         g_mail_gate_addr = closer;
-        InterlockedExchange(&g_drive_exec_ok, 0);
+        g_mail_other = dummy;
+        InterlockedExchange(&g_drive_other_mail_ok, 0);
         InterlockedExchange(&g_drive_hook_got_go, 0);
         InterlockedExchange(&g_mail_gate_armed, 1);
         ResetEvent(g_mail_entered);
@@ -1967,10 +1913,10 @@ int main(int argc, char **argv) {
         }
         if (lmx_msg_drive(rtd, 0, 0) != LMX_MSG_OK
             || WaitForSingleObject(th, 5000) != WAIT_OBJECT_0
-            || InterlockedCompareExchange(&g_drive_exec_ok, 0, 0) != 1
+            || InterlockedCompareExchange(&g_drive_other_mail_ok, 0, 0) != 1
             || InterlockedCompareExchange(&g_drive_hook_got_go, 0, 0) != 1) {
-            fprintf(stderr, "drive-mail overlap exec_ok=%ld hook_got_go=%ld\n",
-                (long)InterlockedCompareExchange(&g_drive_exec_ok, 0, 0),
+            fprintf(stderr, "drive-mail overlap other_mail_ok=%ld hook_got_go=%ld\n",
+                (long)InterlockedCompareExchange(&g_drive_other_mail_ok, 0, 0),
                 (long)InterlockedCompareExchange(&g_drive_hook_got_go, 0, 0));
             lmx_msg_test_mail_locked = 0;
             InterlockedExchange(&g_mail_gate_armed, 0);
@@ -1991,7 +1937,7 @@ int main(int argc, char **argv) {
         CloseHandle(th);
         CloseHandle(g_mail_entered);
         CloseHandle(g_mail_go);
-        fprintf(stderr, "exec wait: drive close mail does not hold exec\n");
+        fprintf(stderr, "exec wait: drive's close holds one mailbox's monitor, not a runtime-wide one\n");
         lmx_msg_runtime_delete(rtd);
     }
     {
@@ -2930,14 +2876,22 @@ int main(int argc, char **argv) {
         fprintf(stderr, "ctx_bind_rollback\n");
         fflush(stderr);
 
-        /* Stage 3b-9: end_turn(p, 0) releases the uncommitted child c1 with the
-         * exec lock dropped. release_slot changes the family tree under the exec
-         * lock, so a reader waiting on that lock inside the window (the hook,
-         * before child_unlink) gets it only after the chain is whole again. */
+        /* Stage 3b-9, narrowed at S6-1 (a3): end_turn(p, 0) releases the
+         * uncommitted child c1 and relinks the family chain. The old case had a
+         * second thread read that chain inside the unlink window, which only meant
+         * anything while an exec lock existed to wait on; a cross-lane read of the
+         * parent's own chain is what the one-writer rule forbids (spec 11543-11553),
+         * so there is no window left to test. What survives is release_slot's
+         * result, asserted here on the host's own lane after end_turn returns. */
         {
             LmxMsgRuntime *rtt;
             LmxMsgAddr tp = 0, tc1 = 0, tc2 = 0;
-            HANDLE th;
+            LmxMsg *pm;
+            LmxMsg *ch;
+            LmxMsg *last = 0;
+            int n = 0;
+            int ok = 1;
+            int present = 0;
             rtt = lmx_msg_runtime_new();
             if (rtt == 0 || lmx_msg_create(rtt, 0, &ini, 1, &tp) != LMX_MSG_OK
                 || lmx_msg_create(rtt, tp, &ini, 1, &tc2) != LMX_MSG_OK
@@ -2949,57 +2903,41 @@ int main(int argc, char **argv) {
                 }
                 return 1;
             }
-            g_rel_entered = CreateEvent(0, TRUE, FALSE, 0);
-            g_rel_done = CreateEvent(0, TRUE, FALSE, 0);
-            g_rel_rt = rtt;
-            g_rel_parent = tp;
-            g_rel_child = tc1;
-            InterlockedExchange(&g_rel_reader_in_window, 0);
-            InterlockedExchange(&g_rel_chain_ok, 0);
-            InterlockedExchange(&g_rel_child_present, 1);
-            InterlockedExchange(&g_rel_count, -1);
-            InterlockedExchange(&g_rel_armed, 1);
-            lmx_msg_exec_test_during_release_tree = release_tree_hook;
-            th = CreateThread(0, 0, release_tree_reader, 0, 0, 0);
-            if (g_rel_entered == 0 || g_rel_done == 0 || th == 0
-                || lmx_msg_end_turn(rtt, tp, 0) != LMX_MSG_OK
-                || WaitForSingleObject(th, 2000) != WAIT_OBJECT_0
-                || InterlockedCompareExchange(&g_rel_reader_in_window, 0, 0) != 0
-                || InterlockedCompareExchange(&g_rel_chain_ok, 0, 0) != 1
-                || InterlockedCompareExchange(&g_rel_child_present, 0, 0) != 0
-                || InterlockedCompareExchange(&g_rel_count, 0, 0) != 1
-                || lmx_msg_find(rtt, tc1) != 0) {
-                fprintf(stderr, "release-tree window reader_in_window=%ld chain_ok=%ld c1_present=%ld n=%ld\n",
-                    (long)InterlockedCompareExchange(&g_rel_reader_in_window, 0, 0),
-                    (long)InterlockedCompareExchange(&g_rel_chain_ok, 0, 0),
-                    (long)InterlockedCompareExchange(&g_rel_child_present, 0, 0),
-                    (long)InterlockedCompareExchange(&g_rel_count, 0, 0));
-                lmx_msg_exec_test_during_release_tree = 0;
-                InterlockedExchange(&g_rel_armed, 0);
-                if (g_rel_entered != 0) {
-                    SetEvent(g_rel_entered);
-                }
-                if (th != 0) {
-                    WaitForSingleObject(th, 2000);
-                    CloseHandle(th);
-                }
-                if (g_rel_entered != 0) {
-                    CloseHandle(g_rel_entered);
-                }
-                if (g_rel_done != 0) {
-                    CloseHandle(g_rel_done);
-                }
-                g_rel_rt = 0;
+            if (lmx_msg_end_turn(rtt, tp, 0) != LMX_MSG_OK) {
+                fprintf(stderr, "release-tree end_turn\n");
                 lmx_msg_runtime_delete(rtt);
                 return 1;
             }
-            lmx_msg_exec_test_during_release_tree = 0;
-            CloseHandle(th);
-            CloseHandle(g_rel_entered);
-            CloseHandle(g_rel_done);
-            g_rel_rt = 0;
+            pm = lmx_msg_find(rtt, tp);
+            if (pm == 0) {
+                ok = 0;
+            } else {
+                for (ch = pm->first_child; ch != 0; ch = ch->next_sibling) {
+                    if (ch->parent_msg != pm) {
+                        ok = 0;
+                    }
+                    if (ch->addr == tc1) {
+                        present = 1;
+                    }
+                    last = ch;
+                    n += 1;
+                    if (n > 64) {
+                        ok = 0;
+                        break;
+                    }
+                }
+                if (pm->last_child != last) {
+                    ok = 0;
+                }
+            }
+            if (ok != 1 || present != 0 || n != 1 || lmx_msg_find(rtt, tc1) != 0) {
+                fprintf(stderr, "release-tree chain_ok=%d c1_present=%d n=%d c1_found=%d\n",
+                    ok, present, n, lmx_msg_find(rtt, tc1) != 0);
+                lmx_msg_runtime_delete(rtt);
+                return 1;
+            }
             lmx_msg_runtime_delete(rtt);
-            fprintf(stderr, "exec wait: release_slot changes the family tree under the exec lock\n");
+            fprintf(stderr, "exec wait: release_slot leaves the family chain whole and the released child gone\n");
             fflush(stderr);
         }
 
@@ -3078,15 +3016,13 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "handoff refusals\n");
                 return 1;
             }
-            lmx_msg_exec_lock(rtv);
+            /* S6-1 (a3): main is the only thread here (no contexts are started in
+             * this case), so these are the host's own reads and writes. */
             vstate = vpm->state;
             vpm->state = LMX_MSG_STATE_STOPPED;
-            lmx_msg_exec_unlock(rtv);
             (void)lmx_msg_poll(rtv, vc, 1000U, 0U, 0, 0);
-            lmx_msg_exec_lock(rtv);
             vclosing = vcm->closing;
             vpm->state = vstate;
-            lmx_msg_exec_unlock(rtv);
             vturn = own_turn(rtv, vc);
             lmx_msg_pump(rtv);
             if (vclosing != 0 || (vturn != LMX_MSG_OK && vturn != 1)

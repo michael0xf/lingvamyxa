@@ -35,9 +35,15 @@ sub: check (int: ok; const: @(char label))
     ---
 end: check
 
-# --- shared observation, written only under lmx_msg_exec_lock.
+# --- observation cells, each with exactly one writer (19.28.R2.2: one arena, one
+# lane, one writer). M0's own turn writes the owner cells and its trace, and they
+# are serial by the model, not by a lock. A and B run on two lanes, so each has its
+# own arrived/saw/turns cell and reads only the other's. The host reads all of them
+# and writes none. No lock here, and none needed: this fixture observes the model's
+# own serialization instead of imposing one.
 @: LmxMsgRuntime g_rt 0
 unsigned: g_owner 0U
+unsigned: g_a 0U
 []: int g_trace 8
 int: g_trace_n 0
 int: g_owner_in_turn 0
@@ -46,9 +52,12 @@ int: g_owner_turns 0
 int: g_owner_value 0
 []: int g_writer_delta 8
 []: int g_writer_sent 8
-int: g_arrived 0
-int: g_saw_other 0
-int: g_rendezvous_turns 0
+int: g_arrived_a 0
+int: g_arrived_b 0
+int: g_saw_a 0
+int: g_saw_b 0
+int: g_turns_a 0
+int: g_turns_b 0
 
 # A writer's turn: one input from P, then its delta goes to M0 as a graph
 # built in the writer's own arena; the sender keeps the original, which its
@@ -69,9 +78,7 @@ fn: turn_writer (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     if: lmx_msg_recv(rt, who, got) != c.LMX_MSG_OK
         return: 2
     lmx_msg_env_release(got)
-    lmx_msg_exec_lock(rt)
     m: lmx_msg_find(rt, who)
-    lmx_msg_exec_unlock(rt)
     if: m = 0
         return: 3
     root: lmx_node_new_owned(@ m\blocks, @ m\ranges)
@@ -89,9 +96,8 @@ fn: turn_writer (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     c.free((cast: (@: void) env))
     if: st != c.LMX_MSG_STAGED
         return: 6
-    lmx_msg_exec_lock(rt)
+    # Writer k writes only its own cell; the host reads them after the stop.
     g_writer_sent[k]: 1
-    lmx_msg_exec_unlock(rt)
     return: lmx_msg_end_turn(rt, who, 1)
 
 # M0's turn: one delivered graph, applied to M0's own cell. Overlap of two
@@ -104,12 +110,10 @@ fn: turn_owner (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     int: st
     if: ctx != 0
         return: 1
-    lmx_msg_exec_lock(rt)
     if: g_owner_in_turn != 0
         g_owner_overlap: g_owner_overlap + 1
     g_owner_in_turn: g_owner_in_turn + 1
     m: lmx_msg_find(rt, who)
-    lmx_msg_exec_unlock(rt)
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: got = 0 || m = 0
         return: 2
@@ -120,17 +124,13 @@ fn: turn_owner (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     lmx_int_store_known(cell, lmx_int_value_known(cell) + delta)
     lmx_msg_env_release(got)
     c.free((cast: (@: void) got))
-    lmx_msg_exec_lock(rt)
     if: g_trace_n < 8
         g_trace[g_trace_n]: delta
     g_trace_n: g_trace_n + 1
     g_owner_value: lmx_int_value_known(cell)
-    lmx_msg_exec_unlock(rt)
     st: lmx_msg_end_turn(rt, who, 1)
-    lmx_msg_exec_lock(rt)
     g_owner_in_turn: g_owner_in_turn - 1
     g_owner_turns: g_owner_turns + 1
-    lmx_msg_exec_unlock(rt)
     return: st
 
 # A and B: enter, announce, wait for the other inside the turn.
@@ -147,24 +147,35 @@ fn: turn_rendezvous (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         return: 3
     lmx_msg_env_release(got)
     c.free((cast: (@: void) got))
-    lmx_msg_exec_lock(rt)
-    g_arrived: g_arrived + 1
-    lmx_msg_exec_unlock(rt)
+    # Each lane writes only its own cells and reads only the other's: A's writes
+    # are A's, B's are B's, so the rendezvous needs no lock to be observed.
+    if: who = g_a
+        g_arrived_a: 1
+    else:
+        g_arrived_b: 1
+    ---
     deadline: c.GetTickCount() + 2000U
     other: 0
     while: other = 0 && c.GetTickCount() < deadline
-        lmx_msg_exec_lock(rt)
-        if: g_arrived >= 2
-            other: 1
-        lmx_msg_exec_unlock(rt)
+        if: who = g_a
+            other: g_arrived_b
+        else:
+            other: g_arrived_a
+        ---
         if: other = 0
             c.Sleep(1U)
     ---
-    lmx_msg_exec_lock(rt)
-    if: other != 0
-        g_saw_other: g_saw_other + 1
-    g_rendezvous_turns: g_rendezvous_turns + 1
-    lmx_msg_exec_unlock(rt)
+    if: who = g_a
+        if: other != 0
+            g_saw_a: 1
+        ---
+        g_turns_a: g_turns_a + 1
+    else:
+        if: other != 0
+            g_saw_b: 1
+        ---
+        g_turns_b: g_turns_b + 1
+    ---
     return: lmx_msg_end_turn(rt, who, 1)
 
 fn: wait_until (@: LmxMsgRuntime rt; int: want_owner_turns; int: want_rendezvous; unsigned: ms) int
@@ -173,10 +184,10 @@ fn: wait_until (@: LmxMsgRuntime rt; int: want_owner_turns; int: want_rendezvous
     deadline: c.GetTickCount() + ms
     ok: 0
     while: ok = 0 && c.GetTickCount() < deadline
-        lmx_msg_exec_lock(rt)
-        if: g_owner_turns >= want_owner_turns && g_rendezvous_turns >= want_rendezvous
+        # Each counter has one writer; the host only reads them.
+        if: g_owner_turns >= want_owner_turns && g_turns_a + g_turns_b >= want_rendezvous
             ok: 1
-        lmx_msg_exec_unlock(rt)
+        ---
         if: ok = 0
             c.Sleep(2U)
     ---
@@ -230,6 +241,7 @@ fn: main () int
         k: k + 1
     ---
     check(lmx_msg_create(rt, p, @ ini, 1U, @ a) = c.LMX_MSG_OK && lmx_msg_create(rt, p, @ ini, 1U, @ b) = c.LMX_MSG_OK, "A and B created")
+    g_a: a
     check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P publishes its seven children")
     om: lmx_msg_find(rt, owner)
     check(om != 0 && lmx_msg_graph(om) != 0 && lmx_msg_graph(om) != t0 && lmx_int_value_known(lmx_branch_child_known(lmx_msg_graph(om), 0U)) = 0, "M0 owns its own cell at 0")
@@ -268,7 +280,7 @@ fn: main () int
 
     # --- concurrent add requests produce the expected total.
     total: 2 + 5 + 7 + 11
-    lmx_msg_exec_lock(rt)
+    # The contexts are stopped above, so these reads are the host's alone.
     check(g_owner_value = total && lmx_int_value_known(lmx_branch_child_known(lmx_msg_graph(om), 0U)) = total, "M0's value is the sum of the four deltas whatever the arrival order")
     # --- the trace is complete: every delta once, none invented.
     seen_mask: 0
@@ -285,8 +297,7 @@ fn: main () int
     # --- own turns never overlap.
     check(g_owner_turns = 4 && g_owner_overlap = 0 && g_owner_in_turn = 0, "M0 ran four turns, never two at once")
     # --- independently mapped Messages execute in parallel.
-    check(g_rendezvous_turns = 2 && g_arrived = 2 && g_saw_other = 2, "A and B were inside their turns at the same time")
-    lmx_msg_exec_unlock(rt)
+    check(g_turns_a + g_turns_b = 2 && g_arrived_a + g_arrived_b = 2 && g_saw_a + g_saw_b = 2, "A and B were inside their turns at the same time")
 
     lmx_msg_runtime_delete(rt)
     c.free((cast: (@: void) env))

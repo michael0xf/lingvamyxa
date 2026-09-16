@@ -162,6 +162,16 @@ fn: yield_until_stopped (@: LmxMsgRuntime rt; unsigned: who) int
         c.SwitchToThread()
     return: 1
 
+# S6-1 (a3): STOPPED is written by end_turn, handoff_ready by the turn's LAST
+# step (native_leave_addr, after end_turn returns), so a reader that waits for
+# STOPPED can look before the lane has finished leaving. The executor lock used
+# to hide that window. Wait for the state the next check requires, as
+# family_release_17, orphan_mapped_17 and scenario36 already do.
+fn: yield_until_handoff_ready (@: LmxMsgRuntime rt; unsigned: who) int
+    while: lmx_msg_handoff_ready(rt, who) = 0
+        c.SwitchToThread()
+    return: 1
+
 fn: yield_until_success (@: LmxMsgRuntime rt; unsigned: who) int
     @: LmxMsg m
     m: lmx_msg_find(rt, who)
@@ -331,6 +341,7 @@ fn: main () int
     family_watch_owner: k
     family_watch_a: bk
     status: yield_until_stopped(rt, successful)
+    status: yield_until_handoff_ready(rt, successful)
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, successful) != 0 && lmx_msg_success_load(k) != 0, "K settled successfully")
     family_check(family_watched_frees = 1 && family_watch_a = 0, "unrooted K block died at K's end-turn")
     family_check(lmx_msg_dispose_child(rt, parent, successful) = LMX_MSG_OK, "dispose K after success")
@@ -347,9 +358,11 @@ fn: main () int
     c_status: yield_until_stopped(rt, child)
     lmx_msg_exec_unbind(rt, grandchild)
     status: lmx_msg_drive(rt, 0U, 0U)
+    status: yield_until_handoff_ready(rt, grandchild)
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, grandchild) != 0, "G native activation left")
     family_check(lmx_msg_graph(g) = gnode && family_block_of(g, (cast: (@: void) gnode)) = gb && lmx_owned_ranges_find(g\ranges, (cast: (@: void) gnode)) = rg_node && lmx_int_value_known(gcell) = 13 && lmx_msg_adopted_n(rt, grandchild) = ng, "G's failed end-turn keeps its graph")
     family_check(family_block_of(g, (cast: (@: void) gextra)) = gxb && family_root_roles(g, (cast: (@: void) gextra)) = LMX_MSG_ROOT_RETAIN, "G's RETAIN root keeps its node through the end-turn")
+    c_status: yield_until_handoff_ready(rt, child)
     status: c_status
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, child) != 0, "C native activation left")
     family_check(lmx_msg_graph(m) = cnode && family_block_of(m, (cast: (@: void) cnode)) = cb && lmx_owned_ranges_find(m\ranges, (cast: (@: void) cnode)) = rc_node && lmx_int_value_known(ccell) = 12 && lmx_msg_adopted_n(rt, child) = nc, "C's failed end-turn keeps its graph")
