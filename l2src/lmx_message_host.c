@@ -28,8 +28,10 @@ int lmx_msg_host_test_get_nomem(void) {
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+/* S6 (c): no host lock. shutting_down is one atomic flag whose writer is the host
+ * (runtime_shutdown sets it under R0's mailbox monitor); host_post checks it under
+ * the same monitor, so a late post is refused there. */
 typedef struct LmxMsgHostSync {
-    CRITICAL_SECTION lock;
     DWORD owner;
     int shutting_down;
 } LmxMsgHostSync;
@@ -37,7 +39,6 @@ typedef struct LmxMsgHostSync {
 #include <pthread.h>
 #include <sched.h>
 typedef struct LmxMsgHostSync {
-    pthread_mutex_t lock;
     pthread_t owner;
     int shutting_down;
 } LmxMsgHostSync;
@@ -53,13 +54,8 @@ int lmx_msg_host_attach(LmxMsgRuntime *rt) {
         return 1;
     }
 #if defined(_WIN32)
-    InitializeCriticalSection(&h->lock);
     h->owner = GetCurrentThreadId();
 #else
-    if (pthread_mutex_init(&h->lock, 0) != 0) {
-        free(h);
-        return 1;
-    }
     h->owner = pthread_self();
 #endif
     rt->host_sync = h;
@@ -72,11 +68,6 @@ void lmx_msg_host_detach(LmxMsgRuntime *rt) {
         return;
     }
     h = (LmxMsgHostSync *)rt->host_sync;
-#if defined(_WIN32)
-    DeleteCriticalSection(&h->lock);
-#else
-    pthread_mutex_destroy(&h->lock);
-#endif
     free(h);
     rt->host_sync = 0;
 }
@@ -94,40 +85,13 @@ int lmx_msg_host_is_owner(LmxMsgRuntime *rt) {
 #endif
 }
 
-int lmx_msg_host_lock(LmxMsgRuntime *rt) {
-    LmxMsgHostSync *h;
-    if (rt == 0 || rt->host_sync == 0) {
-        return 1;
-    }
-    h = (LmxMsgHostSync *)rt->host_sync;
-#if defined(_WIN32)
-    EnterCriticalSection(&h->lock);
-#else
-    pthread_mutex_lock(&h->lock);
-#endif
-    return 0;
-}
-
-void lmx_msg_host_unlock(LmxMsgRuntime *rt) {
-    LmxMsgHostSync *h;
-    if (rt == 0 || rt->host_sync == 0) {
-        return;
-    }
-    h = (LmxMsgHostSync *)rt->host_sync;
-#if defined(_WIN32)
-    LeaveCriticalSection(&h->lock);
-#else
-    pthread_mutex_unlock(&h->lock);
-#endif
-}
-
 int lmx_msg_host_is_shutdown(LmxMsgRuntime *rt) {
     LmxMsgHostSync *h;
     if (rt == 0 || rt->host_sync == 0) {
         return 1;
     }
     h = (LmxMsgHostSync *)rt->host_sync;
-    return h->shutting_down;
+    return __atomic_load_n(&h->shutting_down, __ATOMIC_RELAXED);
 }
 
 int lmx_msg_host_shutdown(LmxMsgRuntime *rt) {
@@ -139,15 +103,7 @@ int lmx_msg_host_shutdown(LmxMsgRuntime *rt) {
         return LMX_MSG_INVALID;
     }
     h = (LmxMsgHostSync *)rt->host_sync;
-#if defined(_WIN32)
-    EnterCriticalSection(&h->lock);
-    h->shutting_down = 1;
-    LeaveCriticalSection(&h->lock);
-#else
-    pthread_mutex_lock(&h->lock);
-    h->shutting_down = 1;
-    pthread_mutex_unlock(&h->lock);
-#endif
+    __atomic_store_n(&h->shutting_down, 1, __ATOMIC_RELAXED);
     return LMX_MSG_OK;
 }
 
@@ -171,15 +127,7 @@ int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms) {
         return LMX_MSG_INVALID;
     }
     h = (LmxMsgHostSync *)rt->host_sync;
-#if defined(_WIN32)
-    EnterCriticalSection(&h->lock);
-    down = h->shutting_down;
-    LeaveCriticalSection(&h->lock);
-#else
-    pthread_mutex_lock(&h->lock);
-    down = h->shutting_down;
-    pthread_mutex_unlock(&h->lock);
-#endif
+    down = __atomic_load_n(&h->shutting_down, __ATOMIC_RELAXED);
     if (down != 0) {
         return LMX_MSG_STOPPED;
     }

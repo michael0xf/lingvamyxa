@@ -21,8 +21,6 @@ void lmx_msg_test_map_site(const char *site, unsigned owner);
 #endif
 int lmx_msg_exec_attach(LmxMsgRuntime *rt);
 void lmx_msg_exec_detach(LmxMsgRuntime *rt);
-int lmx_msg_exec_lock(LmxMsgRuntime *rt);
-void lmx_msg_exec_unlock(LmxMsgRuntime *rt);
 int lmx_msg_exec_holding_turn(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_exec_workers(LmxMsgRuntime *rt);
 int lmx_msg_exec_holding_any(LmxMsgRuntime *rt);
