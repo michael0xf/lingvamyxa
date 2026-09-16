@@ -8745,3 +8745,21 @@ have measured a duplicate-definition error, so he did not run it; the
 stale block is printed verbatim at its measured boundaries and
 deleted from that text; then defs=1 ends=1 for the three, the gate
 re-run, both verdicts.
+Re-run verdict (the lead): compile_lmx_message PASSED in both cores;
+the lm2 half not reached: the reference run RED at run time, "the
+executor selftest failed against the handwritten modules on run 2:
+exit -1073740940" (0xC0000374, STATUS_HEAP_CORRUPTION), deterministic,
+both runs stopping at "live-cascade start" with every earlier case
+passing. Hypothesis (labelled): service_is_live has zero call sites,
+the delivery path still trusts dest_msg, so a letter drained after a
+release's unregister letter reads freed memory (the RELEASED check
+cannot help once the memory is gone; only the live-set check, step 3,
+never dereferences); steps 1-2 landed an unsafe intermediate. RULED:
+locate before reasoning (the executor selftest under the UAF kit's
+poisoning quarantine build, so the first touch of freed memory faults
+at the site), read the live-cascade case's shape; the KIND_UNREGISTER
+handler frees only an entry it found and removed (pointer and id
+matched), a mismatch reported as a fault and never freed (the lead's
+second suspect, a defect regardless); then step 3: is_live before any
+dereference of dest_msg in the drain, KIND_REJECTED when absent. No
+push until it builds and the selftest runs.
