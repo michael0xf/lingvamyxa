@@ -7116,3 +7116,21 @@ seven live_query sites in lmx_message_selftest.lm1 are ordinary child
 queries; liveness_33:372 stays the one parentless assertion (b5's
 reading confirmed); the numeric channel that can move under the R0P
 ruling is live_seq and the poll mark, since R0 joins the same poll.
+The lead's interim red on d6/lock-s6-2 (design f635e6eb), measured and
+explained before it could look like a landing surprise: with the
+mailbox no longer drained at release_slot and parent_msg kept,
+lmx_msg_endp_try_retire's guard (both mailboxes empty, parent_msg 0,
+no children) refuses every retirement, so no settled record leaves
+rt->slots and rt\n never decrements; scenario36's family_release_17
+reads 58 checks, 10 failures, every one an rt\n pin ("one slot fewer",
+"two slots fewer", "past its deadline the drive reclaims the failed
+orphan"), which are the assertions the section restates and the
+functions the stage deletes; "scenario36 green" is not a checkpoint
+until the deletion lands. Measured clean: run_msg_family_handoff
+stays at checks=67 failures=0 watched_frees=4, so not draining the
+mailbox moved no block-free count. Coordinator's flag: the "past its
+deadline the drive reclaims the failed orphan" pin belongs to the
+FAILED-orphan path whose "self-reclaims when it expires" mechanics
+are held; its restatement (the orphan not findable after the
+deadline) is measured at the tip, not assumed to clear with the
+deletion.
