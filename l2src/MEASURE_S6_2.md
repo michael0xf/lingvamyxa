@@ -121,6 +121,7 @@ for the gate:
 | entry_turn | `run_entry_turn.ps1` | `entry turn PASS` | 600 s |
 | graph_abi | `run_graph_abi.ps1` | `graph ABI runner PASS` | 900 s |
 | port_slots | **deleted by this stage** | see below | - |
+| port_path_storage | **deleted by this stage** (step 5, 3e1cec49) | see below | - |
 
 `port_slots` is the sixth gate the section names, through `tests/lmx_msg_slots_selftest.lm1`, and S6-2
 deletes its runner and its module. On the measuring merge there is nothing to run, so its **absence is the
@@ -140,11 +141,24 @@ test ! -e l2src/lmx_msg_slots.lm1 && echo "module gone: ok"
 grep -c -E "^\s*@\('port_slots'" l2src/run_gates.ps1   # expect 0: the ROW is removed with the module
 ```
 
+`port_path_storage` goes the same way at step 5 (the path arrays and the `lmx_msg_path_storage` module), and
+its absence is checked in the same three forms. The row form again, never the bare name: at 3e1cec49
+`run_gates.ps1` keeps one comment recording the deletion, so a bare `grep -c port_path_storage` cannot reach 0
+while the row form reads 0 there (measured, and it read 1 at 2d8f2b6a where the row still stood).
+
+```bash
+test ! -e l2src/run_port_msg_path_storage.ps1 && echo "runner gone: ok"
+test ! -e l2src/lmx_msg_path_storage.lm1 && echo "module gone: ok"
+grep -c -E "^\s*@\('port_path_storage'" l2src/run_gates.ps1   # expect 0: the ROW is removed with the module
+```
+
 lane_oracle and lmx_message repeat the two runner rows above with different arguments; run each form once,
 do not treat one as standing for the other (`-LaneCheck` is what pins the lane, the plain form is not).
 
-Gate-count consequence, stated here because it reds a correct landing if missed: with the `port_slots` row
-gone, `run_gates.ps1 -L2MessageRoot` prints `gates GREEN: 30 of 30`, not S6-1's 31.
+Gate-count consequence, stated here because it reds a correct landing if missed: with the `port_slots` and
+`port_path_storage` rows gone, `run_gates.ps1` holds 28 literal rows (`grep -c '^    @(' l2src/run_gates.ps1`
+= 28 at 3e1cec49) plus the `-L2MessageRoot` one, so it prints `gates GREEN: 29 of 29` -- not S6-1's 31, and not
+the 30 this line said while only `port_slots` had gone.
 
 ## Leg 3 - FALSIFIER, one retain put back
 

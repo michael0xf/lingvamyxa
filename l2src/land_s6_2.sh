@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # S6-2 landing: refs (endp_retain/endp_release/endp_refs/InterlockedCompareExchange/LmxMsg.refs) and the
-# runtime slot list (LmxMsgRuntime slots/n, LmxMsg.alloc_next, the lmx_msg_slots module) are deleted.
+# runtime slot list (LmxMsgRuntime slots/n, LmxMsg.alloc_next, the lmx_msg_slots module) are deleted, and
+# with them the path arrays (path/path_n/path_cap) and the lmx_msg_path_storage module.
 #
 # Shape, timeouts and marker-line discipline are d6's land_base3.sh as it ran S6-1, used with his word;
 # what is added here is stage-specific and named as such:
@@ -19,9 +20,11 @@
 # Usage:
 #   land_s6_2.sh --check <expected integration tip> <branch> <branch hash>
 #   land_s6_2.sh <expected integration tip> <branch> <branch hash> <gate count> <title>
-# <gate count> is what run_gates prints as "gates GREEN: N of N". S6-2 DELETES run_gates.ps1's port_slots
-# row, so with -L2MessageRoot this landing expects 30, not S6-1's 31. Passing 31 reds the landing on a
-# change the stage is supposed to make; passing it explicitly keeps that a decision, not a default.
+# <gate count> is what run_gates prints as "gates GREEN: N of N". S6-2 DELETES two of run_gates.ps1's rows,
+# port_slots and port_path_storage, leaving 28 literal rows plus the -L2MessageRoot one, so this landing
+# expects 29, not S6-1's 31 (and not the 30 this comment said before the path_storage deletion). Passing
+# a stale count reds the landing on a change the stage is supposed to make; passing it explicitly keeps
+# that a decision, not a default.
 set -u
 
 CHECK=0
@@ -47,8 +50,8 @@ LOGS="${LAND_S6_2_LOGS:-${TMPDIR:-/tmp}/land_s6_2_logs}/${BR}"
 PS="powershell -NoProfile -ExecutionPolicy Bypass -File"
 
 # Every path the stage may touch, by why it is here (d6's groups). A path outside this stops the landing
-# before any merge. run_entry_turn.ps1 is deliberately ABSENT: its support list is guarded by Test-Path and
-# needs no edit, so a diff touching it is a surprise worth stopping on.
+# before any merge. (run_entry_turn.ps1 was once listed here as deliberately absent; that reasoning was
+# wrong and it is now allowed below, with the reason it was wrong.)
 ALLOW='^(l2src/(lmx_message\.h|lmx_message\.lm1|lmx_message\.lm2|lmx_message_exec\.c|lmx_message_exec\.h'
 ALLOW="$ALLOW"'|lmx_message_selftest\.lm1|lmx_message_exec_selftest\.c'
 ALLOW="$ALLOW"'|lmx_msg_slots\.h\.lm1|lmx_msg_slots\.lm1|lmx_msg_slots\.lm2|LMX_MSG_SLOTS\.txt'
@@ -78,6 +81,20 @@ ALLOW="$ALLOW"'|run_port_owned_ranges\.ps1|run_port_value_owned\.ps1|run_l2trans
 ALLOW="$ALLOW"'|tests/(lmx_msg_slots_selftest\.lm1|lmx_model_family_release_17_selftest\.lm1'
 ALLOW="$ALLOW"'|lmx_model_orphan_mapped_17_selftest\.lm1|lmx_entry_turn_selftest\.lm1'
 ALLOW="$ALLOW"'|unit_msg_adapter\.lm2|unit_msg_cursor\.lm2))'
+# Added 2026-09-16 for the path_storage deletion (step 5, 3e1cec49), from the dry run over the landing's
+# own diff (integration 7b3a8668...3e1cec49: 67 paths, 13 outside the list above). Three groups:
+#   - the module's own files, deleted (D); its port runner run_port_msg_path_storage.ps1 was already allowed;
+#   - three runners whose $names support lists still named the module (M), missed by the slots-era list;
+#   - the UAF kit under l2src/tools (A, 108b51f0), on the coordinator's word.
+ALLOW="$ALLOW"'|l2src/(lmx_msg_path_storage\.h\.lm1|lmx_msg_path_storage\.lm1|lmx_msg_path_storage\.lm2'
+ALLOW="$ALLOW"'|LMX_MSG_PATH_STORAGE\.txt|run_msg_path_storage\.ps1'
+ALLOW="$ALLOW"'|run_lmx_msg_history_owned\.ps1|run_lmx_msg_roots_stale\.ps1|run_msg_mail_chain\.ps1'
+ALLOW="$ALLOW"'|tests/lmx_msg_path_storage_selftest\.lm1|tools/(q_alloc\.c|uaf_run\.sh))'
+# Two fixtures NOT in the pre-measured population, named rather than folded in: both call the deleted
+# path accessors (lmx_msg_path_n, lmx_msg_path_seg) and step 5 rewrites them onto lmx_msg_get_address.
+# They name neither lmx_msg_path_storage nor lmx_msg_path_grow, so no module-name or exported-symbol grep
+# finds them -- the accessor API is a reference kind of its own. Remove on the coordinator's word.
+ALLOW="$ALLOW"'|l2src/(lmx_message_host_selftest\.c|tests/lmx_msg_send_local_selftest\.lm1)'
 ALLOW="$ALLOW"'|mixa_manager/(lib_l2_runtime_support\.ps1|run_mixa_app_fmpanel_l2_parity\.ps1'
 ALLOW="$ALLOW"'|run_mixa_app_path_l2_parity\.ps1|run_mixa_composite_glyphs_l2_parity\.ps1'
 ALLOW="$ALLOW"'|run_mixa_selection_l2_parity\.ps1|run_mixa_tiles_l2_parity\.ps1))$'
