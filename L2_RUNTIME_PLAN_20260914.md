@@ -7375,3 +7375,17 @@ later cases (removing it failed the compile at 3182), not the file.
 e9's cbe63f42 also fixes two stale figures (the three-pin paragraph,
 the mentions in the falsifier row). Stage branch: d6/lock-s6-2
 18c35299 (the first restatement).
+The lead's two retractions, matching the coordinator's reconciliation
+above: the counts are by commit (39/35 at 7b3a8668, 36/32 at
+18c35299); and the n0 constraint is per-declaration, not per-file:
+six declarations at both commits, the one at 2834 reaches a use at
+3182, so a conversion drops its own capture and leaves a shared
+declaration until the last case in ITS block converts; the cases
+remain separable (the earlier "cannot be converted one at a time" is
+withdrawn). Progress, measured: the first restatement PASSES (the
+rolled-back child on its parent's settled list, RELEASED, off the
+tree, unbound): the settled list is populated, not merely written.
+The gate now fails at the next counter pin, "settle branch st=0 n=4
+n0=4" (the dispose of a failed branch bottom-up), restated in the same
+two-part shape (both records on R's settled list with state RELEASED,
+adoption unchanged in direction); the tripwire for both runs next.
