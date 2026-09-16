@@ -8430,3 +8430,8 @@ of 30" prose becoming 29 (MEASURE_S6_2.md:147, land_s6_2.sh:22-23; the
 marker itself is parameterised). The coordinator's correction to
 e9's reading: the slots list removals (dfc10d08 inside 4409805c) are
 in the stage; only the path_storage removals are incoming.
+b5: sonnet/s6-2-mixa-lists-2 18f5701d off 7b3a8668, one commit, the
+six mixa_manager files with the nine lmx_msg_path_storage occurrences
+removed (8 insertions, 9 deletions), not run; the lead merges it into
+the stage with the module's deletion; sonnet/mixa-module-list holds
+for the merge to main after the landing.
