@@ -9066,3 +9066,13 @@ the chain cold; then the push and the five lines with the hash.  The
 coordinator asked the lead to push 3e1cec49 at once, marked not
 building, so the engineer can widen land_s6_2.sh's allowlist and dry-run
 to 0 outside before the final tip arrives.
+
+TICKETS 2026-09-16 08:33 (coordinator): (a) the engineer pre-widens
+land_s6_2.sh on the lead's red tip 3e1cec49 once it is pushed (allowlist
+from the 7b3a8668..3e1cec49 name-status; dry run to 0 outside; 28
+literal rows, 29/29 with -L2MessageRoot; MEASURE_S6_2.md edits; re-cut
+53ba86bd; no chain run on the red tip; a falsifier: an extra path must be
+reported); (b) b5 writes the AD pre-read on sonnet/ad-preread at
+1763827c (l2src/AD_PREREAD.md: the address-bearing fields by grep, the
+LmxMsgAddr site counts per unit against the plan's 436, each field's
+fate with the spec phrase; counts reproduced from a clean checkout).
