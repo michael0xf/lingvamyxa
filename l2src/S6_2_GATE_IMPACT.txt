@@ -20,8 +20,13 @@ is appended at line 101 only with -L2MessageRoot):
                                                              below with why S6-2 leaves it)
   asserts nothing S6-2 removes:                         25
   BUT also: needs a runner edit when lmx_msg_slots
-  goes, or reds at BUILD time, not at a check:          22  (the support-object lists, section below;
+  goes:                                                 23  (the support-object lists, section below;
                                                              18 of them are port rows filed as unaffected)
+  of those, reds at BUILD time if the edit is missed:   22  (entry_turn is the exception: its list is
+                                                             Test-Path guarded, so a stale name is skipped
+                                                             silently instead of failing the build -- it
+                                                             still needs the edit, which an earlier version
+                                                             of this list got wrong)
   fixtures reading handoff_ready after a stop with no spin on it: 1 file (family_handoff), listed separately
 
 Citation (section and quoted phrase, never a bare line)
@@ -276,9 +281,15 @@ entry_turn    run_entry_turn.ps1
   asserts: one rt\n read, at lmx_entry_turn_selftest.lm1:84 --
     check(rt\n = 1 && c.lmx_msg_find(rt, 1U) != 0 && c.lmx_msg_find(rt, 2U) = 0, "M: the runtime creates R0
     alone, no UI lane"). The property is "R0 alone"; rt\n is how it is currently read.
-  Build side: run_entry_turn.ps1:69 is the ONE support list already guarded
-    (| Where-Object { Test-Path -LiteralPath "l2src/$_.lm1" }), so it survives the module's deletion with no
-    edit. Every other runner's list does not: see below.
+  Build side: run_entry_turn.ps1:69 is the ONE support list guarded by
+    (| Where-Object { Test-Path -LiteralPath "l2src/$_.lm1" }), so it is the one runner that does not BREAK
+    when the module file vanishes. CORRECTED 2026-09-16: an earlier version of this row concluded from that
+    guard that it "needs no edit", and that inference is wrong. Test-Path prevents a build failure; it does
+    nothing about the stale 'lmx_msg_slots' string sitting in $names, which the lead removes at line 69
+    exactly as in the other runners. "It will not break" and "it needs no edit" are different claims and
+    the guard supports only the first. The error is worth keeping visible because the fact underneath it
+    was measured correctly and carried one inference too far -- harder to catch than a wrong measurement,
+    since the evidence keeps checking out.
 
 port_slots    run_port_msg_slots.ps1
   builds: tests/lmx_msg_slots_selftest.lm1 against the L1 module and the generated L2 port
@@ -361,8 +372,12 @@ Only run_entry_turn.ps1:69 is guarded by Test-Path and needs no edit.
   port_visit           run_port_msg_visit.ps1:61
   port_owned_ranges    run_port_owned_ranges.ps1:158
   port_value_owned     run_port_value_owned.ps1:83
-  (not affected: entry_turn, guarded at 69; history, roots_stale, visit and liveness, whose own L1 runners
-  do not list the module; send_local, family_handoff, c_scanners, l2_message_root: no mention at all.)
+  entry_turn      run_entry_turn.ps1:69 -- needs the same one-line edit, and is the only one that would not
+                  have BROKEN without it: its list is Test-Path guarded, so the stale name would have been
+                  silently skipped rather than failing the build. Listed here since 2026-09-16; an earlier
+                  version filed it as not affected, reasoning from the guard that it needed no edit.
+  (not affected: history, roots_stale, visit and liveness, whose own L1 runners do not list the module;
+  send_local, family_handoff, c_scanners, l2_message_root: no mention at all.)
 
 == Pins a numeric side effect of refs or slots (0) ==
 
