@@ -10121,3 +10121,16 @@ run 1:exit=139 no-ok) and then ran so much slower that only 2 runs completed in
 The control was stopped after that contrast rather than run to 80: 0 of 120
 against a tree that failed on contact is the measurement, and its cost per run is
 itself evidence.
+
+THE WAIT-CLAIM FIX IS IN THE STAGE, 2026-09-16 18:13: d6/lock-ad is b3fc817a (the fix
+c33bcca0 merged, plus the run_gates -Only/-Skip filter 6180b44f). Verified on the
+merge: run_port_message GREEN, and the UAF kit 40 of 40 clean in 88 s -- fast,
+i.e. with none of the 300 s watchdog hangs that made the parent tree's control
+runs take minutes each. The full chain is running on this tip as the last step,
+which also confirms the filtered script's unfiltered verdict line is unchanged
+("gates GREEN: 29 of 29") -- the marker the landing scripts pin.
+
+The flake's remaining half is recorded in the fix's own commit: r == 0 from a
+record retired under the walk is dampened only for the wait cell, and the record
+lifetime itself is (d)(3)'s epoch grace. The design document (d6/lock-removal
+dec501c4) already carries the order and the reasoning.
