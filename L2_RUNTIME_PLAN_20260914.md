@@ -9020,3 +9020,16 @@ identical) is recorded in the commit. Still to come before the tip:
 step 5 (path/path_n/path_cap, the path_storage module with its five
 reference populations, b5's 18f5701d, the fixtures, the probe -Part 2);
 the coordinator measures only the tip the lead names as building.
+
+S6-2 COORDINATOR DRY RUN, 2026-09-16 08:25, on the step-4 tip (not the
+building tip): measuring merge de3a40e7 = 1763827c + fable/s6-2-acceptance
+96a754e0 in exec-3a, pin 0B3D85B3 installed in gen2 and gen3.  The probe
+-Part 2 reads "refs=0 runtime_lists=0", S6-2 GREEN, exit 0; the falsifier
+(the base's retain line appended to lmx_message.lm1) reads refs=1, S6-2 RED;
+restored, tree clean.  run_gates.ps1 on the merge: the port_slots row is
+already absent (deleted at 51b73274 with the lmx_msg_slots module; two
+comment mentions remain), the port_path_storage row is still present at
+line 103 and goes with step 5.  The six gates were not run on this tip; they
+run on the tip the lead names as building.  The script is the coordinator's
+measure_tip.sh (merge, pin, probe, six gates each after a pin re-install,
+falsifier, row check), every step under a timeout.
