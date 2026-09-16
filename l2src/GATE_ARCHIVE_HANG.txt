@@ -1,5 +1,8 @@
 GATE_ARCHIVE_HANG: the intermittent git archive hang in run_candidate_c_scanners.ps1, and how to isolate it
-Written by 0c from logs and code at integration 8eeb094f, 2026-09-15. A plan only: nothing below has been run.
+Written by 0c from logs and code at integration 8eeb094f, 2026-09-15. The plan below WAS run, on 2026-09-15,
+inside the coordinator's git-freeze window 21:53:40-22:21: results, the void rule as narrowed, and what the
+run does NOT establish are at the end of this file. The 120 s bound is applied and landed (3f131768, on
+integration since 7b3a8668).
 
 What the logs show
   Both recurrences are in the lead's landing worktree build\fable\wti (a worktree of the shared
@@ -93,7 +96,9 @@ scratchpad\archive_hang\<stage>\)
   Report: per stage, iterations, hangs, elapsed-ms percentiles (50/99/max), and for the hang, if any, the stack,
   the last trace2 region and which stop condition ended the isolation.
 
-Proposed change: bound the archive step at 120 s (not applied, not run)
+The change: bound the archive step at 120 s (APPLIED, not proposed: claude-0c/archive-timeout 3f131768,
+merged into d6/lock-s6 5685a48d and landed with S6-1; proven red against a stub git and green against the
+real one before the merge)
   Normal archive time is about a second; the whole gate takes 22-51 s, so 120 s cannot fail a working run.
   The change runs git as a child with its own stdout and stderr files, kills the process tree at 120 s and fails
   the gate with a named line instead of holding the chain. Process.Handle is read right after the start so
@@ -133,3 +138,64 @@ Proposed change: bound the archive step at 120 s (not applied, not run)
   Falsifier for the change, when it is run: with a stub git.cmd earlier on PATH that sleeps 130 s, the runner
   fails in about 120 s with "Archive timed out after 120 s" and leaves no git.exe or stub behind; with the real
   git it passes as today and records archiveMs.
+  Measured before the merge (2026-09-15): the stub run failed at exit 1 in 131 s naming "Archive timed out
+  after 120 s (git pid 18464, started 19:40:29.921)", archiveMs 120052, no core.zip, no stub process left; the
+  real run passed at exit 0 in 23 s, "candidate scanner parity cases=130 freed=4316 PASS", archiveMs 212.
+
+=== What the isolation measured (2026-09-15, freeze window 21:53:40-22:21) ===
+
+The void rule, as narrowed by the coordinator during the run and recorded here by his words: "the void test
+covers what sessions write: refs/heads, refs/tags, refs/remotes and worktree HEADs; refs/codex/turn-diffs/
+checkpoints rotate on the tool's own schedule and are excluded from the void, but every rotation inside a
+stage is logged with its time against the run it fell in, as concurrent git activity in the shared store,
+because a rotation is a real ref write and, if a hang ever appears, its window is the first thing to check."
+Why it was needed: the first stage C was voided by one such rotation at 22:05:34 whose before and after named
+the same object (c012ed7a) - no content changed. The snapshots hold 165 refs/heads, 19 refs/tags, 169
+refs/remotes, 44 worktree HEADs and 2 codex refs, so the old all-refs test made every long stage a coin flip.
+Stage C was counted as clean under this rule AFTER it had been voided under the old one; that ordering is
+stated here deliberately rather than hidden. isolate_archive_hang.ps1 implements it in Get-HangRefState,
+Get-HangCodexRefs and Write-HangCodexRotations, the last mapping a rotation to the run whose window contains
+it by decoding the 13-digit epoch-ms the tool puts in the ref path - not by polling refs per run, which would
+inject stage D's own variable.
+
+Results. 630 counted runs, 0 hangs, 0 non-zero exits; no watch (60 s, 180 s for C) ever expired; every archive
+byte-identical at 1382517 bytes. Nothing was captured because nothing stalled: there is no trace2 region, no
+backtrace, no CPU sample and no lock listing to read.
+  stage  hypothesis  runs     elapsed                          codex covariate        verdict
+  A      H1          200/200  p50 206 / p99 250 / max 255 ms   none                   clean, counted
+  B(1)   H2          200/200  p50 427 / p99 480 / max 519 ms   -                      VOID, not counted
+  B(2)   H2          200/200  p50 428 / p99 494 / max 508 ms   none                   clean, counted
+  C      in situ     30/30    median 21.9 s (21.6-22.6)        1 rotation at 22:05:34 clean, counted
+  D      H3          200/200  p50 206 / p99 277 / max 285 ms   none                   clean, counted
+B's first run was voided by a peer's local commit (7af872da, 21:55:49) inside its measured interval; it was
+rerun from scratch rather than reinterpreted. D's load was real, not nominal: 21 "isolation load" commits in a
+second 0c worktree between 22:18:08 and 22:18:53 with alternating checkouts, the tree restored afterwards. D
+under that load (p50 206 ms) is indistinguishable from A unloaded (p50 206 ms), which is itself the evidence
+against H3.
+
+An attribution question the run answered, kept because it will recur: a second local commit (bb082d37,
+21:55:23) existed in the same freeze window, and the stage's ref diff did not show it. Three explanations were
+possible - it preceded the baseline, the tree was a separate clone, or the enumeration missed it. It is the
+first: refs_before_B.txt was written 21:55:31, eight seconds later, so the commit sits identically in that
+stage's before and after; the tree was enumerated normally (line 30 of 44 worktree HEAD lines). No verdict
+needed widening or rerunning. Neither peer breached the terms then in force, which named pushes, fetches,
+checkouts, worktree adds and builds, not local commits.
+
+What this does NOT establish, which matters more than the counts above. Both real hangs happened in the lead's
+build/fable/wti, and this isolation never touched wti: it ran entirely in 0c's own worktree. The verdict is
+"not reproduced in 0c's tree", NOT "the hang is gone". Strength: 200 clean runs each in A, B and D make H1, H2
+and H3 unlikely at the observed ~6.5 per 100 rate (0.935^200 is about 1.5e-6), but C's 30 runner runs carry
+about a 13% chance of missing such a defect, so C confirms and does not exclude; H4 (the output path) is
+readable only from a capture, and there was none. The step this file named from the start and which is still
+outstanding is stage A, and B, inside wti itself, archive only, no build and no checkout, leaving that tree
+byte-identical. What protects the gate chain today is not this result but the 120 s bound: a recurrence fails
+that gate in 120 s with a named line and evidence.json instead of holding the chain for hours.
+
+Logs: scratchpad/archive_hang/{A,B,B2,C,D} - stage_X.log, refs_before_X.txt, refs_after_X.txt, codex_before_D
+and codex_after_D, per-run GIT_TRACE2_EVENT .trace2.json and GIT_TRACE2_PERF .perf.txt, plus the generated
+stage_b_line49.ps1 and stage_d_git_load.ps1.
+Falsify: for A, B2 and D, diff refs_before_X.txt refs_after_X.txt prints nothing. For C the codex lines must be
+stripped from BOTH files before diffing -
+  diff <(grep -v codex/turn-diffs refs_before_C.txt) <(grep -v codex/turn-diffs refs_after_C.txt)
+prints nothing; piping one diff through grep -v does not, because it leaves the hunk header 47c47 and the ---
+separator behind and so demonstrates nothing.
