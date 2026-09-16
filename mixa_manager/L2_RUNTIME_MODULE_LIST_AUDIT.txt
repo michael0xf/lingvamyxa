@@ -608,3 +608,32 @@ because it links the REAL object directly with no such staging).
 Reported as a finding for whoever owns l2trans/core L2 work; not fixed
 here, per this session's own role boundary and the ticket's own "a fix
 if it is one site" condition -- it is not.
+
+--- Fix: composite_glyphs' ten "subscripted value" errors
+
+First one, cited directly: mixa_composite_glyphs_l2.c:7483:48, `l2_q25
+= ((((unsigned)((((MixaU8)cell -> fg[0]))))));` -- gcc: "subscripted
+value is neither array nor pointer nor vector". `fg` is `MixaCellByte:
+fg`, a plain scalar field in `struct: MixaCell` (mixa_tiles_l2.h.lm1)
+-- not an own-Array, nothing to index. Traced to the generating L2
+source: mixa_composite_glyphs.lm2:190, `fg: (cast: (unsigned) (cast:
+(MixaU8) cell\fg[0]))` -- the `[0]` is simply wrong, applied to a
+scalar field read. The accepted form, cited directly from the real,
+unmodified oracle: mixa_composite_glyphs.lm1:172, `fg: cell\fg` -- no
+index, no cast, matching mixa_tiles_l2.h.lm1's own struct declaration
+exactly. Same shape as :463 in kind (indexing something that isn't
+indexable) but not the same construct -- :463 was an own-Array local
+needing the bare-name adapter; this is a plain scalar struct field
+that needed no `[0]` at all, ever.
+
+Fix: removed `[0]` from all ten occurrences (`cell\fg[0]` -> `cell\fg`,
+`cell\bg[0]` -> `cell\bg`, `cell\alpha[0]` -> `cell\alpha`, five of
+each shape at :190/:192(x2)/:194/:196 and the identical block at
+:254/:256(x2)/:258/:260) -- the cast wrapping itself is left
+untouched, matching every other L2-ported call site in this file that
+already casts real fields this way without indexing them.
+
+Before: UNEXPECTED_FAILURE (compile, 10 errors, same line numbers as
+the earlier before/after cycle recorded above). After: PASS -- full
+translation, build, and run; L2 trace byte-identical to the oracle's
+own trace across all four scenarios.

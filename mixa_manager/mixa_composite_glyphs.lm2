@@ -187,13 +187,13 @@ fn: mixa_composite_glyphs (@: MixaBackend backend; const: @(MixaTextRect text_re
             if: cell_x < width && cell_y < height
                 cell: (cast: (@: MixaCell) mixa_cell_at_const(text_rect, row, col))
                 cp: cell\codepoint
-                fg: (cast: (unsigned) (cast: (MixaU8) cell\fg[0]))
+                fg: (cast: (unsigned) (cast: (MixaU8) cell\fg))
                 if: mixa_tile_is(cp) != 0
-                    mixa_tile_paint_cell(cp, (cast: (unsigned) (cast: (MixaU8) cell\bg[0])), (cast: (unsigned) (cast: (MixaU8) cell\alpha[0])), cell_x, cell_y, text_cw, text_ch, out_rgba, width, height)
+                    mixa_tile_paint_cell(cp, (cast: (unsigned) (cast: (MixaU8) cell\bg)), (cast: (unsigned) (cast: (MixaU8) cell\alpha)), cell_x, cell_y, text_cw, text_ch, out_rgba, width, height)
                 else:
-                    sa: (cast: (unsigned) (cast: (MixaU8) cell\alpha[0]))
+                    sa: (cast: (unsigned) (cast: (MixaU8) cell\alpha))
                     if: sa != 0U
-                        bg: (cast: (unsigned) (cast: (MixaU8) cell\bg[0]))
+                        bg: (cast: (unsigned) (cast: (MixaU8) cell\bg))
                         c.mixa_palette_rgb(bg, pr, pg, pb)
                         y: 0U
                         while: y < text_ch
@@ -251,13 +251,13 @@ fn: mixa_composite_glyphs (@: MixaBackend backend; const: @(MixaTextRect text_re
             if: cell_x < width && cell_y < height
                 cell: (cast: (@: MixaCell) mixa_cell_at_const(upper_rect, row, col))
                 cp: cell\codepoint
-                fg: (cast: (unsigned) (cast: (MixaU8) cell\fg[0]))
+                fg: (cast: (unsigned) (cast: (MixaU8) cell\fg))
                 if: mixa_tile_is(cp) != 0
-                    mixa_tile_paint_cell(cp, (cast: (unsigned) (cast: (MixaU8) cell\bg[0])), (cast: (unsigned) (cast: (MixaU8) cell\alpha[0])), cell_x, cell_y, upper_cw, upper_ch, out_rgba, width, height)
+                    mixa_tile_paint_cell(cp, (cast: (unsigned) (cast: (MixaU8) cell\bg)), (cast: (unsigned) (cast: (MixaU8) cell\alpha)), cell_x, cell_y, upper_cw, upper_ch, out_rgba, width, height)
                 else:
-                    sa: (cast: (unsigned) (cast: (MixaU8) cell\alpha[0]))
+                    sa: (cast: (unsigned) (cast: (MixaU8) cell\alpha))
                     if: sa != 0U
-                        bg: (cast: (unsigned) (cast: (MixaU8) cell\bg[0]))
+                        bg: (cast: (unsigned) (cast: (MixaU8) cell\bg))
                         c.mixa_palette_rgb(bg, pr, pg, pb)
                         y: 0U
                         while: y < upper_ch
