@@ -35,7 +35,10 @@ fi
 
 X=/c/Nyasha_Planet/lingvamyxa/build/fable/wti
 ACCEPT_REF=origin/fable/s6-2-acceptance
-ACCEPT_EXPECT=4189dea0
+# 96a754e0 since 2026-09-16: the coordinator narrowed the probe's refs needle (the bare
+# InterlockedCompareExchange match counted 178 unrelated spin-cell lines and no holder count, so -Part 2
+# could not reach 0 on any tip). 4189dea0 was the base before that ruling.
+ACCEPT_EXPECT=96a754e0
 MEAS=/c/Nyasha_Planet/wt0c_s62_measure
 # The log directory is derived, not a constant. land_base3.sh's L= is an absolute path into one session's
 # scratchpad -- d6 committed that wart rather than hiding it -- and copying the line would tie this script to

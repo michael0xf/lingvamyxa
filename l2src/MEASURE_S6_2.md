@@ -11,7 +11,10 @@ included), **comment text counts**, and `-Part 2` exits 0 exactly when `refs` an
 test**: a relative call from another worktree silently measures that other worktree (d6 lost one run to
 this).
 
-Acceptance base: `fable/s6-2-acceptance` **4189dea0** = `7b3a8668` merged with `d6/lock-s6-red` 695d54fc.
+Acceptance base: `fable/s6-2-acceptance` **96a754e0** (2026-09-16) = the former base `4189dea0` plus the
+coordinator's narrowing of the probe's `refs` needle, in two commits: `6b15d8e8` the needle, `96a754e0` the
+header stating the narrowing and its reason. `4189dea0` itself is `7b3a8668` merged with `d6/lock-s6-red`
+695d54fc. Every number below is re-measured on `96a754e0`; the figures against `4189dea0` are superseded.
 The probe is never folded into the stage's own history; the green is measured on a separate measuring
 branch.
 
@@ -22,11 +25,13 @@ Timeouts below are bounds, not expectations: a step that hits one is a red landi
 
 ## Leg 1 - RED, on the base
 
-Measured by 0c at 4189dea0, 2026-09-15: `refs=342 runtime_lists=36`, `S6-2 RED`, exit 1.
+Measured by 0c at 96a754e0, 2026-09-16: `refs=163 runtime_lists=36`, `S6-2 RED`, exit 1. (The same tree
+read `refs=342` under the old needle; 163 is the holder count alone, without the 178 unrelated spin-cell
+lines and with one line matching two needles counted once.)
 
 ```bash
 W=/c/Nyasha_Planet/wt0c_s62_red
-git -C /c/Nyasha_Planet/lingvamyxa worktree add -q --detach "$W" 4189dea0
+git -C /c/Nyasha_Planet/lingvamyxa worktree add -q --detach "$W" 96a754e0
 cd "$W"
 timeout 120 powershell -NoProfile -ExecutionPolicy Bypass -File l2src/run_lock_s6_probe.ps1 -Part 2
 echo "exit=$?"
@@ -34,12 +39,12 @@ echo "exit=$?"
 
 | expect | value |
 | --- | --- |
-| count line | `S6 probe: exec_lock_calls=0 exec_lock_decl=0 host_lock=0 exec_fields=0 \| refs=342 runtime_lists=36` |
+| count line | `S6 probe: exec_lock_calls=0 exec_lock_decl=0 host_lock=0 exec_fields=0 \| refs=163 runtime_lists=36` |
 | verdict line | `S6-2 RED` (and `S6-1 GREEN`, since S6-1 has landed) |
 | exit | 1 |
 | timeout | 120 s |
 
-If `refs` is not 342 here, the base moved: stop and re-derive the number before measuring any green, since
+If `refs` is not 163 here, the base moved: stop and re-derive the number before measuring any green, since
 the falsifier's arithmetic below is stated against it.
 
 ## Leg 2 - GREEN, on a measuring merge
@@ -52,7 +57,7 @@ STAGE=origin/d6/lock-s6-2          # the stage tip being accepted
 M=/c/Nyasha_Planet/wt0c_s62_measure
 git -C /c/Nyasha_Planet/lingvamyxa worktree add -q -b fable/s6-2-measure "$M" "$STAGE"
 cd "$M"
-git merge --no-ff -q -m "measuring merge: the S6-2 stage tip with 4189dea0 for the probe" origin/fable/s6-2-acceptance
+git merge --no-ff -q -m "measuring merge: the S6-2 stage tip with 96a754e0 for the probe" origin/fable/s6-2-acceptance
 timeout 120 powershell -NoProfile -ExecutionPolicy Bypass -File l2src/run_lock_s6_probe.ps1 -Part 2
 echo "probe exit=$?"
 ```
@@ -66,6 +71,29 @@ echo "probe exit=$?"
 
 Assert the printed line **and** the exit, never the exit alone: the probe prints its counts before it
 decides, so a 0 exit with a non-zero count line would be a defect in the probe rather than a green stage.
+
+> **The needle was narrowed on 2026-09-16, and why it had to be.** Under the original needle `-Part 2`
+> could not reach `refs=0` on **any** tip, including one where the stage's work is complete: `$hRefs`
+> counted bare `InterlockedCompareExchange` across a flat `ls-files` of all `l2src` sources. Measured at
+> `95de9bf4`, where the holder count is genuinely gone (`lmx_msg_endp_retain(`, `endp_release(`,
+> `endp_refs(`, `->refs` and `\refs` all 0, the `refs;` field out of `struct LmxMsg`, both
+> `(LONG *)&m->refs` loops deleted), the probe still read **178**: 172 of the exec selftest's own spin
+> cells, 5 in `tests/cancel_spin_host.c`, and 1 in `lmx_message_exec.c:352` -- a **comment** recording the
+> removal. Comment text counts, so a perfect deletion still left `refs >= 1` while that sentence stood.
+> The criterion conflated "the refs holder count is gone" with "no atomic compare-exchange appears anywhere
+> in l2src", and only the first is what S6-2 does.
+> **The ruling (the coordinator, on his own branch, since the acceptance is his):** the bare
+> `InterlockedCompareExchange` needle is dropped; the base's two loops already match `->refs`, so it only
+> ever added spin-cell lines and never a holder count. `$hRefs` is now
+> `'lmx_msg_endp_retain(', 'lmx_msg_endp_release(', 'lmx_msg_endp_refs(', '->refs', '\refs'` (probe line
+> 78), with the header stating the narrowing and its reason, and it was decided **before** the green leg
+> was measured -- which is what makes it a criterion change rather than a result fitted to a number.
+> **What was not done, and must not be:** editing the selftest's spin cells, or deleting the comment.
+> Either turns red to green without changing anything the criterion is about -- a pass that means nothing,
+> the mirror of a check that cannot fail. The comment is exactly what a later reader needs.
+> Verified here rather than taken from the ruling: probe `-Part 2` on a detached `96a754e0` prints
+> `refs=163 runtime_lists=36`, `S6-2 RED`. At the lead's `95de9bf4` merged with this base the coordinator
+> measures `refs=0 runtime_lists=32` -- the holder count gone, the registry still to go.
 
 Then, in the same measuring tree, the runners. The pin is rebuilt over by any runner that regenerates gen2,
 so re-install it (`l2src/install_pin.ps1 -Tree "$M"`, exit 2 on mismatch) **before each** of these.
@@ -137,7 +165,7 @@ echo "exit=$? (expect 0); dirty=$(git status --porcelain | wc -l) (expect 0)"
 
 | stage | expect |
 | --- | --- |
-| after the mutation | `refs=1`, `S6-2 RED`, exit 1, and `git diff --numstat` showing exactly one added line |
+| after the mutation | `refs` one higher than the tree's own figure -- **0 -> 1** on a green measuring merge, **163 -> 164** on the red base -- `S6-2 RED`, exit 1, and `git diff --numstat` showing exactly one added line |
 | after the restore | `refs=0 runtime_lists=0`, `S6-2 GREEN`, exit 0, `git status --porcelain` empty |
 
 **Check the diff, not only the count.** A mutation that matches nothing prints a clean "red-to-green" story
@@ -166,12 +194,15 @@ case. They fail **differently**, each firing its own named assertion -- which is
 one mechanism from one mechanism carrying a redundant check. A pair that reds the same assertion has tested
 one thing twice.
 
-Proven by 0c on the red tree at 4189dea0, 2026-09-15, since no green tree exists yet, and proven with this
+Proven by 0c on the red tree at 96a754e0, 2026-09-16, since no green tree exists yet, and proven with this
 exact line rather than inherited from an earlier draft that used a comment: appending
-`git show 7b3a8668:l2src/lmx_message.lm1 | sed -n '1237p'` took `refs` **342 -> 343**,
+`git show 7b3a8668:l2src/lmx_message.lm1 | sed -n '1237p'` took `refs` **163 -> 164**,
 `git diff --numstat` printed exactly `1  0  l2src/lmx_message.lm1`, and `git checkout --` returned it to
-**342** with a clean tree. On a green tree the same step reads **0 -> 1**, `S6-2 GREEN` -> `S6-2 RED`,
+**163** with a clean tree. On a green tree the same step reads **0 -> 1**, `S6-2 GREEN` -> `S6-2 RED`,
 exit 0 -> exit 1.
+These figures were re-measured on 96a754e0 after the needle was narrowed, not converted arithmetically from
+the old base's 342 -> 343: the narrowing changes which lines count, so the old delta is not evidence about
+the new criterion even though both are "one more".
 
 Any of the twenty retain sites in that file serves; 1237 is chosen because it is a plain call in `send`,
 not inside a macro or a generated block. If a future base renumbers the file, take the line number from
@@ -183,8 +214,9 @@ not inside a macro or a generated block. If a future base renumbers the file, ta
 
 - Every command above is plain `bash`; extracting the fenced blocks and running `bash -n` on them exits 0.
 - Every step names a marker line and a timeout; a step with neither is a step that cannot fail.
-- The red numbers: `run_lock_s6_probe.ps1 -Part 2` in a tree at 4189dea0 prints
-  `| refs=342 runtime_lists=36`, `S6-2 RED`, exit 1.
+- The red numbers: `run_lock_s6_probe.ps1 -Part 2` in a tree at 96a754e0 prints
+  `| refs=163 runtime_lists=36`, `S6-2 RED`, exit 1. (Against the superseded base 4189dea0 the same tree
+  read `refs=342`, under the needle the coordinator narrowed on 2026-09-16.)
 - The markers are `run_gates.ps1`'s own: `git show <tip>:l2src/run_gates.ps1 | sed -n '70,101p'` shows each
   quoted row.
 - The green leg's numbers are the only ones not yet measured: they are stated as expectations, and the
