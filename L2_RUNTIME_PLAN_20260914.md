@@ -8668,3 +8668,27 @@ envelope's address field, broken in his own work within the hour):
 live_m and live_id are freed in slot_free with the record's other
 allocations. No spelling blocks him; the first build after the
 letter and the free-partner land.
+The lead's correction of his own line: "ws6's newest mtime within the
+last few minutes" was asserted without running it; measured 04:40:49
+against 05:34:15 (fifty-four minutes); the files were where he said
+(the parity counts read the new content back), only the claim was
+invented; his fifth stale-belief incident, recorded in his words. A
+HOLE in the removal ruling, found by reading teardown: release_slot
+unlinks before posting, teardown_free walks first_child so it never
+reaches an unlinked record, and runtime_delete frees rt\transport
+before teardown_free, so a record whose unregister-and-free letter is
+still queued at runtime_delete (or was never allocated, OOM) is never
+freed. RULED: (3) the teardown sweep, the lead's: before teardown_free
+frees R0, walk R0's live set and slot_free every RELEASED entry (no new
+state; RELEASED plus presence in the set is "released but not yet
+freed"; the order matters since R0's slot_free takes live_m and
+live_id with it); (4) on a failed post release_slot leaves the record
+RELEASED and unfreed for that sweep: an accepted cost written in the
+section beside the one-hop-later free ("under memory pressure a
+released record survives until runtime_delete"), the alternatives
+being the hazard (a live-set entry naming freed memory) or the
+cross-lane write; meanwhile admit_one refuses the RELEASED record
+under its monitor, so the cost is memory, never safety. The arrays'
+free-partner is in slot_free beside done_from/done_id. Remaining: the
+poster, release_slot posting, the KIND_UNREGISTER handler, the sweep,
+both cores; then the first build.
