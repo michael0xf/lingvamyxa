@@ -101,7 +101,8 @@ end: send_init_case
 fn: send_query_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
     @: LmxMsg source
     @: LmxMsgEnv wake
-    unsigned: segment 0U
+    c.array: [16]: unsigned addr
+    int: addr_n 0
     int: st
     source: (cast: (@: LmxMsg) ctx)
     wake: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
@@ -111,8 +112,11 @@ fn: send_query_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
     send_check(lmx_msg_turn_self(rt) = source, "real self-turn callback context")
     send_check(lmx_msg_state(rt, who) = source\state, "self state query")
     send_check(lmx_msg_inbox_n(rt, who) = 0, "self empty inbox query")
-    send_check(lmx_msg_path_n(rt, who) = source\path_n, "self path length query")
-    send_check(lmx_msg_path_seg(rt, who, 0, @ segment) = LMX_MSG_OK && segment = source\path[0], "self path segment query")
+    # S6-2: the path accessors went with the arrays; the address is composed by
+    # the walk, and its last index is the record's own index at its parent.
+    addr_n: lmx_msg_get_address(rt, who, addr, 16)
+    send_check(addr_n >= 2 && addr_n <= 16, "self address length query")
+    send_check(addr_n >= 2 && addr_n <= 16 && addr[0] = 1U && addr[addr_n - 1] = source\index, "self address index query")
     send_check(lmx_msg_child_n(rt, who) = 0 && lmx_msg_child_at(rt, who, 0) = 0U, "self empty child queries")
     send_init_case(rt, who, source)
     st: lmx_msg_end_turn(rt, who, 1)

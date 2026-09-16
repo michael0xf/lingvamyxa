@@ -27,8 +27,12 @@
 #     callbacks=2 at each requested level and checks the module's imports.
 #   port_mail_chain: not exact; run_msg_mail_chain pins checks=26 at each level
 #     and requires no imports.
-#   port_path_storage: not exact; run_msg_path_storage builds O0 and O2, requires
-#     exactly the realloc import and pins 541/543 checks with allocations=11.
+#   port_path_storage: deleted at S6-2 step 5 with the lmx_msg_path_storage module.
+#     SPEC 19.29.7: a Message's address field reduces to its index at its parent and
+#     the full address is composed by walking the parent links (lmx_msg_get_address),
+#     so the path arrays -- the module's only production callers -- went with it.
+#     COUNT after this row: the $gates array holds 28 literal rows (29 before), and
+#     a landing run with -L2MessageRoot reports 29/29 (30/30 before).
 #   port_slots: deleted at S6-2 with the lmx_msg_slots module itself. SPEC 19.28
 #     Revision 2: the slot list "served only the L1 delete loop and its address
 #     lookup and goes without replacement" -- the lookup is the family walk, and
@@ -100,7 +104,6 @@ $gates = @(
     @('port_history', 'run_port_msg_history_owned.ps1', '', 'lmx_msg_history_owned parity PASS'),
     @('port_liveness', 'run_port_msg_liveness.ps1', '', 'lmx_msg_liveness parity PASS'),
     @('port_mail_chain', 'run_port_msg_mail_chain.ps1', '', 'lmx_msg_mail_chain parity PASS'),
-    @('port_path_storage', 'run_port_msg_path_storage.ps1', '', 'lmx_msg_path_storage parity PASS'),
     @('port_roots_stale', 'run_port_msg_roots_stale.ps1', '', 'lmx_msg_roots_stale parity PASS'),
     @('port_storage', 'run_port_msg_storage.ps1', '', 'lmx_msg_storage parity PASS'),
     @('port_visit', 'run_port_msg_visit.ps1', '', 'lmx_msg_visit parity PASS'),

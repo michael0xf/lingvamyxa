@@ -2,6 +2,19 @@ predef: "lmx_message.lm1"
 include: "<stdio.h>"
 
 c.array: []: unsigned lmx_poll_buf 8
+c.array: []: unsigned lmx_addr_buf 32
+
+# S6-2: the path accessors went with the arrays. This reads index i of a
+# Message's composed address (lmx_msg_get_address, the walk up the parent links)
+# with the old accessor's contract: INVALID past the end, OK and the index
+# otherwise, so the assertions below keep their shape.
+fn: selftest_addr_seg (@: LmxMsgRuntime rt; unsigned: who; int: i; @: unsigned out) int
+    int: n
+    n: lmx_msg_get_address(rt, who, lmx_addr_buf, 32)
+    if: n < 1 || n > 32 || i < 0 || i >= n
+        return: c.LMX_MSG_INVALID
+    \out: lmx_addr_buf[i]
+return: c.LMX_MSG_OK
 
 fn: main () int
     @: LmxMsgRuntime rt
@@ -121,21 +134,21 @@ fn: main () int
     unsigned: seg 0U
     # Stage 5 (d1): a Message created without a parent is R0's child, so its
     # path is R0's [1] plus its own segment, and every depth below gains one.
-    if: lmx_msg_path_n(rt, parent) != 2
+    if: lmx_msg_get_address(rt, parent, 0, 0) != 2
         c.printf("root path depth\n")
         fail: fail + 1
-    st: lmx_msg_path_seg(rt, parent, 0, @ seg)
+    st: selftest_addr_seg(rt, parent, 0, @ seg)
     if: st != c.LMX_MSG_OK || seg != 1U
         c.printf("root path not 1\n")
         fail: fail + 1
-    if: lmx_msg_path_n(rt, child) != 3
+    if: lmx_msg_get_address(rt, child, 0, 0) != 3
         c.printf("child path depth\n")
         fail: fail + 1
-    st: lmx_msg_path_seg(rt, child, 0, @ seg)
+    st: selftest_addr_seg(rt, child, 0, @ seg)
     if: st != c.LMX_MSG_OK || seg != 1U
         c.printf("child path prefix\n")
         fail: fail + 1
-    st: lmx_msg_path_seg(rt, child, 2, @ seg)
+    st: selftest_addr_seg(rt, child, 2, @ seg)
     if: st != c.LMX_MSG_OK || seg != 1U
         c.printf("child path not 1.1\n")
         fail: fail + 1
@@ -519,27 +532,27 @@ fn: main () int
         st: lmx_msg_create(rt2, p0, payload, 4U, @ c1)
         st: lmx_msg_create(rt2, p0, payload, 4U, @ c2)
         st: lmx_msg_create(rt2, c1, payload, 4U, @ g1)
-        if: lmx_msg_path_n(rt2, c1) != 3 || lmx_msg_path_n(rt2, c2) != 3 || lmx_msg_path_n(rt2, g1) != 4
+        if: lmx_msg_get_address(rt2, c1, 0, 0) != 3 || lmx_msg_get_address(rt2, c2, 0, 0) != 3 || lmx_msg_get_address(rt2, g1, 0, 0) != 4
             c.printf("sibling/grandchild depth\n")
             fail: fail + 1
-        st: lmx_msg_path_seg(rt2, c1, 2, @ seg)
+        st: selftest_addr_seg(rt2, c1, 2, @ seg)
         if: seg != 1U
             c.printf("first sibling not .1\n")
             fail: fail + 1
-        st: lmx_msg_path_seg(rt2, c2, 2, @ seg)
+        st: selftest_addr_seg(rt2, c2, 2, @ seg)
         if: seg != 2U
             c.printf("second sibling not .2\n")
             fail: fail + 1
-        st: lmx_msg_path_seg(rt2, g1, 0, @ seg)
+        st: selftest_addr_seg(rt2, g1, 0, @ seg)
         if: seg != 1U
             c.printf("grandchild root seg\n")
             fail: fail + 1
         # M: the runtime creates no UI lane, so p0 is R0's first child: [1, 1].
-        st: lmx_msg_path_seg(rt2, g1, 1, @ seg)
+        st: selftest_addr_seg(rt2, g1, 1, @ seg)
         if: seg != 1U
             c.printf("grandchild mid seg\n")
             fail: fail + 1
-        st: lmx_msg_path_seg(rt2, g1, 2, @ seg)
+        st: selftest_addr_seg(rt2, g1, 2, @ seg)
         if: seg != 1U
             c.printf("grandchild not 1.1.1\n")
             fail: fail + 1
@@ -547,14 +560,14 @@ fn: main () int
         while: k < 11
             st: lmx_msg_create(rt2, p0, payload, 4U, @ c10)
             k: k + 1
-        if: lmx_msg_path_n(rt2, c10) != 3
+        if: lmx_msg_get_address(rt2, c10, 0, 0) != 3
             c.printf("tenth sibling depth\n")
             fail: fail + 1
-        st: lmx_msg_path_seg(rt2, c10, 2, @ seg)
+        st: selftest_addr_seg(rt2, c10, 2, @ seg)
         if: seg != 10U
             c.printf("multi-digit segment not 10\n")
             fail: fail + 1
-        if: lmx_msg_path_seg(rt2, g1, 4, @ seg) != c.LMX_MSG_INVALID
+        if: selftest_addr_seg(rt2, g1, 4, @ seg) != c.LMX_MSG_INVALID
             c.printf("path_seg accepted past depth\n")
             fail: fail + 1
         st: lmx_msg_create(rt2, p0, payload, 4U, @ stale_p)
@@ -566,7 +579,7 @@ fn: main () int
         if: retried_p = 0U || retried_p = stale_p
             c.printf("retry after abort reused slot\n")
             fail: fail + 1
-        st: lmx_msg_path_seg(rt2, retried_p, 2, @ seg)
+        st: selftest_addr_seg(rt2, retried_p, 2, @ seg)
         if: seg != 12U
             c.printf("retry after abort reused path segment\n")
             fail: fail + 1
@@ -669,7 +682,7 @@ fn: main () int
         deep: nxt
         di: di + 1
     ---
-    if: lmx_msg_path_n(prt, deep) != 22
+    if: lmx_msg_get_address(prt, deep, 0, 0) != 22
         c.printf("deep path n\n")
         fail: fail + 1
     lmx_msg_runtime_delete(prt)

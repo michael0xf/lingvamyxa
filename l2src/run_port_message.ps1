@@ -19,7 +19,7 @@
 # the translation-time unit graph lands.
 #
 # A C driver opens the unit with real calls BEFORE the selftest's main: a
-# runtime, a root Message with init bytes, find, state, child_n, path_n,
+# runtime, a root Message with init bytes, find, state, child_n, get_address,
 # then delete. It reports "warm-up ok" on stderr.
 #
 # The selftest prints wall-clock fields (ui_ms, cpu_busy_ui_ms, ui_step_ms,
@@ -151,7 +151,7 @@ $redirect = ($redirects | ForEach-Object { '-D' + $_.abi + '=' + $_.unit }) -joi
 #    under -DLMX_MSG_EXEC_TEST, history with its counted malloc/free. The
 #    handwritten lmx_message stays in every link under the real names.
 # ---------------------------------------------------------------------------
-$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
 $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
 foreach ($name in $names) {
     Step "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $out "header_$name.log")) (Join-Path $out "header_$name.log")
@@ -348,7 +348,7 @@ int main(int argc, char **argv) {
     if (rt == 0) { fprintf(stderr, "warm-up: runtime_new\n"); return 90; }
     if (lmx_msg_create(rt, 0U, init, 4U, &a) != LMX_MSG_OK || a == 0) { fprintf(stderr, "warm-up: create\n"); return 91; }
     if (lmx_msg_find(rt, a) == 0 || lmx_msg_state(rt, a) != LMX_MSG_STATE_RUNNING) { fprintf(stderr, "warm-up: find/state\n"); return 92; }
-    if (lmx_msg_child_n(rt, a) != 0 || lmx_msg_path_n(rt, a) != 2 || lmx_msg_inbox_n(rt, a) != 0) { fprintf(stderr, "warm-up: queries\n"); return 93; }
+    if (lmx_msg_child_n(rt, a) != 0 || lmx_msg_get_address(rt, a, 0, 0) != 2 || lmx_msg_inbox_n(rt, a) != 0) { fprintf(stderr, "warm-up: queries\n"); return 93; }
     if (lmx_msg_create(rt, 0U, init, 4U, &a) != LMX_MSG_OK) { fprintf(stderr, "warm-up: create again\n"); return 94; }
     if (lmx_msg_find(rt, 999U) != 0 || lmx_msg_state(rt, 999U) != -1) { fprintf(stderr, "warm-up: unknown address\n"); return 95; }
     lmx_msg_runtime_delete(rt);

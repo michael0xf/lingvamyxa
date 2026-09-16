@@ -3,7 +3,6 @@ predef: "l2src/lmx_msg_visit.h.lm1"
 predef: "l2src/lmx_msg_liveness.h.lm1"
 predef: "l2src/lmx_msg_blocks.h.lm1"
 predef: "l2src/lmx_owned_ranges.h.lm1"
-predef: "l2src/lmx_msg_path_storage.h.lm1"
 predef: "l2src/lmx_msg_storage.h.lm1"
 predef: "l2src/lmx_message_graph_copy.h.lm1"
 predef: "l2src/lmx_chars_owned.h.lm1"
@@ -742,8 +741,17 @@ fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsg
         ---
         a: a\parent_msg
     ---
+    if: q\child_seq + 1U = 0U
+        return: c.LMX_MSG_NOMEM
+    ---
     msg_child_chain_remove(p, ch)
     msg_child_link(q, ch)
+    # S6-2 (SPEC 19.29.7): "when a Message changes parent its address changes,
+    # composed from the parent's address and its index" -- the index is minted by
+    # the new parent exactly as at creation, so it never collides with a sibling
+    # there; every descendant's address follows by the walk, with nothing stored.
+    q\child_seq: q\child_seq + 1U
+    ch\index: q\child_seq
     ch\parent: q\addr
     ch\child_heard_at: c.lmx_msg_now(rt)
     ch\live_query_id: 0U
@@ -1080,10 +1088,6 @@ sub: msg_teardown_free (@: LmxMsg m)
         c.free((cast: (@: void) m\init))
     ---
     m\init: 0
-    if: m\path != 0
-        c.free((cast: (@: void) m\path))
-    ---
-    m\path: 0
     c.lmx_msg_slot_free(m)
 end: msg_teardown_free
 
@@ -1206,36 +1210,21 @@ fn: msg_grow (@: LmxMsgRuntime rt) int
     return: c.lmx_msg_tab_grow(rt)
 end: msg_grow
 
+# S6-2 (SPEC 19.29.7): a Message's address field reduces to its index at its
+# parent; the full address is composed by msg_address_of walking the parent links.
+# The path arrays this function used to fill were a materialized cache of that
+# walk, and went with the path_storage module. Nothing is allocated here any more.
 fn: msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; @: LmxMsg p) int
-    int: i 0
-    int: st
     if: rt = 0 || slot = 0
         return: c.LMX_MSG_INVALID
     if: p = 0
-        # S5: only R0 is created without a parent, so its path is [1].
-        st: lmx_msg_path_grow(@ slot\path, @ slot\path_cap, 1)
-        if: st != c.LMX_MSG_OK
-            return: st
-        slot\path[0]: 1U
-        slot\path_n: 1
-        # S6-2: R0's index, which is the whole of its address.
+        # S5: only R0 is created without a parent; its index is the whole of its
+        # address, [1].
         slot\index: 1U
         return: c.LMX_MSG_OK
-    if: p\path_n < 1 || p\path_n = 2147483647
-        return: c.LMX_MSG_NOMEM
     if: p\child_seq + 1U = 0U
         return: c.LMX_MSG_NOMEM
-    st: lmx_msg_path_grow(@ slot\path, @ slot\path_cap, p\path_n + 1)
-    if: st != c.LMX_MSG_OK
-        return: st
     p\child_seq: p\child_seq + 1U
-    while: i < p\path_n
-        slot\path[i]: p\path[i]
-        i: i + 1
-    slot\path[p\path_n]: p\child_seq
-    slot\path_n: p\path_n + 1
-    # S6-2: the index at the parent -- the same value the array's last element
-    # already carried, kept once the array goes.
     slot\index: p\child_seq
     return: c.LMX_MSG_OK
 end: msg_assign_path
@@ -1787,12 +1776,6 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     ---
     m\init: 0
     m\init_n: 0U
-    if: m\path != 0
-        c.free((cast: (@: void) m\path))
-    ---
-    m\path: 0
-    m\path_n: 0
-    m\path_cap: 0
     m\state: c.LMX_MSG_STATE_RELEASED
     m\committed: 0
     # S6-2 (the removal ruling): the record is freed by its SERVICE, not here.
@@ -2771,7 +2754,7 @@ fn: msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
 end: msg_inbox_n
 
 # S6-2 (SPEC 19.29.7, Mikhail's getAddress): the public address composer. It
-# resolves the Message the way msg_path_n already does -- the turn's own slot
+# resolves the Message the way msg_inbox_n already does -- the turn's own slot
 # first, otherwise the owner's lane and a find -- and then walks the parent links.
 # Returns the number of indices, or -1 when the Message is not reachable; fills
 # out[0..n-1] root-first when out is non-zero and cap is at least n, and otherwise
@@ -2827,45 +2810,6 @@ fn: msg_send_address (@: LmxMsgRuntime rt; LmxMsgAddr: from; const: @(unsigned a
     ---
     return: msg_service_send_address(rt, msg_service_of(src), from, addr, addr_n, env)
 end: msg_send_address
-
-fn: msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
-    @: LmxMsg m
-    int: pn
-    m: msg_turn_slot(rt, who)
-    if: m != 0
-        return: m\path_n
-    ---
-    if: msg_require_owner(rt) != c.LMX_MSG_OK
-        return: -1
-    ---
-    m: msg_self_or_find(rt, who)
-    if: m = 0
-        return: -1
-    pn: m\path_n
-    return: pn
-end: msg_path_n
-
-fn: msg_path_seg (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i; @: unsigned out) int
-    @: LmxMsg m
-    if: out = 0 || i < 0
-        return: c.LMX_MSG_INVALID
-    m: msg_turn_slot(rt, who)
-    if: m != 0
-        if: m\path = 0 || i >= m\path_n
-            return: c.LMX_MSG_INVALID
-        ---
-        \out: m\path[i]
-        return: c.LMX_MSG_OK
-    ---
-    if: msg_require_owner(rt) != c.LMX_MSG_OK
-        return: c.LMX_MSG_INVALID
-    ---
-    m: msg_self_or_find(rt, who)
-    if: m = 0 || m\path = 0 || i >= m\path_n
-        return: c.LMX_MSG_INVALID
-    \out: m\path[i]
-    return: c.LMX_MSG_OK
-end: msg_path_seg
 
 fn: msg_child_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m

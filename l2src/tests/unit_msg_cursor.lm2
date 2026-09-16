@@ -10,10 +10,12 @@
 # count that reads a cached field rather than traversing. So it is re-pointed at
 # fields that survive -- R0's own child chain -- instead of being deleted with the
 # module, which would have dropped that coverage silently.
+# S6-2 step 5 deleted path_n with the path arrays; the cached field read is now
+# live_n (R0's live-set count, an int field that survives).
 fn: count (const: @(LmxMsgRuntime rt)) int
     if: rt = 0 || rt\root = 0
         return: 0
-    return: rt\root\path_n
+    return: rt\root\live_n
 end: count
 fn: at (const: @(LmxMsgRuntime rt); int: i) LmxMsgAddr
     const: @(LmxMsg m)

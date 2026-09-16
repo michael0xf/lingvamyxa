@@ -76,8 +76,6 @@ $rngHdr = Join-Path $out "headers\l2src\lmx_owned_ranges.lm1.h"
 $rngC = Join-Path $out "lmx_owned_ranges.c"
 $stgHdr = Join-Path $out "headers\l2src\lmx_msg_storage.lm1.h"
 $stgC = Join-Path $out "lmx_msg_storage.c"
-$pathHdr = Join-Path $out "headers\l2src\lmx_msg_path_storage.lm1.h"
-$pathC = Join-Path $out "lmx_msg_path_storage.c"
 $mailHdr = Join-Path $out "headers\l2src\lmx_msg_mail_chain.lm1.h"
 $mailC = Join-Path $out "lmx_msg_mail_chain.c"
 $visitHdr = Join-Path $out "headers\l2src\lmx_msg_visit.lm1.h"
@@ -116,10 +114,6 @@ if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_owned_ranges.lm1" }
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_storage.h.lm1" }
 & $trans "l2src\lmx_msg_storage.lm1" $stgC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_storage.lm1" }
-& $trans "l2src\lmx_msg_path_storage.h.lm1" $pathHdr
-if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_path_storage.h.lm1" }
-& $trans "l2src\lmx_msg_path_storage.lm1" $pathC
-if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_path_storage.lm1" }
 & $trans "l2src\lmx_msg_mail_chain.h.lm1" $mailHdr
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_mail_chain.h.lm1" }
 & $trans "l2src\lmx_msg_mail_chain.lm1" $mailC
@@ -220,7 +214,7 @@ function Get-LmxObject([string]$Source, [string[]]$Defines = @()) {
     return $obj
 }
 function Get-LmxSupportObjects([string[]]$Defines = @(), [string[]]$HistoryDefines = $null) {
-    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $mailC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC, $copyC, $msgCopyC)) {
+    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $mailC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC, $copyC, $msgCopyC)) {
         Get-LmxObject $source $Defines
     }
     $histDefs = $Defines

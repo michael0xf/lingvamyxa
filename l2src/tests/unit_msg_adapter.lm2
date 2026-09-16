@@ -5,10 +5,12 @@
 # with the module, which would have dropped that coverage silently.
 # The function keeps its name for this pass: renaming is a second change, and I do
 # not yet know which graph_abi assertions key on emitted method names.
+# S6-2 step 5 deleted path_n with the path arrays; re-pointed again, at live_n
+# (R0's live-set count, an int field that survives), for the same reason.
 fn: slots_n (const: @(LmxMsgRuntime rt)) int
     if: rt = 0 || rt\root = 0
         return: 0
-    return: rt\root\path_n
+    return: rt\root\live_n
 end: slots_n
 fn: move_heads (@@: LmxMsgBlock db; @@: LmxOwnedRange dr; @@: LmxMsgBlock sb; @@: LmxOwnedRange sr) int
     if: db = 0 || dr = 0 || sb = 0 || sr = 0

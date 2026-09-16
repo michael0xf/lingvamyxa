@@ -12,7 +12,6 @@ struct Lmx;
 #include "l2src/lmx_msg_blocks.lm1.h"
 #include "l2src/lmx_owned_ranges.lm1.h"
 #include "l2src/lmx_msg_storage.lm1.h"
-#include "l2src/lmx_msg_path_storage.lm1.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -82,9 +81,6 @@ typedef unsigned char uchar;
 #define LMX_MSG_STATE_STOPPED 2
 #define LMX_MSG_STATE_DEAD 3
 #define LMX_MSG_STATE_RELEASED 4
-
-/* Initial Mix-path chunk. Growable; not a language-level depth limit. */
-#define LMX_MSG_PATH_CHUNK 4
 
 /* Versioned host-ingress seam. Not a promise that create/send/pump/recv
  * are multi-thread safe. Only lmx_msg_host_post may run off the owner thread. */
@@ -199,9 +195,6 @@ typedef struct LmxMsg {
     LmxMsgAddr exec_reply;
     int exec_live;
     unsigned last_beat;
-    unsigned *path;
-    int path_n;
-    int path_cap;
     unsigned child_seq;
     /* Direct-child list (CONTEXT_V0). Not a process-wide registry. */
     struct LmxMsg *parent_msg;
@@ -317,9 +310,6 @@ int lmx_msg_drive(LmxMsgRuntime *rt, unsigned now, unsigned threshold);
 int lmx_msg_drive_tree(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_drive_walk_children(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt);
-/* The path is a Message's creation identity (its genesis): the creator's path
- * plus the creator's child sequence number. A supervision handoff does not
- * change it; parent_msg and parent name the supervisor. */
 /* S6-2 (SPEC 19.29.7, Mikhail's fourteenth line): the COMMON MAIL API, written
  * now as scaffolding "because rewriting them later would be expensive".  Every
  * L3 Thread implements these; the default body is the stub that reads its own
@@ -351,13 +341,13 @@ int lmx_msg_get_address(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned *out, int ca
  * hop-by-hop chain waits for the stage whose executor runs every holder's round. */
 int lmx_msg_service_send_address(LmxMsgRuntime *rt, LmxMsg *svc, LmxMsgAddr from, const unsigned *addr, int addr_n, const LmxMsgEnv *env);
 int lmx_msg_send_address(LmxMsgRuntime *rt, LmxMsgAddr from, const unsigned *addr, int addr_n, const LmxMsgEnv *env);
-int lmx_msg_path_n(LmxMsgRuntime *rt, LmxMsgAddr who);
-int lmx_msg_path_seg(LmxMsgRuntime *rt, LmxMsgAddr who, int i, unsigned *out);
 int lmx_msg_child_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 LmxMsgAddr lmx_msg_child_at(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
 /* Decision 17 rule 4: hand the supervision of old_parent's direct child to the
- * live new_parent. Mailbox, arena, turn, record and path stay; parent_msg,
- * parent, scheduler place and liveness window move. */
+ * live new_parent. Mailbox, arena, turn and record stay; parent_msg, parent,
+ * scheduler place and liveness window move, and the index is minted afresh by
+ * new_parent (S6-2, SPEC 19.29.7: "when a Message changes parent its address
+ * changes"), so lmx_msg_get_address reads the new parent's address plus it. */
 int lmx_msg_handoff_supervision(LmxMsgRuntime *rt, LmxMsgAddr old_parent, LmxMsgAddr child, LmxMsgAddr new_parent);
 
 int lmx_msg_runtime_shutdown(LmxMsgRuntime *rt);

@@ -328,7 +328,7 @@ static int turn_held_live(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
     LmxMsgEnv got;
     LmxMsgEnv init;
-    unsigned seg = 0;
+    unsigned seg[8];
     memset(&got, 0, sizeof(got));
     memset(&init, 0, sizeof(init));
     if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK) {
@@ -337,7 +337,7 @@ static int turn_held_live(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     }
     lmx_msg_env_release(&got);
     SetEvent(c->started);
-    if (lmx_msg_path_n(rt, who) < 1 || lmx_msg_path_seg(rt, who, 0, &seg) != LMX_MSG_OK || lmx_msg_init_copy(rt, who, &init) != LMX_MSG_OK) {
+    if (lmx_msg_get_address(rt, who, seg, 8) < 1 || lmx_msg_init_copy(rt, who, &init) != LMX_MSG_OK) {
         lmx_msg_env_release(&init);
         return 1;
     }
@@ -1826,7 +1826,7 @@ int main(int argc, char **argv) {
         lmx_msg_create(rtc, pc, &ini, 1, &uc);
         lmx_msg_create(rtc, pc, &ini, 1, &cc);
         lmx_msg_end_turn(rtc, pc, 1);
-        if (lmx_msg_path_n(rtc, uc) < 1 || lmx_msg_init_copy(rtc, uc, &ec) != LMX_MSG_OK) {
+        if (lmx_msg_get_address(rtc, uc, 0, 0) < 1 || lmx_msg_init_copy(rtc, uc, &ec) != LMX_MSG_OK) {
             fprintf(stderr, "path/init_copy owner serial failed\n");
             return 1;
         }
@@ -2009,7 +2009,7 @@ int main(int argc, char **argv) {
         LmxMsgEnv el;
         uchar ini = 1;
         TurnCtx pctx, cctx, fctx;
-        unsigned seg = 0;
+        unsigned seg[8];
         int pn;
         int nclose;
         DWORD dl;
@@ -2111,8 +2111,8 @@ int main(int argc, char **argv) {
             fprintf(stderr, "factory not in create phase at meta n=%d\n", g_factory_n_at_meta);
             return 1;
         }
-        pn = lmx_msg_path_n(rtl, cl);
-        if (pn < 1 || lmx_msg_path_seg(rtl, cl, 0, &seg) != LMX_MSG_OK || lmx_msg_init_copy(rtl, cl, &el) != LMX_MSG_OK) {
+        pn = lmx_msg_get_address(rtl, cl, seg, 8);
+        if (pn < 1 || pn > 8 || lmx_msg_init_copy(rtl, cl, &el) != LMX_MSG_OK) {
             SetEvent(fctx.unblock);
             fprintf(stderr, "held-child path/init_copy during factory create phase\n");
             return 1;
@@ -3024,9 +3024,10 @@ int main(int argc, char **argv) {
             LmxMsg *vcm;
             LmxMsgEnv venv;
             TurnCtx vctx;
-            unsigned seg_before = 0U;
-            unsigned seg_after = 0U;
+            unsigned addr_before[8];
+            unsigned addr_after[8];
             int path_before;
+            int path_after;
             int n_ctx = -1;
             int vst;
             int vturn;
@@ -3054,8 +3055,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             lmx_msg_exec_ready(rtv, vc);
-            path_before = lmx_msg_path_n(rtv, vc);
-            (void)lmx_msg_path_seg(rtv, vc, 0, &seg_before);
+            path_before = lmx_msg_get_address(rtv, vc, addr_before, 8);
             n_ctx = lmx_msg_exec_bind_n(rtv);
             if (n_ctx != 1) {
                 fprintf(stderr, "handoff oracle before move binds=%d\n", n_ctx);
@@ -3066,18 +3066,24 @@ int main(int argc, char **argv) {
             n_ctx = lmx_msg_exec_bind_n(rtv);
             vcm = lmx_msg_find(rtv, vc);
             vpm = lmx_msg_find(rtv, vp);
-            (void)lmx_msg_path_seg(rtv, vc, 0, &seg_after);
+            /* S6-2 (SPEC 19.29.7): "when a Message changes parent its address changes".
+             * vp and vq are R0's first and second children and vc was vp's first, so
+             * vc reads [1,1,1] before and [1,2,1] after: same depth, the middle index
+             * now vq's, and the last minted afresh by vq (its first child). */
+            path_after = lmx_msg_get_address(rtv, vc, addr_after, 8);
             if (vst != LMX_MSG_OK || vcm == 0 || vpm == 0
                 || n_ctx != 1
                 || lmx_msg_child_n(rtv, vp) != 0 || lmx_msg_child_n(rtv, vq) != 1
                 || lmx_msg_child_at(rtv, vq, 0) != vc
                 || vcm->parent != vq || vcm->parent_msg != lmx_msg_find(rtv, vq)
-                || lmx_msg_path_n(rtv, vc) != path_before || seg_after != seg_before) {
-                fprintf(stderr, "handoff move st=%d binds=%d pn=%d qn=%d parent=%u path=%d/%d\n",
+                || path_before != 3 || path_after != 3
+                || addr_before[0] != 1U || addr_before[1] != 1U || addr_before[2] != 1U
+                || addr_after[0] != 1U || addr_after[1] != 2U || addr_after[2] != 1U) {
+                fprintf(stderr, "handoff move st=%d binds=%d pn=%d qn=%d parent=%u addr=%d/%d\n",
                     vst, n_ctx,
                     lmx_msg_child_n(rtv, vp), lmx_msg_child_n(rtv, vq),
                     vcm != 0 ? (unsigned)vcm->parent : 0U,
-                    lmx_msg_path_n(rtv, vc), path_before);
+                    path_after, path_before);
                 return 1;
             }
             if (lmx_msg_handoff_supervision(rtv, vp, vc, vq) != LMX_MSG_INVALID
