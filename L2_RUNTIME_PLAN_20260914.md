@@ -9899,3 +9899,10 @@ hit in 30 runs came from its q_alloc (poisoning) build, so the next attempt is t
 rebuild that configuration WITH the instrumented selftest and let it run. The
 diagnostic it prints names which of start_contexts' three refusals fired and what
 host_sync/exec/workers held at that moment.
+
+THE AD TIP PASSES THE FULL GATE CHAIN, measured 2026-09-16 16:21 by the coordinator
+(lingvamyxa-08): on d6/lock-ad a0785a7c (the (c) commit, the id-taking marks'
+deletion, the live set's id order, the envelope pair, and the stage probe)
+run_gates.ps1 -L2MessageRoot ends "gates GREEN: 29 of 29 in 601s". So the stage's
+base is green as it stands, and every later family commit is measured against a
+green parent.
