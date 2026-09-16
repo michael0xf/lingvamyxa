@@ -9843,3 +9843,33 @@ grok_bot returned over the main tree adds a fact to it: production keeps only
 the mailbox monitor, while the SELFTESTS still use events, condition variables
 and joins, i.e. the executor fixtures are the code still carrying the
 synchronization the model removed.
+
+THE L2TRANS DIRECTORY DEPENDENCY, found 2026-09-16 16:08 by 5c (lingvamyxa-5c) and scoped by
+the coordinator (lingvamyxa-08). 5c's evidence: the same l2trans.c
+(15d1434c) built twice gives two different l2trans.exe, and behaviour follows the
+TREE and not the binary -- both exes fail in one worktree and succeed in another,
+and the failing exe succeeds when moved to the other tree; the only l2src
+difference between them is the presence of the tracked
+l2src/LOCK_REMOVAL_SPEC_MAP.txt, and copying it in makes the failing tree
+succeed while removing it makes the succeeding one fail. So the translator's
+behaviour depends on a FILE IN THE SOURCE DIRECTORY that it is not asked to
+read: a directory-state dependency, of the class a self-hosting project cannot
+afford. SCOPE, measured by the coordinator in a clean main tree (wt_ref_main):
+the self-build's fixed point is NOT affected -- run_self_build PASSes with the
+file present AND with it moved aside ("fixed point 8 of 8, committed generated C
+8 of 8 equal to the fixed point"), because the self-build drives the bootstrap
+l1trans and never l2trans. The foundation is intact and the bug is confined to
+the l2trans path. 5c continues with the mechanism (gdb -O0; the suggestion
+recorded for it is to test whether an EMPTY file with the same name also cures
+it -- which separates "the name/position in a directory listing" from "the
+contents").
+
+GROK_BOT DELIVERS THE PAIR INVENTORY, same hour: 5c's two earlier tickets are
+closed and the third task -- the call-site inventory AD's next commits need --
+came back as a 94 KB answer over the AD branch tree (wt_ref_ad): for every call
+site of the send family, which of from_msg/to_msg/reply_to_msg it can fill, what
+the pointer is at that site, or CANNOT with the reason; and for every call site
+of find/find_tree, whether the id names a record already REGISTERED at that point
+-- which is exactly the create-lag that made the reverted
+self_or_find-by-lookup attempt fail. The tree given to it is read-only, and the
+answer is a table plus its greps and totals.
