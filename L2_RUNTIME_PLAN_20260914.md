@@ -9648,3 +9648,29 @@ DOCUMENT PRECEDENCE, Mikhail 2026-09-16: the architecture documents are
 last_step_claude.txt, Lingvamyxa_spec.txt and
 L2_CORE_AND_MESSAGE_MODEL_20260912.md; where they disagree, the one edited last
 wins.
+
+AD PROGRESS, recorded 2026-09-16 14:11 by the coordinator (lingvamyxa-08): the AD branch
+d6/lock-ad was pushed and now carries two commits.  948d38da (the lead's (c):
+LmxMsg.parent retired, probe parent_field 38 -> 0) had been local-only in
+build/fable/wad; c2f56d60 (mine) deletes the id-taking
+lmx_msg_exec_adopt_mark/dispose_mark -- both resolved parent and child by
+scanning and no caller remained (the caller grep names only exec.h:61-62,
+exec.c:2401/:2634 and prose; the pointer forms are what lmx_msg_settle_child
+calls at lmx_message.lm1:1828/1830).  Measured with the AD acceptance probe
+run_lock_ad_probe.ps1 on the branch: id_marks 4 -> 0, parent_field 0, find
+210, find_tree 8, dest_from_src 8, self_or_find_fallback 2 -- still AD RED, as
+the probe's own positive control requires.  run_port_message GREEN on
+c2f56d60 ("lmx_message parity PASS", 117 methods redirected).  Next in the
+design's code order: (a)+(b) signatures with their callers, one family per
+commit, both cores in parity; then (d) the atomic parent_msg/index cells and
+the epoch grace; then the fixtures, the gates one by one and the cold chain.
+
+FLAKE HUNT, same hour: the landing's red reference run is being reproduced with
+an instrumented selftest (own_turn prints the refusal reason) in
+build/fable/wti; 1 hit in the landing's single -LaneCheck run against 24+
+green runs since, so the rate is low and the hunt is a loop of direct
+reference.exe runs with LMX_LANE_CHECK=1.  The failing branch is
+lmx_msg_exec_start_contexts' refusal (LMX_MSG_INVALID) inside own_turn: the
+own_turn line for the child is absent in the red log and present in every
+green one.  The instrumented binary is not committed; it lives only in the
+working tree of wti.
