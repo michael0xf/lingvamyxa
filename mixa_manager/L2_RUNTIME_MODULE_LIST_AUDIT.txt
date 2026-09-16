@@ -828,3 +828,94 @@ same reason as before, this attempt only replaces "why" with a more
 complete picture (the opaque header is not just avoiding the old
 import cap, it is also the only thing keeping MixaCell/MixaTextRect
 single-defined in this file today).
+
+--- Design note: one canonical MixaCell/MixaTextRect source (doc only,
+    no code)
+
+Every declaration at 7b3a8668, by direct grep, both structs:
+`git grep -n "struct MixaCell\|struct: MixaCell" 7b3a8668 --
+'*.h' '*.h.lm1' '*.lm1' '*.lm2'` ->
+  mixa_manager/mixa_backend.h:208: `typedef struct MixaCellMetrics {`
+    (a DIFFERENT struct, MixaCellMetrics -- a substring match on
+    "MixaCell", not a real MixaCell declaration; excluded below)
+  mixa_manager/mixa_core.h:17: `typedef struct MixaCell {` -- the REAL
+    definition.
+  mixa_manager/mixa_tiles_l2.h.lm1:19: (a comment line mentioning the
+    name, not a declaration)
+  mixa_manager/mixa_tiles_l2.h.lm1:35: `struct: MixaCell` -- the
+    L2-declared definition.
+Same query for MixaTextRect finds exactly the same two real sources:
+mixa_core.h:26 (`typedef struct MixaTextRect {`) and mixa_tiles_l2.h.
+lm1:44 (`struct: MixaTextRect`). Two declarations total, one real, one
+L2, for each struct -- no third source anywhere in the tree.
+
+Which translation units combine both chains TODAY (at 7b3a8668, the
+landed state, not the reverted 56fbf75e experiment): NONE. Traced by
+grepping every header unit's own predef:/include: lines (not comments)
+for both mixa_core.h and mixa_tiles_l2.h.lm1: exactly two files
+`include:` real mixa_core.h directly (mixa_app_window.h.lm1,
+mixa_console_window.h.lm1), and exactly three predef the L2 tiles_l2.
+h.lm1 chain (mixa_button_dispatch_l2.h.lm1, mixa_composite_glyphs_l2.
+h.lm1, mixa_highlight_l2.h.lm1, plus mixa_app_fmpanel_l2.h.lm1
+transitively through highlight_l2). Checked each module that touches
+either family for whether ONE translation unit ever pulls in both:
+app_window.lm2 predefs only mixa_app_window_l2.h.lm1 -> button_
+dispatch_l2 -> tiles_l2 (L2 side only); its own separate ABI probe and
+real-side .lm1 keep the real mixa_core.h chain in a SEPARATE .c file
+by the probe's own by-design real/L2 split. Every other module that
+touches MixaCell/MixaTextRect (composite_glyphs, selection, tiles,
+buttons, highlight) is the same shape -- real and L2 sides are always
+compiled as separate translation units, by the parity-runner pattern
+itself. The ONLY place the two chains were ever asked to coexist in
+one file is the reverted app_controller_l2.h.lm1 edit above -- this is
+a hypothetical conflict, surfaced by one specific attempted fix, not a
+live one anywhere in the accepted tree.
+
+The two candidate shapes, and what each breaks:
+
+(a) tiles_l2.h.lm1 includes the real mixa_core.h and drops its own
+`struct: MixaCell`/`struct: MixaTextRect`. Breaks field-level L2
+access broadly: every module that reads/writes a MixaCell/MixaTextRect
+field through L2's own `\` field-follow (composite_glyphs's own
+`cell\fg`/`\bg`/`\alpha`, fixed earlier in this exact audit thread;
+draw's own `rect\cells`/`\rows`/`\cols`; tiles, buttons, app_window,
+highlight all touch these fields the same way) needs L1-known field
+layout, which a plain opaque `include:` cannot supply -- this is
+tiles_l2.h.lm1's own header comment's exact reasoning for declaring
+these structs itself rather than including the real header, already
+written before this note. This candidate reverses that reasoning
+tree-wide, not just for app_controller.
+
+(b) the real side takes the L2 header's declaration -- mixa_core.h (or
+whatever real code currently defines these structs) includes the
+L1-generated tiles_l2.h.lm1 output instead of defining them itself.
+Breaks the oracle/L2 dependency direction for a FOUNDATIONAL header:
+mixa_core.h is real, hand-written C, included directly by dozens of
+unmodified real files having nothing to do with L2 porting; making it
+depend on l1trans's own generated output would mean the entire real
+side needs l1trans to run and produce mixa_tiles_l2.lm1.h before
+mixa_core.h itself can be preprocessed -- inverting which side is the
+source of truth for two of this tree's most foundational types, a
+build-order and architecture change affecting the whole codebase, not
+scoped to app_controller at all.
+
+Recommendation: neither of the two above -- both are tree-wide changes
+for a conflict that, traced just above, is not actually live anywhere
+except the one attempted fix. A narrower option, verified directly
+against what app_controller.lm2 itself actually does with fmpanel
+(`git show 7b3a8668:mixa_manager/mixa_app_controller.lm2 | Select-
+String 'c\\fmpanel'`, PowerShell for the backslash): every occurrence
+is `c\fmpanel` passed AS AN ARGUMENT to a mixa_app_fmpanel_* call (nine
+distinct functions: close, open, render, report_copy_result, hit,
+wheel, release, key) or returned bare -- never `c\fmpanel\<field>`.
+app_controller never needs MixaAppFmPanel's own field layout (it holds
+and passes only a pointer), so it never needed the WHOLE mixa_app_
+fmpanel_l2.h.lm1 chain -- only callable declarations for those nine
+functions. The "declare then link" prototype convention already
+established in this tree (mixa_tiles_l2.h.lm1's own mixa_cell_at,
+mixa_buttons_l2.h.lm1's own mixa_tile_fill_button) gives exactly that,
+with MixaAppFmPanel staying a plain opaque name -- reaching neither
+mixa_core.h nor tiles_l2.h.lm1 from app_controller_l2.h.lm1 at all,
+sidestepping the conflict instead of resolving it. Not implemented
+here (code, out of this note's own doc-only scope) -- a candidate for
+whoever picks up app_controller's own ticket next.
