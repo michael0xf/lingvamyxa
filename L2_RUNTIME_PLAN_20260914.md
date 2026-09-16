@@ -8155,3 +8155,23 @@ rewrites the S6-2 section on this before touching code; e9's runner
 fix branch proceeds unchanged; the acceptance's probe is unchanged
 (refs=0 runtime_lists=0 is still the criterion, with the settled
 list's cells no longer needed).
+e9: claude-0c/archive-timeout-2 at 53ba86bd, cut from 2d8f2b6a: (1)
+the reproduction does NOT hang (minimal: exit 675 ms after the throw;
+full fidelity with the archive stubbed: wall 25.8 s, exit 1, exited
+within a second of the throw, core.zip absent, archive files 0 bytes,
+the same preamble timing as the live run), so the mechanism stays
+unnamed and the fix bounds it (said plainly in the commit); path 1: a
+whole-runner bound by a detached watchdog holding a handle (no
+reused-pid kill), no disarm since the hang follows the last finally,
+the timeout branch printing its verdict before the throw and arming a
+20 s bound, default 600 s from three measured chains (22, 22, 28 s);
+path 2: the marker enforced for every row with a non-empty $g[3], the
+forbidden check left under Count -gt 4 (30 rows with the switch, one
+with a fifth element, 29 never enforced, 0 empty markers); both
+tripwired with controls in l2src/tripwire_gate_bounds.ps1 (the bounded
+runner dies at 6 s exit -1 while the unfixed one completes at 32 s
+exit 0; the silent row reads FAIL under the fix and PASS before it;
+the tripwire injects a second row to end the chain in both runs). The
+30-row marker listing at 7b3a8668 does not carry (27 runners changed
+since); the full chain runs at the branch tip for the listing. The
+branch waits for the lead's reworked stage to merge into.
