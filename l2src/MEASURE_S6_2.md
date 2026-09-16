@@ -115,12 +115,18 @@ gone, `run_gates.ps1 -L2MessageRoot` prints `gates GREEN: 30 of 30`, not S6-1's 
 A green that cannot be made red proves nothing. This mutation puts one `refs` line back into the working
 tree of the measuring merge, expects the probe to go red, then restores it.
 
-The probe counts a line that *names* the needle and its header says comment text counts, so a single
-appended comment is a legitimate minimal mutation: it adds exactly one to `refs` and touches no code.
+What is put back is **an original call this stage deleted**, taken from the base by line number, not a
+comment: the probe counts either, but the record should say a call was restored, so that the thing put back
+is the thing the stage removed. The line used below is `l2src/lmx_message.lm1:1237` at 7b3a8668,
+`if: c.lmx_msg_endp_retain(src) = 0`, one of that file's twenty retain sites.
+
+This is a **text** restoration for a grep: the line is appended without the body its `if:` governed, so the
+tree would no longer translate. That is sound here and only here, because the probe builds nothing and
+counts lines naming the needle. Do not carry this shortcut into any step that compiles.
 
 ```bash
 cd "$M"
-printf '# falsifier: one retain put back -- lmx_msg_endp_retain(m)\n' >> l2src/lmx_message.lm1
+git show 7b3a8668:l2src/lmx_message.lm1 | sed -n '1237p' >> l2src/lmx_message.lm1
 git diff --numstat -- l2src/lmx_message.lm1     # expect "1  0  l2src/lmx_message.lm1"
 timeout 120 powershell -NoProfile -ExecutionPolicy Bypass -File l2src/run_lock_s6_probe.ps1 -Part 2
 echo "exit=$? (expect 1)"
@@ -138,9 +144,16 @@ echo "exit=$? (expect 0); dirty=$(git status --porcelain | wc -l) (expect 0)"
 while proving nothing; that has happened here before, which is why `--numstat` is in the sequence and why
 the mechanism was proven before this file was written.
 
-Proven by 0c on the red tree at 4189dea0, 2026-09-15, since no green tree exists yet: the same appended
-line took `refs` **342 -> 343**, `git diff --numstat` showed exactly 1 added line, and
-`git checkout --` returned it to **342** with a clean tree. On a green tree the same step reads 0 -> 1.
+Proven by 0c on the red tree at 4189dea0, 2026-09-15, since no green tree exists yet, and proven with this
+exact line rather than inherited from an earlier draft that used a comment: appending
+`git show 7b3a8668:l2src/lmx_message.lm1 | sed -n '1237p'` took `refs` **342 -> 343**,
+`git diff --numstat` printed exactly `1  0  l2src/lmx_message.lm1`, and `git checkout --` returned it to
+**342** with a clean tree. On a green tree the same step reads **0 -> 1**, `S6-2 GREEN` -> `S6-2 RED`,
+exit 0 -> exit 1.
+
+Any of the twenty retain sites in that file serves; 1237 is chosen because it is a plain call in `send`,
+not inside a macro or a generated block. If a future base renumbers the file, take the line number from
+`git grep -n 'lmx_msg_endp_retain(' 7b3a8668 -- l2src/lmx_message.lm1` rather than trusting 1237.
 
 ---
 
