@@ -6516,3 +6516,16 @@ slots API/rt\n (the line named), or pinning a numeric side effect
 (owned_frees, watched_frees, slot counts, check counts), and the
 fixtures reading handoff_ready right after a stop without a spin (the
 idiom S6-1's landing hit); counts at the top.
+S6-1 fixture fix proven (the lead, 2026-09-15): five of five cold runs of
+run_msg_family_handoff.ps1 green ("checks=67 failures=0 watched_frees=4"),
+the fix committed and pushed on d6/lock-s6 (yield_until_handoff_ready:
+the helper plus three uses). Two of the lead's own misreadings
+corrected by him: a "FAIL_lines=1" from a case-insensitive grep
+matching "failures=0" (the verdict line is what decides, not a word
+search); a supposed hang at l2trans that was the gap between two steps
+before the next step's log exists (l2trans "gen2 ok", port_parser
+running). The first landing runs out red on the gates line alone,
+unpushed, so the whole union base is measured on that merge; then a
+fresh merge of the new tip with its own selfbuild tag and landing
+branch, scenario36 on the merge before "landed", five lines with the
+five-run count and scenario36's verdict. Both rules taken by the lead.
