@@ -7628,3 +7628,13 @@ planted red). Not a checkpoint until the two tripwires are shown (a
 green never shown able to fail), which come next; the refs and
 slots deletion proper, the header, the lm1 fixtures, the module and
 the runner lines follow toward the tip.
+b5's mixa parity gate runner on sonnet/mixa-module-list 6fa23fec
+(mixa_manager/run_mixa_parity_gates.ps1): ten rows with expected
+verdicts, the tree's own cmd /c and $LASTEXITCODE shape inside a
+background job so Wait-Job -Timeout enforces each row's cap (at least
+twice its cold time); two cold runs "mixa parity gates: 10 of 10 as
+expected" (162.4 s and 164.4 s), both exit 0, recorded with the
+per-runner breakdown in MIXA_L2_PARITY_GATE.txt; app_controller and
+audio_mp3 outside until diagnosed. Joins the union base as its own
+step after run_mixa.ps1 from the R0P landing on (e9 adds it to that
+landing script); the branch merges to main after S6-2 lands.
