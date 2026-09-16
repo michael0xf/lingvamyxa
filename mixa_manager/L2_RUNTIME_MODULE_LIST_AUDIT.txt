@@ -551,3 +551,60 @@ run; L2 trace byte-identical to the oracle's own 58-check trace.
 Falsifier met: the verdict names no `@ ` on an own-array element
 anywhere (grep confirms zero remaining occurrences of the shape in the
 file).
+
+--- Diagnosis: why app_window's L2 trace stops silently after check 15
+    of 162 (no fix -- root cause is in l2trans.lm1 itself, outside
+    mixa_manager's own scope)
+
+Reproduced directly under gdb (`gdb -batch -x <run> ./parity_l2.exe`,
+the exact object this dispatcher run built): SIGSEGV in strlen, called
+from mixa_button_panel_add, called from l2_uCC211EFB79C1B967_m9 (the
+L2-generated body of mixa_app_window_open), called from main. The
+crash is the FIRST call this whole test sequence ever makes to
+mixa_button_panel_add -- every earlier CHK (open hb0 through open too
+small) returns ERR from an early guard before reaching it; "open long
+msg rejected" (harness line 198, the check whose own CHK line never
+prints) is the first call to survive every early guard and reach it.
+
+mixa_button_panel_add itself is the REAL, unmodified object (Build-
+RealDep in run_mixa_l2_parity.ps1 always translates mixa_buttons.lm1
+via l1trans, never mixa_buttons.lm2 -- confirmed already in this
+audit's own duplicate-symbol section) -- identical on both the oracle
+and L2 sides, so the bug is not in that function's own body. The
+generated call site itself matches the real .lm1 source exactly
+(mixa_app_window.lm2:244, byte-identical to mixa_app_window.lm1:254):
+`mixa_button_panel_add(panel, 0U, MIXA_APP_WINDOW_BTN_LABEL, ...)`.
+
+Root cause, found by reading the actual generated C
+(app_window_l2.c:4197-4204) and its own gcc warnings (l2mod_compile_
+stderr.log): l2trans stages every `define:`d constant argument to this
+call through an intermediate temp it types uniformly as `int`,
+regardless of the constant's real type --
+    int l2_t3; l2_t3 = MIXA_APP_WINDOW_BTN_LABEL;   // a `char *` constant
+    int l2_t4; l2_t4 = MIXA_APP_WINDOW_BTN_FG;       // genuinely numeric
+    int l2_t5; l2_t5 = MIXA_APP_WINDOW_BTN_BG;
+    int l2_t6; l2_t6 = MIXA_APP_WINDOW_BTN_ALPHA;
+gcc's own warnings name exactly this: ":4198:11: warning: assignment to
+'int' from 'char *' makes integer from pointer without a cast
+[-Wint-conversion]" and ":4295:42: warning: passing argument 3 of
+'mixa_button_panel_add' makes pointer from integer without a cast
+[-Wint-conversion]" -- neither is covered by this runner's own
+-Werror set (incompatible-pointer-types/discarded-qualifiers/implicit-
+function-declaration/implicit-int catch different diagnostics, not
+-Wint-conversion), so it compiles silently. On this 64-bit target the
+pointer truncates to its low 32 bits in l2_t3 (an int), then widens
+back on the call with garbage high bits -- the crash's own rcx at the
+strlen frame, 0x4ebf1611, is exactly that shape: a 32-bit-looking value
+where a real heap/text-segment pointer would be. FG/BG/ALPHA survive
+the same treatment only because they are genuinely small numeric
+constants an int can hold intact.
+
+This is an l2trans.lm1 type-inference defect (the checkpoint/staging
+codegen for a define:'d call-actual constant does not consult the
+constant's own type, or the callee's own parameter type, when choosing
+the temp's C type) -- not a one-site mixa_manager fix, not a missing
+runtime module, and not an oracle-side divergence (the oracle passes
+because it links the REAL object directly with no such staging).
+Reported as a finding for whoever owns l2trans/core L2 work; not fixed
+here, per this session's own role boundary and the ticket's own "a fix
+if it is one site" condition -- it is not.
