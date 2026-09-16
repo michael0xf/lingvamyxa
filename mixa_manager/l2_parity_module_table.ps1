@@ -64,6 +64,25 @@
 #   BarrierSet = 'UI' or 'UIA' -- which $KnownBarrier substrings apply
 #     ('UI' = unknown foreign type + incompatible entry signature;
 #     'UIA' = + unsupported own array declaration).
+#   L2LinkAllowMultipleDefinition = $true, or omitted (default $false)
+#     -- appends -Wl,--allow-multiple-definition to the L2-SIDE final
+#     link only. Only for a module whose own L2Deps names two real
+#     dependency stems that each independently `predef:` (full-body
+#     embed, not header-only) the SAME further module: the oracle side
+#     never sees this (mixa_app_window.lm1 itself already predefs both
+#     chains, so OracleDeps is empty and there is only one copy), but
+#     the L2 side links each real dep as its own separately-compiled
+#     object, and l1trans's predef embeds a full, byte-identical copy
+#     of the shared module into EACH one (app_window: mixa_draw.lm1
+#     predefs mixa_text_rect.lm1 directly, mixa_buttons.lm1 predefs
+#     mixa_tiles.lm1 which itself predefs mixa_text_rect.lm1 -- so
+#     mixa_draw.o and mixa_buttons.o both define mixa_rect_open/
+#     _release/_fill/_put_text/_dump/mixa_cell_at/_at_const, confirmed
+#     identical by construction, same source, same translator, same
+#     flags). This does not mask an unrelated symbol clash -- it keeps
+#     the first of two guaranteed-identical definitions, ld's own
+#     documented behavior for this flag. Set only on a module actually
+#     shaped this way; do not default it on for every module.
 
 $ModuleTable = @{
     'app_window' = @{
@@ -80,6 +99,7 @@ $ModuleTable = @{
         Fixture = 'none'
         LinkLibs = ''
         BarrierSet = 'UI'
+        L2LinkAllowMultipleDefinition = $true
     }
     'backend_ctors_headless' = @{
         HeaderTrans = @(

@@ -66,6 +66,7 @@ function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$er
     & cmd /c "$exe $argsStr > `"$outLog`" 2> `"$errLog`""
     return $LASTEXITCODE
 }
+$InvokeCmdRef = { param($e, $a, $o, $er) Invoke-Cmd $e $a $o $er }
 
 function Invoke-HeaderTrans([string]$SrcRel, [string]$OutName) {
     Push-Location $RepoRoot
@@ -286,71 +287,13 @@ if ($FpExit -ne 0 -and $KnownBarrier) {
         $Verdict = "UNEXPECTED_FAILURE"
         $ExitCode = 1
     } else {
-        $coreHeaderDir = Join-Path $RunDir 'headers\l2src'
-        New-Item -ItemType Directory -Force -Path $coreHeaderDir | Out-Null
-        $coreNames = @(
-            'lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage',
-            'lmx_msg_mail_chain',
-            'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness',
-            'lmx_msg_history_owned', 'lmx_msg_roots_stale',
-            'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned',
-            'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned',
-            'lmx_merge_owned', 'lmx_message_graph_copy')
-        foreach ($coreHeader in $coreNames) {
-            $coreHeaderOut = Join-Path $coreHeaderDir ($coreHeader + '.lm1.h')
-            $coreHeaderStdout = Join-Path $RunDir ($coreHeader + '_header_stdout.log')
-            $coreHeaderStderr = Join-Path $RunDir ($coreHeader + '_header_stderr.log')
-            Push-Location $RunDir
-            $coreHeaderExit = Invoke-Cmd $L2L1Trans "`"l2src\$coreHeader.h.lm1`" `"$coreHeaderOut`"" $coreHeaderStdout $coreHeaderStderr
-            Pop-Location
-            if ($coreHeaderExit -ne 0) {
-                Get-Content $coreHeaderStderr
-                throw "core header translation failed: $coreHeader"
-            }
-        }
         # A generated library owns a real Message graph, so its parity executable
         # must link the same runtime object set as the graph ABI gate.
-        $coreObjectDir = Join-Path $RunDir 'core_objects'
-        New-Item -ItemType Directory -Force -Path $coreObjectDir | Out-Null
-        $coreObjects = @()
-        foreach ($coreName in $coreNames + @('lmx_message')) {
-            $coreSource = Join-Path $coreObjectDir ($coreName + '.c')
-            $coreObject = Join-Path $coreObjectDir ($coreName + '.o')
-            $coreSourceStdout = Join-Path $RunDir ($coreName + '_source_stdout.log')
-            $coreSourceStderr = Join-Path $RunDir ($coreName + '_source_stderr.log')
-            Push-Location $RunDir
-            $coreSourceExit = Invoke-Cmd $L2L1Trans "`"l2src\$coreName.lm1`" `"$coreSource`"" $coreSourceStdout $coreSourceStderr
-            Pop-Location
-            if ($coreSourceExit -ne 0) {
-                Get-Content $coreSourceStderr
-                throw "core source translation failed: $coreName"
-            }
-            $coreCompileStdout = Join-Path $RunDir ($coreName + '_compile_stdout.log')
-            $coreCompileStderr = Join-Path $RunDir ($coreName + '_compile_stderr.log')
-            $coreCompileExit = Invoke-Cmd 'gcc' "$GccStd -I `"$L1Root`" -I `"$RunDir\headers`" -c `"$coreSource`" -o `"$coreObject`"" $coreCompileStdout $coreCompileStderr
-            if ($coreCompileExit -ne 0) {
-                Get-Content $coreCompileStderr
-                throw "core source compile failed: $coreName"
-            }
-            $coreObjects += $coreObject
-        }
-        foreach ($coreCName in @('lmx_message_host', 'lmx_message_exec')) {
-            $coreCSource = Join-Path $L1Root ("l2src\$coreCName.c")
-            $coreCObject = Join-Path $coreObjectDir ($coreCName + '.o')
-            $coreCStdout = Join-Path $RunDir ($coreCName + '_compile_stdout.log')
-            $coreCStderr = Join-Path $RunDir ($coreCName + '_compile_stderr.log')
-            $coreCExit = Invoke-Cmd 'gcc' "$GccStd -I `"$L1Root`" -I `"$RunDir\headers`" -c `"$coreCSource`" -o `"$coreCObject`"" $coreCStdout $coreCStderr
-            if ($coreCExit -ne 0) {
-                Get-Content $coreCStderr
-                throw "core C compile failed: $coreCName"
-            }
-            $coreObjects += $coreCObject
-        }
-        $coreObjectArgs = ($coreObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
+        $L2Rt = Add-L2RuntimeSupport -L1Trans $L2L1Trans -L1Root $L1Root -RunDir $RunDir -InvokeCmd $InvokeCmdRef
         $l2FpO = Join-Path $RunDir "mixa_app_fmpanel_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2fp_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2fp_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$RunDir\headers`" -c `"$l2FpC`" -o `"$l2FpO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -c `"$l2FpC`" -o `"$l2FpO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
@@ -359,7 +302,7 @@ if ($FpExit -ne 0 -and $KnownBarrier) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2fp_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2fp_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2FpO`" `"$fmCopyO`" `"$drawO`" `"$highlightO`" `"$pumpO`" `"$backendTableO`" `"$backendHeadlessO`" `"$backendCtorsO`" `"$eventFifoO`" $coreObjectArgs -o `"$l2Exe`" $LinkLibs" $l2olLog1 $l2olLog2
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2FpO`" `"$fmCopyO`" `"$drawO`" `"$highlightO`" `"$pumpO`" `"$backendTableO`" `"$backendHeadlessO`" `"$backendCtorsO`" `"$eventFifoO`" $($L2Rt.ObjList) -o `"$l2Exe`" $LinkLibs" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"

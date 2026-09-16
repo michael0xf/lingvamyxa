@@ -1,0 +1,205 @@
+MIXA_L2_PARITY_GATE: proposal for gating the mixa L2 parity runners
+so they stop rotting between measurements (the lesson this whole
+lmx_root_record thread already lived twice -- five/six runners sat
+red for days unmeasured, per this session's own standing memory of
+that incident). Doc only, no runner code, per the ticket. Measured at
+sonnet/mixa-module-list tip 53d77171, 2026-09-15, one runner at a
+time, cold, none past three minutes.
+
+--- Count: twelve, not thirteen
+
+Every runner this whole audit thread has directly measured and
+recorded a verdict for, re-counted from L2_RUNTIME_MODULE_LIST_AUDIT.
+txt by runner name: twelve, not thirteen (the seven original baseline
+runners plus the five migrated onto lib_l2_runtime_support.ps1 in
+commit 90c36eb3). If a specific thirteenth runner belongs in this
+gate's own scope, name it and this doc gets a thirteenth row appended
+-- not guessed here, since a fabricated row would violate this
+session's own falsifier discipline (a claimed verdict has to be a
+verdict actually run, not invented to match a count).
+
+--- Today's verdicts (all twelve, cold, one at a time)
+
+Runner                                       | Verdict              | Seconds
+run_mixa_app_controller_l2_parity.ps1        | UNEXPECTED_FAILURE   | 14.5
+run_mixa_app_panel_l2_parity.ps1             | PASS                 | 25.0
+run_mixa_app_win32_l2_parity.ps1             | PASS                 | 26.3
+run_mixa_audio_mp3_l2_parity.ps1             | THROW (missing artifact, ticket 20260912-084943, unrelated) | 0.4
+run_mixa_backend_ctors_win32_l2_parity.ps1   | EXPECTED_CORE_BARRIER| 3.9
+run_mixa_backend_win32_l2_parity.ps1         | EXPECTED_CORE_BARRIER| 4.6
+run_mixa_l2_parity.ps1 -Module app_window    | PARITY_FAILURE       | 17.4
+run_mixa_app_fmpanel_l2_parity.ps1           | PASS                 | 26.9
+run_mixa_app_path_l2_parity.ps1              | PASS                 | 11.4
+run_mixa_composite_glyphs_l2_parity.ps1      | PASS                 | 12.5
+run_mixa_selection_l2_parity.ps1             | PASS                 | 11.9
+run_mixa_tiles_l2_parity.ps1                 | PASS                 | 11.4
+                                                            Total:    166.2
+
+Seven PASS outright. Two are the already-documented, pre-existing
+EXPECTED_CORE_BARRIER state (backend_ctors_win32: "incompatible entry
+signature"; backend_win32: "unsupported own array declaration" --
+both this audit's own earlier sections trace to the integrated
+frontend not yet being on main, unrelated to anything this thread
+touched). One (app_window) is the specific, already-diagnosed
+l2trans int/pointer defect from commit 2b4df6ad -- accepted by you as
+your own ticket after S6-2 lands. Two (app_controller,
+audio_mp3) are red for reasons this audit already traced to something
+OTHER than lmx_root_record or the list migration: app_controller's own
+translation gap in its header design (commit 41e13bf8's own
+diagnosis), audio_mp3's own missing, unrelated build artifact
+(ticket 20260912-084943) -- neither is proposed for the allowlist below
+since neither is a KNOWN, bounded state the way the barriers and the
+app_window defect are; they would need their own accepted diagnosis
+first, which is a decision for whoever owns this proposal, not decided
+here.
+
+--- Proposed run_mixa_parity_gates.ps1 shape (no code yet)
+
+Runs the ten runners with a known, accepted state today (the seven
+PASS plus the three allowlisted below), skipping app_controller and
+audio_mp3 until each has its own accepted, bounded diagnosis (or is
+explicitly excluded by name, a one-line decision for whoever accepts
+this proposal):
+
+  - A per-runner table, same shape as l2_parity_module_table.ps1's own
+    convention: @{ Script = "run_mixa_X_l2_parity.ps1" (or @{ Script =
+    "run_mixa_l2_parity.ps1"; Args = @("-Module","app_window") } for
+    dispatcher-driven ones); ExpectVerdict = "PASS" | a specific
+    non-pass verdict string; TimeoutSeconds = <int> }.
+  - Per-runner timeout via Start-Process -PassThru plus
+    Wait-Process -Timeout (or a background job with Wait-Job -Timeout,
+    matching this session's own established "PS 5.1 stderr under
+    EAP=Stop" and "cmd /c, never Start-Process -Wait" runner-invocation
+    lessons for the INNER native calls each script itself makes --
+    this OUTER per-runner timeout is a different layer, wrapping the
+    whole child powershell.exe process, and needs its own kill-on-
+    timeout path so one hung runner cannot block the rest).
+  - The allowlist is the ExpectVerdict field itself: a runner PASSES
+    the gate when its own verdict this run equals ExpectVerdict, not
+    only when it equals "PASS" -- so backend_ctors_win32/backend_win32
+    passing means "still EXPECTED_CORE_BARRIER, unchanged", and
+    app_window passing means "still PARITY_FAILURE with the SAME l2trans
+    defect", not a silent acceptance of any red. A DIFFERENT non-pass
+    verdict, or a different diagnostic under the same verdict name, is
+    itself a gate failure to report, not to absorb -- the same "a
+    further red is its own finding" rule this whole thread's own
+    tickets have already used throughout.
+  - One line per runner in the gate's own summary: name, expected,
+    actual, seconds, PASS/FAIL-the-gate. A single non-zero exit if any
+    row's actual != expected.
+  - Cost: 166.2s measured today for all twelve candidates (ten of
+    which the gate would actually run) -- under three minutes total,
+    comfortably inside a single "lead's builds keep priority" slot,
+    and each runner's own individual timeout should be set generously
+    above ITS OWN measured time here (a 3x margin, matching this
+    thread's own per-runner "stop past three minutes" convention, so
+    e.g. app_fmpanel's own 26.9s measured today gets roughly a 90s
+    cap) rather than one global timeout for the whole gate.
+
+--- Where it sits in the landing's union base
+
+A step of its own, immediately after run_mixa.ps1 (the union base's
+existing first mixa step) and before/alongside run_ingress_harness.ps1
+(its second) -- not folded into either, since both of those are
+selftest suites with their own existing pass/fail shape, while this
+gate's own allowlist logic (expected-verdict-by-name, not just exit
+code) is a genuinely different check. Three mixa steps in the landing
+after this proposal: run_mixa.ps1, run_mixa_parity_gates.ps1 (new),
+run_ingress_harness.ps1 -- order among the three not load-bearing
+(measured independent today: no runner here touches shared build
+state another step depends on), so run_mixa_parity_gates.ps1 landing
+between the other two, or after both, are both fine; putting it
+directly after run_mixa.ps1 groups "the two things that read the pinned
+translator and build/run mixa code" before the third, narrower ingress-
+specific harness.
+
+--- Accepted; run_mixa_parity_gates.ps1 written and run cold twice
+
+Proposal accepted by lingvamyxa-6f. mixa_manager/run_mixa_parity_gates.
+ps1 written per the accepted shape: the ten-row table above (script,
+args, ExpectVerdict, timeout >= 2x each runner's own cold time measured
+above), one runner at a time via `& cmd /c "powershell ... > log 2>&1"`
+inside a background job (Wait-Job -Timeout enforces the per-runner cap
+around that same proven invocation shape, not a different one),
+mismatch lines carry both the expected and actual verdict, and the
+script exits 0 only when all ten match. app_controller and audio_mp3
+stay outside, unchanged from the proposal above.
+
+Run cold twice, same tip, back to back:
+
+Run 1 (162.9s wall): OK on all ten (app_panel PASS 26.1s, app_win32
+PASS 26.4s, backend_ctors_win32 EXPECTED_CORE_BARRIER 4.2s,
+backend_win32 EXPECTED_CORE_BARRIER 5.0s, app_window PARITY_FAILURE
+19.1s, app_fmpanel PASS 29.6s, app_path PASS 12.6s, composite_glyphs
+PASS 13.9s, selection PASS 13.3s, tiles PASS 12.2s) --
+"mixa parity gates: 10 of 10 as expected (total 162.4s)"
+
+Run 2 (164.8s wall): OK on all ten again (app_panel PASS 27.0s,
+app_win32 PASS 28.0s, backend_ctors_win32 EXPECTED_CORE_BARRIER 4.5s,
+backend_win32 EXPECTED_CORE_BARRIER 5.2s, app_window PARITY_FAILURE
+19.5s, app_fmpanel PASS 29.3s, app_path PASS 11.2s, composite_glyphs
+PASS 12.8s, selection PASS 13.2s, tiles PASS 13.7s) --
+"mixa parity gates: 10 of 10 as expected (total 164.4s)"
+
+Both runs exit 0. Falsifier met both times.
+
+--- 2026-09-16: audio_mp3 enters the gate (commit 4014bec8), 11 rows
+
+audio_mp3's scratch second-translator mechanism retired (see
+L2_RUNTIME_MODULE_LIST_AUDIT.txt's own entry) -- re-measured cold at
+PASS, 23.1s. Added to run_mixa_parity_gates.ps1's own table with a
+dated comment naming commit 4014bec8, Expect = "PASS", TimeoutSec = 60.
+
+Run 1 (180.0s wall): OK on all eleven (the same ten as above, plus
+audio_mp3 PASS 23.8s) -- "mixa parity gates: 11 of 11 as expected
+(total 179.7s)"
+
+Run 2 (179.7s wall): OK on all eleven again (audio_mp3 PASS 23.8s,
+same as run 1) -- "mixa parity gates: 11 of 11 as expected (total
+179.3s)"
+
+--- 2026-09-16: app_controller enters the gate (commit 8e094e98), 12 rows
+
+app_controller's opaque fmpanel #include gained eight prototype:
+declarations (declare-then-link, alongside not instead of the real
+#include -- see L2_RUNTIME_MODULE_LIST_AUDIT.txt's own entry for the
+two corrections found while implementing). Moved past every fmpanel
+call; still UNEXPECTED_FAILURE, now at mixa_app_controller.lm2:16:5
+(frame=mixa_file_close), a different, out-of-scope gap. Re-measured
+cold at 15.0s (then 15.7s/16.4s across the two gate runs below). Added
+to run_mixa_parity_gates.ps1's own table with a dated comment naming
+commit 8e094e98, Expect = "UNEXPECTED_FAILURE", TimeoutSec = 40.
+
+Run 1 (198.5s wall): OK on all twelve (the same eleven as above, plus
+app_controller UNEXPECTED_FAILURE 15.7s) -- "mixa parity gates: 12 of
+12 as expected (total 197.9s)"
+
+Run 2 (201.3s wall): OK on all twelve again (app_controller UNEXPECTED_
+FAILURE 16.4s, same as run 1) -- "mixa parity gates: 12 of 12 as
+expected (total 201.0s)"
+
+Both runs exit 0.
+
+--- 2026-09-16: app_controller's twenty remaining prototype:
+    declarations landed (commit 10c46bde)
+
+Landed the twenty blocks from the class-of-gap inventory (a29c7f76),
+already tested and reverted there. Moves app_controller past every
+declaration gap in the file; still UNEXPECTED_FAILURE, now l2trans's
+own internal `translation failed with no located diagnostic` (no line
+number) -- an l2trans compiler defect, lingvamyxa-6f's own ticket after
+S6-2, not a further missing declaration. Gate row's own Expect stays
+"UNEXPECTED_FAILURE" (unchanged verdict name); dated comment updated to
+record the new diagnostic text in place of a line number, TimeoutSec
+raised 40 -> 60 (re-measured cold at 22.6s/22.5s across the two runs
+below, up from 15-16s before this commit).
+
+Run 1 (202.2s wall): OK on all twelve (the same eleven as above, plus
+app_controller UNEXPECTED_FAILURE 22.6s) -- "mixa parity gates: 12 of
+12 as expected (total 201.7s)"
+
+Run 2 (203.2s wall): OK on all twelve again (app_controller UNEXPECTED_
+FAILURE 22.5s, same as run 1) -- "mixa parity gates: 12 of 12 as
+expected (total 202.9s)"
+
+Both runs exit 0.

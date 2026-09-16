@@ -1,46 +1,37 @@
 # Real L1-vs-L2 parity gate for mixa_audio_mp3 (ticket 20260913-232000/
 # 231500 Part 2, module 5 of 8).
 #
-# GENUINE DEVIATION FROM EVERY OTHER MODULE THIS SESSION, stated plainly
-# rather than hidden: the real mixa_audio_mp3.lm1 needs 22 imports in one
-# translation unit (it predefs both mixa_audio_scan.lm1's and mixa_
-# audio_launch.lm1's full bodies). stable65D5's import path table caps
-# at 16, so the STABLE PINNED compiler cannot translate the real .lm1 at
-# all -- not a barrier, a hard compile failure unrelated to the clean-L2
-# porting effort. This was already solved once, by an earlier Claude
-# session (ticket 20260912-084943): Codex's own CANDIDATE compiler (SHA256
-# 24A1B57B6C831C7B45630DF8CA61A7441376B4EB8EF946B1F08FC41957290B09, at
-# build/codex/l1-import-capacity/build/import_capacity/run_20260912_084844/
-# l1trans.exe) removes the cap and is used ONLY for this module's own
-# oracle-side headers/translation/compile -- read-only, hash-verified
-# against the published value every run, exactly mirroring the already-
-# accepted run_mp3_selftest.ps1's own precedent (not a new exception
-# invented here). stable65D5's own hash is independently re-verified
-# unchanged on every run. The L2-side attempt (l2trans.exe, itself always
-# built from stable65D5, and any subsequent l1trans call on l2trans's own
-# generated intermediate output) still uses the STABLE compiler, matching
-# every other module -- l2trans's own import handling is unrelated to
-# l1trans's fixed-size import table and has never needed the candidate.
+# The real mixa_audio_mp3.lm1 needs 22 imports in one translation unit
+# (it predefs both mixa_audio_scan.lm1's and mixa_audio_launch.lm1's
+# full bodies). This once needed a separate, scratch second translator
+# (ticket 20260912-084943) because the pinned translator of that day
+# (stable65D5) had a fixed 16-import cap. That second-translator
+# mechanism is retired as of L2_RUNTIME_MODULE_LIST_AUDIT.txt's own
+# 2026-09-16 finding: the fixed cap no longer exists anywhere in
+# l1src/l1trans.lm1 (the fix published into the tracked bootstrap C on
+# 2026-09-12, before this whole session's own work began), and the
+# CURRENT pinned $L1Trans translates the real 22-import .lm1 directly,
+# verified cold before this edit. Every step below now uses the SAME
+# stable, pinned $L1Trans every other module in this tree uses --
+# no scratch, unpinned, gitignored build artifact required.
 #
-#   1. ALWAYS builds and runs the ORACLE-side harness (via the CANDIDATE
-#      compiler) against real, test-owned on-disk fixtures with an
-#      independent mixa_dir enumeration oracle.
+#   1. ALWAYS builds and runs the ORACLE-side harness against real,
+#      test-owned on-disk fixtures with an independent mixa_dir
+#      enumeration oracle.
 #   2. Attempts to translate the COMPLETE mixa_audio_mp3.lm2 (via
 #      l2trans.exe, built from STABLE).
 #      - fails with an already-known barrier -> EXPECTED_CORE_BARRIER
 #        (exit 2). NOT a pass.
 #      - fails with any OTHER diagnostic -> UNEXPECTED_FAILURE (exit 1).
-#      - SUCCEEDS -> builds/links/runs the L2-side harness (STABLE for
-#        the generated-C step, candidate only if that step itself needs
-#        it) and diffs its stdout against the oracle trace byte-for-
-#        byte. PASS (exit 0) only on an exact match, else PARITY_FAILURE
-#        (exit 1).
+#      - SUCCEEDS -> builds/links/runs the L2-side harness and diffs its
+#        stdout against the oracle trace byte-for-byte. PASS (exit 0)
+#        only on an exact match, else PARITY_FAILURE (exit 1).
 #
 # mixa_audio_mp3.lm1/.h.lm1 and the real, unmodified chain it predefs
 # (mixa_audio_scan, mixa_audio_launch, and everything they in turn
 # predef) are the parity oracle and are never touched. Nothing under
-# l1src, l2src or build/codex is modified, only read. Every input is
-# built fresh in a unique run directory -- no stale objects.
+# l1src or l2src is modified, only read. Every input is built fresh in
+# a unique run directory -- no stale objects.
 param()
 $ErrorActionPreference = "Stop"
 
@@ -49,17 +40,8 @@ $L1Root = $RepoRoot
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 . (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root
-$Candidate = Join-Path $RepoRoot "build\codex\l1-import-capacity\build\import_capacity\run_20260912_084844\l1trans.exe"
-$ExpectedCandidateHash = "24A1B57B6C831C7B45630DF8CA61A7441376B4EB8EF946B1F08FC41957290B09"
 
 $ActualL1Hash = Assert-PinnedL1Translator -L1Trans $L1Trans -L1Root $L1Root
-if (-not (Test-Path -LiteralPath $Candidate)) {
-    throw "missing candidate L1 translator (ticket 20260912-084943, read-only, not modified by this script): $Candidate"
-}
-$ActualCandidateHash = (Get-FileHash -LiteralPath $Candidate -Algorithm SHA256).Hash
-if ($ActualCandidateHash -ne $ExpectedCandidateHash) {
-    throw "candidate L1 translator hash mismatch: expected $ExpectedCandidateHash got $ActualCandidateHash"
-}
 
 $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
@@ -98,22 +80,19 @@ function Invoke-HeaderTrans([string]$Trans, [string]$SrcRel, [string]$OutName) {
     if ($rc -ne 0) { Get-Content $o2; throw "$SrcRel header translation failed" }
 }
 
-# ---- Step 0: translate the real headers with the CANDIDATE (oracle
-# side needs the same candidate for headers as for the body, matching
-# run_mp3_selftest.ps1's own approach), then the L2 header unit with
-# STABLE (the L2 header alone, forward-declares aside, has a small
-# transitive predef closure well under 16 imports). ----
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_dir_win32.h.lm1" "mixa_dir_win32.lm1.h"
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_dir.h.lm1" "mixa_dir.lm1.h"
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_audio_win32.h.lm1" "mixa_audio_win32.lm1.h"
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_audio.h.lm1" "mixa_audio.lm1.h"
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_audio_scan.h.lm1" "mixa_audio_scan.lm1.h"
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_audio_button.h.lm1" "mixa_audio_button.lm1.h"
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_app_window.h.lm1" "mixa_app_window.lm1.h"
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_audio_panel.h.lm1" "mixa_audio_panel.lm1.h"
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_audio_launch.h.lm1" "mixa_audio_launch.lm1.h"
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_audio_mp3.h.lm1" "mixa_audio_mp3.lm1.h"
-Invoke-HeaderTrans $Candidate "mixa_manager\mixa_audio_mp3_l2.h.lm1" "mixa_audio_mp3_l2.lm1.h"
+# ---- Step 0: translate the real headers, then the L2 header unit --
+# all with the same STABLE $L1Trans every other module uses. ----
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_dir_win32.h.lm1" "mixa_dir_win32.lm1.h"
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_dir.h.lm1" "mixa_dir.lm1.h"
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_audio_win32.h.lm1" "mixa_audio_win32.lm1.h"
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_audio.h.lm1" "mixa_audio.lm1.h"
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_audio_scan.h.lm1" "mixa_audio_scan.lm1.h"
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_audio_button.h.lm1" "mixa_audio_button.lm1.h"
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_app_window.h.lm1" "mixa_app_window.lm1.h"
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_audio_panel.h.lm1" "mixa_audio_panel.lm1.h"
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_audio_launch.h.lm1" "mixa_audio_launch.lm1.h"
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_audio_mp3.h.lm1" "mixa_audio_mp3.lm1.h"
+Invoke-HeaderTrans $L1Trans "mixa_manager\mixa_audio_mp3_l2.h.lm1" "mixa_audio_mp3_l2.lm1.h"
 
 # ---- Step 1: build l2trans.exe fresh, from STABLE (as always -- its
 # own import handling is independent of l1trans's fixed-size table). ----
@@ -139,15 +118,12 @@ try {
 }
 $L2TransExeHash = (Get-FileHash -LiteralPath $l2exe -Algorithm SHA256).Hash
 
-# ---- Step 2: build the harness object (compiled ONCE, via CANDIDATE --
-# it must link against the oracle object below, and while the harness's
-# OWN predef closure is small, using the same translator for both avoids
-# any ambiguity about which l1trans's C-generation conventions apply). ----
+# ---- Step 2: build the harness object (compiled ONCE, via STABLE). ----
 Push-Location $RepoRoot
 $harnessC = Join-Path $RunDir "harness.c"
 $hLog1 = Join-Path $RunDir "harness_trans_stdout.log"
 $hLog2 = Join-Path $RunDir "harness_trans_stderr.log"
-$hExit = Invoke-Cmd $Candidate "mixa_manager\tests\mixa_audio_mp3_parity_harness.lm1 `"$harnessC`"" $hLog1 $hLog2
+$hExit = Invoke-Cmd $L1Trans "mixa_manager\tests\mixa_audio_mp3_parity_harness.lm1 `"$harnessC`"" $hLog1 $hLog2
 Pop-Location
 if ($hExit -ne 0) { Get-Content $hLog2; throw "harness translation failed" }
 
@@ -157,14 +133,14 @@ $hcLog2 = Join-Path $RunDir "harness_compile_stderr.log"
 $hcExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$harnessC`" -o `"$harnessO`"" $hcLog1 $hcLog2
 if ($hcExit -ne 0) { Get-Content $hcLog2; throw "harness compile failed" }
 
-# ---- Step 3: ALWAYS build + run the ORACLE-side harness (CANDIDATE). ----
+# ---- Step 3: ALWAYS build + run the ORACLE-side harness (STABLE). ----
 $oracleC = Join-Path $RunDir "mixa_audio_mp3_oracle.c"
 $ocLog1 = Join-Path $RunDir "oracle_trans_stdout.log"
 $ocLog2 = Join-Path $RunDir "oracle_trans_stderr.log"
 Push-Location $RepoRoot
-$ocExit = Invoke-Cmd $Candidate "mixa_manager\mixa_audio_mp3.lm1 `"$oracleC`"" $ocLog1 $ocLog2
+$ocExit = Invoke-Cmd $L1Trans "mixa_manager\mixa_audio_mp3.lm1 `"$oracleC`"" $ocLog1 $ocLog2
 Pop-Location
-if ($ocExit -ne 0) { Get-Content $ocLog2; throw "oracle mixa_audio_mp3.lm1 translation failed (candidate compiler)" }
+if ($ocExit -ne 0) { Get-Content $ocLog2; throw "oracle mixa_audio_mp3.lm1 translation failed" }
 
 $oracleO = Join-Path $RunDir "mixa_audio_mp3_oracle.o"
 $occLog1 = Join-Path $RunDir "oracle_compile_stdout.log"
@@ -215,24 +191,15 @@ if ($MpExit -ne 0 -and $KnownBarrier) {
     $Verdict = "UNEXPECTED_FAILURE"
     $ExitCode = 1
 } else {
-    # If l2trans ever succeeds here, the generated intermediate .lm1
-    # might itself need >16 imports (it embeds the same composed
-    # scan+launch chain) -- try STABLE first, fall back to the
-    # candidate only if stable specifically reports the import-table
-    # limit, and say plainly which one actually worked.
+    # The generated intermediate .lm1 embeds the same composed
+    # scan+launch chain as the real .lm1 -- translated with the same
+    # STABLE $L1Trans as every other step now that its own fixed
+    # import cap is gone (see this file's own top comment).
     Push-Location $RepoRoot
     $l2MpC = Join-Path $RunDir "mixa_audio_mp3_l2.c"
     $l2ccLog1 = Join-Path $RunDir "l2mp_trans_stdout.log"
     $l2ccLog2 = Join-Path $RunDir "l2mp_trans_stderr.log"
     $l2ccExit = Invoke-Cmd $L1Trans "`"$mpOut`" `"$l2MpC`"" $l2ccLog1 $l2ccLog2
-    $UsedCandidateForIntermediate = $false
-    if ($l2ccExit -ne 0) {
-        $stableIntermediateErr = Get-Content $l2ccLog2 -Raw
-        if ($stableIntermediateErr -match "import path table full") {
-            $l2ccExit = Invoke-Cmd $Candidate "`"$mpOut`" `"$l2MpC`"" $l2ccLog1 $l2ccLog2
-            $UsedCandidateForIntermediate = $true
-        }
-    }
     Pop-Location
     if ($l2ccExit -ne 0) {
         Get-Content $l2ccLog2
@@ -280,8 +247,6 @@ if ($MpExit -ne 0 -and $KnownBarrier) {
 $Summary = @"
 Stable-L1-Translator: $L1Trans
 Stable-L1-Translator-Sha256: $ActualL1Hash
-Candidate-L1-Translator (ticket 20260912-084943, oracle side only): $Candidate
-Candidate-L1-Translator-Sha256: $ActualCandidateHash
 L2trans-Source (informational, not pinned): $L2TransSource
 L2trans-Source-Sha256 (informational, not pinned): $L2TransSourceHash
 L2trans-Exe-Sha256 (rebuilt fresh this run from STABLE, not a stable artifact): $L2TransExeHash
@@ -311,7 +276,7 @@ $Summary
 
 switch ($Verdict) {
     "EXPECTED_CORE_BARRIER" {
-        "EXPECTED_CORE_BARRIER: full mixa_audio_mp3.lm2 translation stopped at an already-known barrier. This is NOT a pass -- the integrated frontend is not yet on main. The oracle-side harness DID run (see Oracle-Trace above), using the CANDIDATE compiler as documented."
+        "EXPECTED_CORE_BARRIER: full mixa_audio_mp3.lm2 translation stopped at an already-known barrier. This is NOT a pass -- the integrated frontend is not yet on main. The oracle-side harness DID run (see Oracle-Trace above)."
     }
     "UNEXPECTED_FAILURE" {
         "UNEXPECTED_FAILURE: translation or build failed with something OTHER than the already-known barriers. Inspect the logs under $RunDir."

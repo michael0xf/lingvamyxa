@@ -58,6 +58,120 @@ include: "<stddef.h>" "mixa_manager/mixa_app_path.h" "mixa_manager/mixa_help.h" 
 # NAME only here, exactly like mixa_app_controller_impl.h's own real
 # `struct MixaConsoleView *view;`/`MixaCmdLine *cmdline;` fields do.
 
+# MixaAppFmPanel stays a plain opaque name (no predef, no struct here
+# at all -- the real `include:` above still supplies the C forward
+# declaration `typedef struct MixaAppFmPanel MixaAppFmPanel;`, l1trans/
+# gcc's own requirement for using the name as a pointer type, unrelated
+# to l2trans's own separate need below): mixa_app_controller.lm2 only
+# ever passes c\fmpanel as a function argument or returns it bare
+# (verified directly, cited in L2_RUNTIME_MODULE_LIST_AUDIT.txt's own
+# 2026-09-16 design note -- grep finds no `c\fmpanel\<field>` anywhere),
+# so it never needs MixaAppFmPanel's own field layout. What it DOES need,
+# that the plain #include above does not give it, is an L2-visible
+# callable declaration for each of the eight functions it calls --
+# l2trans's own frame-recognition does not consult plain C prototypes
+# the way l1trans's `\` dereference lowering does, confirmed directly
+# (removing the #include entirely broke the C side too: MixaAppFmPanel
+# had no forward declaration at all without it). The eight blocks below
+# supply that, the same "declare then link" convention already
+# established for mixa_cell_at (mixa_tiles_l2.h.lm1) and mixa_tile_
+# fill_button (mixa_buttons_l2.h.lm1) -- reaching neither the real
+# mixa_core.h nor the L2 mixa_tiles_l2.h.lm1 chain, sidestepping the
+# MixaCell/MixaTextRect redefinition conflict that same design note
+# found when the FULL mixa_app_fmpanel_l2.h.lm1 chain was tried instead
+# (reverted, commit 56fbf75e).
+prototype:
+    fn: mixa_app_fmpanel_close (@: MixaAppFmPanel p) void
+end: prototype
+prototype:
+    fn: mixa_app_fmpanel_open (@@: MixaAppFmPanel out; @: MixaFm fm; size_t: list_row; size_t: list_col; size_t: list_rows; size_t: list_cols; size_t: action_row; size_t: action_col) int
+end: prototype
+prototype:
+    fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
+end: prototype
+prototype:
+    fn: mixa_app_fmpanel_report_copy_result (@: MixaAppFmPanel p; int: status) void
+end: prototype
+prototype:
+    fn: mixa_app_fmpanel_hit (@: MixaAppFmPanel p; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col) int
+end: prototype
+prototype:
+    fn: mixa_app_fmpanel_wheel (@: MixaAppFmPanel p; size_t: cell_row; size_t: cell_col; int: notches) int
+end: prototype
+prototype:
+    fn: mixa_app_fmpanel_release (@: MixaAppFmPanel p) int
+end: prototype
+prototype:
+    fn: mixa_app_fmpanel_key (@: MixaAppFmPanel p; int: keycode) int
+end: prototype
+
+# The same "declare then link" shape as the eight fmpanel blocks above,
+# for every remaining call in this file with only a real-header
+# prototype and no L2-visible declaration -- the full inventory (call
+# site, source header, and why each type stays a plain opaque pointer
+# name) is in L2_RUNTIME_MODULE_LIST_AUDIT.txt's own 2026-09-16 class-
+# of-gap note, traced empirically before landing here, not guessed.
+prototype:
+    fn: mixa_file_close (@: MixaFile f) void
+end: prototype
+prototype:
+    fn: mixa_file_open (@@: MixaFile out; const: @(char path_utf8); int: mode) int
+end: prototype
+prototype:
+    fn: mixa_app_path_join (const: @(char a); const: @(char b); const: @(MixaAppPathFaultVTable fault); @@: char out) int
+end: prototype
+prototype:
+    fn: mixa_cmd_dispatch_start (const: @(char command_utf8); const: @(char cwd_utf8); @: MixaFile console_file; @@: MixaCmdDispatch out) int
+end: prototype
+prototype:
+    fn: mixa_cmd_dispatch_poll (@: MixaCmdDispatch d; @: int out_exit_code; @@: char out_new_cwd) int
+end: prototype
+prototype:
+    fn: mixa_cmd_dispatch_running (const: @(MixaCmdDispatch d)) int
+end: prototype
+prototype:
+    fn: mixa_cmd_dispatch_release (@: MixaCmdDispatch d) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_init (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_release (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_insert (@: MixaCmdLine cl; const: @(MixaCmdLineFaultVTable fault); unsigned: codepoint) int
+end: prototype
+prototype:
+    fn: mixa_cmdline_backspace (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_delete_forward (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_move_left (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_move_right (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_move_home (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_move_end (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_cmdline_extract_to_cursor_utf8 (const: @(MixaCmdLine cl); const: @(MixaCmdLineFaultVTable fault); @@: char out) int
+end: prototype
+prototype:
+    fn: mixa_cmdline_clear (@: MixaCmdLine cl) void
+end: prototype
+prototype:
+    fn: mixa_help_key_event (@: MixaHelpCtx ctx; const: @(MixaEvent ev)) int
+end: prototype
+prototype:
+    fn: mixa_help_hit (@: MixaHelpCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int
+end: prototype
+
 define: MIXA_APP_CONTROLLER_OK 0
 define: MIXA_APP_CONTROLLER_ERR_ARG 1
 define: MIXA_APP_CONTROLLER_ERR_OPEN 2

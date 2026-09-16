@@ -460,7 +460,7 @@ fn: mixa_app_entry_read (const: @(char entry_path_utf8); @: MixaAppEntry out) in
     c.memset(out, 0, c.sizeof(c.MixaAppEntry))
     dslot[0]: 0
     lslot[0]: 0U
-    st: mixa_app_read_file_utf8(entry_path_utf8, @ dslot[0], @ lslot[0])
+    st: mixa_app_read_file_utf8(entry_path_utf8, dslot, lslot)
     if: st != MIXA_APP_OK
         return: st
     data: dslot[0]
@@ -507,7 +507,7 @@ fn: mixa_app_entry_create (const: @(char src_utf8); const: @(char entry_path_utf
         ---
     ---
     tslot[0]: 0
-    st: mixa_app_entry_to_text(out, @ tslot[0])
+    st: mixa_app_entry_to_text(out, tslot)
     if: st != MIXA_APP_OK
         return: st
     text: tslot[0]

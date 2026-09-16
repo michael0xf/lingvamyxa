@@ -1,0 +1,1097 @@
+L2_RUNTIME_MODULE_LIST_AUDIT: every module name in lib_l2_runtime_
+support.ps1's own $L2RuntimeNames and in the five runners' own lists
+(mixa_manager/run_mixa_app_fmpanel_l2_parity.ps1, run_mixa_app_path_
+l2_parity.ps1, run_mixa_composite_glyphs_l2_parity.ps1, run_mixa_
+selection_l2_parity.ps1, run_mixa_tiles_l2_parity.ps1), against l2src
+at integration 7b3a8668 (sonnet/mixa-module-list, 2026-09-15).
+
+--- Counts
+
+19 distinct module names checked (the shared 18-name list every file
+  but fmpanel carries, plus fmpanel's own extra 19th name, lmx_merge_
+  owned, which none of the other five files list). 18 exist; 1 is gone.
+
+--- The 18 that exist
+
+lmx_array_owned, lmx_array_ref_owned, lmx_branch_owned, lmx_chars_owned,
+  lmx_graph_copy_owned, lmx_message_graph_copy, lmx_msg_blocks, lmx_msg_
+  history_owned, lmx_msg_liveness, lmx_msg_mail_chain, lmx_msg_path_
+  storage, lmx_msg_roots_stale, lmx_msg_slots, lmx_msg_storage, lmx_msg_
+  visit, lmx_owned_ranges, lmx_value_owned, lmx_merge_owned (fmpanel's
+  own extra) -- each has its own l2src/<name>.lm1 present at 7b3a8668
+  (verified directly, one file test per name, not assumed from the
+  list's own consistency). Each follows this tree's established port-
+  module convention (an l2src/run_port_<name>.ps1 gate translating and
+  linking it against its own oracle; e9's own claude-0c/s6-2-gate-
+  impact c28aa05a and this session's earlier LOCK_REMOVAL_S6_2_TEST_
+  INVENTORY.txt already trace the l2src-side gate for lmx_msg_slots
+  specifically, run_port_msg_slots.ps1 -- not re-derived here for all
+  18, since the ticket's own subject is the mixa_manager side of the
+  list, not a second l2src gate census). lmx_msg_slots itself is still
+  present today: S6-2 deletes it, not yet landed at 7b3a8668, so its
+  own listing here (and in every one of these six files) is correct as
+  of this tip, not stale -- it becomes the NEXT stale name once S6-2
+  lands, a fact for that stage's own future list-cleanup ticket, not
+  this one.
+
+--- The 1 that is gone
+
+lmx_msg_sched_ready: GONE. l2src/lmx_msg_sched_ready.lm1/.lm2/.h.lm1 do
+  not exist at 7b3a8668 (confirmed by direct file test) and have never
+  existed anywhere in this repository's own git history under that
+  path (`git log --all -- l2src/lmx_msg_sched_ready.lm1` returns
+  nothing directly -- the file was deleted before this history's own
+  earliest surviving commit for that exact path name, found instead by
+  content search). Deleted by commit f391fb27, "core stage 3c-2: retire
+  the lmx_msg_sched_ready queue helper" (2026-09-14), part of the S3
+  family (the wake/launch-gate mechanism; stage 3c-2's own commit
+  message cites decision 18, "readiness is the Message's own flag and
+  the parents' ready lists are gone," so the queue helper compiled but
+  nothing called it). That commit's own message names every other list
+  it swept the name out of -- run_graph_abi, run_l2trans, run_model_
+  scenario36, run_port_message, run_sched_record, 18 run_port_*
+  runners, run_port_parser's header list, run_lmx's support build --
+  and does not mention mixa_manager at all: these six files' own copies
+  were simply missed by that sweep, not deleted on a different stage
+  and re-added later. Not S5 (runtime lists), not S6-1 (exec lock), not
+  M's own UI-lane removal (M's UI-lane deletions this session's own
+  earlier LOCK_REMOVAL_S6_LOCK_SITES.txt work found are a different set
+  of names entirely -- lmx_msg_exec_ui_step etc., functions inside
+  lmx_message_exec.c, not a standalone module file).
+
+--- Which name or which own-module failure produces each of the seven
+    runners' own verdict lines (S6_2_MIXA_BASELINE.txt's own seven
+    verdicts, sonnet/s6-2-mixa-lists 4409805c)
+
+run_mixa_app_controller_l2_parity.ps1 (UNEXPECTED_FAILURE): does not
+  call Add-L2RuntimeSupport at all (confirmed: not in the grep -rl list
+  that found the other six) -- its own failure is mixa_app_controller.
+  lm2's own translation ("unsupported body, frame=mixa_app_fmpanel_
+  close"), unrelated to any module list.
+run_mixa_app_panel_l2_parity.ps1 (THROW before any oracle/L2 step):
+  the stale name. lib_l2_runtime_support.ps1's own loop over
+  $L2RuntimeNames reaches lmx_msg_sched_ready and throws translating a
+  header that does not exist.
+run_mixa_app_win32_l2_parity.ps1 (UNEXPECTED_FAILURE): own-module
+  failure, mixa_app_win32.lm2's own translation ("address of an Array
+  element needs an explicit adapter"), unrelated to the module list.
+run_mixa_audio_mp3_l2_parity.ps1 (THROW before any translation step):
+  neither -- fails earlier still, on a missing local build artifact
+  from an unrelated ticket (20260912-084943), before ever reaching a
+  module list of its own.
+run_mixa_backend_ctors_win32_l2_parity.ps1 (EXPECTED_CORE_BARRIER):
+  own-module failure, mixa_backend_ctors_win32.lm2's own translation
+  ("incompatible entry signature"), the runner's own already-documented
+  non-pass state, unrelated to the module list.
+run_mixa_backend_win32_l2_parity.ps1 (EXPECTED_CORE_BARRIER): own-
+  module failure, mixa_backend_win32.lm2's own translation ("unsupported
+  own array declaration"), same already-documented category.
+run_mixa_l2_parity.ps1 -Module app_window (THROW before any translation
+  step): the stale name, identical cause to app_panel's own -- the
+  same shared lib_l2_runtime_support.ps1 loop, same throw.
+
+Two of seven (app_panel, the dispatcher) are the stale name; two
+(app_controller, app_win32) are UNEXPECTED_FAILURE on their own
+module's code; two (backend_ctors_win32, backend_win32) are the
+runners' own already-documented EXPECTED_CORE_BARRIER; one (audio_mp3)
+never reaches a module list at all.
+
+--- Fix (this commit, on this branch): the stale name only
+
+Removed lmx_msg_sched_ready from all nine of its own occurrences across
+the six files (one line changed per occurrence, nothing else on any
+touched line): lib_l2_runtime_support.ps1:95 (1), run_mixa_app_
+fmpanel_l2_parity.ps1:294 (1), run_mixa_app_path_l2_parity.ps1:243 (1),
+run_mixa_composite_glyphs_l2_parity.ps1:65/103 (2), run_mixa_selection_
+l2_parity.ps1:81/123 (2), run_mixa_tiles_l2_parity.ps1:63/95 (2). Every
+other name (including lmx_msg_slots, still current at this tip) is
+untouched.
+
+--- Before/after verdicts (the same seven, re-measured cold after the
+    fix commit, one at a time, none exceeding 3 minutes)
+
+run_mixa_app_controller_l2_parity.ps1: UNEXPECTED_FAILURE ->
+  UNEXPECTED_FAILURE (unchanged; own-module failure, the fix does not
+  touch this runner's own code path; oracle 32 CHK lines PASS both
+  times, same "unsupported body, frame=mixa_app_fmpanel_close").
+run_mixa_app_panel_l2_parity.ps1: THROW (stale name, never reached the
+  oracle/translate steps) -> UNEXPECTED_FAILURE (a DIFFERENT failure,
+  not a pass: oracle now runs, 47 CHK lines PASS, and Add-L2Runtime
+  Support's own header/impl translation loop now completes; the build
+  fails at LINK instead, `undefined reference to lmx_root_record_new/
+  _orphan_retain/_set_clock/_set_clock_test/_clock/_clock_test/
+  _set_orphan_retain' -- lmx_root_record.lm2/.c (R0's own policy-record
+  module, already referenced by lmx_message.lm1/lmx_message_exec.c
+  since stage 5 (e)) is not itself in ANY of these six files' own
+  module lists, so nothing ever compiles or links it in. A finding for
+  the stage, not fixed here: this ticket's own ruling is "the stale
+  name only," and lmx_root_record is not a stale name -- it is a real,
+  still-needed module missing from these lists' own coverage entirely,
+  a gap this session's earlier work never had reason to surface since
+  it never got past the sched_ready throw before now).
+run_mixa_app_win32_l2_parity.ps1: UNEXPECTED_FAILURE -> UNEXPECTED_
+  FAILURE (unchanged, own-module failure; oracle 58 checks, 0 failures
+  both times, same "address of an Array element needs an explicit
+  adapter").
+run_mixa_audio_mp3_l2_parity.ps1: THROW (missing artifact) -> THROW
+  (unchanged; this runner does not use Add-L2RuntimeSupport's list at
+  all, so the fix cannot touch it -- same missing-artifact message
+  both times).
+run_mixa_backend_ctors_win32_l2_parity.ps1: EXPECTED_CORE_BARRIER ->
+  EXPECTED_CORE_BARRIER (unchanged, own-module failure; oracle 7 checks
+  PASS both times, same "incompatible entry signature").
+run_mixa_backend_win32_l2_parity.ps1: EXPECTED_CORE_BARRIER ->
+  EXPECTED_CORE_BARRIER (unchanged, own-module failure; oracle 43 CHK
+  lines PASS both times, same "unsupported own array declaration").
+run_mixa_l2_parity.ps1 -Module app_window: THROW (stale name) ->
+  UNEXPECTED_FAILURE (the same new failure mode as app_panel: oracle
+  now runs (162 checks PASS) and the module's own translation succeeds
+  cleanly; link fails on the same seven undefined lmx_root_record_*
+  references, PLUS a second, distinct link error this module alone
+  hits -- `multiple definition of mixa_rect_open/_release/mixa_cell_
+  at/_at_const/mixa_rect_fill/_put_text/_dump' between mixa_draw.o and
+  mixa_buttons.o, a pre-existing duplicate-symbol issue in this
+  module's own object list, unrelated to lmx_root_record or to this
+  ticket's own fix).
+
+Net: the one stale-name fix turns two THROWs (never reaching a real
+build) into two UNEXPECTED_FAILUREs at link time, both now failing on
+the same newly-exposed cause (lmx_root_record missing from these lists'
+own coverage) -- not a regression from the fix, but the fix un-masking
+a second, pre-existing gap that the stale name had been hiding by
+throwing first. Per the ticket's own words, a runner still red for its
+own reasons is a finding, not a fix: named here, not chased further on
+this branch.
+
+--- Falsifier
+For lmx_msg_sched_ready, the one name marked gone: `git ls-tree
+7b3a8668 l2src/lmx_msg_sched_ready.lm1` prints nothing (checked
+directly). For the 18 marked exists, the same command prints a blob
+line for each (spot-checked; also confirmed by a direct file-existence
+test on every one of the 19 names, not the ls-tree form specifically,
+since the ticket's own falsifier names ls-tree as the check for gone
+names, which is what matters for the one negative claim this document
+makes).
+
+--- lmx_root_record: why it is not a list entry (this commit,
+    sonnet/mixa-module-list, follow-up ticket)
+
+The follow-up ticket read as "add lmx_root_record to the six lists,
+nothing else." Checked first, before editing: l2src/lmx_root_record.lm1
+does not exist (direct file test) -- only l2src/lmx_root_record.lm2 and
+lmx_root_record.h.lm1 do. Every one of the six lists is consumed by an
+l1trans-only loop (lib_l2_runtime_support.ps1:99-105 for headers,
+:117-122 for modules -- l1trans invoked directly on l2src\<name>.lm1 for
+each entry; the other five files' own list-copies follow the identical
+shape). Adding the bare name as a plain list entry would make that loop
+call l1trans on a file that is not there, throwing "L2 runtime module
+lmx_root_record translation failed" before compile or link -- a THROW
+again, not the "past link" this ticket's own part (2) expects.
+run_port_message.ps1 itself never names lmx_root_record (grep -n
+lmx_root_record on it prints nothing) -- the "support order" the ticket
+pointed at is not literally in that file. Reported to lingvamyxa-6f
+rather than guessed (this session's own stop-on-contradiction rule);
+ruling: (b) -- wire the L2-native build step into lib_l2_runtime_
+support.ps1, not a list entry.
+
+The actual mechanism, found by dot-source search across l2src (grep -rl
+Build-L2RuntimeUnits l2src/*.ps1): l2src/l2units_build.ps1's
+Build-L2RuntimeUnits, already used by run_port_message.ps1:176-179 and
+26 other l2src runners. It discovers L2-native runtime units itself (no
+name list needed) -- every l2src/lmx_*.lm2 whose first line is "profile:
+runtime" and has no sibling .lm1 -- and builds each through the L2
+pipeline: l2trans.lm1->l2trans.exe once, then per unit: header via
+l1trans (if a .h.lm1 exists), .lm2->generated .lm1 via l2trans.exe,
+library/no-escape-poll checks, generated .lm1->.c via l1trans, gcc -c.
+Confirmed directly (Build-L2RuntimeUnits' own discovery predicate, run
+cold against this tree): exactly one unit qualifies today,
+lmx_root_record.lm2 -- matching the ticket's own subject exactly, not a
+broader set.
+
+--- Fix (this commit): lib_l2_runtime_support.ps1 only
+
+Add-L2RuntimeSupport now dot-sources l2src/l2units_build.ps1 and calls
+Build-L2RuntimeUnits (lib_l2_runtime_support.ps1:110-124), before the
+existing l1trans loop over $L2RuntimeModuleNames (unchanged at
+:133-155) -- the returned objects seed $L2RuntimeObjs so they reach the
+final ObjList the caller links against. No copy of Build-L2RuntimeUnits,
+no change to the l1trans loop or to $L2RuntimeNames itself (still 17
+names, the ones with real .lm1 sources -- lmx_root_record is not added
+there, since it has none). Every caller of Add-L2RuntimeSupport
+(app_panel, the run_mixa_l2_parity dispatcher, and the five runners
+with their own extra lists) now gets lmx_root_record's four symbols
+compiled and linked into its generic runtime object set.
+
+Not wired this commit, by the ruling's own scope: the five runners that
+also carry their OWN separate list-copies for their own per-module L2
+runtime staging (run_mixa_app_fmpanel_l2_parity.ps1's coreNames,
+run_mixa_app_path_l2_parity.ps1's runtimeNames, and the two-list pairs
+in run_mixa_composite_glyphs_l2_parity.ps1, run_mixa_selection_l2_
+parity.ps1, run_mixa_tiles_l2_parity.ps1) do not call Build-L2Runtime
+Units on their own account -- their own staging step still has no
+lmx_root_record coverage. A finding for a later ticket that moves these
+five onto lib_l2_runtime_support.ps1 instead of their own copies, not
+fixed here.
+
+--- Falsifier (this commit)
+git show <this commit> --stat prints lib_l2_runtime_support.ps1 and
+this audit file only -- no change to any of the five runners' own list
+files, and no new/changed list-entry string anywhere.
+
+--- After (commit 4b527e1a, the same seven re-measured cold, one at a
+    time, none past three minutes, 2026-09-15)
+
+Runner                                        | Before (pre-4b527e1a)      | After (post-4b527e1a)
+run_mixa_app_controller_l2_parity.ps1         | UNEXPECTED_FAILURE         | UNEXPECTED_FAILURE (unchanged)
+run_mixa_app_panel_l2_parity.ps1              | UNEXPECTED_FAILURE (link)  | PASS
+run_mixa_app_win32_l2_parity.ps1              | UNEXPECTED_FAILURE         | UNEXPECTED_FAILURE (unchanged)
+run_mixa_audio_mp3_l2_parity.ps1              | THROW (missing artifact)   | THROW (unchanged)
+run_mixa_backend_ctors_win32_l2_parity.ps1    | EXPECTED_CORE_BARRIER      | EXPECTED_CORE_BARRIER (unchanged)
+run_mixa_backend_win32_l2_parity.ps1          | EXPECTED_CORE_BARRIER      | EXPECTED_CORE_BARRIER (unchanged)
+run_mixa_l2_parity.ps1 -Module app_window     | UNEXPECTED_FAILURE (link)  | UNEXPECTED_FAILURE (different link)
+
+run_mixa_app_controller_l2_parity.ps1: unchanged, own-module failure,
+  the fix touches nothing this runner's own code path reaches (it never
+  calls Add-L2RuntimeSupport); oracle 9 CHK lines PASS, same "l2trans
+  error: mixa_manager\mixa_app_controller.lm2:14:5: unsupported body,
+  frame=mixa_app_fmpanel_close" both times.
+run_mixa_app_panel_l2_parity.ps1: fixed, not just "past link" -- full
+  PASS. Translation, build, and link all succeed now that
+  Add-L2RuntimeSupport compiles and links lmx_root_record's own object
+  through Build-L2RuntimeUnits; the L2 trace is byte-identical to the
+  oracle's own (31 CHK lines PASS, "mixa app panel parity harness ok").
+run_mixa_app_win32_l2_parity.ps1: unchanged, own-module failure, same
+  "l2trans error: mixa_manager\mixa_app_win32.lm2:463:50: address of an
+  Array element needs an explicit adapter" both times; oracle 58 checks,
+  0 failures both times.
+run_mixa_audio_mp3_l2_parity.ps1: unchanged, this runner never calls
+  Add-L2RuntimeSupport, same missing-artifact throw (ticket
+  20260912-084943) both times.
+run_mixa_backend_ctors_win32_l2_parity.ps1: unchanged, own-module
+  failure, same "incompatible entry signature" both times; oracle 7
+  checks PASS both times.
+run_mixa_backend_win32_l2_parity.ps1: unchanged, own-module failure,
+  same "unsupported own array declaration" both times; oracle 43 CHK
+  lines PASS both times.
+run_mixa_l2_parity.ps1 -Module app_window: past the lmx_root_record
+  link failure (translation now exits 0, no stderr; oracle 162 checks
+  PASS), but still UNEXPECTED_FAILURE -- a DIFFERENT, pre-existing link
+  error this ticket's own earlier before/after cycle already named and
+  explicitly did not chase: `multiple definition of mixa_rect_open/
+  _release/mixa_cell_at/_at_const/mixa_rect_fill/_put_text/_dump'
+  between mixa_draw.o and mixa_buttons.o, unrelated to lmx_root_record.
+  A finding, not fixed here -- this is the "further red" 6f's own
+  ticket named as its own possible, separate outcome.
+
+Net: matches the ticket's own expected move exactly for app_panel
+(PASS, better than merely "past link") and for the dispatcher (past the
+lmx_root_record failure onto a different, already-documented,
+pre-existing duplicate-symbol issue). The other five runners are
+unchanged for reasons already established (own-module failures, an
+unrelated missing artifact, or already-documented core barriers) --
+none of them call Add-L2RuntimeSupport's now-extended runtime object
+set in a way this fix could touch, or already reached their own
+independent failure before any list is consulted.
+
+--- Diagnosis, no fix: app_controller and app_win32's UNEXPECTED_FAILURE
+    (both at 7b3a8668; neither's own .lm2 has ever been touched by any
+    other commit -- each has exactly one commit in its own git log, its
+    own initial L2 port)
+
+run_mixa_app_controller_l2_parity.ps1 -- first failure:
+  mixa_manager/mixa_app_controller.lm2:14:5 (translation, l2trans):
+  `mixa_app_fmpanel_close(c\fmpanel)`. l2trans error "unsupported
+  body", detail "frame=mixa_app_fmpanel_close" -- l2trans.lm1:653
+  prints this detail whenever the node the generic fallback guard
+  rejects (l2trans.lm1:8893-8894's own comment: "the unsupported-body
+  guard, which runs before the statement is dispatched") is a call
+  frame; it fires here because mixa_app_controller.lm2's own header
+  (mixa_manager/mixa_app_controller_l2.h.lm1) never gives l2trans an L2
+  declaration for mixa_app_fmpanel_close -- MixaAppFmPanel and its own
+  functions are pulled in ONLY via the real, opaque `#include
+  "mixa_manager/mixa_app_fmpanel.h"` (a plain C header), by that
+  header's OWN already-written design comment (lines 18-34, written at
+  the port's own commit 12aa8b44): an earlier draft that DID predef the
+  L2 chain for app_fmpanel_l2 (plus help_l2/cmdline_l2/cmdline_
+  dispatch_l2/app_path_l2) hit `l1trans error: ...mixa_app_fmpanel_l2.
+  h.lm1:0:0: import path table full`, reproduced directly by that
+  draft's own author, not guessed -- so the accepted header keeps
+  fmpanel genuinely opaque on purpose. Names no field or function any
+  of S3, M, S5, or S6-1 deleted (mixa_app_fmpanel_close is a mixa_
+  manager UI-panel function, never touched by any of those four
+  stages -- git log on this .lm2 shows only its own 12aa8b44 port
+  commit, predating and untouched by all four). A pre-existing,
+  already-documented consequence of this module's own header design,
+  not a regression.
+run_mixa_app_win32_l2_parity.ps1 -- first failure:
+  mixa_manager/mixa_app_win32.lm2:463:50 (translation, l2trans):
+  `st: mixa_app_read_file_utf8(entry_path_utf8, @ dslot[0], @
+  lslot[0])`, the `@ dslot[0]` address-of. l2trans error "address of an
+  Array element needs an explicit adapter", detail "atom=@" --
+  l2trans.lm1:10075, whose own comment (lines 10071-10074) states the
+  rule directly: "An address prefix in flat-field position... except an
+  own Array element: its storage address is not an L2 `@` form (spec
+  11.3.1, 12.2)". dslot/lslot are this function's own local `[]:`
+  (own Array) declarations (lines 456-457) -- a deliberate, spec-cited
+  L2 language restriction (own-Array-element address-of needs an
+  adapter this call site does not use), not a deleted symbol. Names no
+  field or function any of S3, M, S5, or S6-1 deleted -- dslot/lslot
+  are local mixa_manager variables, unconnected to the runtime/executor
+  internals those four stages touched (git log on this .lm2 shows only
+  its own 29539c99 port commit, likewise untouched by all four).
+
+--- Fix: the dispatcher's app_window duplicate symbols (mixa_draw.o vs
+    mixa_buttons.o)
+
+Cause, confirmed directly (both generated .c files inspected, not
+guessed): mixa_draw.lm1 predefs mixa_text_rect.lm1 (full body, not
+header-only); mixa_buttons.lm1 predefs mixa_tiles.lm1, which itself
+predefs mixa_text_rect.lm1 -- so BOTH mixa_draw.c and mixa_buttons.c
+carry their own byte-identical copy of mixa_rect_open/_release/_fill/
+_put_text/_dump/mixa_cell_at/_at_const (verified: `int mixa_rect_open`
+appears in both, line 4 of each, same generated text). This is not new
+-- the now-deleted per-module run_mixa_app_window_l2_parity.ps1 (git
+show ce18299f^, before batch 3 folded it into the dispatcher) linked
+the L2 side's mixa_buttons.o and mixa_draw.o together the identical
+way and would have hit the same clash; it was masked until now by the
+lmx_msg_sched_ready throw and then the lmx_root_record link failure --
+the same masking pattern this whole audit has already found twice.
+The oracle side never sees it: mixa_app_window.lm1 itself predefs both
+chains directly, so OracleDeps is empty and only one copy is ever
+compiled.
+
+Fix: a new per-module table field, L2LinkAllowMultipleDefinition
+(l2_parity_module_table.ps1, documented in the schema comment), set
+$true only on app_window; run_mixa_l2_parity.ps1's L2-side link
+appends -Wl,--allow-multiple-definition only when that field is set
+(run_mixa_l2_parity.ps1, the L2-side link-args block). Scoped to this
+one module -- every other module's L2-side link is unchanged. Safe
+because the two definitions are guaranteed identical by construction
+(same source, same translator, same flags), not an unrelated clash
+being papered over.
+
+Before: UNEXPECTED_FAILURE -- `ld.exe: ...mixa_draw.o:mixa_draw.c:
+(.text+0x0): multiple definition of `mixa_rect_open'; ...mixa_buttons.
+o:mixa_buttons.c:(.text+0x0): first defined here` (plus 6 more of the
+same shape for the other 6 functions).
+After: PARITY_FAILURE -- link succeeds, both sides build and run;
+falsifier met (the verdict line no longer names a duplicate symbol).
+Oracle trace completes all 162 checks ("mixa app window parity harness
+ok checks=162"); the L2 trace stops silently after check 15 ("CHK open
+too small got=1 want=1 PASS", no crash message in stdout or stderr) --
+a real, further divergence, a new finding, not chased here.
+
+--- Fix: app_win32's mixa_app_win32.lm2:463 `@ dslot[0]` through the
+    explicit adapter (spec 11.3.1, 12.2), one site
+
+Cause: l1trans's own l2trans is stricter than l1trans about own-Array
+element addressing. `@ dslot[0]`/`@ lslot[0]` is exactly what the real,
+accepted oracle mixa_app_win32.lm1:464 already writes (the L2 port is a
+faithful copy of that line); l1trans accepts it (oracle: 58 checks, 0
+failures) but l2trans's own l2_check_fields (l2trans.lm1:10072-10075)
+rejects `@` directly in front of a resolved own-array-index pattern,
+per 12.2's own rule: "A raw element-storage pointer is a different
+value, obtained through an explicit low-level adapter when admitted."
+The admitted adapter, confirmed from this SAME file's own already-
+passing code (mixa_app_win32.lm2:292 `mixa_app_utf8_to_wide(path_utf8,
+wslot)`, :302 `c.WriteFile(hfile, text, (cast: (ulong) n), wrote, 0)`
+-- both pass a size-1 own-array BARE, no `@`, no index, as a call
+actual): l2trans's own l2_check_actual_fields sets l2_decay_ok while
+checking a call actual, and a bare own-array name in that position
+decays to its backing pointer (l2trans.lm1:9965's own comment) -- for
+a size-1 array that IS the element-0 address `@ dslot[0]` meant, with
+no L2-visible `@`.
+
+Fix, one site only, per the ticket: mixa_app_win32.lm2:463 changed from
+`mixa_app_read_file_utf8(entry_path_utf8, @ dslot[0], @ lslot[0])` to
+`mixa_app_read_file_utf8(entry_path_utf8, dslot, lslot)`. dslot is
+`[]: (@: char) dslot 1` (decays to char**, matches the callee's `@@:
+char data_out`); lslot is `[]: size_t lslot 1` (decays to size_t*,
+matches `@: size_t len_out`).
+
+Before: UNEXPECTED_FAILURE -- mixa_app_win32.lm2:463:50, "address of an
+Array element needs an explicit adapter", atom=@.
+After: UNEXPECTED_FAILURE -- translation gets past line 463, fails on
+the SAME diagnostic at a second, later, structurally identical site,
+mixa_app_win32.lm2:510:37 (`mixa_app_entry_to_text(out, @ tslot[0])`,
+tslot declared `[]: (@: char) tslot 1`, the same shape as dslot) -- the
+identical bare-name adapter fix would apply there too, but the ticket
+named one site; a further finding, not fixed in this commit.
+
+--- Port design note: app_controller's opaque fmpanel header -- what an
+    L2 declaration would need, and why the earlier predef draft
+    overflowed the import path table (no code, per the ticket)
+
+mixa_app_controller_l2.h.lm1's own header comment (lines 5-59, written
+at the port's own commit 12aa8b44) already records this in full; this
+note restates it against the specific symbol part 3's diagnosis named,
+mixa_app_fmpanel_close, and traces the actual overflow.
+
+What an L2 declaration for mixa_app_fmpanel_close would need: not just
+a bare `prototype: fn: mixa_app_fmpanel_close (@: MixaAppFmPanel p)
+void end: prototype` block (the "declare then link" form already used
+for mixa_cell_at in mixa_tiles_l2.h.lm1 and mixa_tile_fill_button in
+mixa_buttons_l2.h.lm1) -- that form only works when the parameter type
+can stay a plain opaque name. Here it cannot: MixaAppFmPanel embeds
+MixaHighlight BY VALUE (mixa_app_fmpanel_l2.h.lm1:105, `MixaHighlight:
+focus`, confirmed by that file's own comment lines 13-35), and a
+by-value embedded field needs the translator to know its real layout
+to compute MixaAppFmPanel's own size/offsets -- an opaque forward name
+cannot supply that (this is the SAME distinction mixa_app_controller_l2
+.h.lm1's own comment already draws for the OTHER, safely-opaque fields:
+"a DEREFERENCED struct field needs L1-known layout -- true for the
+by-value-embedding case... but NOT true for plain pointer-field
+dereference"). So the declaration mixa_app_fmpanel_close needs is the
+FULL chain: predef mixa_app_fmpanel_l2.h.lm1 itself (giving
+MixaAppFmPanel's own real, field-accurate struct plus the function's
+own prototype).
+
+Why that overflows: mixa_app_fmpanel_l2.h.lm1 is not a leaf -- it
+predefs three further chains of its own (mixa_file_manager.h.lm1,
+mixa_selection_walk.h.lm1, mixa_highlight_l2.h.lm1), each potentially
+carrying more. The earlier draft of mixa_app_controller_l2.h.lm1 tried
+predefing this full closure alongside the controller's OTHER by-value-
+adjacent needs (fm_copy + console_window_l2 + help_l2 + cmdline_l2 +
+cmdline_dispatch_l2 + app_path_l2 + app_fmpanel_l2) and hit `l1trans
+error: mixa_manager/mixa_app_fmpanel_l2.h.lm1:0:0: import path table
+full` -- reproduced directly by that draft's own author (mixa_app_
+controller_l2.h.lm1:37-40), overflowing the pinned stable65D5 l1trans's
+16-file cap by a wide margin, not by one file. The accepted header
+avoids this by keeping MixaAppFmPanel (and every other struct this
+controller only ever touches through a pointer field) genuinely opaque,
+reached via the real, plain `#include "mixa_manager/mixa_app_fmpanel.h"`
+instead -- correct for l1trans (which resolves `\` dereference through
+gcc, never needing L1-level field knowledge for a pointer field, per
+that header's own comment lines 27-34) but insufficient for l2trans,
+whose own unsupported-body guard needs an L2-recognized callable frame
+for mixa_app_fmpanel_close specifically, which a plain #include never
+supplies. That gap -- l2trans needing what l1trans does not -- is the
+open question a real fix would have to resolve, not addressed here.
+
+--- Migrate the five own-list runners onto lib_l2_runtime_support.ps1
+
+fmpanel, app_path, composite_glyphs, selection, and tiles each carried
+their own copy of the 17-name lmx_* runtime-object build (the same
+copy-pasted shape this whole audit's own earlier sections trace to
+each own missing lmx_root_record coverage), instead of calling
+Add-L2RuntimeSupport like the other 7 runners already do. Each now
+dot-sources lib_l2_runtime_support.ps1 (already present in all five)
+and calls Add-L2RuntimeSupport in place of its own header-translate +
+module-translate + compile loop, using the returned ObjList/HeaderRoot
+at the link and compile steps that used to reference its own
+$CoreRuntimeObjects/$runtimeObjectArgs. app_path and fmpanel used a
+second, separate L1 translator ($L2L1Trans, gen3) for their own
+runtime-object build (distinct from $L1Trans/gen2 used everywhere
+else in those two files) -- Add-L2RuntimeSupport is called with
+-L1Trans $L2L1Trans there specifically, to preserve that existing
+choice unchanged; composite_glyphs/selection/tiles never had a gen3
+split and are called with -L1Trans $L1Trans, matching their own
+existing convention.
+
+composite_glyphs/selection/tiles additionally stage a COPY of the raw
+l2src/*.h.lm1 predef SOURCES into a build-local tree ($StageCoreDir)
+before translating their own generated .lm1 output -- confirmed
+directly (first attempt at this migration dropped that staging on the
+theory that only the runtime-OBJECT build needed the list, which broke
+composite_glyphs with `l1trans error: cannot read import l2src/
+lmx_array_owned.h.lm1`) to be a SEPARATE need from the runtime-object
+build: l1trans's own translation of the generated .lm1 (not the
+compile step) reads these raw .h.lm1 sources relative to the staged
+tree's own root. That staging step is kept as-is in all three; only
+the OBJECT-building duplicate ($CoreImplUnits + the two native-C
+compiles) was replaced.
+
+Before/after, each measured cold, one at a time, none past three
+minutes (fmpanel/app_path/selection/tiles all show the identical
+lmx_root_record undefined-reference pattern before, confirmed by grep
+on each one's own link stderr):
+
+run_mixa_app_fmpanel_l2_parity.ps1: UNEXPECTED_FAILURE (link,
+  undefined reference to lmx_root_record_orphan_retain/_new/_set_clock
+  etc.) -> PASS.
+run_mixa_app_path_l2_parity.ps1: UNEXPECTED_FAILURE (link, same
+  lmx_root_record undefined references) -> PASS.
+run_mixa_composite_glyphs_l2_parity.ps1: UNEXPECTED_FAILURE ->
+  UNEXPECTED_FAILURE, unchanged -- NOT lmx_root_record. Confirmed by
+  measuring the true pre-migration state directly (git checkout --,
+  re-run, compare): both before and after fail at the SAME earlier
+  stage, compiling the module's own generated C (mixa_composite_
+  glyphs_l2.c:7483 and 9 other sites, "subscripted value is neither
+  array nor pointer nor vector" on `cell -> fg[0]`/`bg[0]`/`alpha[0]`),
+  identical line numbers and error count (10) both times -- a
+  pre-existing, unrelated compile defect in the module's own generated
+  code, never reaching the runtime-object link step this migration
+  touches. A finding, not fixed here (out of this ticket's own scope,
+  which is the list migration only).
+run_mixa_selection_l2_parity.ps1: UNEXPECTED_FAILURE (link, same
+  lmx_root_record undefined references) -> PASS (all nine scenarios).
+run_mixa_tiles_l2_parity.ps1: UNEXPECTED_FAILURE (link, same
+  lmx_root_record undefined references) -> PASS.
+
+Net: 4 of 5 fixed outright (the same lmx_root_record gap this whole
+audit traces throughout); the fifth (composite_glyphs) is unchanged,
+its own pre-existing failure sitting upstream of where this fix could
+reach it -- consistent with this audit's own repeated finding that a
+masking failure hides what's underneath until removed.
+
+--- Fix: every remaining `@ xslot[0]` site in mixa_app_win32.lm2
+
+Swept the whole file (`grep -n "@ [a-zA-Z_][a-zA-Z0-9_]*\[" mixa_manager
+/mixa_app_win32.lm2`) for the same shape :463 and :510 already showed.
+Exactly one remained: :510, `mixa_app_entry_to_text(out, @ tslot[0])`
+inside mixa_app_entry_create -- tslot is `[]: (@: char) tslot 1`, the
+same size-1 own-array shape as dslot/lslot, and mixa_app_entry_to_text's
+own signature (`@@: char text_out`) matches tslot's own bare-name
+decay exactly, the same adapter :463's own fix already established.
+Changed to `mixa_app_entry_to_text(out, tslot)`.
+
+Before: UNEXPECTED_FAILURE at :510:37 (only remaining site after the
+prior commit's :463 fix). After: PASS -- full translation, build, and
+run; L2 trace byte-identical to the oracle's own 58-check trace.
+Falsifier met: the verdict names no `@ ` on an own-array element
+anywhere (grep confirms zero remaining occurrences of the shape in the
+file).
+
+--- Diagnosis: why app_window's L2 trace stops silently after check 15
+    of 162 (no fix -- root cause is in l2trans.lm1 itself, outside
+    mixa_manager's own scope)
+
+Reproduced directly under gdb (`gdb -batch -x <run> ./parity_l2.exe`,
+the exact object this dispatcher run built): SIGSEGV in strlen, called
+from mixa_button_panel_add, called from l2_uCC211EFB79C1B967_m9 (the
+L2-generated body of mixa_app_window_open), called from main. The
+crash is the FIRST call this whole test sequence ever makes to
+mixa_button_panel_add -- every earlier CHK (open hb0 through open too
+small) returns ERR from an early guard before reaching it; "open long
+msg rejected" (harness line 198, the check whose own CHK line never
+prints) is the first call to survive every early guard and reach it.
+
+mixa_button_panel_add itself is the REAL, unmodified object (Build-
+RealDep in run_mixa_l2_parity.ps1 always translates mixa_buttons.lm1
+via l1trans, never mixa_buttons.lm2 -- confirmed already in this
+audit's own duplicate-symbol section) -- identical on both the oracle
+and L2 sides, so the bug is not in that function's own body. The
+generated call site itself matches the real .lm1 source exactly
+(mixa_app_window.lm2:244, byte-identical to mixa_app_window.lm1:254):
+`mixa_button_panel_add(panel, 0U, MIXA_APP_WINDOW_BTN_LABEL, ...)`.
+
+Root cause, found by reading the actual generated C
+(app_window_l2.c:4197-4204) and its own gcc warnings (l2mod_compile_
+stderr.log): l2trans stages every `define:`d constant argument to this
+call through an intermediate temp it types uniformly as `int`,
+regardless of the constant's real type --
+    int l2_t3; l2_t3 = MIXA_APP_WINDOW_BTN_LABEL;   // a `char *` constant
+    int l2_t4; l2_t4 = MIXA_APP_WINDOW_BTN_FG;       // genuinely numeric
+    int l2_t5; l2_t5 = MIXA_APP_WINDOW_BTN_BG;
+    int l2_t6; l2_t6 = MIXA_APP_WINDOW_BTN_ALPHA;
+gcc's own warnings name exactly this: ":4198:11: warning: assignment to
+'int' from 'char *' makes integer from pointer without a cast
+[-Wint-conversion]" and ":4295:42: warning: passing argument 3 of
+'mixa_button_panel_add' makes pointer from integer without a cast
+[-Wint-conversion]" -- neither is covered by this runner's own
+-Werror set (incompatible-pointer-types/discarded-qualifiers/implicit-
+function-declaration/implicit-int catch different diagnostics, not
+-Wint-conversion), so it compiles silently. On this 64-bit target the
+pointer truncates to its low 32 bits in l2_t3 (an int), then widens
+back on the call with garbage high bits -- the crash's own rcx at the
+strlen frame, 0x4ebf1611, is exactly that shape: a 32-bit-looking value
+where a real heap/text-segment pointer would be. FG/BG/ALPHA survive
+the same treatment only because they are genuinely small numeric
+constants an int can hold intact.
+
+This is an l2trans.lm1 type-inference defect (the checkpoint/staging
+codegen for a define:'d call-actual constant does not consult the
+constant's own type, or the callee's own parameter type, when choosing
+the temp's C type) -- not a one-site mixa_manager fix, not a missing
+runtime module, and not an oracle-side divergence (the oracle passes
+because it links the REAL object directly with no such staging).
+Reported as a finding for whoever owns l2trans/core L2 work; not fixed
+here, per this session's own role boundary and the ticket's own "a fix
+if it is one site" condition -- it is not.
+
+--- Fix: composite_glyphs' ten "subscripted value" errors
+
+First one, cited directly: mixa_composite_glyphs_l2.c:7483:48, `l2_q25
+= ((((unsigned)((((MixaU8)cell -> fg[0]))))));` -- gcc: "subscripted
+value is neither array nor pointer nor vector". `fg` is `MixaCellByte:
+fg`, a plain scalar field in `struct: MixaCell` (mixa_tiles_l2.h.lm1)
+-- not an own-Array, nothing to index. Traced to the generating L2
+source: mixa_composite_glyphs.lm2:190, `fg: (cast: (unsigned) (cast:
+(MixaU8) cell\fg[0]))` -- the `[0]` is simply wrong, applied to a
+scalar field read. The accepted form, cited directly from the real,
+unmodified oracle: mixa_composite_glyphs.lm1:172, `fg: cell\fg` -- no
+index, no cast, matching mixa_tiles_l2.h.lm1's own struct declaration
+exactly. Same shape as :463 in kind (indexing something that isn't
+indexable) but not the same construct -- :463 was an own-Array local
+needing the bare-name adapter; this is a plain scalar struct field
+that needed no `[0]` at all, ever.
+
+Fix: removed `[0]` from all ten occurrences (`cell\fg[0]` -> `cell\fg`,
+`cell\bg[0]` -> `cell\bg`, `cell\alpha[0]` -> `cell\alpha`, five of
+each shape at :190/:192(x2)/:194/:196 and the identical block at
+:254/:256(x2)/:258/:260) -- the cast wrapping itself is left
+untouched, matching every other L2-ported call site in this file that
+already casts real fields this way without indexing them.
+
+Before: UNEXPECTED_FAILURE (compile, 10 errors, same line numbers as
+the earlier before/after cycle recorded above). After: PASS -- full
+translation, build, and run; L2 trace byte-identical to the oracle's
+own trace across all four scenarios.
+
+--- Merge preview: the landing's two mixa steps, run cold at this tip
+
+run_mixa.ps1                | SUCCESS (exit 0), every suite line "ok"
+                             (core, overlay, backend, pump, selection,
+                             draw, pointer, tiles, buttons, win32
+                             backend, backend table, process seam,
+                             ingress host harness incl. its own
+                             expected-failure diagnostics) -- 105
+                             output lines, zero real fail/error/
+                             exception (the four case-insensitive
+                             matches are GDI_ERROR sentinel text and
+                             two explicitly-expected diagnostic lines,
+                             both themselves marked "ok").
+run_ingress_harness.ps1     | exit 0, all 26 output lines "ok" (pin
+                             verification, nm check, the full ingress
+                             evidence sequence, the same two expected-
+                             failure diagnostics as above, both ok).
+
+Neither red. Nothing to report as a merge blocker from this tip.
+
+--- Design note: retiring L2LinkAllowMultipleDefinition (no code)
+
+Duplicated definitions (confirmed earlier in this audit by inspecting
+both generated .c files directly): mixa_rect_open, mixa_rect_release,
+mixa_cell_at, mixa_cell_at_const, mixa_rect_fill, mixa_rect_put_text,
+mixa_rect_dump -- all seven live in mixa_text_rect.lm1, none in draw.lm1
+or buttons.lm1 themselves.
+
+Through which two chains: mixa_draw.lm1 predefs mixa_text_rect.lm1
+directly (a FULL-BODY predef, not header-only); mixa_buttons.lm1
+predefs mixa_tiles.lm1, which itself predefs mixa_text_rect.lm1, also
+full-body. l1trans's own predef convention embeds the complete body of
+a predef'd MODULE (not a .h.lm1 header unit) into every translation
+unit that predefs it -- by design, and correct when only one such unit
+is ever linked into a given executable. app_window's own L2Deps links
+both draw.o and buttons.o into the same executable, so both embedded
+copies collide.
+
+The one-definition shape that removes the flag: either candidate needs
+the SAME two changes, no way around touching real, accepted .lm1 files
+(not a dispatcher-only change like this session's own list-migration
+work) -- (a) one of the two chains (draw's own direct predef, or
+tiles's own predef reached via buttons) is rewritten from a full-body
+`predef:` to a header-only "declare then link" prototype block, the
+exact convention mixa_tiles_l2.h.lm1 already uses for mixa_cell_at on
+the L2 side (`prototype: fn: mixa_cell_at (...) ... end: prototype`);
+(b) the dispatcher then adds mixa_text_rect as ITS OWN explicit L2Dep
+for app_window (a single Build-RealDep call, one compiled object), so
+exactly one copy of the seven functions is linked, shared by both
+draw.o and buttons.o. Whether the rewrite lands on mixa_draw.lm1 or on
+mixa_tiles.lm1 is a real choice for that ticket, not decided here --
+either is a genuine edit to an already-accepted, hand-written oracle
+file, not something to fold into a mixa_manager runner/list change.
+
+--- audio_mp3 and app_controller: an honest ExpectVerdict for the two
+    runners left outside the parity gate (doc only, no code)
+
+audio_mp3's THROW -- first line: run_mixa_audio_mp3_l2_parity.ps1:57,
+`throw "missing candidate L1 translator (ticket 20260912-084943, read-
+only, not modified by this script): $Candidate"`, $Candidate itself
+set at :52 to `build\codex\l1-import-capacity\build\import_capacity\
+run_20260912_084844\l1trans.exe`. What the runner expects to find: a
+hash-pinned (24A1B57B...) CANDIDATE l1trans built by an earlier Codex
+session to remove l1trans's own then-fixed 16-import cap, needed
+because the real mixa_audio_mp3.lm1 predefs 22 files in one unit and
+the STABLE pin of that day (stable65D5) could not translate it at all.
+That candidate is a scratch build artifact under build/ (fully
+gitignored, confirmed: `grep build/ .gitignore` matches both root
+entries, and the directory does not exist in this worktree at all,
+parent included) -- L1_IMPORT_CAPACITY_20260912.md's own words call it
+"Evidence (private, not a stable promotion)", never meant to survive
+across worktrees or sessions.
+
+Whether to build it, skip with its own EXPECTED_ state, or retire: NONE
+of the three as literally posed -- a fourth option, verified directly,
+not guessed: `grep -n "import path table full" l1src/l1trans.lm1`
+returns NOTHING (the error string doesn't exist in the current source
+at all), and the CURRENT pinned l1trans (build\l1trans\gen2\l1trans.
+exe, hash 0B3D85B3..., a DIFFERENT hash than stable65D5A5ED... cited in
+that doc) translates mixa_audio_mp3.lm1 directly with exit 0 and no
+diagnostic (`./build/l1trans/gen2/l1trans.exe mixa_manager/mixa_audio_
+mp3.lm1 <out>.c`, run cold just now). The whole reason this candidate
+exists -- the pinned compiler's own fixed import cap -- is gone from
+the pin currently in use; L1_IMPORT_CAPACITY_20260912.md's own
+"Published bootstrap-C refresh" section says this landed in the
+tracked C bootstrap on 2026-09-12, before this session's own work
+began. Recommendation: retire the CANDIDATE-COMPILER MECHANISM, not
+just this one check -- change the runner's own oracle-side build to
+use $L1Trans like every other module instead of $Candidate (a real
+code edit, not done here, doc only per the ticket); ExpectVerdict then
+becomes whatever this runner's own translate/parity result actually is
+once it can run past this line, not asserted here since it has never
+been observed.
+
+app_controller's UNEXPECTED_FAILURE -- first line, re-confirmed
+unchanged just now: mixa_manager/mixa_app_controller.lm2:14:5,
+l2trans error "unsupported body" (frame=mixa_app_fmpanel_close), fully
+diagnosed in commit 41e13bf8: the module's own accepted header keeps
+MixaAppFmPanel opaque via a plain #include specifically because an
+EARLIER DRAFT that instead predef'd the full mixa_app_fmpanel_l2.h.lm1
+chain hit `l1trans error: ...import_path table full` when translated
+standalone (mixa_app_controller_l2.h.lm1's own comment, lines 37-40).
+ExpectVerdict to record today: UNEXPECTED_FAILURE, same diagnostic,
+unchanged.
+
+The condition that lifts it, connected to the audio_mp3 finding just
+above and verified to the same extent (not fully re-tested, since
+reproducing the earlier draft's own predef chain is itself code): the
+SAME fixed import cap that forced the opaque-header design is gone
+from the current source (same grep, same negative result, same
+"landed 2026-09-12" timing) -- the earlier draft's own reason for
+abandoning the full predef chain may no longer apply. This is NOT
+independently confirmed for app_controller's own specific 7-chain
+combination (fm_copy + console_window_l2 + help_l2 + cmdline_l2 +
+cmdline_dispatch_l2 + app_path_l2 + app_fmpanel_l2) -- doing so means
+writing and translating a test header, which is code, out of this
+ticket's own doc-only scope. The condition to lift the barrier: someone
+re-attempts that full predef chain against the current pin; if it no
+longer hits a table-full error, l2trans's own "unsupported body" gap
+for calling mixa_app_fmpanel_close becomes a separate, still-open
+question (an L2-visible declaration existing is necessary but not
+independently confirmed sufficient here) -- not resolved by this note,
+a next step for whoever picks up either ticket.
+
+--- Fix: retire audio_mp3's scratch second-translator mechanism
+
+Removed the whole mechanism, not just the missing-file check: the
+second translator's own path/hash constants (formerly :52-53), its
+existence/hash-mismatch throws (formerly :56-62), and every one of its
+9 call sites (the 11 header translations, the harness translation, the
+oracle translation, and the stable-fails-then-retry-with-it fallback
+in the intermediate-.lm1 translation step) -- all now use $L1Trans, the
+same stable, pinned translator every other module in this tree already
+uses. `grep -c candidate mixa_manager/run_mixa_audio_mp3_l2_parity.ps1`
+prints 0 (falsifier met).
+
+Before: THROW at the old :57 (missing artifact). After: PASS -- full
+translation, build, and run; L2 trace byte-identical to the oracle's
+own trace ("mp3 composition selftest: 36 checks, 0 failures" both
+sides), 23.1s cold. Confirms the 2026-09-16 finding above directly:
+the fixed import cap this whole mechanism existed to work around is
+genuinely gone from the current pin, and the real 22-import module
+needed no special-case translator at all once asked to use the one
+every other module already uses.
+
+--- app_controller: re-attempted the full mixa_app_fmpanel_l2.h.lm1
+    predef chain against the current pin (no code landed -- reverted;
+    this is the "next verdict" the ticket asked to follow, not a fix)
+
+Edited mixa_app_controller_l2.h.lm1: removed the opaque `include:
+"mixa_manager/mixa_app_fmpanel.h"`, added `predef: "mixa_manager/
+mixa_app_fmpanel_l2.h.lm1"` in its place -- the earlier draft's own
+approach, re-attempted. The import-table-full error did NOT return
+(confirmed: three header-translation additions later -- mixa_tiles_l2.
+h.lm1, mixa_highlight_l2.h.lm1, mixa_app_fmpanel_l2.h.lm1 itself, added
+to the runner's own Step 0 list to satisfy the new predef chain's own
+transitive closure -- l1trans never once printed that error), directly
+confirming this finding's own earlier claim that the old cap is gone.
+
+But it does not reach a working state either -- a DIFFERENT, genuine
+blocker, not anticipated by either of the ticket's own two branches:
+gcc: `headers/mixa_manager/mixa_tiles_l2.lm1.h:16:8: error:
+redefinition of struct MixaCell` and `:25:8: error: redefinition of
+struct MixaTextRect`, both conflicting with `mixa_core.h:17:16` and
+`:26:16` -- mixa_tiles_l2.h.lm1's own L2-declared MixaCell/MixaTextRect
+(reached transitively via the new app_fmpanel_l2 chain) now collides
+with the REAL mixa_core.h's own definitions (reached transitively via
+the EXISTING console_window.h.lm1 chain, already predef'd before this
+attempt) -- both landing in the same translation unit for the first
+time. mixa_tiles_l2.h.lm1's own header comment already names exactly
+this hazard as the reason it avoids including mixa_core.h/mixa_tiles.h
+directly: "doing so would redefine `struct MixaCell`/`struct
+MixaTextRect` a second time in the same translation unit". Resolving
+it means picking one canonical source for these two structs across
+app_controller's own combined chain (a real design decision -- which
+of console_window's real chain or fmpanel's L2 chain keeps the
+definition, and the other one made to reference it instead of
+redeclaring it), not a mechanical header-translation addition; not
+attempted here.
+
+Both edited files reverted to their prior, working (opaque-header)
+state before committing anything -- re-ran the runner cold after
+reverting to confirm: same UNEXPECTED_FAILURE, same mixa_app_
+controller.lm2:14:5 diagnostic as before, unchanged. ExpectVerdict
+entered into the gate table: unchanged (app_controller stays outside
+run_mixa_parity_gates.ps1, as it already was) -- UNEXPECTED_FAILURE,
+same reason as before, this attempt only replaces "why" with a more
+complete picture (the opaque header is not just avoiding the old
+import cap, it is also the only thing keeping MixaCell/MixaTextRect
+single-defined in this file today).
+
+--- Design note: one canonical MixaCell/MixaTextRect source (doc only,
+    no code)
+
+Every declaration at 7b3a8668, by direct grep, both structs:
+`git grep -n "struct MixaCell\|struct: MixaCell" 7b3a8668 --
+'*.h' '*.h.lm1' '*.lm1' '*.lm2'` ->
+  mixa_manager/mixa_backend.h:208: `typedef struct MixaCellMetrics {`
+    (a DIFFERENT struct, MixaCellMetrics -- a substring match on
+    "MixaCell", not a real MixaCell declaration; excluded below)
+  mixa_manager/mixa_core.h:17: `typedef struct MixaCell {` -- the REAL
+    definition.
+  mixa_manager/mixa_tiles_l2.h.lm1:19: (a comment line mentioning the
+    name, not a declaration)
+  mixa_manager/mixa_tiles_l2.h.lm1:35: `struct: MixaCell` -- the
+    L2-declared definition.
+Same query for MixaTextRect finds exactly the same two real sources:
+mixa_core.h:26 (`typedef struct MixaTextRect {`) and mixa_tiles_l2.h.
+lm1:44 (`struct: MixaTextRect`). Two declarations total, one real, one
+L2, for each struct -- no third source anywhere in the tree.
+
+Which translation units combine both chains TODAY (at 7b3a8668, the
+landed state, not the reverted 56fbf75e experiment): NONE. Traced by
+grepping every header unit's own predef:/include: lines (not comments)
+for both mixa_core.h and mixa_tiles_l2.h.lm1: exactly two files
+`include:` real mixa_core.h directly (mixa_app_window.h.lm1,
+mixa_console_window.h.lm1), and exactly three predef the L2 tiles_l2.
+h.lm1 chain (mixa_button_dispatch_l2.h.lm1, mixa_composite_glyphs_l2.
+h.lm1, mixa_highlight_l2.h.lm1, plus mixa_app_fmpanel_l2.h.lm1
+transitively through highlight_l2). Checked each module that touches
+either family for whether ONE translation unit ever pulls in both:
+app_window.lm2 predefs only mixa_app_window_l2.h.lm1 -> button_
+dispatch_l2 -> tiles_l2 (L2 side only); its own separate ABI probe and
+real-side .lm1 keep the real mixa_core.h chain in a SEPARATE .c file
+by the probe's own by-design real/L2 split. Every other module that
+touches MixaCell/MixaTextRect (composite_glyphs, selection, tiles,
+buttons, highlight) is the same shape -- real and L2 sides are always
+compiled as separate translation units, by the parity-runner pattern
+itself. The ONLY place the two chains were ever asked to coexist in
+one file is the reverted app_controller_l2.h.lm1 edit above -- this is
+a hypothetical conflict, surfaced by one specific attempted fix, not a
+live one anywhere in the accepted tree.
+
+The two candidate shapes, and what each breaks:
+
+(a) tiles_l2.h.lm1 includes the real mixa_core.h and drops its own
+`struct: MixaCell`/`struct: MixaTextRect`. Breaks field-level L2
+access broadly: every module that reads/writes a MixaCell/MixaTextRect
+field through L2's own `\` field-follow (composite_glyphs's own
+`cell\fg`/`\bg`/`\alpha`, fixed earlier in this exact audit thread;
+draw's own `rect\cells`/`\rows`/`\cols`; tiles, buttons, app_window,
+highlight all touch these fields the same way) needs L1-known field
+layout, which a plain opaque `include:` cannot supply -- this is
+tiles_l2.h.lm1's own header comment's exact reasoning for declaring
+these structs itself rather than including the real header, already
+written before this note. This candidate reverses that reasoning
+tree-wide, not just for app_controller.
+
+(b) the real side takes the L2 header's declaration -- mixa_core.h (or
+whatever real code currently defines these structs) includes the
+L1-generated tiles_l2.h.lm1 output instead of defining them itself.
+Breaks the oracle/L2 dependency direction for a FOUNDATIONAL header:
+mixa_core.h is real, hand-written C, included directly by dozens of
+unmodified real files having nothing to do with L2 porting; making it
+depend on l1trans's own generated output would mean the entire real
+side needs l1trans to run and produce mixa_tiles_l2.lm1.h before
+mixa_core.h itself can be preprocessed -- inverting which side is the
+source of truth for two of this tree's most foundational types, a
+build-order and architecture change affecting the whole codebase, not
+scoped to app_controller at all.
+
+Recommendation: neither of the two above -- both are tree-wide changes
+for a conflict that, traced just above, is not actually live anywhere
+except the one attempted fix. A narrower option, verified directly
+against what app_controller.lm2 itself actually does with fmpanel
+(`git show 7b3a8668:mixa_manager/mixa_app_controller.lm2 | Select-
+String 'c\\fmpanel'`, PowerShell for the backslash): every occurrence
+is `c\fmpanel` passed AS AN ARGUMENT to a mixa_app_fmpanel_* call (nine
+distinct functions: close, open, render, report_copy_result, hit,
+wheel, release, key) or returned bare -- never `c\fmpanel\<field>`.
+app_controller never needs MixaAppFmPanel's own field layout (it holds
+and passes only a pointer), so it never needed the WHOLE mixa_app_
+fmpanel_l2.h.lm1 chain -- only callable declarations for those nine
+functions. The "declare then link" prototype convention already
+established in this tree (mixa_tiles_l2.h.lm1's own mixa_cell_at,
+mixa_buttons_l2.h.lm1's own mixa_tile_fill_button) gives exactly that,
+with MixaAppFmPanel staying a plain opaque name -- reaching neither
+mixa_core.h nor tiles_l2.h.lm1 from app_controller_l2.h.lm1 at all,
+sidestepping the conflict instead of resolving it. Not implemented
+here (code, out of this note's own doc-only scope) -- a candidate for
+whoever picks up app_controller's own ticket next.
+
+--- Implemented: the prototype: declarations for app_controller's
+    fmpanel calls (two corrections to the recommendation above, found
+    while implementing, both cited exactly)
+
+Correction 1, the count: app_controller.lm2 calls EIGHT distinct
+mixa_app_fmpanel_* functions, not nine -- the design note's own prose
+said "nine" but its own listed names were only eight (close, open,
+render, report_copy_result, hit, wheel, release, key); re-verified
+twice independently just now (PowerShell regex match + unique, and a
+second full-file grep for every `mixa_app_fmpanel_` occurrence) --
+both give the same eight, no ninth function anywhere, including no
+separate constructor (mixa_app_fmpanel_open's own out-param, `@@:
+MixaAppFmPanel out`, already fills that role). `grep -c "prototype:"`
+on the edited file after this commit prints 8.
+
+Correction 2, "replacing" the opaque #include: the real `include:
+"mixa_manager/mixa_app_fmpanel.h"` cannot simply be removed -- tried
+first, and it broke the C side too: gcc reported `unknown type name
+'MixaAppFmPanel'` at every one of the eight prototype: sites and the
+struct field itself, because that real header is what supplies
+`typedef struct MixaAppFmPanel MixaAppFmPanel;`, l1trans/gcc's own
+plain forward-declaration requirement for using the name as a bare
+pointer type -- a need the eight `prototype:` blocks do not cover
+(they give l2trans an L2-visible callable declaration, a completely
+separate requirement l1trans/gcc never had). Fix: keep the real
+`include:` AND add the eight prototype: blocks alongside it, not in
+its place -- both needs, same file, two different translators reading
+it two different ways.
+
+Before: UNEXPECTED_FAILURE at mixa_app_controller.lm2:14:5 (frame=
+mixa_app_fmpanel_close). After: UNEXPECTED_FAILURE still, but moved
+past every fmpanel call entirely -- the new first failure is
+mixa_app_controller.lm2:16:5, frame=mixa_file_close, a DIFFERENT
+function with the exact same shape of gap (`grep -rn mixa_file_close
+mixa_manager/*.h.lm1` finds nothing -- only the real mixa_file.h:32
+prototype, no L2-visible declaration, same class of fix as fmpanel's
+own, just not this ticket's own scope). Real progress, not a pass --
+this ticket's own fix is confirmed working for exactly what it targets
+and nothing past it, reported rather than chased.
+
+--- Class-of-gap inventory: every app_controller.lm2 call with only a
+    real-header prototype and no L2-visible declaration (doc only, no
+    code -- all prototype: blocks below were added, tested, and
+    reverted, never landed)
+
+Method: extracted every `mixa_[a-z0-9_]+\(` call-site identifier from
+mixa_app_controller.lm2 (51 distinct names), subtracted the 15 locally
+`fn:`-defined mixa_app_controller_* names, leaving 36 external calls.
+For each, checked whether ANY .h.lm1 file already predef's/prototypes
+it (L2-visible) or only a plain .h file does (real-only, a gap). Eight
+were already fixed (mixa_app_fmpanel_*, commit 8e094e98). Eight more
+(mixa_app_loop_close/open/running/step, mixa_console_view_init/
+recompute, mixa_console_window_present, mixa_fm_copy_here_action) are
+NOT gaps -- already L2-visible via mixa_fm_copy.h.lm1/mixa_console_
+window.h.lm1, both already predef'd. The remaining twenty are the
+inventory below, grouped by the real header that declares them, each
+with its first call site and the prototype: block it would need (the
+same shape as the eight already-landed fmpanel blocks; every type
+involved -- MixaFile, MixaCmdLine, MixaCmdDispatch, MixaHelpCtx, and
+the two FaultVTable types -- is used only by pointer here, the same
+"stays opaque" reasoning already established for MixaAppFmPanel).
+
+mixa_file.h (2):
+  mixa_file_close at :16 (the current first failure) --
+    `fn: mixa_file_close (@: MixaFile f) void`
+  mixa_file_open at :184 --
+    `fn: mixa_file_open (@@: MixaFile out; const: @(char path_utf8); int: mode) int`
+
+mixa_app_path.h (1):
+  mixa_app_path_join at :97 --
+    `fn: mixa_app_path_join (const: @(char a); const: @(char b); const: @(MixaAppPathFaultVTable fault); @@: char out) int`
+
+mixa_cmdline_dispatch.h (4):
+  mixa_cmd_dispatch_release at :39 --
+    `fn: mixa_cmd_dispatch_release (@: MixaCmdDispatch d) void`
+  mixa_cmd_dispatch_poll at :356 --
+    `fn: mixa_cmd_dispatch_poll (@: MixaCmdDispatch d; @: int out_exit_code; @@: char out_new_cwd) int`
+  mixa_cmd_dispatch_start at :490 --
+    `fn: mixa_cmd_dispatch_start (const: @(char command_utf8); const: @(char cwd_utf8); @: MixaFile console_file; @@: MixaCmdDispatch out) int`
+  mixa_cmd_dispatch_running at :547 --
+    `fn: mixa_cmd_dispatch_running (const: @(MixaCmdDispatch d)) int`
+
+mixa_cmdline.h (11):
+  mixa_cmdline_release at :41 --
+    `fn: mixa_cmdline_release (@: MixaCmdLine cl) void`
+  mixa_cmdline_init at :225 --
+    `fn: mixa_cmdline_init (@: MixaCmdLine cl) void`
+  mixa_cmdline_backspace at :467 --
+    `fn: mixa_cmdline_backspace (@: MixaCmdLine cl) void`
+  mixa_cmdline_delete_forward at :470 --
+    `fn: mixa_cmdline_delete_forward (@: MixaCmdLine cl) void`
+  mixa_cmdline_move_left at :473 --
+    `fn: mixa_cmdline_move_left (@: MixaCmdLine cl) void`
+  mixa_cmdline_move_right at :476 --
+    `fn: mixa_cmdline_move_right (@: MixaCmdLine cl) void`
+  mixa_cmdline_move_home at :479 --
+    `fn: mixa_cmdline_move_home (@: MixaCmdLine cl) void`
+  mixa_cmdline_move_end at :482 --
+    `fn: mixa_cmdline_move_end (@: MixaCmdLine cl) void`
+  mixa_cmdline_extract_to_cursor_utf8 at :487 --
+    `fn: mixa_cmdline_extract_to_cursor_utf8 (const: @(MixaCmdLine cl); const: @(MixaCmdLineFaultVTable fault); @@: char out) int`
+  mixa_cmdline_clear at :496 --
+    `fn: mixa_cmdline_clear (@: MixaCmdLine cl) void`
+  mixa_cmdline_insert at :500 --
+    `fn: mixa_cmdline_insert (@: MixaCmdLine cl; const: @(MixaCmdLineFaultVTable fault); unsigned: codepoint) int`
+
+mixa_help.h (2):
+  mixa_help_key_event at :391 --
+    `fn: mixa_help_key_event (@: MixaHelpCtx ctx; const: @(MixaEvent ev)) int`
+  mixa_help_hit at :413 --
+    `fn: mixa_help_hit (@: MixaHelpCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int`
+
+The runner's expected path, traced empirically (each of the 20 added,
+tested cold, reverted -- not a static guess): declaring them
+incrementally moves the first failure forward exactly as the inventory
+above predicts, in this actually-encountered order: :16 -> :39 -> :41
+-> :225 -> :467 -> :470 -> :473 -> :476 -> :479 -> :482 -> :487 ->
+:496, each a clean `l2trans error: ...: unsupported body` naming the
+next undeclared call, confirming the inventory both statically and
+dynamically. One wrinkle, resolved: at :487 (mixa_cmdline_extract_to_
+cursor_utf8, used as a comparison operand -- `... = MIXA_CMDLINE_OK`,
+not a bare statement) l2trans instead reports "unknown method", a
+DIFFERENT diagnostic shape for the identical cause (an undeclared call
+used as a value rather than a statement) -- confirmed by declaring
+that one function alone, which moved translation cleanly past it to
+:496. No missing `define:` was ever the actual cause here; an earlier
+guess along those lines during this same investigation was wrong and
+is corrected here rather than left standing.
+
+Declaring all twenty (verified twice, once with an accidental gap in
+the set that still reproduced the same result, once with the complete,
+correct set) does NOT reach PASS: l2trans instead fails with
+`l2trans error: mixa_manager\mixa_app_controller.lm2: translation
+failed with no located diagnostic` -- l2trans's own generic fallback
+(l2src/l2trans.lm1:14837-14838) for when its own main() sees a nonzero
+return with zero diagnostics ever recorded, not a barrier and not a
+new missing-declaration gap. A 177KB `.lm1.tmp` intermediate survives
+in the run directory (l2trans's own atomic-publish rename never
+reaches the failing path that would delete it), meaning translation
+gets very far -- past everything in this inventory -- before whatever
+fails. Attempted a live gdb backtrace on the exact failing invocation
+to localize it further; did not return within a reasonable wait and
+was not chased further, since root-causing an internal l2trans failure
+is dedicated l2trans-side debugging (gdb -x on a -g build, per this
+session's own established method for exactly this class of silent
+failure), out of this ticket's own doc-only scope and this session's
+own role. The runner's own expected path today: PASS is not reachable
+without first landing all twenty declarations above (a real, larger
+follow-up commit than this ticket's own scope), and even then the
+runner's own next own-module failure is this unlocalized internal
+l2trans error, not a further missing declaration -- reported as the
+honest answer to "PASS or its next own-module failure", which is
+neither cleanly.
+
+--- Landed: the twenty prototype: declarations from the inventory above
+
+The same twenty blocks the inventory already tested and reverted,
+landed as-is (one duplicate mixa_cmdline_insert block caught and
+removed while re-adding them -- 28 prototype: occurrences, 28 distinct
+fn: names, verified by grep, no duplicates left).
+
+Before: UNEXPECTED_FAILURE at mixa_app_controller.lm2:16:5 (frame=
+mixa_app_fmpanel_close, the pre-8e094e98 state -- already moved to
+:16:5/mixa_file_close after that commit; this section's own "before"
+is relative to before commit 8e094e98, still the starting point this
+whole app_controller thread has tracked throughout). After:
+UNEXPECTED_FAILURE still, now `l2trans error: mixa_manager\mixa_app_
+controller.lm2: translation failed with no located diagnostic` -- no
+line number, l2trans's own generic fallback, exactly as traced in the
+inventory above and now confirmed as the LANDED state, not just a
+test. This is the compiler defect lingvamyxa-6f is tracking as its own
+ticket after S6-2 lands, alongside the app_window int/pointer defect.
+app_controller's own row in run_mixa_parity_gates.ps1 stays Expect=
+"UNEXPECTED_FAILURE" (the verdict name is unchanged) with a dated
+comment recording the new diagnostic text in place of a line number.

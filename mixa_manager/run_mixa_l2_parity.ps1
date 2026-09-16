@@ -370,6 +370,7 @@ if ($ModExit -ne 0 -and $NoMain) {
             $l2olArgsStr = "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2ModO`""
             if ($L2DepArgs) { $l2olArgsStr += " $L2DepArgs" }
             if ($Cfg.RuntimeTrio) { $l2olArgsStr += " $($L2Rt.ObjList)" }
+            if ($Cfg.L2LinkAllowMultipleDefinition) { $l2olArgsStr += " -Wl,--allow-multiple-definition" }
             $l2olArgsStr += " -o `"$l2Exe`"$LinkLibsStr"
             $l2olExit = Invoke-Cmd "gcc" $l2olArgsStr $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {

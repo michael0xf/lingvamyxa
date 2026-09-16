@@ -58,11 +58,18 @@ function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$er
     return $LASTEXITCODE
 }
 
-# ---- Step 0: stage the complete generated-library predef closure. ----
+# ---- Step 0: stage the complete generated-library predef closure.
+# The generated mixa_composite_glyphs_l2.lm1 (l2trans's own output)
+# carries predef references to these l2src headers by path relative to
+# this staged tree's own root -- l1trans's later translation of that
+# generated .lm1 (below, cwd=$StageRoot) needs the raw .h.lm1 SOURCES
+# physically present here, which is a different need from the runtime
+# OBJECTS Add-L2RuntimeSupport builds further down (that part no longer
+# needs its own copy of this list). ----
 $CoreHeaderUnits = @(
     "lmx_msg_blocks.h.lm1", "lmx_owned_ranges.h.lm1", "lmx_msg_storage.h.lm1",
     "lmx_msg_mail_chain.h.lm1",
-    "lmx_msg_sched_ready.h.lm1", "lmx_msg_visit.h.lm1", "lmx_msg_liveness.h.lm1",
+    "lmx_msg_visit.h.lm1", "lmx_msg_liveness.h.lm1",
     "lmx_chars_owned.h.lm1", "lmx_array_owned.h.lm1", "lmx_array_ref_owned.h.lm1",
     "lmx_branch_owned.h.lm1", "lmx_value_owned.h.lm1", "lmx_msg_history_owned.h.lm1",
     "lmx_msg_roots_stale.h.lm1", "lmx_graph_copy_owned.h.lm1",
@@ -89,43 +96,9 @@ $vtHdrOut = Join-Path $HeaderTestsDir "mixa_composite_glyphs_testvtable.lm1.h"
 $hdrExit3 = Invoke-Cmd $L1Trans "mixa_manager\tests\mixa_composite_glyphs_testvtable.h.lm1 `"$vtHdrOut`"" $hdrLog1 $hdrLog2
 Pop-Location
 if ($hdrExit3 -ne 0) { throw "testvtable header translation failed: see $hdrLog2" }
-foreach ($unit in $CoreHeaderUnits) {
-    $unitOut = Join-Path $CoreHeaderDir ($unit -replace '\.h\.lm1$', '.lm1.h')
-    Push-Location $StageRoot
-    $unitExit = Invoke-Cmd $L1Trans "l2src\$unit `"$unitOut`"" (Join-Path $RunDir "runtime_header_$unit.stdout.log") (Join-Path $RunDir "runtime_header_$unit.stderr.log")
-    Pop-Location
-    if ($unitExit -ne 0) { throw "core header translation failed: $unit" }
-}
 
-$CoreImplUnits = @(
-    "lmx_msg_blocks.lm1", "lmx_owned_ranges.lm1", "lmx_msg_storage.lm1",
-    "lmx_msg_mail_chain.lm1",
-    "lmx_msg_sched_ready.lm1", "lmx_msg_visit.lm1", "lmx_msg_liveness.lm1",
-    "lmx_chars_owned.lm1", "lmx_array_owned.lm1", "lmx_array_ref_owned.lm1",
-    "lmx_branch_owned.lm1", "lmx_value_owned.lm1", "lmx_msg_history_owned.lm1",
-    "lmx_msg_roots_stale.lm1", "lmx_graph_copy_owned.lm1",
-    "lmx_message_graph_copy.lm1", "lmx_message.lm1"
-)
-$CoreRuntimeObjects = @()
-foreach ($unit in $CoreImplUnits) {
-    $stem = $unit -replace '\.lm1$', ''
-    $generatedC = Join-Path $RunDir ("runtime_" + $stem + ".c")
-    $generatedO = Join-Path $RunDir ("runtime_" + $stem + ".o")
-    Push-Location $L1Root
-    $unitExit = Invoke-Cmd $L1Trans "l2src\$unit `"$generatedC`"" (Join-Path $RunDir "runtime_$stem.translate.stdout.log") (Join-Path $RunDir "runtime_$stem.translate.stderr.log")
-    Pop-Location
-    if ($unitExit -ne 0) { throw "core runtime translation failed: $unit" }
-    $compileExit = Invoke-Cmd "gcc" "$GccStd -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$generatedC`" -o `"$generatedO`"" (Join-Path $RunDir "runtime_$stem.compile.stdout.log") (Join-Path $RunDir "runtime_$stem.compile.stderr.log")
-    if ($compileExit -ne 0) { throw "core runtime compile failed: $unit" }
-    $CoreRuntimeObjects += $generatedO
-}
-foreach ($native in @("lmx_message_host.c", "lmx_message_exec.c")) {
-    $stem = $native -replace '\.c$', ''
-    $nativeO = Join-Path $RunDir ("runtime_" + $stem + "_native.o")
-    $compileExit = Invoke-Cmd "gcc" "$GccStd -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$(Join-Path $L1Root "l2src\$native")`" -o `"$nativeO`"" (Join-Path $RunDir "runtime_$stem.native.stdout.log") (Join-Path $RunDir "runtime_$stem.native.stderr.log")
-    if ($compileExit -ne 0) { throw "core native runtime compile failed: $native" }
-    $CoreRuntimeObjects += $nativeO
-}
+$InvokeCmdRef = { param($e, $a, $o, $er) Invoke-Cmd $e $a $o $er }
+$L2Rt = Add-L2RuntimeSupport -L1Trans $L1Trans -L1Root $L1Root -RunDir $RunDir -InvokeCmd $InvokeCmdRef
 
 # ---- Step 0.5: ABI parity gate (reused tiles probes). ----
 $abiRealExe = Join-Path $RunDir "abi_probe_real.exe"
@@ -304,7 +277,7 @@ if ($CgExit -ne 0) {
         $l2CgO = Join-Path $RunDir "mixa_composite_glyphs_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2cg_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2cg_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$l2CgC`" -o `"$l2CgO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -I `"$($L2Rt.HeaderRoot)`" -c `"$l2CgC`" -o `"$l2CgO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
@@ -313,8 +286,7 @@ if ($CgExit -ne 0) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2cg_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2cg_link_stderr.log"
-            $runtimeObjectArgs = ($CoreRuntimeObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$HeaderRoot`" `"$harnessO`" `"$l2CgO`" `"$tilesImplO`" `"$btO`" `"$csO`" $runtimeObjectArgs -o `"$l2Exe`"" $l2olLog1 $l2olLog2
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$HeaderRoot`" `"$harnessO`" `"$l2CgO`" `"$tilesImplO`" `"$btO`" `"$csO`" $($L2Rt.ObjList) -o `"$l2Exe`"" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"
