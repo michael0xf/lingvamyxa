@@ -8124,3 +8124,34 @@ table's marker text is corrected, never the rule loosened. His
 verification on e9's push: descent from 2d8f2b6a, name-status exactly
 the two runners plus the tripwire path, and the "no marker line" FAIL
 branch outside the Count -gt 4 guard.
+
+MIKHAIL'S ANSWER on the settled-slot question (2026-09-16, verbatim):
+"Убирай вот это: 'a capability is the target's mailbox handle; a closing
+Message's mailbox is settled into its parent with the rest of its
+storage, so a late send lands in a mailbox the parent owns and is
+refused there, on the parent's lane, with a status to the sender;
+there is no count of holders.'. У вас проблема без id найти Message?"
+Done: the sentence is removed from the spec (19.29.7) and replaced by
+his answer's content: a capability is the target's id, a Message is
+found by its id, a closed Message's slot and arena are freed by the
+release chain (19.29.6, 2026-09-14, stands in full), a late send
+resolves the id and is refused with a status when the target is not
+found or closed, and there is no count of holders; the model carries
+the same in Russian with his words. CONSEQUENCE FOR S6-2, ruled by
+the coordinator: THE LANDING IS STOPPED before launch. What stands:
+the deletion of refs and of the runtime slot registry (no count of
+holders; the registry's lookup duty is the tree walk by id). What
+changes: the settle no longer keeps a closed child's record and
+mailbox alive in the parent (no settled list, no drain_settled, no
+owner-cell rewrite for late senders); release_slot frees the record
+and destroys its mailbox by the chain as before S6-2, without the
+refs guard; a capability carries the target's id, and a late send
+resolves the id on the lane that owns the resolution (R0's transport
+today, under R0's mailbox monitor) and is refused with a status
+(KIND_REJECTED stays as the kind) when not found or closed; the
+fixtures' "freed" properties return to the literal watched free at
+release (the wrap-free shape), not the settled-list form. The lead
+rewrites the S6-2 section on this before touching code; e9's runner
+fix branch proceeds unchanged; the acceptance's probe is unchanged
+(refs=0 runtime_lists=0 is still the criterion, with the settled
+list's cells no longer needed).

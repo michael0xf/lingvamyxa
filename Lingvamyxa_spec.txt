@@ -12900,13 +12900,13 @@ Message: "У нас нет никаких копий message. Есть толь�
 Message который не L3 Thread присоединяется к арене получателя. Всё", there
 are no copies of a message; there is only the message itself, and it has its
 own arena, be it one alloc, its own; on receipt a Message that is not an L3
-Thread attaches to the recipient's arena; that is all.) A capability held
-by a Message that is not the target's parent, after the target closes (agreed
-with Mikhail 2026-09-15, "давай так", to this wording): a capability is the
-target's mailbox handle; a closing Message's mailbox is settled into its
-parent with the rest of its storage, so a late send lands in a mailbox the
-parent owns and is refused there, on the parent's lane, with a status to the
-sender; there is no count of holders. The delivered storage must be independently
+Thread attaches to the recipient's arena; that is all.) A capability is the
+target's id, and a Message is found by its id (Mikhail, 2026-09-16, on the
+removed 2026-09-15 wording that kept a closed Message's mailbox alive in its
+parent for late senders: "У вас проблема без id найти Message?"); a closed
+Message's slot and arena are freed by the release chain as 19.29.6 says, a
+late send resolves the id and is refused with a status when the target is
+not found or closed, and there is no count of holders. The delivered storage must be independently
 transferable: a running sender cannot also keep using it through mutable aliases.
 An explicit copy, merge, materialization or transport/codec contract may allocate
 fresh state; this is not a runtime choice to clone ordinary delivery. Activation preserves
