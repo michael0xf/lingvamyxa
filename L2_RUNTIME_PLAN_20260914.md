@@ -9587,3 +9587,21 @@ run_mixa_app_controller_l2_parity.ps1 matched to the oracle side's, tested on th
 scratch, pushed to sonnet/mixa-module-list only.  The engineer's translator
 landing script: claude-0c/land-l2trans 1b0d184e (parent d3bde8b5, allowlist the
 candidate's 8 paths, bash -n ok).
+
+L2TRANS LANDING LAUNCHED on the coordinator's word, recorded 10:38: the
+engineer's report -- claude-0c/land-l2trans 1b0d184e (off d3bde8b5, only
+l2src/land_l2trans.sh: the land_s6_2 pattern, union base of ten steps, per-step
+timeouts, no stage probe); the new run_l2trans cases sit at top level
+(5ba818b7 lines 2418-2438) before the "l2trans $gen ok" banner (5230), so the
+step's marker cannot print unless they ran and held, and the script also
+requires the two fixture headers to be written during the step; dry run over
+d3bde8b5...5ba818b7 8 paths, 0 outside, falsifier "outside the allowlist: A
+l2src/tests/unit_text_capacity_over.lm2" (1); the candidate's cold chain alone
+on the machine "gates GREEN: 29 of 29 in 612s", logs
+C:\Nyasha_Planet\wt0c_l2t_cand\build\gates\20260916_102733, 0 leftover
+processes.  Launch: check mode, then land_l2trans.sh d3bde8b5
+fable/l2trans-text-cap 5ba818b7 29 "l2trans: define actuals are passed as
+themselves; a statement call's text has its own buffer, and an overflow is
+reported at its statement".  Then one selfbuild tag, the log line branch, the
+coordinator's integration fast-forward and main merge; the row-bounds branch
+re-cut off the new integration head.
