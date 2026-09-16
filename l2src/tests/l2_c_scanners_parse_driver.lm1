@@ -654,8 +654,9 @@ end: boundary_bytes
 
 fn: make_owner (@: LmxMsgRuntime rt) @: LmxMsg
     unsigned: addr 0U
-    require(c.lmx_msg_create(rt, 0U, 0, 0U, @ addr) = c.LMX_MSG_OK, "create owner")
-return: c.lmx_msg_find(rt, addr)
+    @: LmxMsg owner 0
+    require(c.lmx_msg_create(rt, 0U, 0, 0U, @ addr, @ owner) = c.LMX_MSG_OK, "create owner")
+return: owner
 
 fn: main () int
     @: LmxMsgRuntime rt c.lmx_msg_runtime_new()

@@ -125,8 +125,7 @@ external:
         int: process_result 1
         if: process_runtime = 0
             return: 1
-        if: c.lmx_msg_create(process_runtime, 0U, 0, 0U, @ process_addr) = c.LMX_MSG_OK
-            process_message: c.lmx_msg_find(process_runtime, process_addr)
+        if: c.lmx_msg_create(process_runtime, 0U, 0, 0U, @ process_addr, @ process_message) = c.LMX_MSG_OK
             if: process_message != 0
                 process_result: l2_program_entry(process_message)
             ---

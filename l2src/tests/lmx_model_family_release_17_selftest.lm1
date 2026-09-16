@@ -258,16 +258,16 @@ fn: main () int
     # Unbuffered: a run the runner kills still shows its reading lines and FAILs.
     c.setvbuf(c.stdout, 0, c._IONBF, 0U)
     rt: lmx_msg_runtime_new()
-    check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
+    check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ r, 0) = c.LMX_MSG_OK, "R, the root, created")
     if: rt = 0 || r = 0U
         return: 2
     g_r: r
-    check(lmx_msg_create(rt, r, @ ini, 1U, @ p1) = c.LMX_MSG_OK && lmx_msg_create(rt, r, @ ini, 1U, @ p2) = c.LMX_MSG_OK && lmx_msg_create(rt, r, @ ini, 1U, @ p3) = c.LMX_MSG_OK && lmx_msg_create(rt, r, @ ini, 1U, @ p4) = c.LMX_MSG_OK && lmx_msg_create(rt, r, @ ini, 1U, @ p5) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P1 to P5 created and published")
-    check(lmx_msg_create(rt, p1, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p1, 1) = c.LMX_MSG_OK, "C1 created by P1 and published")
-    check(lmx_msg_create(rt, p2, @ ini, 1U, @ c2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p2, 1) = c.LMX_MSG_OK, "C2 created by P2 and published")
-    check(lmx_msg_create(rt, p3, @ ini, 1U, @ c3) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p3, 1) = c.LMX_MSG_OK, "C3 created by P3 and published")
-    check(lmx_msg_create(rt, p4, @ ini, 1U, @ c4) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p4, 1) = c.LMX_MSG_OK, "C4 created by P4 and published")
-    check(lmx_msg_create(rt, p5, @ ini, 1U, @ c5) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p5, 1) = c.LMX_MSG_OK, "C5 created by P5 and published")
+    check(lmx_msg_create(rt, r, @ ini, 1U, @ p1, 0) = c.LMX_MSG_OK && lmx_msg_create(rt, r, @ ini, 1U, @ p2, 0) = c.LMX_MSG_OK && lmx_msg_create(rt, r, @ ini, 1U, @ p3, 0) = c.LMX_MSG_OK && lmx_msg_create(rt, r, @ ini, 1U, @ p4, 0) = c.LMX_MSG_OK && lmx_msg_create(rt, r, @ ini, 1U, @ p5, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "P1 to P5 created and published")
+    check(lmx_msg_create(rt, p1, @ ini, 1U, @ c1, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p1, 1) = c.LMX_MSG_OK, "C1 created by P1 and published")
+    check(lmx_msg_create(rt, p2, @ ini, 1U, @ c2, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p2, 1) = c.LMX_MSG_OK, "C2 created by P2 and published")
+    check(lmx_msg_create(rt, p3, @ ini, 1U, @ c3, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p3, 1) = c.LMX_MSG_OK, "C3 created by P3 and published")
+    check(lmx_msg_create(rt, p4, @ ini, 1U, @ c4, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p4, 1) = c.LMX_MSG_OK, "C4 created by P4 and published")
+    check(lmx_msg_create(rt, p5, @ ini, 1U, @ c5, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p5, 1) = c.LMX_MSG_OK, "C5 created by P5 and published")
     c1_cell[0]: c1
     c1_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
     check(lmx_msg_exec_bind(rt, p1, turn_map_own_child, (cast: (@: void) c1_cell), c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, c1, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, p2, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, c2, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, p3, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, c3, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, p4, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, c4, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, p5, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, c5, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "all ten bound; none is mapped yet")
