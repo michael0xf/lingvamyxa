@@ -2245,8 +2245,21 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         selftest reports lmx_message_exec ok, reference and generated agree on both runs". That is the holder
         count entirely gone (refs, its three functions, endp_refs, the field, 46 call sites per core, the C-side
         pins) with lm1/lm2 parity intact and the settled list carrying the weight instead. run_lmx -Suite Message
-        is running and is NOT claimed here until it returns.
+        is green too, exit 0. Both gates on tip 95de9bf4, so step two stands on its own.
         Scale, for the record: -531/+102 lines across six files.
+      - THE REGISTRY GROUP, scoped next and with one real design piece in it. runtime_delete walks rt\slots
+        TWICE and the order is load-bearing: first every mailbox is drained (because slot_free destroys the
+        monitor), then the transport is torn down under R0's monitor, then every record's init/path is freed and
+        slot_free called. Both walks become ONE recursive traversal -- R0's tree by first_child/next_sibling, plus
+        each record's settled list, recursively -- used twice in that same order. A settled record is off its
+        owner's child chain by construction, so the tree walk alone would miss exactly the records this stage
+        creates; the settled list is what makes the teardown reach them, which is the point (2a) was added for.
+        The rest is mechanical: rt\slots/rt
+/alloc_next at three sites per core and three in the header, the
+        module's eight files (LMX_MSG_SLOTS.txt, the .h.lm1/.lm1/.lm2, run_msg_slots.ps1, run_port_msg_slots.ps1,
+        the selftest -- and NOT tests/unit_slots6.lm2, whose "slots" are l2trans stack slots, 0c's catch),
+        run_gates' port_slots row with the gate count 31 -> 30, and 25 runner list sites across 27 files (52 raw
+        occurrences, of which 5 are comments and 1 is Test-Path-guarded: counted by role, not by grep hits).
       - THE SAME ERROR FOUR TIMES IN ONE SESSION, which is the honest headline of this step. I wrote the rule --
         before removing one side of a pair, grep the PARTNER and count its sites -- after the copy_free imbalance,
         and then broke it three more times: drive_walk_roots (retain removed, release left), send_owned in lm1, and
