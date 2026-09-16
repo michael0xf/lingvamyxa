@@ -1197,6 +1197,39 @@ static void seen_new(LmxMsgRuntime *rt) {
         } \
     } while (0)
 
+/* S6-2 (the drain ruling): only R0's lane drains the transport, and in this
+ * selftest the host IS R0's lane. A worker ending its turn only PUSHES, and no
+ * worker ever runs R0's round, so a host that waits with contexts live and only
+ * yields is the host idling instead of being R0 -- letters sit in the transport and
+ * a wait on delivery never returns (the first scenario hung under the runner's
+ * 300 s watchdog exactly this way). R0 as an L3 Thread checks its mail every round;
+ * this is that loop: drain, then test. It stays single-writer (the drain runs only
+ * on the host) and is a no-op on an empty transport, so using it in a wait that did
+ * not strictly need delivery costs nothing. host_drain's status is discarded on
+ * purpose: when the host is not the owner it returns INVALID and delivers nothing,
+ * which must not end the wait. The "reading:" line is IDENTICAL to YIELD_UNTIL's,
+ * because the gate compares stderr between the reference and generated runs. */
+/* S6-2 (the drain ruling): one round of R0 run by the host, which is R0's lane.
+ * The same act YIELD_UNTIL_R0 performs, for waits written by hand -- a Sleep loop
+ * against a GetTickCount deadline -- rather than through that macro. Called once
+ * before each check of a loop whose exit needs a letter a WORKER sent after the
+ * contexts started: such a letter is only pushed, and nothing delivers it unless R0's
+ * round runs. A no-op on an empty transport; the status is discarded because a host
+ * that is not the owner gets INVALID and delivers nothing, which must not end a wait.
+ * It has its own name so the loops reshaped by S6-2 can be counted with grep. */
+static void r0_round(LmxMsgRuntime *rt) {
+    (void)lmx_msg_host_drain(rt);
+}
+
+#define YIELD_UNTIL_R0(rt, what, cond) \
+    do { \
+        fprintf(stderr, "reading: %s\n", what); \
+        fflush(stderr); \
+        while ((void)lmx_msg_host_drain(rt), !(cond)) { \
+            SwitchToThread(); \
+        } \
+    } while (0)
+
 /* The next turn of child on its own context: starts the contexts when none are
  * live, reads the end of the child's next turn not yet read, and stops the
  * contexts again when it started them, so the host outside any turn keeps the
@@ -1221,7 +1254,14 @@ static int own_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     fprintf(stderr, "reading: the end of turn %ld of %u on its context\n",
         (long)(g_seen_taken[child] + 1), (unsigned)child);
     fflush(stderr);
-    while (InterlockedCompareExchange(&g_seen_turns[child], 0, 0) <= g_seen_taken[child]) {
+    /* S6-2 (the drain ruling): the child's next turn cannot run until its input is
+     * delivered, and delivery now happens only in R0's round -- a worker ending a
+     * turn only pushes. This helper starts the contexts itself when none are live,
+     * which is why several cases reach it without an exec_start_contexts of their
+     * own. So the host, which is R0's lane, drains before each check, exactly as
+     * YIELD_UNTIL_R0 does; the "reading:" line above is left unchanged because the
+     * gate compares stderr between the reference and generated runs. */
+    while ((void)lmx_msg_host_drain(rt), InterlockedCompareExchange(&g_seen_turns[child], 0, 0) <= g_seen_taken[child]) {
         SwitchToThread();
     }
     g_seen_taken[child] += 1;
@@ -1496,7 +1536,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "exec_start\n");
         return 1;
     }
-    YIELD_UNTIL("first scenario: w1 once, w2 twice, the UI Message twice, the peer and all 70",
+    YIELD_UNTIL_R0(rt, "first scenario: w1 once, w2 twice, the UI Message twice, the peer and all 70",
         first_scenario_done(&slow, &fast, &uic, &peerrec));
     fprintf(stderr, "mass wait ok\n");
     fflush(stderr);
@@ -1781,7 +1821,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_drive(rtc, 0, 0);
-        YIELD_UNTIL("close-path: the stopped closer's closing turn on its own context ends stopped",
+        YIELD_UNTIL_R0(rtc, "close-path: the stopped closer's closing turn on its own context ends stopped",
             InterlockedCompareExchange(&uictx.done, 0, 0) != 0 && lmx_msg_state(rtc, uc) == LMX_MSG_STATE_STOPPED);
         if (InterlockedCompareExchange(&uictx.done, 0, 0) != 1 || lmx_msg_state(rtc, uc) != LMX_MSG_STATE_STOPPED) {
             fprintf(stderr, "closer done=%ld state=%d\n",
@@ -2314,6 +2354,7 @@ int main(int argc, char **argv) {
         }
         dl = GetTickCount() + 3000;
         while ((InterlockedCompareExchange(&spawn.done, 0, 0) == 0 || InterlockedCompareExchange(&child.done, 0, 0) == 0) && GetTickCount() < dl) {
+            r0_round(rts);
             Sleep(10);
         }
         lmx_msg_exec_stop(rts);
@@ -2387,6 +2428,7 @@ int main(int argc, char **argv) {
         }
         dl = GetTickCount() + 3000;
         while ((InterlockedCompareExchange(&fa.done, 0, 0) == 0 || InterlockedCompareExchange(&fb.done, 0, 0) == 0) && GetTickCount() < dl) {
+            r0_round(rtf);
             Sleep(10);
         }
         lmx_msg_exec_stop(rtf);
@@ -2441,7 +2483,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "auth start\n");
             return 1;
         }
-        YIELD_UNTIL("rebind authority: A's turn tried to rebind its sibling B",
+        YIELD_UNTIL_R0(rta, "rebind authority: A's turn tried to rebind its sibling B",
             InterlockedCompareExchange(&tryui.done, 0, 0) != 0);
         if (tryui.st != LMX_MSG_INVALID || lmx_msg_exec_is_bound(rta, b) != 1) {
             fprintf(stderr, "auth rebind st=%d\n", tryui.st);
@@ -2456,7 +2498,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_host_drain(rta);
-        YIELD_UNTIL("rebind authority: B's input taken on B's own context",
+        YIELD_UNTIL_R0(rta, "rebind authority: B's input taken on B's own context",
             InterlockedCompareExchange(&other.done, 0, 0) != 0);
         lmx_msg_exec_stop(rta);
         if (InterlockedCompareExchange(&other.done, 0, 0) != 1 || other.t0 == 0 || other.t0 == owner) {
@@ -2575,6 +2617,7 @@ int main(int argc, char **argv) {
         lmx_msg_exec_stop(rtr);
         dl = GetTickCount() + 2000;
         while (InterlockedCompareExchange(&spawn.done, 0, 0) == 0 && GetTickCount() < dl) {
+            r0_round(rtr);
             Sleep(10);
         }
         if (InterlockedCompareExchange(&spawn.done, 0, 0) != 1 || lmx_msg_exec_workers(rtr) != 0) {
@@ -2635,7 +2678,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         (void)own_turn(rtp, a);
-        YIELD_UNTIL("mix: A's two mapped children each ran on its own context",
+        YIELD_UNTIL_R0(rtp, "mix: A's two mapped children each ran on its own context",
             InterlockedCompareExchange(&a1.done, 0, 0) != 0 && InterlockedCompareExchange(&a2.done, 0, 0) != 0);
         lmx_msg_exec_stop(rtp);
         if (InterlockedCompareExchange(&mix.done, 0, 0) != 1 || InterlockedCompareExchange(&a1.done, 0, 0) != 1 || InterlockedCompareExchange(&a2.done, 0, 0) != 1 || a1.tid == 0 || a2.tid == 0 || a1.tid == a2.tid || mix.tid == 0 || mix.tid == owner) {
@@ -2700,7 +2743,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
         }
-        YIELD_UNTIL("map retry: C's waiting input taken on its own context",
+        YIELD_UNTIL_R0(rtm, "map retry: C's waiting input taken on its own context",
             InterlockedCompareExchange(&rec.done, 0, 0) != 0);
         if (InterlockedCompareExchange(&rec.done, 0, 0) != 1 || rec.t0 == 0 || rec.t0 == owner) {
             fprintf(stderr, "map retry delivery tid=%lu owner=%lu done=%ld\n",
@@ -2755,7 +2798,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "child-timer map\n");
             return 1;
         }
-        YIELD_UNTIL("child timer: C's first turn sent its liveness query",
+        YIELD_UNTIL_R0(rtl, "child timer: C's first turn sent its liveness query",
             InterlockedCompareExchange(&rec.done, 0, 0) != 0);
         if (lmx_msg_state(rtl, c) == LMX_MSG_STATE_STOPPED) {
             fprintf(stderr, "test-clock expired before deadline\n");
@@ -2764,7 +2807,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_set_now(rtl, 1008U);
-        YIELD_UNTIL("child timer: C's own round closes it past its deadline",
+        YIELD_UNTIL_R0(rtl, "child timer: C's own round closes it past its deadline",
             lmx_msg_state(rtl, c) == LMX_MSG_STATE_STOPPED);
         if (lmx_msg_state(rtl, c) != LMX_MSG_STATE_STOPPED) {
             fprintf(stderr, "child own timer state=%d done=%ld\n", lmx_msg_state(rtl, c),
@@ -2809,9 +2852,9 @@ int main(int argc, char **argv) {
             fprintf(stderr, "real-clock map\n");
             return 1;
         }
-        YIELD_UNTIL("real clock: C's first turn sent its liveness query",
+        YIELD_UNTIL_R0(rtr, "real clock: C's first turn sent its liveness query",
             InterlockedCompareExchange(&rec.done, 0, 0) != 0);
-        YIELD_UNTIL("real clock: C's own round closes it once the runtime's clock passes the threshold",
+        YIELD_UNTIL_R0(rtr, "real clock: C's own round closes it once the runtime's clock passes the threshold",
             lmx_msg_state(rtr, c) == LMX_MSG_STATE_STOPPED);
         if (lmx_msg_state(rtr, c) != LMX_MSG_STATE_STOPPED) {
             fprintf(stderr, "real-clock did not expire state=%d\n", lmx_msg_state(rtr, c));
@@ -3270,6 +3313,7 @@ int main(int argc, char **argv) {
             }
             dl = GetTickCount() + 3000;
             while (InterlockedCompareExchange(&omit.done, 0, 0) == 0 && GetTickCount() < dl) {
+                r0_round(rtb);
                 Sleep(10);
             }
             Sleep(20);
@@ -3401,7 +3445,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rtc);
             return 1;
         }
-        YIELD_UNTIL("cancel idle: C1's close runs on its own context",
+        YIELD_UNTIL_R0(rtc, "cancel idle: C1's close runs on its own context",
             lmx_msg_state(rtc, c1) == LMX_MSG_STATE_STOPPED);
         gm = lmx_msg_find(rtc, g);
         if (lmx_msg_state(rtc, c1) != LMX_MSG_STATE_STOPPED || InterlockedCompareExchange(&rec.done, 0, 0) != 0 || gm == 0 || lmx_msg_running_load(gm) != 0) {
@@ -3457,7 +3501,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rtp);
             return 1;
         }
-        YIELD_UNTIL("complete idle: C1's settle runs on its own context",
+        YIELD_UNTIL_R0(rtp, "complete idle: C1's settle runs on its own context",
             lmx_msg_state(rtp, c1) == LMX_MSG_STATE_STOPPED);
         if (lmx_msg_state(rtp, c1) != LMX_MSG_STATE_STOPPED || InterlockedCompareExchange(&rec.done, 0, 0) != 0) {
             fprintf(stderr, "complete-idle state=%d done=%ld\n",
@@ -5784,7 +5828,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
             return 1;
         }
-        YIELD_UNTIL("two mapped Messages each take their input on their own context",
+        YIELD_UNTIL_R0(rti, "two mapped Messages each take their input on their own context",
             InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 0 && InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0);
         if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
             || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
@@ -5825,7 +5869,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
             return 1;
         }
-        YIELD_UNTIL("two isolated Message contexts each take their own input",
+        YIELD_UNTIL_R0(rti, "two isolated Message contexts each take their own input",
             InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 0 && InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0);
         if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
             || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
@@ -6564,7 +6608,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            YIELD_UNTIL("failed-turn release: the sibling takes its input on its own context",
+            YIELD_UNTIL_R0(rti, "failed-turn release: the sibling takes its input on its own context",
                 InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 0);
             if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
                 || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0) {
@@ -6616,7 +6660,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            YIELD_UNTIL("remap: the rebound child takes its input on its new context",
+            YIELD_UNTIL_R0(rti, "remap: the rebound child takes its input on its new context",
                 InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 0);
             lmx_msg_exec_stop(rti);
             fprintf(stderr, "exec wait: unbind clears mapped; a rebound child is mapped again and gets a worker\n");
@@ -6712,7 +6756,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            YIELD_UNTIL("bind grow: c0 takes its input on its own context after 16 more binds",
+            YIELD_UNTIL_R0(rti, "bind grow: c0 takes its input on its own context after 16 more binds",
                 InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 0);
             if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1) {
                 fprintf(stderr, "exec wait-grow done=%ld\n",
@@ -6774,6 +6818,7 @@ int main(int argc, char **argv) {
             while ((InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0
                 || InterlockedCompareExchange(&c_ctx.done, 0, 0) == 0)
                 && GetTickCount() < dl) {
+                r0_round(rti);
                 Sleep(10);
             }
             if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
@@ -6798,6 +6843,7 @@ int main(int argc, char **argv) {
             }
             dl = GetTickCount() + 2000;
             while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                r0_round(rti);
                 Sleep(10);
             }
             if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
@@ -6856,7 +6902,7 @@ int main(int argc, char **argv) {
                 }
                 return 1;
             }
-            YIELD_UNTIL("self rebind: A's turn tried to unbind and rebind itself",
+            YIELD_UNTIL_R0(rti, "self rebind: A's turn tried to unbind and rebind itself",
                 InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0);
             if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
                 fprintf(stderr, "exec self-rebind old=%ld\n",
@@ -6888,7 +6934,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            YIELD_UNTIL("self rebind: the host's new binding takes A's next input",
+            YIELD_UNTIL_R0(rti, "self rebind: the host's new binding takes A's next input",
                 InterlockedCompareExchange(&g_self_new.done, 0, 0) != 0);
             if (InterlockedCompareExchange(&g_self_new.done, 0, 0) != 1) {
                 fprintf(stderr, "exec self-rebind new=%ld\n",
@@ -7474,6 +7520,7 @@ int main(int argc, char **argv) {
         lmx_msg_exec_ready(rti, dummy);
         dl = GetTickCount() + 2000;
         while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+            r0_round(rti);
             Sleep(10);
         }
         if (InterlockedCompareExchange(&any_ctx.done, 0, 0) < 1) {

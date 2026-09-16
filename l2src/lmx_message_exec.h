@@ -8,6 +8,13 @@ void lmx_msg_test_on_admit(LmxMsgAddr dest, const LmxMsgCopy *fresh);
 void lmx_msg_test_release_tree(LmxMsgRuntime *rt, LmxMsg *m);
 void lmx_msg_test_lane_write(LmxMsgRuntime *rt, LmxMsg *owner, const char *site);
 void lmx_msg_test_unbind_refused(LmxMsgRuntime *rt, LmxMsg *m, int st, const char *site);
+/* S6-2 (the found-and-removed ruling): an unregister-and-free letter named a record
+ * its service does not hold -- st is the unregister's status, id the id the letter
+ * carried.  A fault: under the lane check it aborts with a message; otherwise it is
+ * silent and the caller does NOT free, so the worst case is a leak, never a double
+ * free.  Takes the id rather than reading the record, so reporting never
+ * dereferences what it reports on. */
+void lmx_msg_test_unregister_absent(LmxMsgRuntime *rt, LmxMsg *m, LmxMsgAddr id, int st, const char *site);
 extern int lmx_msg_test_lane_check;
 void lmx_msg_test_wake_site(const char *site, unsigned owner);
 void lmx_msg_test_map_site(const char *site, unsigned owner);
@@ -18,6 +25,7 @@ void lmx_msg_test_map_site(const char *site, unsigned owner);
 #define lmx_msg_test_release_tree(r, m) ((void)0)
 #define lmx_msg_test_lane_write(r, o, s) ((void)0)
 #define lmx_msg_test_unbind_refused(r, m, st, s) ((void)(st))
+#define lmx_msg_test_unregister_absent(r, m, id, st, s) ((void)(st))
 #endif
 int lmx_msg_exec_attach(LmxMsgRuntime *rt);
 void lmx_msg_exec_detach(LmxMsgRuntime *rt);

@@ -235,6 +235,23 @@ void lmx_msg_test_unbind_refused(LmxMsgRuntime *rt, LmxMsg *m, int st, const cha
     fflush(stderr);
     abort();
 }
+
+/* S6-2 (the found-and-removed ruling): an unregister-and-free letter named a record
+ * its service does not hold.  The service frees only an entry it found AND removed
+ * (pointer and id both matching); anything else is a fault, never a silent free --
+ * freeing a record the set still names, or one already freed, is the double free
+ * the ruling exists to prevent.  Aborts under the lane check, silent otherwise, and
+ * the caller does not free either way.  Reports the id the letter carried and never
+ * reads the record. */
+void lmx_msg_test_unregister_absent(LmxMsgRuntime *rt, LmxMsg *m, LmxMsgAddr id, int st, const char *site) {
+    if (lmx_msg_test_lane_check == 0 || st == LMX_MSG_OK || rt == 0 || m == 0) {
+        return;
+    }
+    fprintf(stderr, "%s: unregister named a record its service does not hold id=%u st=%d\n",
+        site, (unsigned)id, st);
+    fflush(stderr);
+    abort();
+}
 #else
 #define lmx_msg_test_lane_take(r, o, h, s) ((void)0)
 #endif

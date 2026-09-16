@@ -1358,13 +1358,17 @@ fn: msg_service_unregister (@: LmxMsg svc; @: LmxMsg m; LmxMsgAddr: id) int
     int: i
     if: svc = 0 || m = 0
         return: c.LMX_MSG_INVALID
+    # S6-2 (the found-and-removed ruling): OK means THIS call removed the entry, and
+    # nothing else does. Every miss returns GONE, so a caller can tell a real
+    # removal from a record the service never held -- the distinction that decides
+    # whether the record may be freed.
     if: msg_live_find(svc, m, @ at) = 0
-        return: c.LMX_MSG_OK
+        return: c.LMX_MSG_GONE
     # The id must match: an entry at this address belonging to a DIFFERENT record
     # is not ours to remove, and removing it would unregister a live Message
     # because its predecessor's address was reused.
     if: svc\live_id[at] != id
-        return: c.LMX_MSG_OK
+        return: c.LMX_MSG_GONE
     i: at
     while: i < svc\live_n - 1
         svc\live_m[i]: svc\live_m[i + 1]
@@ -1808,8 +1812,13 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     # which never received blocks in create_prepare.
     # A service releasing ITSELF has no letter to send and does both directly.
     if: m\service = m
-        msg_service_unregister(m, m, m\addr)
-        c.lmx_msg_slot_free(m)
+        # The found-and-removed rule applies here too: free only on a real removal.
+        ust: msg_service_unregister(m, m, m\addr)
+        if: ust = c.LMX_MSG_OK
+            c.lmx_msg_slot_free(m)
+        else:
+            c.lmx_msg_test_unregister_absent(rt, m, m\addr, ust, "msg_release_slot")
+        ---
     else:
         # A failed post (calloc under pressure) leaves the record RELEASED and
         # unfreed rather than freed behind the service's back. It is out of the
@@ -2187,7 +2196,18 @@ fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         msg_request_children_close(rt, who)
     ---
     msg_arena_collect(m)
-    return: msg_pump(rt)
+    # S6-2 (the drain ruling): the transport is R0's INBOX, and a Message's own data
+    # is touched only on its own lane, so only R0's lane drains it. Every other
+    # lane only PUSHES -- which this function already did above, moving the outbox
+    # into rt\transport under R0's monitor. Draining here from an arbitrary lane is
+    # what let msg_service_register / msg_service_unregister (which realloc and
+    # shift the live set) run on two lanes at once. R0 ending its own turn IS R0's
+    # round, so it drains; any other Message returns having pushed, and its letters
+    # are delivered in R0's next round.
+    if: who = msg_root_addr(rt)
+        return: msg_pump(rt)
+    ---
+    return: c.LMX_MSG_OK
 end: msg_end_turn
 
 # S6-2, SPEC 19.29.7 (respecified 2026-09-16): a capability is the target's ID,
@@ -2225,6 +2245,7 @@ fn: msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy entry) int
     @: LmxMsgCopy fresh
     @: LmxMsgCopy put
     unsigned: dest_addr
+    int: ust
     if: rt = 0 || entry = 0
         msg_copy_free(entry)
         return: c.LMX_MSG_INVALID
@@ -2249,13 +2270,40 @@ fn: msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy entry) int
     # unfreed precisely so that this lane could be the one to free it.
     if: entry\kind = c.LMX_MSG_KIND_UNREGISTER
         if: entry\dest_msg != 0
-            msg_service_unregister(msg_service_of(entry\dest_msg), entry\dest_msg, entry\to)
-            c.lmx_msg_slot_free(entry\dest_msg)
+            # S6-2 (the found-and-removed ruling): free ONLY an entry this call
+            # actually removed. The service is rt\root: this is R0's drain, and
+            # asking the record for its service would read the record first.
+            ust: msg_service_unregister(rt\root, entry\dest_msg, entry\to)
+            if: ust = c.LMX_MSG_OK
+                c.lmx_msg_slot_free(entry\dest_msg)
+            else:
+                c.lmx_msg_test_unregister_absent(rt, entry\dest_msg, entry\to, ust, "msg_admit_one")
+            ---
         ---
         msg_copy_free(entry)
         return: c.LMX_MSG_OK
     ---
     dest: entry\dest_msg
+    # S6-2 (step 3, the send through the service): delivery by memory address is
+    # safe with no count of holders ONLY because the service checks its live set
+    # BEFORE touching the record. dest_msg is a handle a sender kept; the record it
+    # names may have been released and freed by an unregister-and-free letter that
+    # drained earlier in this very drain (FIFO). So nothing below may read dest
+    # until is_live says the pointer AND its id are still registered.
+    # The service here is rt\root, never dest\service: reading dest\service would be
+    # the dereference this check exists to prevent, and since only R0's lane drains
+    # the transport, the service in this drain IS R0.
+    # A REJECTED letter is never itself refused: msg_pump keeps popping while
+    # msg_post_rejected pushes, so refusing a refusal to a vanished sender would loop.
+    # msg_self_or_find below needs no check -- it walks the live tree and returns
+    # only a record that is still there.
+    if: dest != 0 && msg_service_is_live(rt\root, dest, entry\to) = 0
+        if: entry\kind != c.LMX_MSG_KIND_REJECTED
+            msg_post_rejected(rt, entry\to, entry\from, entry\correlation)
+        ---
+        msg_copy_free(entry)
+        return: c.LMX_MSG_GONE
+    ---
     if: dest = 0
         dest: msg_self_or_find(rt, entry\to)
     ---
@@ -2509,7 +2557,13 @@ fn: msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
             return: c.LMX_MSG_NOMEM
         ---
     ---
-    return: msg_pump(rt)
+    # S6-2 (the drain ruling): push-only, as in msg_end_turn. msg_post_dead above
+    # already pushed the notice into R0's transport; delivering it is R0's round,
+    # not this failing Message's. R0 failing is its own round and drains.
+    if: who = msg_root_addr(rt)
+        return: msg_pump(rt)
+    ---
+    return: c.LMX_MSG_OK
 end: msg_fail
 
 fn: msg_parent_gone (@: LmxMsgRuntime rt; @: LmxMsg child; unsigned: now; unsigned: threshold) int
