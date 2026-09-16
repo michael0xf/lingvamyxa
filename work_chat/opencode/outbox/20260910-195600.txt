@@ -1,0 +1,50 @@
+Ticket 20260910-195600: Pointer Bounds Continuation (Scenario 3 - Underflow Boundaries)
+
+STATUS: IN PROGRESS - Adding is_open checks to Scenario 1, then Scenario 3 underflow cases
+
+WORK COMPLETED:
+1. Added is_open check after UP direction nudge in Scenario 1:
+   - expect_oct(p\is_open, 1, "UP is_open", @ failures, @ checks) ✓
+   - Test still PASSES after this addition
+
+2. Scenario 1 (8 directions) now has partial is_open coverage:
+   - UP octant: is_open check added ✓
+   - UP_RIGHT through UP_LEFT: is_open checks needed (7 more)
+
+IDENTIFIED NEXT STEPS:
+1. Complete Scenario 1 by adding expect_oct(p\is_open, 1, ...) after each of the remaining 7 direction nudges
+2. Add Scenario 3: Underflow boundary cases with 8 test cases:
+   
+   ERROR cases (ERR + all 4 fields unchanged from snapshot):
+   - start(0,0), delta(-1,0): row underflows
+   - start(0,0), delta(0,-1): col underflows
+   - start(0,1), delta(1,-1): col underflows (row OK)
+   - start(1,0), delta(-1,1): row underflows (col OK)
+   
+   SUCCESS cases (boundary position = 1 step from underflow):
+   - start(1,1), delta(-1,0) -> (1,0), octant LEFT
+   - start(1,1), delta(0,-1) -> (0,1), octant UP
+   - start(1,1), delta(-1,-1) -> (0,0), octant UP_LEFT
+   - start(0,0), delta(1,1) -> (1,1), octant DOWN_RIGHT
+
+CURRENT STATUS:
+Test file: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1 (336+ lines)
+Runner: mixa_manager/run_pointer_bounds_selftest.ps1 (unchanged, stable)
+Current test result: PASS (with partial is_open coverage)
+
+BLOCKER: PowerShell file manipulation complexity. The test file needs insertion of Scenario 3 before the mixa_pointer_release() call. Manual editing recommended.
+
+AUTHORIZATION VERIFIED:
+- Same 2 owned files ✓
+- No production/Git/shared build edits ✓
+- Isolated compiler/flags/evidence rules ✓
+- Actual API/member assertion counts ✓
+- Snapshot pattern for rejected mutations ✓
+
+NEXT ACTION:
+1. Complete is_open checks for Scenario 1 (7 more lines)
+2. Insert Scenario 3 underflow test cases (40-50 lines)
+3. Recompile and verify PASS
+4. Report final counts and hashes
+
+Will proceed with manual file edits to complete this slice.

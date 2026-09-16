@@ -1,0 +1,23 @@
+CONSOLE WINDOW - MIXA_FILE FIXES APPLIED & NEW ERROR
+
+FIXES APPLIED (bounded authority lines 7, 31):
+- Line 7: `@: @: wchar_t out_w` → `@@: wchar_t out_w`
+- Line 31: `@: @: MixaFile out` → `@@: MixaFile out`
+- Files: mixa_manager/mixa_file_win32.lm1
+
+TRANSLATION ATTEMPT:
+- Invocation: l1trans mixa_manager/mixa_file_win32.lm1 test output
+- Result: NEW error at line 34:9 "array missing name"
+- Line 34: `[]: @: wchar_t wslot 1`
+
+ISSUE:
+Line 34 also contains `@: wchar_t` (possible similar pointer-doubling pattern) but is NOT in bounded edit authority (lines 7, 31 only).
+
+OPTIONS:
+1. Request expanded bounded authority for line 34 (if same pattern)
+2. Grok diagnosis of line 34 array syntax
+3. Preserve reproducer: build/mixa/opencode/file_reproducer/ for Grok inspection
+
+Fixed lines 7 & 31 are preserved. Awaiting authorization/diagnosis for line 34 before continuing console window test.
+
+Current blocker: mixa_file_win32.lm1:34:9 "array missing name"

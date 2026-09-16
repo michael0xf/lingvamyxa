@@ -1,0 +1,123 @@
+Ticket 20260910-221158: Scenario 7 move_to Displacement Limits - COMPLETED
+
+STATUS: PASSED - All 9 move_to displacement limit cases added and verified
+
+PART 1: ISSUE & RESOLUTION
+Initial attempt failed with L1 translator error at line 758:5 "unknown type name".
+Root cause: Declaration `size_t: L` conflicted with L1 scope/type rules.
+
+Solution applied:
+- Removed variable declaration for L
+- Used inline casts: `(cast: (size_t) 2147483647)` directly in move_to calls
+- Declared snapshot variables once at Scenario 7 start, reused across all cases
+- No per-case redeclarations
+
+Result: Clean translation and compilation with all 9 cases passing.
+
+PART 2: PRE-EDIT BACKUP
+Backup created before Scenario 7 work:
+  - Location: build/mixa/opencode/pointer_bounds/recovery/
+  - File: mixa_pointer_bounds_selftest_5840AA4705E9A9EB.lm1
+  - Hash: 5840AA4705E9A9EB21CFBE949D0E776B1DAFB5C72809A53DFFB13BAED81D1EA2
+  - Preserved for rollback if needed
+
+PART 3: SCENARIO 7 - MOVE_TO DISPLACEMENT LIMITS (9 cases)
+
+move_to contract: permits displacement magnitude ≤ 2147483647 (INT32_MAX) on EACH axis.
+Displacement M (2147483648) is rejected on any axis.
+
+Case 1: move_to (7,9) from (7,9) - no displacement, all 4 fields unchanged
+  - Fixture: init(), then p\row=7, p\col=9, p\octant=UP_LEFT
+  - Target: (7,9)
+  - Expected: OK, octant UP_LEFT, is_open=1, row=7, col=9 (unchanged)
+  - Result: All 4 fields verified unchanged ✓
+
+Cases 2-5: Successful displacement limits
+
+Case 2: (0,0) → (0,2147483647) - displacement 2147483647 on col axis, valid
+  - Expected: OK, octant RIGHT, is_open=1
+  - Result: ✓
+
+Case 3: (0,2147483647) → (0,0) - negative displacement 2147483647 on col, valid
+  - Expected: OK, octant LEFT, is_open=1
+  - Result: ✓
+
+Case 4: (0,0) → (2147483647,0) - displacement 2147483647 on row axis, valid
+  - Expected: OK, octant DOWN, is_open=1
+  - Result: ✓
+
+Case 5: (2147483647,0) → (0,0) - negative displacement 2147483647 on row, valid
+  - Expected: OK, octant UP, is_open=1
+  - Result: ✓
+
+Cases 6-9: Displacement too large errors
+
+Case 6: (0,0) → (1, M) - ERR, col displacement M exceeds limit
+  - M = 2147483648 (INT32_MAX + 1)
+  - Snapshot all 4 fields, verify unchanged after ERR
+  - Result: All 4 fields unchanged ✓
+
+Case 7: (0,0) → (M, 1) - ERR, row displacement M exceeds limit
+  - Snapshot all 4 fields, verify unchanged after ERR
+  - Result: All 4 fields unchanged ✓
+
+Case 8: (1, M) → (1, 0) - ERR, negative col displacement M exceeds limit
+  - Fixture: p\row=1, p\col=M
+  - Snapshot all 4 fields before move_to(1,0)
+  - Result: All 4 fields unchanged ✓
+
+Case 9: (M, 1) → (0, 1) - ERR, negative row displacement M exceeds limit
+  - Fixture: p\row=M, p\col=1
+  - Snapshot all 4 fields before move_to(0,1)
+  - Result: All 4 fields unchanged ✓
+
+TEST RESULTS:
+Build: SUCCESS (translation + compilation, gcc exit 0)
+Execution: SUCCESS (exit 0)
+Test output: mixa_pointer_bounds_selftest OK
+
+FINAL COUNTS (exactly as expected):
+  Scenarios: 7 ✓
+  Member checks: 180 (was 144, +36 from 9 cases × 4 field checks) ✓
+  API assertions: 104 (was 86, +18 from 9 cases × 2 assertions: init + move_to) ✓
+  Failures: 0 ✓
+
+FILE STATE:
+  Path: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1
+  Byte count: 39519
+  SHA256: 7A8359041EC6BE80B6A4655693FD28A62B0C0D4550A7E740D51D8035D88AA309
+  Verified in run_summary.log ✓
+
+IMPLEMENTATION DETAILS:
+- Constants defined inline via casts: (cast: (size_t) 2147483647), int32_magnitude
+- Snapshot variables declared once: snap_oct_mt, snap_open_mt, snap_row_mt, snap_col_mt
+- Each case reuses snapshots; no per-case redeclarations
+- Direct field assignment for fixture setup (p\row, p\col, p\octant set after init)
+- Success cases verify all 4 fields directly
+- Error cases snapshot before move_to, verify all 4 unchanged after ERR
+- Native exact Edit tool used only (no PowerShell regex/read-pipe-write)
+
+COMPLIANCE:
+✓ Restored from backup when translator error detected
+✓ Used translator diagnostics (_trans_stderr.tmp) to identify issue
+✓ Resolved by removing conflicting variable declaration
+✓ Used inline casts instead of variable L (simpler, portable)
+✓ Pre-edit backup created and preserved
+✓ No production/Git/shared build edits
+✓ No runner or framework changes
+✓ Native exact Edit tool only
+✓ Actual counts verified: 180 member, 104 API
+✓ Final hash verified matches run_summary
+
+DIAGNOSTICS LEARNED:
+L1 translator error messages available in build/mixa/opencode/pointer_bounds/logs/_trans_stderr.tmp.
+Future compilation failures can be diagnosed without external debugging.
+
+NEXT ACTION:
+Scenario 7 move_to displacement limits complete. First comprehensive slice of pointer bounds testing finished:
+- 7 scenarios covering 8 directions, zero-delta, underflows, boundaries, SIZE_MAX, INT32 extremes, move_to limits
+- 180 member field checks
+- 104 API operation assertions
+- 0 failures
+
+Remaining work queued: released pointer state, null pointer cases (final edge cases).

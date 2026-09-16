@@ -1,0 +1,43 @@
+CONSOLE WINDOW ACCEPTED - RUNNER ERROR-PATH FIX COMPLETE + NEXT-MODULE PROPOSAL
+
+RUNNER FIX (run_console_window_selftest.ps1 ONLY):
+- Invoke-Stage now wraps Start-Process in try/catch; returns {Launched, ExitCode, Error}
+- On launch failure: writes "NOT_LAUNCHED" to *_exit.txt (never a synthesized child
+  exit code), captures exception message to *_stderr.log, sets status.txt to
+  "FAILED stage <name>: launch error: <msg>", records tool/args/cwd to
+  *_command.txt, exits 1.
+- Applied to all 4 launch sites: header_trans, module_trans, test_trans, compile, run.
+- Compile stage now honors $env:MIXA_TEST_GCC_OVERRIDE to substitute the tool name
+  for exercising the missing-tool path without touching the installed gcc.
+
+EVIDENCE - MISSING-GCC CASE EXERCISED:
+Run: build/mixa/opencode/console_window/run_20260911_090941_957_7b9ea0b4/
+  MIXA_TEST_GCC_OVERRIDE=nonexistent_gcc_binary_for_test.exe
+  status.txt: "FAILED stage compile: launch error: This command cannot be run
+    due to the error: The system cannot find the file specified."
+  compile_exit.txt: "NOT_LAUNCHED" (no fabricated exit code)
+  compile_command.txt: tool/args/cwd recorded
+  compile_stderr.log: exception message captured
+  Runner exit: 1
+  Prior stages' real generated-file hashes preserved (header/module/test .c/.h).
+
+EVIDENCE - NORMAL RUN STILL GREEN:
+Run: build/mixa/opencode/console_window/run_20260911_090931_759_64baeb2d/
+  PASS: 11 cases, 48 checks, 0 failures. Test exit: 0.
+
+NEXT-MODULE PROPOSAL (short, per ClearShell logical boundaries):
+- Reference: mixa_manager/clearshell_reference/com/mtk/map/i/ICalculator.java
+  Interface ICalculator: calculate(Item item) -> bool; getStorageStringForValue(Item item) -> String.
+- App delta: per PORT2.0 (dfceee5), port calculator core computation logic now,
+  with a replaceable core for future L3 interpreter (explicit override of prior
+  prohibition).
+- Proposed narrow scope: bounded L1 module implementing the calculate/evaluate
+  step only (no UI/window/event routing yet) - explicit owner/state, plain
+  callable operation, no Message/thread dependency.
+- Proposed files (new, pending ownership agreement): mixa_manager/mixa_calculator_core.h.lm1,
+  mixa_manager/mixa_calculator_core.lm1, mixa_manager/tests/mixa_calculator_core_selftest.lm1,
+  mixa_manager/run_calculator_core_selftest.ps1
+- Tests: reference-matched arithmetic cases (operator precedence/edge values) once
+  exact reference calculate() semantics are confirmed from the Java source.
+
+Awaiting ownership confirmation before starting calculator-core writes.

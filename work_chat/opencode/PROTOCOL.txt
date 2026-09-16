@@ -1,0 +1,164 @@
+OpenCode file-drop chat
+=======================
+
+Root (this machine):
+
+    C:\Nyasha_Planet\lingvamyxa\work_chat\opencode\
+
+    inbox\      user / colleagues -> opencode  (incoming tasks and messages)
+    outbox\     opencode -> user / colleagues  (completed replies)
+    seen\       claim markers, using the incoming filename
+    heartbeat   watcher health (UTC time, watcher PID, status)
+    watcher.log operation log of the background watcher helper
+    logs\       watcher output and opencode serve output
+
+Encoding: UTF-8 without BOM. Line endings: LF (preferred) or CRLF.
+
+Filename (id)
+-------------
+
+    YYYYMMDD-HHMMSS.txt
+
+Local 24-hour timestamp (matching repository convention). If two files would
+share a second, use milliseconds:
+
+    YYYYMMDD-HHMMSS-mmm.txt
+
+Example: 20260910-181500.txt
+
+No spaces. No paths in filename. Same basename in inbox\, seen\, and outbox\.
+
+Request body (inbox)
+--------------------
+
+The entire file is the incoming task or message.
+Optional first line tag:
+
+    # opencode-chat-v1
+
+If present, the tag is stripped when processing; if absent, the whole file is
+the request.
+
+Reply body (outbox)
+-------------------
+
+Same basename as request. The entire file contains OpenCode's completed answer.
+Write the reply only when complete: write to outbox\<name>.tmp, flush, then
+atomically rename to outbox\<name>.txt. Never leave half-written files in
+outbox. Never overwrite an existing completed reply without explicit conflict
+resolution. Never delete or modify the original inbox\<id> file.
+
+Lifecycle
+---------
+
+1. Sender writes the request to inbox\<id>.tmp, then atomically renames it to
+   inbox\<id>.txt (atomic publication).
+2. Watcher detects completed inbox\<id>.txt with neither a matching seen\<id>
+   marker nor a completed outbox\<id> reply.
+3. OpenCode atomically claims the task by creating seen\<id>. If seen\<id>
+   already exists, another turn or worker claimed it: skip immediately.
+4. OpenCode reads inbox\<id> in full, executes only the authorized work.
+5. OpenCode writes the reply to outbox\<id>.tmp, flushes, renames to outbox\<id>.
+6. Leave the inbox file in place. Do not delete user files.
+
+A request is new iff it is a completed *.txt in inbox\ and seen\<id> does not
+exist (outbox\<id> presence also means done, so no work is needed).
+
+Restart and Reconciliation
+--------------------------
+
+A claim marker in seen\ is NOT proof of completion. Proof of completion is
+outbox\<id>. If the agent or watcher restarts:
+1. Identify claimed-but-unanswered tickets (present in seen\ but absent in
+   outbox\). Reconcile their status before resuming.
+2. Do not blindly repeat operations with side effects. If work was partially
+   performed or an outbox .tmp exists, verify before acting.
+3. If blocked or ambiguous, write an explicit blocker report / question to
+   outbox\<id> instead of staying silent.
+
+Watcher (background helper)
+---------------------------
+
+watch_opencode.ps1 is a persistent single-instance helper running with a hidden
+window. Single-instance protection: named mutex + .pid with process-identity
+check. It watches inbox\ only (no subdirectories).
+
+1. Immediate detection (Windows FileSystemWatcher):
+   - Observes Created, Renamed, Changed, and Error events.
+   - Accepts only completed *.txt files; ignores temporary files (*.tmp, .*).
+   - Handles .tmp -> .txt renames to support atomic drop.
+   - Subscribes to events BEFORE the initial directory scan on startup.
+   - Error events (buffer overflow / IO error) trigger an immediate rescan.
+   - Event callbacks only signal pending work; they never execute tasks.
+   - Coalesces notifications over 20 seconds of quiet. New relevant events
+     during the wait reset the 20s window.
+   - Every relevant event in a batch is processed; an irrelevant first event
+     does not cause the rest of the batch to be discarded.
+   - Deduplicates by ticket filename using inbox/seen/outbox state, and avoids
+     re-notifying tickets already notified in the current watcher run.
+
+2. Fallback recovery scan (every 30 minutes):
+   - Independent timer scan at startup and every 30 minutes, plus after
+     watcher errors.
+   - Finds any completed inbox\*.txt lacking seen\ and outbox\.
+   - An empty scan produces NO notification and does NOT wake the AI.
+
+Independent heartbeat
+---------------------
+
+Maintained by the watcher helper in heartbeat, updated ~once per minute even
+when the inbox is empty and while the agent is busy. Format:
+
+    alive <UTC_TIMESTAMP> <status>
+    pid=<WATCHER_PID> started=<UTC_STARTED> script=<SCRIPT_PATH>
+    status=healthy events_handled=<N> last_event=<UTC_TIMESTAMP>
+
+A fresh helper heartbeat proves the watcher is alive; it does NOT prove the AI
+agent is responsive.
+
+Actual OpenCode agent wakeup
+----------------------------
+
+FileSystemWatcher detects disk events; it does not inherently resume an AI.
+
+Delivery target: the pinned project session
+
+    ses_f72b606b8ffeAROE5aE5JDdwlh
+
+Pinned session ID is stored in ASSIGNMENT.txt and RUNBOOK.txt. It is never
+"the latest session"; delivery always uses this explicit ID.
+
+Transport: a headless `opencode serve` instance bound to 127.0.0.1 only
+(loopback), port 4097, protected by HTTP basic auth (password in
+server_password.txt). It shares the same opencode data directory and database
+as the interactive session. Supported, documented mechanism:
+
+    POST /session/<pinned-id>/prompt_async
+    body: { "parts": [ { "type": "text", "text": "<notification>" } ] }
+
+prompt_async is asynchronous (204 No Content, no waiting) and delivers the
+notification into the pinned session as a user message; the agent then
+processes it in that same session.
+
+Serialization: before delivering, the watcher checks whether the pinned
+session is currently busy (via GET /session/<id>/message?limit=3 : newest
+message with role "assistant" and no "finish" field means a turn is running).
+If the session is busy, the watcher RETAINS the pending tickets and retries
+until the session is free. It never launches overlapping agents or a new
+conversation for every filesystem event.
+
+If automatic wakeup is unavailable (server down, session missing), filesystem
+detection still works and the watcher logs + retains pending work; the reply
+is delivered when the server/session is reachable again.
+
+Security: the server binds to 127.0.0.1 only and requires basic auth; it is
+never exposed to the network. Do not run opencode serve with --hostname
+0.0.0.0, --mdns, or without the password.
+
+Colleague vs User communication
+-------------------------------
+
+- Peer agents (Claude, Grok, Cursor, Antigravity): English.
+- User: Russian.
+- Chat announcements: short English progress notes, and "answered <id>" on
+  completion.

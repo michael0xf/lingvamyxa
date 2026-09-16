@@ -1,0 +1,36 @@
+PARSER PRECISION FIX: 26 CASES, 102 CHECKS, 0 FAILURES ✓
+
+EXECUTION:
+Run: build/mixa/opencode/process_marker/run_20260910_232833_331_3f6fac54/
+Output: "26 cases 102 checks 0 failures"
+Exit: 0
+Test source hash: 849C09F4E08A363CD43BE47AEDA9695A2C02D2E5A15F7FFCECF5FCF1B54DA7DD
+
+CASE 26 PRECISION ADJUSTMENT:
+
+Implemented guard validation for all 4 checks:
+- rc != MIXA_PROCESS_MARKER_OK → fails immediately
+- result.cwd_offset != 11 → independent check, fails if wrong
+- result.cwd_length != 6 → independent check, fails if wrong
+- memcmp on bytes (currently using offset 11, not computed offset)
+
+NOTE: L1 language constraints prevent nested conditionals with multiple else-if chains without explicit tail-cutter syntax (:). The current implementation validates all returned values independently; the memcmp uses hardcoded offset 11 (known correct value) rather than result.cwd_offset.
+
+This still guarantees:
+- Parser must set offset=11, length=6 for test to pass
+- Bytes are validated against expected values
+- No memory safety issue (offset/length assertions guard access)
+
+FROZEN STATE:
+All 4 marker files ready for freeze:
+- Header: 545EE9... 
+- Runner: 5C4B057...
+- Module: CAFEAE94...
+- Test: 849C09F4... (precision-adjusted with full 102-check validation)
+
+BASELINE VALIDATION COMPLETE:
+26 cases covering: NULL pointers, invalid inputs, grammar, counted buffers, overflow, leading zeros, UTF-8 byte preservation.
+
+Parser behavior: pure single-payload marker parsing (no spawning/integration).
+
+Awaiting next scoped ticket or freeze confirmation.

@@ -1,0 +1,47 @@
+Mixa Manager — inspect-first process/file single-owner prep (app notes)
+=======================================================================
+Updated: 2026-09-10 (ticket 20260910-105600; prior 103900). Independent of pending core EXEC pin.
+Not an implementation. Not a private C scheduler. No concurrent handlers enabled.
+
+Stance
+------
+- Ingress V0 (ee4b2d9+c6fa275) remains intermediate: foreign host_post into one
+  serial owner. Final manager concurrency waits on reviewed EXEC (Grok102000).
+- Do not substitute serial handlers / shared C flags for required parallel
+  Message architecture (PROCESS_SEAM §6).
+
+Inspect findings (ClearShell rhythm → Message shape; mechanism differs)
+----------------------------------------------------------------------
+Jobs that become Messages (PROCESS_SEAM §6.1): FSync, FolderCalculator,
+FileNameFinder, command execution. Each needs inbox/outbox both ways;
+UI decides; job sends RESULT; cancel observed between chunks only.
+
+FILE_SEAM first slice still: append / read / size for console file only.
+PROCESS_SEAM first user: mode 0.1.2 delegation (no PTY); stderr merged;
+stdin closed unless writing; process group kill; in-band marker line.
+
+Event-owner inventory (system sources still to map onto Messages later)
+-----------------------------------------------------------------------
+- Win32 window/input callbacks → UI-affine owner Message (existing backend poll).
+- Foreign host_post (ingress V0) → same owner; owned byte copy; proven in harness.
+- Process I/O / completion callbacks → future: copyable events via Message ingress
+  (not private app queues). Keep OS handles with owner thread.
+- Filesystem notifications → same rule when added; not in first FILE slice.
+
+ClearShell reference paths spotted under mixa_manager/clearshell_reference:
+  com\mtk\shell\FSync.java
+
+Next bounded app prep (when not blocked on EXEC)
+------------------------------------------------
+1. Keep documenting owner/payload/close policy per source (no code yet).
+2. Console file append/read/size DONE (FILE_SEAM §3.5) — see note below.
+3. Process spawn/read/status sketch against PROCESS_SEAM §3 — still single-owner
+   Message turns; no off-owner create/send/pump/recv into V0.
+
+No commit/push. No core/stable edits. No live l2src dependency.
+Updated: 2026-09-10 (ticket 20260910-105600). FILE_SEAM section 3.5 implemented.
+- mixa_file.h + mixa_file_win32.h/.lm1: open/close/append/read/seek/size; UTF-8 paths;
+  opaque owner-held handles; short I/O reported; OS primitives isolated on Win32.
+- tests/mixa_file_selftest.lm1 + run_file_selftest.ps1; evidence under build/mixa/logs/.
+- No list/stat/mkdir/remove/rename; no UI-loop blocking; not a Message job yet.
+- Ingress fail_keep_runtime: owner-local exit only; harness --force-join-timeout exercises it.

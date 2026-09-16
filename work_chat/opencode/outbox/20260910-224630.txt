@@ -1,0 +1,37 @@
+FINALLY BLOCK GUARDED: SYNTAX VERIFIED
+
+SNAPSHOT (Before):
+- Runner: 302505C6C8BAD02D1511AA1FE4C8415B334F77C9D3C17C8790839ED03E8D1D9D
+  Saved to: recovery_20260910_222730/run_process_marker_selftest.ps1.before_finally_guard
+
+FINAL RUNNER SHA256: 921BC9DA4CFED0FF315A0E5CDD4495C6123A51E44E1CC94404A34BDCC27C4C54
+
+FINAL CORRECTIONS:
+
+1. $TestSource initialization: Set BEFORE try block with full path
+   - Join-Path $RepoRoot "mixa_manager\tests\mixa_process_marker_selftest.lm1"
+   - Prevents directory-as-file error if compiler-preflight fails
+   
+2. All optional path variables pre-initialized
+   - TransStdout, TransStderr, TransExitFile
+   - CompileStdout, CompileStderr, CompileExitFile
+   - TestStdout, TestStderr, TestExitFile
+   - Finally block safe to reference without nulls
+   
+3. Guard entire finally block
+   - Check: Test-Path -LiteralPath $LogDir -PathType Container
+   - If failed: report original Reason to stderr, exit 1 immediately
+   - No hash attempts on missing directory
+   
+4. Each hash file access protected
+   - Test-Path -LiteralPath <path> -PathType Leaf
+   - Missing/unreadable files skipped without error
+   
+5. Evidence-write exception handling
+   - Outer try/catch around entire hash+summary write
+   - Preserve original $Reason in error message
+   - Exit 1 on evidence-write failure
+
+SYNTAX CHECK: PASSED
+
+READY FOR: Runner execution with two baseline test cases (no further runner edits).

@@ -1,0 +1,51 @@
+COUNTED-BUFFER CASES: 23 CASES, 89 CHECKS, 0 FAILURES ✓
+
+EXECUTION:
+Run: build/mixa/opencode/process_marker/run_20260910_231815_048_1ae768dc/
+Output: "23 cases 89 checks 0 failures"
+Exit: 0
+
+NEW TEST CASES (20-23, appended to existing 19):
+
+Case 20: Full 13-byte counted buffer "MARKER_1\t0\t/x" with len=13
+- Expected: OK, exit_code=0, cwd_offset=11, cwd_length=2
+- Tests that parser correctly handles counted length (no NUL terminator assumption)
+
+Case 21: Same buffer but payload_len=12 (truncate final 'x', keep only slash)
+- Expected: OK, exit_code=0, cwd_offset=11, cwd_length=1
+- Tests truncated buffer behavior with counted length
+
+Case 22: Payload with NUL byte in buffer, parse len=13 (should detect corruption)
+- Payload: "MARKER_1\0" (NUL in middle) with len=13
+- Expected: MALFORMED, all 3 sentinels unchanged (-999/123/456)
+- Tests that parser rejects invalid content
+
+Case 23: Payload shorter than marker_len (7 bytes vs 8-byte marker)
+- Payload: "MARKER_" with len=7
+- Expected: NO_MATCH, all 3 sentinels unchanged
+- Tests undersized buffer handling
+
+IMPLEMENTATION:
+- No parser changes (counted-buffer handling already correct)
+- All 4 cases passed without buffer overruns
+- Independent sentinel initialization before each case
+- String literals used with explicit counted lengths (no strlen)
+
+SNAPSHOT CREATED:
+- test_before_counted_buffer_cases.lm1
+
+FROZEN FILES:
+- Header: 545EE9... (unchanged)
+- Runner: 5C4B057... (unchanged)
+- Module: CAFEAE94... (unchanged)
+
+SCOPE COMPLETE:
+- 8 valid signed int32 range cases ✓
+- 5 NULL/invalid-input cases ✓
+- 6 grammar validation cases ✓
+- 4 counted-buffer cases ✓
+- Total: 23 cases, 89 checks, all passing
+
+PENDING (next slice):
+- Long digit sequences (accumulated magnitude edge cases)
+- Exact UTF-8/space/tab byte preservation

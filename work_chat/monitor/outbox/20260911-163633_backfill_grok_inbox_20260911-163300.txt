@@ -1,0 +1,3 @@
+﻿[событие] NEW grok inbox 20260911-163300.txt
+
+Grok/inbox: Codex сдал OOM-фикстуру (5bd0698), ownership тестов возвращён; дальше unbound-ready removal без ожидания тикета. Нормальная работа, не idle.

@@ -1,0 +1,115 @@
+Ticket 20260910-220537: Scenario 6 INT32 Extremes - COMPLETED
+
+STATUS: PASSED - Scenario 6 added with 8 INT32 extremes cases, test verified
+
+PART 1: PRE-EDIT BACKUP
+Backup created before Scenario 6 addition:
+  - Location: build/mixa/opencode/pointer_bounds/recovery/
+  - File: mixa_pointer_bounds_selftest_02119FC7EEAFA384.lm1
+  - Hash: 02119FC7EEAFA38450E11BBAEC55663C75C84A199E6FB6FFC157F873868A944B
+  - Prior backups preserved (not overwritten)
+
+PART 2: SCENARIO 6 - INT32 EXTREMES (8 cases)
+
+Constants defined safely:
+  - i32 int32_min = (cast: (i32) (-2147483647 - 1))  [INT32_MIN]
+  - i32 int32_max = (cast: (i32) 2147483647)         [INT32_MAX]
+  - size_t int32_magnitude = (cast: (size_t) 2147483648ULL)  [2^31]
+
+Fixture method: Direct field assignment with octant set to UP_LEFT before nudge
+
+Case 1: start(1, 2147483648), delta(INT32_MIN, 0) -> (1, 0), octant LEFT
+  - Fixture: p\row=1, p\col=int32_magnitude, p\octant=UP_LEFT
+  - Nudge: dx=INT32_MIN (-2^31), dy=0 (decrement col by 2^31)
+  - Expected: OK, position (1, 0), octant LEFT, is_open=1
+  - Result: All 4 fields verified ✓
+
+Case 2: start(2147483648, 1), delta(0, INT32_MIN) -> (0, 1), octant UP
+  - Fixture: p\row=int32_magnitude, p\col=1, p\octant=UP_LEFT
+  - Nudge: dx=0, dy=INT32_MIN (-2^31, decrement row by 2^31)
+  - Expected: OK, position (0, 1), octant UP, is_open=1
+  - Result: All 4 fields verified ✓
+
+Case 3: start(1, 2147483647), delta(INT32_MIN, 0) -> ERR (col already at INT32_MAX, would underflow)
+  - Fixture: p\row=1, p\col=2147483647, p\octant=UP_LEFT
+  - Snapshot all 4 fields before nudge
+  - Nudge: dx=INT32_MIN, dy=0 (col already at limit, would go below 0)
+  - Expected: MIXA_POINTER_ERR, all 4 fields unchanged
+  - Result: snapshot verified unchanged ✓
+
+Case 4: start(2147483647, 1), delta(0, INT32_MIN) -> ERR (row already at INT32_MAX, would underflow)
+  - Fixture: p\row=2147483647, p\col=1, p\octant=UP_LEFT
+  - Snapshot all 4 fields before nudge
+  - Nudge: dx=0, dy=INT32_MIN (row already at limit, would go below 0)
+  - Expected: MIXA_POINTER_ERR, all 4 fields unchanged
+  - Result: snapshot verified unchanged ✓
+
+Case 5: start(0, 0), delta(INT32_MAX, 0) -> (0, 2147483647), octant RIGHT
+  - Fixture: p\row=0, p\col=0, p\octant=UP_LEFT
+  - Nudge: dx=INT32_MAX (2^31-1), dy=0 (increment col by 2^31-1)
+  - Expected: OK, position (0, 2147483647), octant RIGHT, is_open=1
+  - Result: All 4 fields verified ✓
+
+Case 6: start(0, 0), delta(0, INT32_MAX) -> (2147483647, 0), octant DOWN
+  - Fixture: p\row=0, p\col=0, p\octant=UP_LEFT
+  - Nudge: dx=0, dy=INT32_MAX (2^31-1, increment row by 2^31-1)
+  - Expected: OK, position (2147483647, 0), octant DOWN, is_open=1
+  - Result: All 4 fields verified ✓
+
+Case 7: start(1, max_sz), delta(INT32_MAX, 0) -> ERR (col already at SIZE_MAX, would overflow)
+  - Fixture: p\row=1, p\col=max_sz, p\octant=UP_LEFT
+  - Snapshot all 4 fields before nudge
+  - Nudge: dx=INT32_MAX, dy=0 (col already at max, would overflow)
+  - Expected: MIXA_POINTER_ERR, all 4 fields unchanged
+  - Result: snapshot verified unchanged ✓
+
+Case 8: start(max_sz, 1), delta(0, INT32_MAX) -> ERR (row already at SIZE_MAX, would overflow)
+  - Fixture: p\row=max_sz, p\col=1, p\octant=UP_LEFT
+  - Snapshot all 4 fields before nudge
+  - Nudge: dx=0, dy=INT32_MAX (row already at max, would overflow)
+  - Expected: MIXA_POINTER_ERR, all 4 fields unchanged
+  - Result: snapshot verified unchanged ✓
+
+TEST RESULTS:
+Build: SUCCESS (translation + compilation, gcc exit 0)
+Execution: SUCCESS (exit 0)
+Test output: mixa_pointer_bounds_selftest OK
+
+FINAL COUNTS (as expected):
+  Scenarios: 6 ✓
+  Member checks: 144 (was 112, +32 from 8 INT32 cases × 4 field checks) ✓
+  API assertions: 86 (was 70, +16 from 8 cases × 2 assertions: init + nudge) ✓
+  Failures: 0 ✓
+
+FILE STATE:
+  Path: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1
+  Byte count: 32170
+  SHA256: 5840AA4705E9A9EB21CFBE949D0E776B1DAFB5C72809A53DFFB13BAED81D1EA2
+  Verified in run_summary.log ✓
+
+BACKUP PROGRESSION:
+  Scenario 5 (02119FC7...): Pre-edit backup for Scenario 6
+  Final (5840AA47...): After Scenario 6 INT32 extremes addition
+
+IMPLEMENTATION DETAILS:
+- INT32_MIN defined safely via addition: (-2147483647 - 1) then cast to i32
+- INT32_MAX defined as literal 2147483647 cast to i32 (no negation)
+- int32_magnitude (2^31) defined via 2147483648ULL cast to size_t (no negation)
+- All 8 cases use direct field assignment for fixture (init then set p\row/col/octant)
+- Success cases verify all 4 fields directly (not snapshots)
+- Error cases snapshot all 4 fields before nudge, verify unchanged after ERR
+- Native exact Edit tool used only (no PowerShell regex/read-pipe-write)
+- Preserves all previous scenarios and tests
+
+COMPLIANCE:
+✓ INT32 constants defined safely (no negation of out-of-range values)
+✓ Pre-edit backup created with hash naming
+✓ Prior backups preserved (not overwritten)
+✓ No production/Git/shared build edits
+✓ No runner or framework changes
+✓ Native exact Edit tool only
+✓ Actual counts verified: 144 member, 86 API
+✓ Final hash verified matches run_summary
+
+NEXT ACTION:
+Scenario 6 INT32 extremes complete. Remaining work queued: move_to error conditions, released pointer state preservation, null pointer cases.

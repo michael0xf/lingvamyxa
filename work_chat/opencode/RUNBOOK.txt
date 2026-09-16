@@ -1,0 +1,86 @@
+Руководство по каналу OpenCode (RUNBOOK)
+========================================
+
+Канал:    C:\Nyasha_Planet\lingvamyxa\work_chat\opencode\
+Сессия:   ses_f72b606b8ffeAROE5aE5JDdwlh  (закреплена, не "последняя")
+Сервер:   opencode serve, 127.0.0.1:4097, loopback, basic auth
+          (пароль в server_password.txt, файл в .gitignore)
+Скрипты:  work_chat\opencode\scripts\
+          watch_opencode.ps1   -- постоянный вотчер (FSW + резервные сканы)
+          start_channel.ps1    -- запуск serve + вотчера (скрытые окна)
+          stop_channel.ps1     -- штатная остановка (только своих процессов)
+          run_serve.ps1        -- запуск headless-сервера (logger)
+
+Протокол и назначение агента: PROTOCOL.txt (en), ASSIGNMENT.txt (ru).
+
+1. Запуск
+---------
+    powershell -NoProfile -ExecutionPolicy Bypass -File `
+        C:\Nyasha_Planet\lingvamyxa\work_chat\opencode\scripts\start_channel.ps1
+
+Команда запускает по одному экземпляру:
+  - run_serve.ps1 -> `opencode serve --port 4097 --hostname 127.0.0.1`
+      (PID сохраняется в serve.pid, вывод в logs\serve.log);
+  - watch_opencode.ps1 (скрытое окно; PID в watcher.pid, журнал watcher.log,
+      пульс в heartbeat, раз в минуту, UTC).
+
+Повторный запуск безопасен: если экземпляры уже живы, ничего не дублируется.
+Сервер привязан только к 127.0.0.1; НЕ запускайте его с --hostname 0.0.0.0,
+--mdns или без пароля.
+
+2. Штатная остановка
+--------------------
+    powershell -NoProfile -ExecutionPolicy Bypass -File `
+        C:\Nyasha_Planet\lingvamyxa\work_chat\opencode\scripts\stop_channel.ps1
+
+Останавливает ТОЛЬКО процессы канала, чья командная строка совпадает
+(watch_opencode.ps1, opencode serve) и чей PID записан в channel\*.pid.
+Чужие процессы и вотчеры других агентов не трогаются.
+
+3. Восстановление после перезапуска OpenCode или Windows
+--------------------------------------------------------
+После перезагрузки Windows или завершения opencode.exe:
+  а) Убедитесь, что целевая сессия существует и вы в ней:
+         opencode --session ses_f72b606b8ffeAROE5aE5JDdwlh
+  б) Запустите канал заново одной командой (см. п.1). Если serve.pid /
+     watcher.pid остались "мёртвыми", скрипты всё равно перезапустят службы,
+     а стale pid-файлы перезапишутся.
+  в) Проверьте здоровье:
+         Get-Content C:\Nyasha_Planet\lingvamyxa\work_chat\opencode\heartbeat
+         Get-Content C:\Nyasha_Planet\lingvamyxa\work_chat\opencode\logs\serve.log
+
+Восстановление тикетов (reconciliation): при старте агент проверяет
+"взятые, но не завершённые" тикеты (есть в seen\, нет в outbox\) и выверяет
+их статус, не повторяя вслепую операции с побочными эффектами.
+
+4. Диагностика
+--------------
+  - heartbeat: алive-метка, PID вотчера, статус, время UTC.
+  - watcher.log: события FSW, пауза 20 с, доставка уведомления в сессию
+    (HTTP 204 = доставлено), ошибки.
+  - logs\serve.log: запуск и ошибки headless-сервера.
+  - Проверка сервера:
+        Invoke-RestMethod -Uri http://127.0.0.1:4097/global/health -Headers `
+            @{Authorization="Basic "+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
+            "opencode:"+(Get-Content C:\Nyasha_Planet\lingvamyxa\work_chat\opencode\server_password.txt)))}
+
+5. Доставка и сериализация
+--------------------------
+Вотчер уведомляет целевую сессию через POST /session/ses_f72b.../prompt_async
+(асинхронно, 204). Перед доставкой проверяет занятость сессии: если в сессии
+выполняется ход (новейшее сообщение роли assistant без поля finish), работа
+удерживается и повторяется каждые ~15 c, пока сессия не освободится.
+Одновременные агенты не запускаются; на каждое событие ФС создаётся не новая
+беседа, а одно пачечное уведомление.
+
+6. Формат тикетов
+-----------------
+Имя: YYYYMMDD-HHMMSS.txt (миллисекунды при коллизии), UTF-8 без BOM, LF.
+Запись через .tmp -> .txt. Claim: seen\<имя>. Ответ: outbox\<имя>.tmp ->
+outbox\<имя>.txt. Исходный файл inbox не удалять/не менять.
+
+7. Авторизация работ
+--------------------
+Настроен только канал и безопасные тесты. Любое другое изменение кода
+компилятора, стабильных сборок, общих настроек репозитория или чужих
+каналов -- только по прямому указанию в тикете.

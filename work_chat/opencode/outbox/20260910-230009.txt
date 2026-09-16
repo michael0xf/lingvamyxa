@@ -1,0 +1,31 @@
+BASELINE TESTS: MODULE TRANSLATES, TEST COMPILATION ERRORS
+
+MODULE TRANSLATION: SUCCESS ✓
+- Fixed else-if syntax: two sibling ifs for +/- sign
+- Simplified overflow check (removed nested ifs)
+- Implementation now translates correctly
+
+TEST COMPILATION: FAILED - Type/Syntax Errors
+Errors in generated C:
+
+1. result->exit_code: pointer dereference on value type
+   → Should use result.exit_code (dot, not arrow) throughout test
+   
+2. Line 97: cast missing argument
+   → (cast: (const char *)): needs (payload + exit_start) as argument
+   
+3. Bitwise OR needs parentheses in digit check
+   → Compiler warning (not fatal)
+
+NEXT FIXES (Same test file):
+- Change all `result->` to `result.` 
+- Fix cast: (const char *) → cast to proper pointer dereference
+- Re-run compilation
+
+PROGRESS:
+- Header translation step functional ✓
+- Module syntax corrected ✓
+- Test needs minor C-generation fixes (dereference type issue)
+- Two-case baseline ready once test fixed
+
+All infrastructure in place. Test fixes straightforward.

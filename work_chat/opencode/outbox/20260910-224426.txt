@@ -1,0 +1,33 @@
+CONTROL FLOW DEFECTS FIXED: SYNTAX VERIFIED
+
+SNAPSHOT (Before):
+- Runner: 752C8A3EA43B9A2A703934619144B385561A157C0A8BA7793211F587DCE9971A
+  Saved to: recovery_20260910_222730/run_process_marker_selftest.ps1.before_controlflow_fix
+
+CORRECTED RUNNER SHA256: 302505C6C8BAD02D1511AA1FE4C8415B334F77C9D3C17C8790839ED03E8D1D9D
+
+CONTROL FLOW FIXES:
+
+1. LogDir creation order: Create run/log directory BEFORE compiler preflight
+   - All path variables initialized at start
+   - Preflight errors caught with valid LogDir
+   
+2. Error handling in catch: Capture error reason with $Reason = $_
+   - Distinguishes unrun stages from failures
+   - No SUCCESS label on failed stages
+   
+3. Final exit code: Based on $Status
+   - exit 0 only if Status = "SUCCESS"
+   - exit 1 for any failure (compiler, translation, compilation, execution, summary write)
+   
+4. Test execution: Explicit -WorkingDirectory $RepoRoot
+   - Redirected stdout and stderr to files
+   - Exact exit code capture via $TestProc.ExitCode
+   
+5. Summary label: Compiler-Exit-File → Compiler-Hash-File (correct type)
+   - Summary persisted even on failure
+   - Summary write failure yields exit 1
+
+SYNTAX CHECK: PASSED
+
+READY FOR: Execution with two baseline test cases. No further syntax-only work needed.

@@ -1,0 +1,37 @@
+TWO-CASE TEST EXECUTION ATTEMPT: BLOCKED BY L1 HEADER/INCLUDE CONSTRAINTS
+
+FILES SNAPSHOTTED (pre-test):
+- mixa_process_marker.h.lm1: 545EE9541278B1350F84C4E0B9B6056B5B1FEFE30BAF809CDE17C4EF24C40019
+- mixa_process_marker.lm1: E65B358BFD7D60EF32BED14795704C142E525289241A327BB8FFA9AC176094E4
+- tests/mixa_process_marker_selftest.lm1 (old): 6ED1D4B51B16D43B507205C5F9771692A9B3DF540804F4D946D048546D4DF311
+- run_process_marker_selftest.ps1: 921BC9DA4CFED0FF315A0E5CDD4495C6123A51E44E1CC94404A34BDCC27C4C54
+
+TEST SOURCE CREATED: 2 baseline cases
+- Case 1: MARKER_1, zero exit, /home/user → OK, exit_code=0, offset=11, length=10 (4 asserts)
+- Case 2: MARKER_1, empty exit field → MALFORMED, all fields unchanged (4 asserts)
+- Total: 8 checks, expect 0 failures
+- Proper aggregate value semantics (no pointer aliasing)
+
+TRANSLATION ATTEMPTS (all failed):
+
+1. predef: mixa_process_marker_hdr.lm1 (renamed from .h.lm1)
+   Error: l1trans error: line 3: unsupported L1 form
+   → Enum in predef context not supported
+
+2. predef with struct only (removed enum)
+   Error: l1trans error: line 3: unsupported L1 form
+   → Struct in predef context not supported
+
+3. predef with prototype only (struct removed from predef)
+   Error: l1trans error: line 3: unsupported L1 form
+   → Even prototype syntax rejected
+
+4. include: mixa_process_marker.h (C header)
+   Error: l1trans error during translation
+   → C header include not functional for L1 type definitions
+
+ROOT CAUSE: L1 header/predef/include mechanism cannot carry struct/enum/prototype definitions in forms L1 translator accepts. Predef files reject all declaration forms tested; C header include fails.
+
+BLOCKED: Cannot establish test baseline without resolution of header structure constraint. Parser implementation itself not tested yet.
+
+NEXT STEP: Clarify L1 header declaration syntax for predef'd structs or alternative include mechanism.

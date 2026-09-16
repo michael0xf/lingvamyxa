@@ -1,0 +1,23 @@
+HEADER SELF-CONTAINMENT: COMPLETE; PROTOTYPE: BLOCKED
+
+FILES (ACTUAL HASHES):
+- mixa_process_marker.h.lm1: 3B5309FC17C1A427B46773D835B53C0E7B7429F17945626503C3668DF64D604F
+  Includes: <stddef.h> <stdint.h> (self-contained)
+  Content: enum MixaProcessMarkerStatus (0/1/2) + struct MixaProcessMarkerResult (exit_code: i32, offsets/length: size_t)
+  
+- Translation to build/mixa/opencode/process_marker/header_check_2/header.c: SUCCESS (exit 0)
+  Generated C SHA256: BDBF24AF8379B73FE0DAF0E00E622741F053AA4271FBEDB681E3286CD3556088
+
+PROTOTYPE ATTEMPT:
+- Syntax: prototype: fn: mixa_process_marker_parse (const: @(char marker); size_t; ...) int end: prototype
+- Error at position 59 (second size_t after named char pointer): "parameter must be a frame"
+- hdr_combo.h.lm1 pattern uses struct references (@: Rect rect; size_t; size_t) which works
+- char array pointers (@(char)) with scalar size_t parameters in prototype context hits undocumented frame constraint
+- Attempted workarounds (all named, wrapper struct) failed; dropped for now
+
+GENERATED HEADER VALIDATES (self-contained, includes stdint):
+- No dependencies beyond stddef/stdint
+- Enum and struct ready for C consumer linkage
+- Prototype deferred; public function signature available in implementation .lm1
+
+NEXT: Implementation compilation + tiny C consumer test (no prototype needed for consumer).

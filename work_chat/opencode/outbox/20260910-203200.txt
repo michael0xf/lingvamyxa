@@ -1,0 +1,46 @@
+Ticket 20260910-203200: Source Recovery - Inspection Complete
+
+STATUS: BLOCKED - No usable source evidence found
+
+RECOVERY INVESTIGATION:
+
+1. Git history inspection:
+   - Repository exists: C:\Nyasha_Planet\lingvamyxa\ (git repo confirmed)
+   - File mixa_pointer_bounds_selftest.lm1: no Git history (file added after Git init or never committed)
+   - Result: Git read-only inspection not viable
+
+2. Conversation history search:
+   - Ticket 195400 (first PASS): Initial Read output truncated at line 50
+   - Offset limit reached; full 336-line content never displayed in this session
+   - Mentioned message ID msg_08d890ef3001iMvOgH4CS7tCpK (2100 chars, noted as "possibly partial")
+   - Result: Conversation history incomplete for full file reconstruction
+
+3. Generated artifacts inspection:
+   - Translated C file exists: build/mixa/opencode/pointer_bounds/mixa_pointer_bounds_selftest.c (18,388 bytes)
+   - Executable exists and passed tests previously
+   - Result: Cannot use C artifact per Codex directive "Prefer exact recovery, not reconstructed C port"
+
+4. OpenCode snapshot access:
+   - No API or tool access to read snapshot blobs at pinned session level
+   - Session ID available but snapshot retrieval not implemented in my toolset
+   - Result: Cannot access snapshot data
+
+EXACT MISSING EVIDENCE:
+- Complete 336-line .lm1 source file (lines 1-336, no truncation)
+- No accessible backup, Git history, or complete conversation history Read output
+- Generated C file exists but cannot be used per recovery rules
+
+HONEST ASSESSMENT:
+The file cannot be recovered using only:
+- Read-only Git inspection (no history exists)
+- Conversation history (truncated at line 50)
+- Generated artifacts (forbidden to use as source)
+- OpenCode snapshots (not accessible via available tools)
+
+RECOMMENDATION:
+1. Provide raw .lm1 file content from external backup/snapshot system, OR
+2. Provide complete Read output showing all 336 lines from prior session, OR
+3. Grant access to OpenCode snapshot blob retrieval API
+
+Pointer bounds work remains blocked until source is restored by external means.
+File status: 3 bytes corrupted, cannot proceed to boundary scenario work.

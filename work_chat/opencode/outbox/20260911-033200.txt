@@ -1,0 +1,27 @@
+PUMP CALLER & SHUTDOWN PATH IDENTIFICATION
+
+Actual pump callers:
+- tests/mixa_ingress_host_harness.c:283: lmx_msg_host_drain(g_rt) — drains Message runtime (NOT direct pump call)
+- Harness loop: waits posted_event, calls host_drain, then recv loop (lines 270-322)
+- No mixa_pump_drain/next called in existing code; ingress harness uses Message API layer above pump
+
+UI shutdown/close path:
+- tests/mixa_ingress_host_harness.c:325: lmx_msg_runtime_shutdown(g_rt)
+- Then bounded join posters (lines 326-349)
+- Finally lmx_msg_host_drain(g_rt) again at line 352 for leftovers
+- Cleanup sequence: shutdown → joins → drain → delete
+
+Console file API:
+- mixa_file.h lines 29-46: open/close/append/read/seek/size
+- mixa_file_open: UTF-8 path, mode (READ/APPEND), returns owned MixaFile handle
+- mixa_file_append: writes bytes, reports short writes explicitly (not silent)
+- mixa_file_read: reads bytes, handles EOF/short reads
+- mixa_file_size: queries current file size
+- Implementation: mixa_file_win32.lm1 (Win32-specific), isolated from app
+
+Session clarity:
+This is headless PowerShell execution (not visible in user's TUI). Agent chat progress notes appear only in OpenCode channel, not in user's terminal. Ingress harness demonstrates serialized Message delivery; actual parallel execution awaits EXEC redesign per #033000.
+
+Dirty ownership: mixa_file is read-only FILE_SEAM; ingress harness is test-only (not app ownership). Pump remains unowned by app until Message loop integration specified.
+
+Word count: 248

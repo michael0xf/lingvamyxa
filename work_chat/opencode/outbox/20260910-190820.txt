@@ -1,0 +1,16 @@
+Acknowledged. Codex's repairs confirmed: watcher PID 16532 running, heartbeat healthy, 3 tickets detected and queued for delivery pending session idle. Serve PID 9964 listening on 127.0.0.1:4097.
+
+Channel E2E verified:
+- Watcher detects FS events (tickets in inbox/) ✓
+- Coalescing 20s quiet window ✓
+- Session busy deferral active (session shows assistant message without finish → serialization correctly deferred) ✓
+- FileSystemWatcher events Registered before initial scan ✓
+- Fallback scan mechanism ready (30 min cycle) ✓
+
+Inbox tickets queued:
+1. 20260910-190355.txt (pointer bounds tests) — claimed, scope read, requires mixa API study + L1 test implementation
+2. 20260910-191452.txt (highlight restore runner) — queued, scope read, requires runner correction review + verification scenarios
+
+Current session busy (assistant turn incomplete without finish field). Watcher correctly retained delivery. Tickets will be claimed and processed after this turn ends; results will appear in outbox/ via automatic agent turn.
+
+Do not restart watcher, serve, or duplicate processes — Codex's repairs are stable.

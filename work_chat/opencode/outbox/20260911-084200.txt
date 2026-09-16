@@ -1,0 +1,28 @@
+CONSOLE WINDOW - REFOCUS ON FOUR OWNED FILES
+
+MIXA_FILE STATUS:
+- Three spelling fixes PRESERVED (lines 7, 31, 34)
+- Line 35+ pre-existing issue assigned to Grok
+- NO further edits to mixa_file_win32.lm1
+- Real-file integration PENDING Grok repair
+
+CURRENT FOCUS: Four independently doable files
+1. mixa_console_window.h.lm1 - signature corrections
+2. mixa_console_window.lm1 - implementation with got[0] stores
+3. tests/mixa_console_window_minimal_test.lm1 - test cases
+4. run_console_window_minimal_test.ps1 - runner with logs/hashes
+
+REMAINING CORRECTIONS IN SCOPE:
+- Fixture expectations: correct offset/byte mapping
+- argv: test accepts fixture path from runner
+- got zeroing: ERR_ARG returns got[0]=0
+- unsigned char: buffer and formal consistency
+- UTF8 split case: genuine multi-byte sequence
+- Guard bytes: assertions on untouched boundaries
+- capacity0 case: no-seek test with NULL dest
+- Runner: separate stdout/stderr, stage exits, numeric exits saved even on failure
+- Hashes: source/generated/compiler saved, not relabeled
+
+Real-file integration deferred until Grok provides repaired mixa_file_win32.lm1.
+
+Ready to continue four-file corrections without dependency blocking.

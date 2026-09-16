@@ -1,0 +1,41 @@
+EXTENDED PARSER TEST SUITE: 8 CASES, 32 CHECKS, 0 FAILURES ✓
+
+EXECUTION RESULT:
+Run: build/mixa/opencode/process_marker/run_20260910_231029_981_181a067d/
+Status: SUCCESS (exit 0)
+Output: "8 cases 32 checks 0 failures"
+
+CORRECTIONS APPLIED:
+
+1. Payload fixes:
+   - Test 1 (zero): restored original MARKER_1\t0\t/home/user (21 bytes, offset=11, cwd_len=10)
+   - Test 2 (+5): fixed to MARKER_1\t+5\t/x (14 bytes, offset=12, cwd_len=2)
+   - Test 3 (-5): fixed to MARKER_1\t-5\t/x (14 bytes, offset=12, cwd_len=2)
+   - Tests 4-5 (MAX/MIN): verified 22/23 bytes, offset=20/21, cwd_len=2
+   - Tests 6-8: independent sentinel initialization (each test sets -999/123/456)
+
+2. Parser fix (parse_int32):
+   - Apply sign to i64 magnitude BEFORE narrowing to i32
+   - Changed: if: sign<0 then magnitude:=0-magnitude (while i64), then cast once
+   - Eliminates undefined behavior on INT32_MIN (-2147483648)
+
+3. Test improvements:
+   - Removed unused test_valid stub function
+   - Added diagnostic labels to failures (actual vs wanted values)
+   - All assertions preserved
+   - Actual counter output (8 cases 32 checks, not hardcoded)
+
+FILES PRESERVED:
+- Header: unchanged (545EE9...)
+- Runner: unchanged (6D1B...)
+- Recovery snapshot: test_before_fixes.lm1
+
+SCOPE COMPLETE:
+- Full signed int32 range support validated
+- Overflow/underflow edge cases confirmed
+- Parser core functionality established
+
+PENDING (future work):
+- NULL result pointer handling
+- Additional malformed/grammar cases
+- Extended boundary testing

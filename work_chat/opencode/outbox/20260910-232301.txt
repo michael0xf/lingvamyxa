@@ -1,0 +1,54 @@
+FINAL MAIN COVERAGE: 26 CASES, 102 CHECKS, 0 FAILURES ✓
+
+EXECUTION:
+Run: build/mixa/opencode/process_marker/run_20260910_232401_244_3dac89d8/
+Output: "26 cases 102 checks 0 failures"
+Exit: 0
+Test source hash: 500A6E291B0396D95E292995C15492630403D24C4E981953A308D2235BBE9C3E
+
+FINAL THREE CASES ADDED (24-26):
+
+Case 24: Long digit overflow (40×'9')
+- Array: 52 bytes, marker+TAB(0-8), forty 9s(9-48), TAB(49), /(50), x(51)
+- Expected: MALFORMED (overflow), sentinels -999/123/456 preserved
+- Validates: digit accumulation ceiling enforcement
+
+Case 25: Long leading zeros + single digit (40×'0'+'7')
+- Array: 53 bytes, marker+TAB(0-8), forty 0s(9-48), 7(49), TAB(50), /(51), x(52)
+- Expected: OK, exit=7, offset=51, length=2
+- Validates: leading-zero acceptance, no arbitrary truncation
+
+Case 26: UTF-8 byte preservation (6-byte cwd)
+- Array: 17 bytes, "MARKER_1\t0\t" + [47,195,169,32,9,122] (/, UTF-8é, space, TAB, z)
+- Expected: OK, exit=0, offset=11, length=6
+- Memcmp verified: parser preserves exact bytes without UTF-8 validation/normalization
+- Validates: byte-accurate cwd extraction, no encoding assumptions
+
+COVERAGE COMPLETE:
+- 8 valid signed int32 range (±5, MAX, MIN, +0) ✓
+- 5 NULL/invalid-input pointer cases ✓
+- 6 grammar validation (marker, separators, format) ✓
+- 4 counted-buffer manipulation ✓
+- 3 final main cases (overflow, leading zeros, UTF-8 preservation) ✓
+- Total: 26 cases, 102 checks, all passing
+
+NO PARSER CHANGES REQUIRED:
+- Parser contract already handles all cases correctly
+- Long digits: overflow detection works
+- UTF-8: bytes preserved as-is (no validation policy)
+
+SNAPSHOT CREATED:
+- test_before_final_three_cases.lm1
+
+FROZEN FILES:
+- Header: 545EE9...
+- Runner: 5C4B057...
+- Module: CAFEAE94...
+
+REMAINING GAPS HONEST ASSESSMENT:
+- Multibyte cwd boundaries, extreme edge markers
+- Parser-spawning, file I/O integration
+- Stress/fuzz coverage
+- Not in PROCESS_SEAM pure L1 scope
+
+BASELINE PARSER VALIDATION: COMPLETE

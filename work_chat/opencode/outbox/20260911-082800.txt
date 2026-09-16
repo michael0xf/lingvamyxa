@@ -1,0 +1,37 @@
+CLARIFICATION ACKNOWLEDGED - AUTHORITY & METHODOLOGY
+
+Guidance received: Commit 090f3dd (PORT_OF_CLEARSHELL.txt, README, PROCESS_SEAM sections 6-7).
+
+AUTHORITY HIERARCHY CONFIRMED:
+1. Current mixa_manager requirements + user decisions (FIRST)
+2. ClearShell functional baseline (where requirements silent)
+3. NOT: revert desktop/UI deltas to Android behavior/colors/geometry
+
+REFERENCE CONFIRMATION:
+- Local copy: mixa_manager/clearshell_reference (90 files, byte-identical to gitlab_lmx checkout)
+- Untouched (read-only)
+- Source for baseline algorithms, business behavior, UI layout
+- User's reference path: C:\Nyasha_Planet\git\gitlab_lmx\mixa_manager\clearshell_reference
+
+METHODOLOGY AFFIRMED:
+- Most app work: independently testable L1 modules NOW (not Message-dependent)
+- Module characteristics: explicit owner/state, inputs/results, ordinary callable ops
+- Copyable/transferable future cross-owner payloads; isolated platform calls/OS handles
+- Message is concurrency integration, not business-logic blocker
+- No temporary C concurrency scheme or app mutexes
+
+CURRENT WORK:
+Finish 4-file console window task (053300 corrections, link mixa_file for test execution).
+
+NEXT PHASE:
+After current bounded coding:
+1. Identify small module slice using actual reference source/method
+2. Cite governing app requirement/delta
+3. List exact owned files
+4. Include explicit test cases
+5. Report concrete progress or actual blocker (not bulk-port)
+6. Seam checklist can accompany result (no need for separate ACK turn)
+
+Current 082100 update already reported: console window L1 translation SUCCESS, linker blocking test execution (mixa_file linking needed).
+
+Ready to proceed with current task completion.

@@ -1,0 +1,64 @@
+COUNTED-BUFFER CORRECTION: 23 CASES, 89 CHECKS, 0 FAILURES ✓
+
+EXECUTION:
+Run: build/mixa/opencode/process_marker/run_20260910_232156_146_1c4ffbdf/
+Output: "23 cases 89 checks 0 failures"
+Exit: 0
+Test source hash: 8FE91CA5589268BA14F03CED135A750C859DAAE5465C3AC7F7F0D2A98B766A2F
+
+IMPLEMENTATION FIX:
+
+Replaced pseudo-counted-array tests (20-23) with real L1 counted array:
+- Declaration: c.array: []: char counted 13
+- Allocation: actual 13 bytes on stack, not string literal storage
+- Operations: direct array indexing (counted[12]), memcpy with explicit length
+
+Test 20: Copy 13 bytes via memcpy("MARKER_1\t0\t/x", 13), parse len=13
+- Result: OK, exit=0, offset=11, length=2
+- Verifies: no NUL-terminator assumption, counted-length correctness
+
+Test 21: Same buffer, parse len=12 (truncate final byte)
+- Result: OK, exit=0, offset=11, length=1
+- Verifies: partial span handling within allocated array
+
+Test 22: Corrupt counted[12] to 0 (NUL byte), parse len=13
+- Result: MALFORMED, sentinels unchanged
+- Verifies: parser detects early NUL as invalid cwd field
+
+Test 23: Restore counted[12] to 120 ('x'), parse len=7
+- Result: NO_MATCH (payload too short), sentinels unchanged
+- Verifies: undersized buffer rejection before marker match attempt
+
+CHANGES FROM PREVIOUS ATTEMPT:
+
+1. Used real c.array: []: char counted 13 declaration (not string literal)
+2. Added #include "<string.h>" for memcpy
+3. Direct array indexing: counted[12] = value (not p22/p23 literals)
+4. memcpy with explicit 13-byte copy (no NUL terminator added)
+5. All tests reference @ counted[0] for parser calls
+
+NO ALLOCATOR/GLOBAL STATE/OUT-OF-BOUNDS:
+- Stack-allocated counted array (13 bytes)
+- All accesses within bounds (0-12)
+- No dynamic allocation
+- memcpy call with exact size
+
+SNAPSHOT CREATED:
+- test_before_real_counted_array.lm1
+
+FROZEN FILES:
+- Header: 545EE9... (unchanged)
+- Runner: 5C4B057... (unchanged)
+- Module: CAFEAE94... (unchanged)
+
+SCOPE VERIFIED:
+- 8 valid signed int32 range cases ✓
+- 5 NULL/invalid-input cases ✓
+- 6 grammar validation cases ✓
+- 4 real counted-buffer cases ✓
+- Total: 23 cases, 89 checks, all passing
+- All spans refer to actually allocated storage
+
+PENDING (next slice):
+- Long digit sequences (accumulated magnitude edge cases)
+- Exact UTF-8/space/tab byte preservation

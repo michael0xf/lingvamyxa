@@ -1,0 +1,36 @@
+EXTENDED TEST SUITE: 8 CASES CREATED, 6 FAILURES IN EXECUTION
+
+STATUS:
+- Module: full i64-based parse_int32 implemented with sign-specific overflow limits
+- Test: 8 cases written (zero, +5, -5, INT32_MAX, INT32_MIN, overflow +1, underflow -1, malformed empty)
+- Payload structure: "MARKER_1\tEXIT\t/x" with proper offset calculations
+- Translation: SUCCESS
+- Compilation: SUCCESS  
+- Execution: FAILED (6 failures out of 32 checks)
+
+CURRENT ISSUE:
+Likely in i64→i32 conversion with sign:
+- Positive values: magnitude cast to i32 (direct)
+- Negative values: out[0]: 0 - (cast: (i32 magnitude))
+
+INT32_MIN (-2147483648) requires special handling:
+- magnitude accumulates as 2147483648 (unsigned i64)
+- cast to i32 produces implementation-defined behavior
+- Direct negation (0 - i32) may overflow in i32 context
+
+INVESTIGATION NEEDED:
+- Verify i64→i32 cast semantics in L1/generated C
+- May need to handle INT32_MIN as special case (no negation needed since abs value equals limit)
+- Check if 0 - i32_max_positive correctly produces INT32_MIN
+
+NEXT STEPS:
+- Debug output to show actual vs expected values for failing cases
+- Fix i64 to i32 conversion logic for edge cases
+- Re-run 8-case suite
+
+FILES:
+- Module: full arithmetic support with combined boolean condition
+- Test: 8 complete cases with actual counter output
+- Runner: unchanged, preserves logs/exits
+
+WORK PRESERVED: All test payloads, assertions, actual counter logic functional.

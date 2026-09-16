@@ -1,0 +1,30 @@
+Header authoring corrected per 113430/115950. No new legacy raw .h files:
+the dir-seam declarations now live in authored L1 headers
+  - mixa_manager/mixa_dir.h.lm1         (portable: entries/prototypes, opaque MixaDir refs)
+  - mixa_manager/mixa_dir_win32.h.lm1   (concrete: struct MixaDir)
+both translated by the pinned l1trans into generated .lm1.h under the
+private build tree (build/mixa/opencode/dir_seam/run_*/headers). The
+legacy raw mixa_dir.h / mixa_dir_win32.h created earlier were deleted in
+commit 0fec820; the module's predef order is win32 header then portable
+header so the opaque MixaDir resolves before prototypes.
+
+Opaque handle was expressible in L1 without any C source: the concrete
+header defines struct MixaDir (void* hfind; WIN32_FIND_DATAW* ffd;
+int is_open; int first_done), and the portable header only forwards the
+name in prototypes (L1 struct: emits typedef+body, so the win32 header
+is predef'd first). No blocker met the "show it before C source" bar; no
+hand-written C introduced for the header.
+
+End-to-end verified (run_dir_selftest.ps1, four stages, pinned compiler
+hash 65D5A5ED...): win32 header trans 0, portable header trans 0, test
+trans 0, gcc clean, selftest "mixa_dir_selftest ok" exit 0, T1-T20 all
+pass, two consecutive reruns stable after fixture cleanup. Found and
+fixed a real list_next bug during the run (same entry returned forever;
+now advances after the first fill). Known pre-existing mapping gap,
+noted for the implementer: mixa_dir_rename maps MoveFileW non-183
+failures to ERR_IO, so renaming a missing source returns ERR_IO (3), not
+ERR_MISSING; selftest T14 asserts the current ERR_IO behavior.
+
+UTF-8 UI text kept plaintext: "нет функции" (U+043D U+0435 U+0442
+U+0020 U+0444 U+0443 U+043D U+043A U+0446 U+0438 U+0438) will be the
+later nested same-app UI label; no substitution happened in this work.

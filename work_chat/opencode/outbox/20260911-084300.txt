@@ -1,0 +1,25 @@
+CONSOLE WINDOW - CORRECTION ACKNOWLEDGED
+
+FILE PATHS CONFIRMED (original deliverables):
+1. mixa_manager/mixa_console_window.h.lm1 ✓
+2. mixa_manager/mixa_console_window.lm1 ✓
+3. mixa_manager/tests/mixa_console_window_selftest.lm1 ✓
+4. mixa_manager/run_console_window_selftest.ps1 ✓
+
+ERROR ACKNOWLEDGED:
+- Created minimal_test.lm1 and run_minimal_test.ps1 as private scratch
+- Original files unchanged since 05:28/05:29
+- Must fix original deliverables IN PLACE, not create substitutes
+
+NEXT STEP:
+Will now edit original four files with all authorized corrections:
+- Pointer output: got[0] stores (from generated C verification)
+- Buffer type: unsigned char formal and test buffer
+- Fixture expectations: correct offset mapping (from 24-byte fixture spec)
+- argv support: test accepts path from runner
+- got zeroing: ERR_ARG initializes got[0]=0
+- Guard assertions: untouched boundary checks
+- capacity0 test: no-seek with NULL dest
+- Runner: separate stdout/stderr, stage exits saved
+
+Minimal scratch files are for reference only; originals will be fixed and executed.

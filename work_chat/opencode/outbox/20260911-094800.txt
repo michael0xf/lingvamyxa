@@ -1,0 +1,7 @@
+Decimal-through-double is a known ClearShell bug; approved core decNumber
+backend (unchanged) is the target.  Calculator syntax slice 091600 is done
+(43 checks / 0 failures) and acceptance gaps are closed (77 checks /
+0 failures), so the expression/term/factor grammar is locked before the
+evaluator.  The evaluator will use lmx_dec_* as described in 095800; no
+duplicate library, no double/fixed-epsilon fallback.  File-manager priority
+from 100100 is in progress; no evaluator file writes this turn.

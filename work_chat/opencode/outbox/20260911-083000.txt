@@ -1,0 +1,32 @@
+CONSOLE WINDOW TASK - EXECUTION BLOCKER REPORT
+
+CORRECTIONS APPLIED:
+1. Buffer type: Changed from `char*` to `unsigned char*` (both formal and test)
+2. Guard assertion: Will preserve signed-char target safety (buf[8] != 0xAA on uchar)
+3. Runner structure: Prepared to link mixa_file_win32.lm1
+
+EXECUTION BLOCKER - mixa_file_win32.lm1:
+- Error: "pointer parameter missing name" at line 7:55
+- This is read-only file implementation (cannot edit per guidance)
+- Attempted to translate via existing runner pattern (run_process_marker_selftest.ps1)
+- Translation fails before linking stage
+
+STATUS:
+- Pointer output stores: FIXED (got[0] = ...) in generated C
+- Formal parameters: FIXED (unsigned char*)
+- Test logic: READY (fixture created, test.c generated)
+- Implementation: TRANSLATED (mixa_console_window.lm1 via predef'd header)
+- FILE API: BLOCKED (mixa_file_win32.lm1 syntax error, read-only file)
+
+NEXT ACTION REQUIRED:
+Either:
+1. Fix mixa_file_win32.lm1 line 7:55 pointer parameter name (requires write access)
+2. Use alternate file implementation (if exists)
+3. Mock minimal file operations for this bounded test
+
+Current run directory: build/mixa/opencode/console_window/run_minimal_<timestamp>_<guid>/
+- Fixture created and valid
+- Test.c generated and ready to compile
+- All generated C files and logs preserved for inspection
+
+This is a genuine tool/compiler blocker on read-only file, not methodology issue.

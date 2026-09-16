@@ -1,0 +1,88 @@
+Ticket 20260910-205000: Scenario 3 Cosmetic Fix + Scenario 4 Successful Boundaries - COMPLETED
+
+STATUS: PASSED - Case 1 comment fixed, Scenario 4 added with 4 successful boundary cases, test verified
+
+PART 1: COSMETIC CORRECTION (Scenario 3 Case 1)
+Comment and labels corrected from "row underflows" to "col underflows":
+  - Changed: "# Case 1: start(0,0), delta(-1,0) - row underflows (dy=-1 affects ROW)"
+  - To: "# Case 1: start(0,0), delta(-1,0) - col underflows (dx=-1 affects COL)"
+  - Updated printf label: "underflow-row" → "underflow-col" (all 4 assertions)
+  - Actual nudge call unchanged: mixa_pointer_nudge(p, -1, 0)
+
+PART 2: PRE-EDIT BACKUP
+Backup created before Scenario 4 addition:
+  - Location: build/mixa/opencode/pointer_bounds/recovery/
+  - File: mixa_pointer_bounds_selftest_505977655E5C9FE3.lm1
+  - Hash: 505977655E5C9FE312621735F9120D5F8EEDA425E76AB85BC748281EDD964BD8
+  - Prior backups preserved (not overwritten)
+
+PART 3: SCENARIO 4 - SUCCESSFUL BOUNDARY CASES (4 cases)
+Four successful nudges from positions one step away from underflow:
+
+Case 1: start(1,1), delta(-1,0) -> (1,0), octant LEFT
+  - Fixture: init(), move_to(1,1)
+  - Nudge: dx=-1, dy=0 (COL decrements validly)
+  - Expected: OK, position (1,0), octant LEFT, is_open=1
+  - Verified: row, col, octant, is_open all correct
+
+Case 2: start(1,1), delta(0,-1) -> (0,1), octant UP
+  - Fixture: init(), move_to(1,1)
+  - Nudge: dx=0, dy=-1 (ROW decrements validly)
+  - Expected: OK, position (0,1), octant UP, is_open=1
+  - Verified: row, col, octant, is_open all correct
+
+Case 3: start(1,1), delta(-1,-1) -> (0,0), octant UP_LEFT
+  - Fixture: init(), move_to(1,1)
+  - Nudge: dx=-1, dy=-1 (both decrement validly)
+  - Expected: OK, position (0,0), octant UP_LEFT, is_open=1
+  - Verified: row, col, octant, is_open all correct
+
+Case 4: start(0,0), delta(+1,+1) -> (1,1), octant DOWN_RIGHT
+  - Fixture: init(), move_to(0,0)
+  - Nudge: dx=+1, dy=+1 (both increment validly)
+  - Expected: OK, position (1,1), octant DOWN_RIGHT, is_open=1
+  - Verified: row, col, octant, is_open all correct
+
+TEST RESULTS:
+Build: SUCCESS (translation + compilation, gcc exit 0)
+Execution: SUCCESS (exit 0)
+Test output: mixa_pointer_bounds_selftest OK
+
+FINAL COUNTS (as expected):
+  Scenarios: 4 ✓
+  Member checks: 96 (was 80, +16 from 4 boundary cases × 4 field checks) ✓
+  API assertions: 62 (was 50, +12 from 4 cases × 3 assertions: init + move_to + nudge) ✓
+  Failures: 0 ✓
+
+FILE STATE:
+  Path: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1
+  Byte count: 21650
+  SHA256: B63EFD1929C33B8A853396DD8C64885CA5966F76D288B4F73457192E2B9827B6
+  Verified in run_summary.log ✓
+
+BACKUP PROGRESSION:
+  Initial recovery (ticket 204000): 0E914963787EC5D404E7125E31345996DB7609760231504B21F9B3C1AF1063E8
+  After scenario 3 + is_open: A2891DD0C05E1015763762C99E86854B5DC0E5C6766C5C64C17A174683E7B77C
+  Scenario 3 accuracy: F8CF389E811865F1EB5DD2C87DB47CABFB9AA8CB783075E1ECF14A4BA1BCF078
+  Pre-scenario 4 backup: 505977655E5C9FE312621735F9120D5F8EEDA425E76AB85BC748281EDD964BD8
+  Final (scenario 4): B63EFD1929C33B8A853396DD8C64885CA5966F76D288B4F73457192E2B9827B6
+
+IMPLEMENTATION DETAILS:
+- Scenario 3 Case 1: comment/labels corrected (col underflow, not row)
+- Scenario 4: 4 successful boundary cases with init/move_to/nudge counted separately
+- Each case verifies all 4 fields: row, col, octant, is_open=1
+- Consistent error handling: all failures checked with rc != MIXA_POINTER_OK or rc != MIXA_POINTER_ERR
+- Native exact Edit tool used only (no PowerShell regex/read-pipe-write)
+
+COMPLIANCE:
+✓ Comment corrected (cosmetic accuracy)
+✓ New pre-edit backup created with hash naming
+✓ Prior backups preserved (not overwritten)
+✓ No production/Git/shared build edits
+✓ No runner or framework changes
+✓ Native exact Edit tool only
+✓ Actual counts verified: 96 member, 62 API
+✓ Final hash verified matches run_summary
+
+NEXT ACTION:
+Scenario 4 boundary successes complete. Remaining work queued: SIZE_MAX/INT32 edge cases, move_to error conditions, released pointer state.

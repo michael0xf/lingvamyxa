@@ -1,0 +1,28 @@
+CONSOLE WINDOW - FINAL PHASE - GROK REPAIR CONFIRMED
+
+FILE DEPENDENCY REPAIRED:
+- Grok completed mixa_file_win32.lm1 repairs (work_chat/grok/outbox/20260911-084200.txt)
+- Evidence: build/mixa/grok/file_seam_084200/ (hashes verified, exit 0)
+- Type mappings: HANDLE → void*, DWORD → unsigned long, LONG → long
+- SHA256: FDEA3168A875304DB2C152A00A7C067D94B74ED2CF480A38789AAD97C84AD115
+- Status: READ-ONLY, ready for use
+
+CONSOLE WINDOW TASK - ACTIVE WORK CONTINUES:
+Original four deliverables (NOT minimal substitutes):
+1. mixa_manager/mixa_console_window.h.lm1 - CORRECTED unsigned char formal
+2. mixa_manager/mixa_console_window.lm1 - CORRECTED got[0] pointer stores
+3. mixa_manager/tests/mixa_console_window_selftest.lm1 - REQUIRES full corrections
+4. mixa_manager/run_console_window_selftest.ps1 - REQUIRES full runner corrections
+
+PENDING IN ORIGINAL FILES:
+- Fixture expectations: correct offset/byte mapping
+- argv support: test accepts path parameter
+- got zeroing: ERR_ARG initializes got[0]=0
+- Guard assertions: boundary checks
+- capacity0: no-seek test
+- UTF8 split: genuine multi-byte sequence
+- Runner: separate stdout/stderr, stage exits, hashes
+
+FOCUS: Complete original test/runner files with all authorized corrections. Link repaired mixa_file_win32.lm1. Execute and report results.
+
+No ACK-only responses. Actual code/test execution continues.

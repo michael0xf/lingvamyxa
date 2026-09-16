@@ -1,0 +1,25 @@
+READ-ONLY: CLEARSHELL ENTER BEHAVIOR vs PROCESS_SEAM §2
+
+ClearShell Implementation (clearshell_reference/com/mtk/shell/ClearShell.java):
+- enter() → pressChar("\n") at line 6425
+- pressChar(c) at 7321: replaces selection (start/end) with char, invalidates text
+- getLine() at 7365: extracts WHOLE line (finds \n before/after cursor, returns trimmed)
+- getSelectionStart/End: uses EditText cursors for current position
+
+Behavior: Enter replaces SELECTED TEXT with newline. If no selection, acts as insertion. Selection-based, not cursor-to-end-of-line.
+
+PROCESS_SEAM §2 (PROCESS_SEAM.txt line 20-23):
+"pressing Enter takes the line from its START up to the CURSOR, sends it plus a newline to the OS..."
+
+This is DIFFERENT: line-start-to-cursor + newline (not selection-based).
+
+Current mixa_manager state:
+- No Enter/command submission implemented yet (mixa_pump.lm1 has no such logic)
+- mixa_process_marker.lm1 parses exit status from output (backwards extraction)
+- No pure L1 helper for "extract line start to cursor" extraction exists
+
+Minimal test would verify: given text "cmd arg | more\nls -la" with cursor after "more", extract "cmd arg | more" (line start to cursor).
+
+Uncertainty: current exact UI text model (mixa_tiles, mixa_composite, mixa_pump) and whether cursor position tracked. Need UI architect review before proposing extraction helper.
+
+Status: Behavior identified in reference; implementation gap in mixa_manager confirmed. Deferred pending UI model clarity.

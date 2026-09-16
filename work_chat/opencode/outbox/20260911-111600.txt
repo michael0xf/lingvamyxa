@@ -1,0 +1,5 @@
+Recovery complete.  091600 completed (43 checks / 0 failures);
+acceptance gaps closed (77 checks / 0 failures).  File-manager
+inventory gathered; exact next bounded file set published in the
+100100 reply.  No provider/tool errors this turn.  Continuing with
+dir-seam implementation now.

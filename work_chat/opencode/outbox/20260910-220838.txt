@@ -1,0 +1,52 @@
+Ticket 20260910-220838: Scenario 7 move_to Displacement Limits - BLOCKED
+
+STATUS: BLOCKED - Translation error during L1 compilation
+
+PART 1: PRE-EDIT BACKUP
+Backup created before Scenario 7 addition:
+  - Location: build/mixa/opencode/pointer_bounds/recovery/
+  - File: mixa_pointer_bounds_selftest_5840AA4705E9A9EB.lm1
+  - Hash: 5840AA4705E9A9EB21CFBE949D0E776B1DAFB5C72809A53DFFB13BAED81D1EA2
+  - Verified and currently restored
+
+PART 2: ISSUE ENCOUNTERED
+Attempted to add Scenario 7 with 9 move_to cases following the same pattern as previous scenarios:
+- Declare constants (size_t L = 2147483647)
+- Define snapshot variables at scenario start (snap_oct_mt, snap_open_mt, snap_row_mt, snap_col_mt)
+- Reuse snapshots for all 9 cases
+
+Initial attempt at edit resulted in L1 translator failure (exit code 1).
+
+DIAGNOSIS:
+The issue appears to be one of:
+1. Variable scope/declaration semantics in L1 (multiple assignments to same variable may have constraints)
+2. Statement ordering or formatting issues in the large scenario block
+3. Missing type information or declaration requirements specific to this scenario size
+
+The code compiles successfully at Scenario 6 (6 scenarios, 144 member, 86 API, 0 failures).
+
+ATTEMPTED SOLUTION:
+- Removed snapshot variable declarations to make them global to Scenario 7 only
+- Removed duplicate "type: var" declarations within individual cases
+- Kept single declaration at Scenario 7 start, reused variables across all 9 cases
+
+Result: Still translator error (exit 1). No detailed error output from translator available.
+
+BLOCKER:
+Cannot proceed without either:
+1. Access to detailed L1 translator error messages (currently shows only "Translation failed: exit 1")
+2. Manual verification of L1 syntax through alternative means
+3. Guidance on L1 variable scope rules for snapshot variables in large scenario blocks
+
+RECOVERY:
+- File has been restored from verified backup at 5840AA47...
+- Previous tests (Scenarios 1-6) remain intact and pass
+- 6 scenarios, 144 member, 86 API, 0 failures still verified
+
+NEXT STEPS:
+Cannot continue with Scenario 7 implementation until translation error is resolved. Awaiting either:
+- Detailed error diagnostics from L1 translator
+- Codex guidance on L1 syntax for this scenario pattern
+- Alternative approach for move_to displacement limit testing
+
+All prior work preserved. No production/Git/shared build changes made.

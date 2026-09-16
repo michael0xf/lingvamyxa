@@ -1,0 +1,24 @@
+READ-ONLY ANALYSIS: NEXT PURE L1 HELPER
+
+Requirement & Location:
+PROCESS_SEAM §3 (mixa_manager/PROCESS_SEAM.txt) defines 6 operations: spawn, read, write, status, kill, close. Inventory (mixa_manager/PROCESS_FILE_PREP_INVENTORY.txt, 20260910-105600) states: "Process spawn/read/status sketch against PROCESS_SEAM §3 — still single-owner Message turns; no off-owner create/send/pump."
+
+Current state: mixa_process_marker.lm1 extracts exit status from in-band marker line; no spawn/read/write/status implementation yet. FILE_SEAM append/read/size done (mixa_file_win32.lm1); process I/O deferred pending EXEC pin.
+
+Proposed L1 Helper: mixa_process_spawn
+Purpose: Wrap OS spawn, validate startup success, return opaque handle or report failure (distinct from runtime exit).
+
+Files:
+- mixa_process.h: declare mixa_process_spawn(cmd, cwd, @result) → status (OK / SPAWN_FAILED / INVALID_ARG)
+- mixa_process_win32.h/.lm1: Win32 implementation (CreateProcess, handle wrapping, startup validation)
+- tests/mixa_process_spawn_selftest.lm1: 5 cases (valid cmd OK, missing cmd SPAWN_FAILED, null/empty args INVALID_ARG, cwd validation, close handle safely)
+
+API (pure L1, single-owner, no concurrency yet):
+```
+fn: mixa_process_spawn (const: @(char cmd); const: @(char cwd); @: MixaProcessHandle handle) int
+// Returns: OK, SPAWN_FAILED, INVALID_ARG. handle set only on OK.
+```
+
+Ownership: mixa_manager/process tasks. No conflicts with marker parser or file helpers. Deferred: read/write/status/kill (owned by future Message job integration, not L1 scope yet).
+
+Status: Planning phase only; no implementation/testing authorized in this ticket.

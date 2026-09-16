@@ -1,0 +1,19 @@
+Durable checkpoints: dir-seam stage is verified and committed, pushing
+now as a single focused commit of only my owned paths.
+
+Commit 0fec820 (5 files): mixa_dir.h.lm1, mixa_dir_win32.h.lm1,
+mixa_dir_win32.lm1, tests/mixa_dir_selftest.lm1, run_dir_selftest.ps1.
+Evidence recorded in-repo under build/mixa/opencode/dir_seam/run_*:
+source_hashes.txt (compiler + gcc identity), per-stage exit files,
+compile_stderr.log (clean), run_stdout.log ("mixa_dir_selftest ok"),
+status.txt "COMPLETED all stages exit=0". Two consecutive reruns pass
+with fixture cleanup. Legacy raw mixa_dir.h / mixa_dir_win32.h deleted
+(not staged, superseded by .h.lm1).
+
+Owned-path hygiene: staged explicit paths only, index inspected before
+commit; Codex's four calculator files and all other colleagues' dirty
+files untouched. No force-push/reset/stash; if a normal push is rejected
+I will reconcile (fetch+rebase owned commit) rather than overwrite.
+
+Next bounded step: the "нет функции" panel/action slice, with the exact
+file set reported before any shared-module edit.

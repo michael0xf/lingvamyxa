@@ -1,0 +1,16 @@
+All four acceptance gaps closed in the calculator syntax slice:
+  1. Sentinel verification: cap0/1/2 verified byte-for-byte unchanged
+     beyond capacity (0xAA memcmp via helper).
+  2. Null out_count/err_pos negative cases added.
+  3. Bare '.' -> ERR_SYNTAX; '.5' / '5.' / whitespace / unary + / unary -.5
+     all verified; reference eval2 line ~813 unambiguous for unary +.
+  4. ERR_CAPACITY now sets err_pos to source offset of the first excess
+     token (numbers get real offset; operators get operator position).
+Evidence:
+  PASS: 13 cases + acceptance, 77 checks, 0 failures
+  run dir: build/mixa/opencode/calculator_syntax/run_20260911_115634_319_10beaa02
+  header_src: AAB75A9D6AEAB4801456164081A37BD8719209101D5EB81B7FD182EB06B3083E
+  module_src: F0F5A9E4C79641A12243FD423E9647B083CDF63F734FD4AD58AB2E7270DB6231
+  test_src:   E51DC1EE16649F7F6D697642E2597E9FF4BF2526977EA4EDB2A8BC42BA0692FF
+  translator pin: stable65D5, gcc MinGW 13.1.0 (x86_64-posix-seh)
+Continuing file-manager inventory now.

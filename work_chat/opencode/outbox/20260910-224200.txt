@@ -1,0 +1,32 @@
+RUNNER CORRECTIONS APPLIED: SYNTAX VERIFIED
+
+CORRECTED RUNNER SHA256: 752C8A3EA43B9A2A703934619144B385561A157C0A8BA7793211F587DCE9971A
+
+CORRECTIONS APPLIED (from 6D1B...):
+
+1. Path resolution: $RepoRoot = Split-Path -Parent $PSScriptRoot (one parent, not two)
+   - Validates mixa_manager directory exists before work
+   
+2. Removed Remove-Item line (line 54 in previous) that deleted translation evidence
+   
+3. WorkingDirectory explicit: Added -WorkingDirectory $RepoRoot to all Start-Process calls
+   
+4. Error handling: Initialize $Stage/$Status before work; wrap work in try/catch
+   - Failures logged with stage and reason
+   - Summary persisted in finally (always written, even on failure)
+   - No unrun stages labeled SUCCESS
+   
+5. Exit code files: Save numeric exit codes to separate files
+   - trans_exit.txt, compile_exit.txt, test_exit.txt
+   
+6. File hashing: Hash compiler/header/implementation/test/runner
+   - Each saved to separate file in logs/
+   
+7. Unique run directory: timestamp+GUID format (run_YYYYMMDD_HHmmss_fff_GUID)
+   
+8. Summary always persisted in finally block with status/stage/reason/all log paths
+
+SYNTAX CHECK: PASSED (no errors)
+
+READY FOR NEXT: Two baseline test cases (zero exit valid, malformed preserving fields).
+Parser/test defects remain pending.

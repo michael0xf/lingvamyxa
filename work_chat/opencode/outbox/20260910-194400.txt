@@ -1,0 +1,105 @@
+Ticket 20260910-194400: Negative Evidence Verification
+
+STATUS: COMPLETED - FILES VERIFIED ON DISK
+
+ISSUE RESOLVED:
+Previous Copy-Item command used -ErrorAction SilentlyContinue which suppressed failure. Root cause: relative path resolution in catch block combined with error suppression. Fix: Use -ErrorAction Stop to expose errors, use -LiteralPath for explicit path handling.
+
+VERIFICATION TEST 1: Negative case (missing translator) in child process
+
+Command executed:
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Nyasha_Planet\lingvamyxa\mixa_manager\run_highlight_restore_selftest.ps1" -TranslatorPath "C:\nonexistent\translator.exe"
+
+Working directory: C:\Nyasha_Planet\lingvamyxa
+
+Child process exit code: 1 (captured)
+
+Child process stdout:
+  ERROR: Translator not found: C:\nonexistent\translator.exe
+
+Assertions verified:
+  ✓ Child exit code: 1 (nonzero)
+  ✓ Stage: preflight (native stage preserved)
+  ✓ Status: FAILED
+
+Files created in negative directory:
+  
+  File: C:\Nyasha_Planet\lingvamyxa\build\mixa\antigravity\highlight_restore\negative\run_summary.log
+  Length: 328 bytes
+  SHA256: 8FFF6B338764E1D8308869FB9F7282A4085B08F557A376938F330B778A5F3507
+  
+  Content:
+    Status: FAILED
+    Failed-At: 2026-09-10T22:44:27.7552276Z
+    Stage: preflight
+    Exit-Code: 1
+    Translator: C:\nonexistent\translator.exe
+    Compiler-SHA256: unknown
+    TestSource-SHA256: unknown
+    Runner-SHA256: unknown
+    MixaHighlight-LM1-SHA256: unknown
+    MixaHighlight-H-SHA256: unknown
+    Detail: Translator not found: C:\nonexistent\translator.exe
+
+VERIFICATION TEST 2: Final normal PASS case, verify negative files persist
+
+Command executed:
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Nyasha_Planet\lingvamyxa\mixa_manager\run_highlight_restore_selftest.ps1"
+
+Working directory: C:\Nyasha_Planet\lingvamyxa
+
+Exit code: 0
+
+Test output:
+  Scenario 3: Repeated cycles (stale snapshot reuse prevention)
+  mixa_highlight_restore_selftest: scenarios=3 member_checks=8160 api_assertions=22 failures=0
+  mixa_highlight_restore_selftest OK
+  All stages completed successfully.
+
+Negative files after normal PASS:
+
+  File: C:\Nyasha_Planet\lingvamyxa\build\mixa\antigravity\highlight_restore\negative\run_summary.log
+  Status after normal run: EXISTS (not overwritten)
+  Length: 328 bytes
+  SHA256: 8FFF6B338764E1D8308869FB9F7282A4085B08F557A376938F330B778A5F3507
+  
+  ✓ Negative files preserved after normal PASS
+
+RUNNER HASH VERIFICATION:
+
+  Updated runner file SHA256: 526915E6E60E2E73159F44E1CBA2C3B46742EA9920A3C1FE070073C6FA6EA98F
+  Recorded in final run_summary.log: 526915E6E60E2E73159F44E1CBA2C3B46742EA9920A3C1FE070073C6FA6EA98F
+  
+  ✓ Hash match verified (runner frozen, no edits after final run)
+
+ROOT CAUSE ANALYSIS:
+  Error was in catch block line 182: Copy-Item $runSummaryLog (Join-Path $negDir "run_summary.log") -ErrorAction SilentlyContinue
+  
+  Issue: -ErrorAction SilentlyContinue suppressed all errors without providing feedback
+  Fix: Changed to -ErrorAction Stop with explicit -LiteralPath for path resolution
+  
+  Updated line:
+    $negSummaryPath = Join-Path $negDir "run_summary.log"
+    Copy-Item -LiteralPath $runSummaryLog -Destination $negSummaryPath -ErrorAction Stop
+
+COMPLIANCE:
+✓ No production code edited
+✓ No shared runners modified
+✓ No Git commits
+✓ No PATH/compiler modifications
+✓ Isolated build directory only
+✓ Negative evidence now EXISTS on disk
+✓ Native stage/exit-code tracking preserved
+✓ Hash frozen and verified
+✓ All previous replies intact
+
+EVIDENCE SUMMARY:
+  Source: build/mixa/antigravity/highlight_restore/negative/run_summary.log (328 bytes)
+  SHA256: 8FFF6B338764E1D8308869FB9F7282A4085B08F557A376938F330B778A5F3507
+  Status: FAILED
+  Stage: preflight
+  Exit-Code: 1
+  Preserved after normal PASS: Yes
+
+RUNNER ACCEPTANCE FINAL: Complete and verified on disk.
+Pointer bounds work (ticket 20260910-190355) now eligible for execution.

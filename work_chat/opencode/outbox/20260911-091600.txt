@@ -1,0 +1,84 @@
+# opencode reply: calculator_syntax four-file slice EXECUTED (recovered)
+
+Recovery note: a prior turn for this ticket terminated at 09:27:53 with an API
+provider error after in-progress source edits were made but not verified. This
+reply completes that claimed ticket. No calculator evaluator was started.
+
+## Files owned (exactly the 4 authorized NEW files, created under mixa_manager)
+
+  mixa_manager/mixa_calculator_syntax.h.lm1          (new)
+  mixa_manager/mixa_calculator_syntax.lm1            (new)
+  mixa_manager/tests/mixa_calculator_syntax_selftest.lm1  (new)
+  mixa_manager/run_calculator_syntax_selftest.ps1    (new)
+
+All four were verified absent before creation. No existing file, no other
+agent's dirty file, and no core/stable/compiler file was touched. Compiler
+used read-only (pinned hash below).
+
+## Scope implemented (per ticket 20260911-091600)
+Numeric-arithmetic SYNTAX module only - no numerical evaluation, no
+double/BigDecimal conversion. Produces a bounded postfix operation stream in
+caller-provided storage.
+
+- API: mixa_calc_syntax_parse(expr, expr_len, out, capacity, out_count, err_pos)
+  -> int (MixaCalcSyntaxStatus).
+- Op record struct MixaCalcOp { int kind; size_t offset; size_t length; },
+  kind enum MixaCalcOpKind (NUMBER/ADD/SUB/MUL/DIV/POW/NEG).
+- Number tokens retain exact source offset+length and the original lexeme is
+  preserved verbatim in the caller's expression buffer (no atof/strtod).
+- Grammar ported from ClearShell eval2() (ClearShell.java) with reference
+  behaviour preserved: expression(+/-) -> term(*,/,^ at same precedence,
+  plainly LEFT-associative) -> factor(unary +/-, parens, numbers). Reference
+  permissive unclosed-paren behaviour (eat(')') result unchecked) is preserved
+  and explicitly asserted by a test case.
+- Statuses: OK/ERR_ARG/ERR_CAPACITY/ERR_SYNTAX/ERR_UNSUPPORTED. Capacity
+  failure emits zero tokens beyond current count (by-design checked BEFORE each
+  write, so storage is never partially overwritten).
+- Unsupported constructs (letters/high bytes: variables, functions, degree
+  postfix) return ERR_UNSUPPORTED with err_pos.
+
+## Test evidence (real run, saved)
+Run dir: build/mixa/opencode/calculator_syntax/run_20260911_111901_638_01e59c98/
+Result:  PASS: 13 cases, 43 checks, 0 failures   (test exit 0)
+Status:  "COMPLETED all stages exit=0"
+Source hashes (source_hashes.txt):
+  compiler: 65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936 (pinned, unchanged)
+  header_src: D6BDA577473DCA2940777E022A20881D836F545788FE9D1199D94AA2A78C06CF
+  module_src: BB48B4049423FD4CFA1B2414CDFDC2D1B503598753361FF5E7D121CDDD95B136
+  test_src:   26E0068B678C2934D51D1BC863538D4BC58FB1F7C169161E41AAE5FCDBF79B13
+  runner_src: 5C83AB0BC3556E0C12BD8934CD1226704718228160D67C6D526631CCDB94D5C9
+  exe: 17FE74B8BAA52534A64229AD0120278063274EAAF219DE299A3EB511BE8609DE
+  gcc: MinGW 13.1.0 (x86_64-posix-seh)
+
+## Cases covered (13 cases / 43 checks)
+- NULL arg guards (NULL expr, NULL out) -> ERR_ARG.
+- "2+3*4" -> 2 3 4 * + (term binds tighter than expression).
+- "2^3^2" -> 2 3 ^ 2 ^ (left-associative; ^ at */ precedence, no right-fold).
+- "2*3^2" -> 2 3 * 2 ^ (same-precedence left-to-right chain, single loop).
+- "-2^2" -> 2 NEG 2 ^ (unary binds in factor before ^).
+- "(2+3)*4" -> 2 3 + 4 * (nested parens).
+- "0.1+0.2" -> lexemes preserved EXACTLY as source spellings with offsets.
+- "2 3" -> ERR_SYNTAX at pos 2 (trailing garbage).
+- "2+" -> ERR_SYNTAX (dangling operator / factor at end of input).
+- capacity=1 on "2+3" -> ERR_CAPACITY, count stops at last emitted token (1),
+  storage not overwritten beyond capacity.
+- "x+2" -> ERR_UNSUPPORTED at pos 0 (variable/letter).
+- "sin(2)" -> ERR_UNSUPPORTED (function name).
+- "90\xC2\xB0" (degree postfix UTF-8) -> ERR_UNSUPPORTED.
+- "(2+3" (reference-permissive unmatched paren) -> OK, 3 tokens (preserved
+  ported behaviour, asserted; noted in test comment).
+
+Accessor note: the module also defines mixa_calc_op_kind(ops, idx) and
+mixa_calc_op_lexeme_eq(expr, ops, idx, expected) because L1 backslash field
+access on an index expression emits scalar '->' (invalid); these helpers keep
+callers safe. Identical latent issue found and fixed inside mc_emit (local
+pointer 'slot').
+
+Runner hardening (same pattern as console window): per-stage stdout/stderr,
+numeric exit files, NOT_LAUNCHED on launch failure, *_command.txt, status.txt,
+pinned compiler guard, MIXA_TEST_GCC_OVERRIDE support.
+
+## Status
+Calculator syntax slice COMPLETE. No evaluator started (per 100100/111600:
+user priority is file manager next). Next bounded slice proposal + file-manager
+inventory will follow separately.

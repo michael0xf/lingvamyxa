@@ -1,0 +1,40 @@
+READ-ONLY INTEGRATION MAP: MESSAGE DELIVERY INTO MIXA_MANAGER
+
+CURRENT WIRING (Single-owner serial execution):
+
+1. UI-affine Message stepping:
+   - mixa_pump.lm1:6 mixa_pump_open() initializes pump\inbox (event FIFO)
+   - mixa_pump.lm1:23 mixa_pump_drain(pump, backend) polls backend, pushes non-NONE events to pump\inbox
+   - mixa_pump.lm1:63 mixa_pump_next(pump, out) yields one event from inbox FIFO
+   - Backend poll: mixa_backend_win32.lm1, mixa_backend_headless.lm1 (isolated per-backend poll logic)
+   - Ingress harness: tests/mixa_ingress_host_harness.c demonstrates lmx_msg_host_post (V0 serial foreign→owner)
+
+2. File operations:
+   - mixa_file_win32.lm1 (append/read/size verified per PROCESS_FILE_PREP_INVENTORY)
+   - No background job Message wiring yet; file ops are blocking/local only
+
+3. Result delivery & cancellation:
+   - NOT YET IMPLEMENTED in application layer
+   - Message protocol outline exists (lmx_message.h/lmx_message_host.h) but not integrated into app event loop
+
+MISSING PIECES:
+
+1. Background job Message creation: No spawn/create of child Message for file/list operations
+2. Request/reply correlation: Ingress harness posts bytes; no handler routing or reply outbox wiring
+3. Job cancellation: No cancel message acceptance or turn-boundary interrupt
+4. Orderly shutdown: No child close sequence; Message ingress chain incomplete
+5. Owner side of conversation: App never sends to child inboxes (only receives foreign posts into owner)
+
+SMALL PROPOSED TICKET (when EXEC contract available):
+
+Phase 1: Add file-operation Message job stub
+- Owned files: mixa_manager/mixa_message_files.h/.lm1 (NEW, non-overlapping)
+- Integration point: pump event loop (mixa_pump.lm1) adds Message turn boundary after drain
+- Contract: one file job Message (list directory stub), receives append request in one turn, sends back status/data in reply
+- Tests: 3 cases (valid dir list, permission deny via reply, cancel during list)
+- Does NOT change backend/pump core; wraps on top via Message boundary
+- Depends on: EXEC pin (create/send/drive/recv API finalized)
+
+This preserves single-owner pump stepping while demonstrating multi-Message architecture required before parallel workers.
+
+Word count: 347

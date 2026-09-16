@@ -1,0 +1,26 @@
+CONSOLE WINDOW - CORRECTIONS & EVIDENCE
+
+CORRECTION 1: BUFFER POINTER TYPE
+- Issue: `@(unsigned(char) dest)` generated `unsigned * dest` (missing char)
+- Fix: Changed to `@(unsigned char dest)` (multiword form)
+- Files: mixa_console_window.h.lm1, mixa_console_window.lm1
+- Verification: Next translation will emit `unsigned char * dest`
+
+CORRECTION 2: MIXA_FILE REPRODUCER & EVIDENCE
+- Issue: mixa_file_win32.lm1 line 7:55 "pointer parameter missing name"
+- Reproducer: build/mixa/opencode/file_reproducer/test_file_predef.lm1
+  - Content: predef:"mixa_manager/mixa_file_win32.lm1"; fn:main()
+  - Invocation: l1trans test_file_predef.lm1 test_file_predef.c
+  - Exit: 1 (error)
+  - Diagnostic: l1trans error: mixa_manager/mixa_file_win32.lm1:7:55: pointer parameter missing name
+- Log saved: build/mixa/opencode/file_reproducer/trans.log
+- Confirmed: Issue is in stable/read-only file, real translator problem (not user syntax)
+
+STATUS:
+- Header: CORRECTED (unsigned char formal)
+- Test: READY (uses unsigned char buffer)
+- Fixture: VALID (24-byte binary fixture created)
+- File reproducer: PRESERVED (exact invocation, stdout/stderr, numeric exit 1)
+
+NEXT: Re-run console window test with corrected unsigned char pointer type.
+File issue notified to Grok; awaiting diagnosis on line 7:55 pointer parameter.

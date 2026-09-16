@@ -1,0 +1,149 @@
+Antigravity file-drop chat
+==========================
+
+Root (this machine):
+
+    C:\Nyasha_Planet\lingvamyxa\work_chat\antigravity\
+
+    inbox\      user / colleagues -> antigravity  (incoming tasks and messages)
+    outbox\     antigravity -> user / colleagues  (completed replies)
+    seen\       claim markers, using the incoming filename
+    heartbeat   watcher health and process information
+
+Encoding: UTF-8 without BOM.
+Line endings: LF (preferred) or CRLF.
+
+Filename (id)
+-------------
+
+    YYYYMMDD-HHMMSS.txt
+
+Local 24-hour timestamp (matching repository convention). If two files share a second:
+
+    YYYYMMDD-HHMMSS-mmm.txt
+
+Example: 20260910-181500.txt
+
+No spaces. No paths in filename. Same basename in inbox\, seen\, and outbox\.
+
+Request body (inbox)
+--------------------
+
+The entire file is the incoming task or message.
+Optional first line tag:
+
+    # antigravity-chat-v1
+
+If present, the tag is stripped when processing; if absent, the whole file is the request.
+
+Reply body (outbox)
+-------------------
+
+Same basename as request. The entire file contains Antigravity's completed answer.
+Write the reply only when complete: write to a temporary file in outbox (e.g. <basename>.tmp),
+then atomically rename to <basename>. Never leave half-written files in outbox.
+Never overwrite an existing reply without explicit conflict resolution.
+
+Lifecycle
+---------
+
+1. Sender writes incoming message to inbox\ (e.g. writing inbox\<id>.tmp then atomically
+   renaming to inbox\<id>.txt).
+2. Watcher detects completed inbox\<id>.txt with neither a matching seen\<id> marker
+   nor a completed outbox\<id> reply.
+3. Antigravity atomically claims the task by creating seen\<id>.
+   If seen\<id> already exists, another turn or worker claimed it: skip immediately.
+4. Antigravity reads inbox\<id>, executes authorized work.
+5. Antigravity writes reply to outbox\<id>.tmp, flushes, and renames to outbox\<id>.
+6. Never delete or modify the original inbox\<id> file.
+7. Post a short English progress note in chat during long tasks, and "answered <id>"
+   upon completion.
+
+Restart and Reconciliation
+--------------------------
+
+A claim marker in seen\ is NOT proof of completion. Proof of completion is outbox\<id>.
+If the agent or watcher restarts:
+1. Identify any claimed-but-unanswered tickets (present in seen\ but absent in outbox\).
+2. Reconcile their status before resuming:
+   - Check if work was partially performed or an outbox.tmp exists.
+   - Do not blindly repeat potentially destructive work.
+   - If blocked or ambiguous, write an explicit blocker report / question to outbox\<id>.
+
+Hybrid Watcher
+--------------
+
+Watch YOUR inbox (work_chat\antigravity\inbox\), not outbox. Colleagues watch your outbox.
+
+1. Immediate Detection (Windows FileSystemWatcher):
+   - Watches inbox\ only, without subdirectories.
+   - Observes Created, Renamed, and Changed events.
+   - Accepts only *.txt files; ignores temporary files (*.tmp, .*).
+   - Handles .tmp -> .txt renames to support atomic drop.
+   - Subscribes to Error events (event-buffer overflow) and initiates an immediate rescan.
+   - Subscribes to events BEFORE the initial directory scan on startup.
+   - Event callbacks only signal pending work; they never execute tasks themselves.
+   - Coalesces notifications over 20 seconds of quiet. If new relevant events arrive
+     during settling, the 20-second quiet window resets.
+   - Deduplicates by ticket filename using inbox/seen/outbox state.
+
+2. Fallback Recovery Scan (Every 30 minutes):
+   - Independent timer scan every 30 minutes (and on startup / post-error).
+   - Discovers any completed inbox/*.txt lacking seen\ or outbox\.
+   - An empty scan produces NO notifications, NO doorbell triggers, and does NOT wake the AI.
+
+Independent Heartbeat
+---------------------
+
+Maintained by the background helper process in C:\Nyasha_Planet\lingvamyxa\work_chat\antigravity\heartbeat.
+Updates approximately once per minute (~60s), even when inbox is empty and even while
+a task is being processed by the agent.
+
+Format:
+    alive <UTC_TIMESTAMP> <status>
+    pid=<PID> started=<UTC_STARTED> script=<SCRIPT_PATH>
+    status=healthy events_handled=<N> last_event=<UTC_TIMESTAMP>
+
+A fresh heartbeat proves the helper process is alive; it does not prove the AI agent
+is responsive.
+
+Actual Agent Wakeup
+-------------------
+
+FileSystemWatcher detects disk events; it does not inherently wake an AI model.
+In the Antigravity CLI (`agy`):
+- The model executes in an interactive session governed by an event loop.
+- The CLI natively resumes execution when a background task (initiated via run_command)
+  exits, delivering a high-priority system message to the agent context.
+- External Windows processes cannot inject keystrokes or synthetic turns into the CLI
+  without an active harness task or user input.
+- Therefore, within an active Antigravity session, the agent keeps an internal background
+  listener task armed (wait_doorbell). When the persistent watcher finishes settling (20s)
+  and confirms new unseen work, it touches .doorbell. The listener task exits, triggering
+  an automatic agent turn without manual user intervention.
+- If the session was restarted or idle without an armed background task, filesystem detection
+  continues via the persistent watcher, but model processing will resume upon the next turn
+  or session restart.
+
+Process Management
+------------------
+
+Only ONE persistent watcher helper instance may run.
+The watcher helper runs in the background with hidden windows (-WindowStyle Hidden).
+
+Startup:
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\Nyasha_Planet\lingvamyxa\work_chat\antigravity\watch_antigravity.ps1" -WindowStyle Hidden
+
+Shutdown:
+    $pidFile = "C:\Nyasha_Planet\lingvamyxa\work_chat\antigravity\.pid"
+    if (Test-Path $pidFile) {
+        $wpid = [int](Get-Content $pidFile)
+        Stop-Process -Id $wpid -Force -ErrorAction SilentlyContinue
+    }
+
+Colleague vs User Communication
+-------------------------------
+
+- Peer agents (Claude, Grok, Cursor): English.
+- User: Russian.
+- Chat announcements: short English progress notes, and "answered <filename>".

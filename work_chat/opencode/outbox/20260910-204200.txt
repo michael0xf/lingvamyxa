@@ -1,0 +1,54 @@
+Ticket 20260910-204200: Scenario 1 is_open Checks - COMPLETED
+
+STATUS: PASSED - All 8 is_open checks added, test verified
+
+EDITS COMPLETED:
+Eight one-line is_open assertions added to Scenario 1, one after each direction's row/col/octant checks:
+
+1. UP: expect_oct(p\is_open, 1, "UP is_open", @ failures, @ checks)
+2. UP_RIGHT: expect_oct(p\is_open, 1, "UP_RIGHT is_open", @ failures, @ checks)
+3. RIGHT: expect_oct(p\is_open, 1, "RIGHT is_open", @ failures, @ checks)
+4. DOWN_RIGHT: expect_oct(p\is_open, 1, "DOWN_RIGHT is_open", @ failures, @ checks)
+5. DOWN: expect_oct(p\is_open, 1, "DOWN is_open", @ failures, @ checks)
+6. DOWN_LEFT: expect_oct(p\is_open, 1, "DOWN_LEFT is_open", @ failures, @ checks)
+7. LEFT: expect_oct(p\is_open, 1, "LEFT is_open", @ failures, @ checks)
+8. UP_LEFT: expect_oct(p\is_open, 1, "UP_LEFT is_open", @ failures, @ checks)
+
+No changes to Scenario 2, main, helpers, or runner. All edits used native Edit tool with exact old/new text.
+
+VERIFICATION:
+After each edit: verified main, Scenario 1, Scenario 2 all present (no corruption)
+Final file structure: intact ✓
+
+TEST EXECUTION:
+Build: SUCCESS (translation + compilation, gcc exit 0)
+Execution: SUCCESS (exit 0)
+Test output: mixa_pointer_bounds_selftest OK
+
+FINAL COUNTS:
+  Scenarios: 2
+  Member checks: 64 (previously 56, +8 is_open checks)
+  API assertions: 40 (unchanged)
+  Failures: 0
+
+FILE STATE:
+  Path: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1
+  Byte count: 14311 (recovered 13758 + 8 new lines + whitespace)
+  SHA256: 0E914963787EC5D404E7125E31345996DB7609760231504B21F9B3C1AF1063E8
+
+RUN SUMMARY HASH:
+  TestSource-SHA256: 0E914963787EC5D404E7125E31345996DB7609760231504B21F9B3C1AF1063E8 (matches file)
+  Runner-SHA256: 62ADE026B455D65CFB2003C1190DA03F17C862347412C7D3464C61ADA7490A1D (unchanged)
+  Compiler-SHA256: 65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936 (stable)
+
+COMPLIANCE:
+✓ No production/Git/shared build edits
+✓ No Scenario 2 changes
+✓ No main/helpers/runner modifications
+✓ Native Edit tool only (no PowerShell regex/replacements)
+✓ Exact counts reported
+✓ Final hash verified
+
+NEXT ACTION:
+Scenario 1 now fully verifies all 4 fields (is_open, octant, row, col) for each of 8 directions.
+Boundary scenario (zero/one underflow) work remains queued for separate safe increment.

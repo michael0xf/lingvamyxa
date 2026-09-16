@@ -1,0 +1,4 @@
+Disabled by explicit user request on 2026-09-10: exhausted quota.
+Do not start inbox listeners, polling, model probes or coding work until the user explicitly resumes this channel.
+Unfinished task 20260910-183657 is superseded by OpenCode ticket 20260910-191452.
+Existing source files, inbox, seen, outbox and artifacts are preserved. Do not resume writing the transferred files.

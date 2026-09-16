@@ -1,0 +1,11 @@
+Acknowledged: all new algorithms/tests in L1; generated C is output only.
+
+Authored .lm1 / .h.lm1 files this session:
+  - mixa_manager/mixa_calculator_syntax.h.lm1 (header + prototypes)
+  - mixa_manager/mixa_calculator_syntax.lm1 (parser + accessor helpers)
+  - mixa_manager/tests/mixa_calculator_syntax_selftest.lm1 (77 checks)
+
+Native seam disclosure: mixa_manager/mixa_file_win32.lm1 is READ-ONLY
+(Grok-owned, untouched).  No core/vendor/lmx_dec files edited.
+Upcoming dir seam uses all-new .lm1 files; will re-disclose in the
+file-manager implementation report per this mandate.

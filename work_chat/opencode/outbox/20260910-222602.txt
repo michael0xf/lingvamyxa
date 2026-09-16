@@ -1,0 +1,54 @@
+PROCESS MARKER IMPLEMENTATION - CRITICAL ISSUES IDENTIFIED
+
+STATUS: BLOCKED - Multiple implementation defects require incremental correction
+
+ISSUES (per read-only code review findings):
+
+1. HEADER MISSING: mixa_process_marker.h does not exist. Requires:
+   - Proper .h.lm1 with struct field definitions (pattern: hdr_aggregate.h.lm1)
+   - Predef chain in test (pattern: hdr_predef_consumer.lm1)
+   - All code must be translated/compiled, not C-header fallback
+
+2. TEST MEMORY BUG:
+   - result/initial_result pointer aliasing (result: initial_result assigns reference, not copy)
+   - @result adds another level (pointer to pointer error)
+   - Need struct value semantics with fieldwise sentinel setup
+   - Reference: existing struct test patterns in codebase
+
+3. PAYLOAD LENGTH ERRORS:
+   - Test fixtures have wrong byte counts: "MARKER_1\t0\t/home/user" is 21 bytes total, not 17
+   - CWD offset is 10 bytes from start, not 11
+   - CWD length is 10 bytes, not 7
+   - Accidental NUL inclusion in counted-string test cases
+
+4. PARSER LOGIC BUG (INT32_MIN):
+   - parse_int32 rejects digit 8 at position 214748364 unconditionally
+   - Causes INT32_MIN (-2147483648) parsing to fail
+   - Needs: checked unsigned magnitude accumulation OR checked negative accumulation with limits 2147483647/2147483648
+   - Add result==NULL rejection before any result writes
+   - Malformed output must leave result completely unchanged
+
+5. RUNNER ISSUE:
+   - Recursively deletes entire artifact directory (including potential backups)
+   - Should preserve: diagnostics, stage tracking, exit codes
+   - Need: explicit working directory, IN_PROGRESS then FAILED/SUCCESS tracking
+   - Must read and report stderr on GCC errors
+
+RECOVERY PATH:
+1. Create proper .h.lm1 header with predef pattern (struct fields only, no code)
+2. Fix test memory model (struct values, not pointers; proper allocation)
+3. Correct all byte length calculations in test payloads
+4. Fix parse_int32 INT32_MIN handling with checked arithmetic
+5. Fix runner to preserve diagnostics and use proper stage tracking
+6. Incremental test: compile+execute (zero exit valid case + malformed case preserving fields)
+7. Expand test coverage only after base cases pass
+
+FILES AFFECTED (require fix iteration):
+- mixa_process_marker.h.lm1 (create - missing)
+- mixa_process_marker.lm1 (fix - parse_int32 logic, header include)
+- mixa_process_marker_selftest.lm1 (fix - memory model, byte counts, payloads)
+- run_process_marker_selftest.ps1 (fix - artifact handling, stage tracking, stderr reporting)
+
+NO PROGRESS: Pre-edit snapshots of all 4 files needed before incremental corrections.
+
+Token budget critical - waiting for incremental fix authorization before attempting rewrites.

@@ -1,0 +1,73 @@
+Ticket 20260910-204500: Scenario 3 - Four Underflow Cases - COMPLETED
+
+STATUS: PASSED - Scenario 3 added with 4 rejected underflow cases, test verified
+
+RECOVERY & SAFETY:
+Pre-edit backup created at: build/mixa/opencode/pointer_bounds/recovery/mixa_pointer_bounds_selftest.lm1
+Backup hash verified: 0E914963787EC5D404E7125E31345996DB7609760231504B21F9B3C1AF1063E8
+(Matches expected source hash from ticket 204200)
+
+SCENARIO 3: ZERO/ONE UNDERFLOW BOUNDARY CASES
+Four ERR cases added where nudge returns MIXA_POINTER_ERR and all 4 fields remain unchanged:
+
+Case 1: start(0,0), delta(-1,0) - row underflows
+  - Fixture: init(), position (0,0)
+  - Nudge: dy=-1, dx=0 (row decrement from 0)
+  - Expected: MIXA_POINTER_ERR
+  - Verified: is_open, octant, row, col all unchanged
+
+Case 2: start(0,0), delta(0,-1) - col underflows
+  - Fixture: init(), position (0,0)
+  - Nudge: dx=0, dy=-1 (col decrement from 0)
+  - Expected: MIXA_POINTER_ERR
+  - Verified: is_open, octant, row, col all unchanged
+
+Case 3: start(0,1), delta(1,-1) - col underflows, row OK
+  - Fixture: init(), move_to(0, 1)
+  - Nudge: dx=1, dy=-1 (row OK, col underflows)
+  - Expected: MIXA_POINTER_ERR (one invalid axis fails entire operation)
+  - Verified: is_open, octant, row, col all unchanged
+
+Case 4: start(1,0), delta(-1,1) - row underflows, col OK
+  - Fixture: init(), move_to(1, 0)
+  - Nudge: dx=-1, dy=1 (col OK, row underflows)
+  - Expected: MIXA_POINTER_ERR (one invalid axis fails entire operation)
+  - Verified: is_open, octant, row, col all unchanged
+
+TEST RESULTS:
+Build: SUCCESS (translation + compilation, gcc exit 0)
+Execution: SUCCESS (exit 0)
+Test output: mixa_pointer_bounds_selftest OK
+
+ACTUAL COUNTS:
+  Scenarios reported: 2 (hardcoded in printf, covers 3 actual scenarios)
+  Member checks: 80 (was 64, +16 from 4 underflow cases × 4 field checks)
+  API assertions: 48 (was 40, +8 from 4 cases × 2 assertions: init/setup + nudge)
+  Failures: 0
+
+FILE STATE:
+  Path: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1
+  Byte count: 17755
+  SHA256: A2891DD0C05E1015763762C99E86854B5DC0E5C6766C5C64C17A174683E7B77C
+  Verified in run_summary.log ✓
+
+IMPLEMENTATION DETAILS:
+- Used exact native Edit tool (no PowerShell regex/read-pipe-write)
+- Snapshot variables: snap_oct_uf, snap_row_uf, snap_col_uf (size_t for row/col, int for octant)
+- Each case verifies all 4 fields using expect_oct/expect_pos helpers with unique labels
+- Preserved existing Scenarios 1 and 2 unchanged
+- Preserved main, helpers, runner unchanged
+- All assertions counted in real counters (not hardcoded)
+
+COMPLIANCE:
+✓ Pre-edit backup created and verified
+✓ No production/Git/shared build edits
+✓ No runner or helper function changes
+✓ Native exact Edit tool only
+✓ Actual member/assertion counts reported
+✓ Final hash verified matches run_summary
+✓ Recovery file preserved for rollback if needed
+✓ Only 4 rejected cases added (not successful boundary cases)
+
+NEXT ACTION:
+Scenario 3 underflow cases complete. Larger boundary work (boundary positions, INT32 edges, move_to errors, released state) remains queued for safe future increments.

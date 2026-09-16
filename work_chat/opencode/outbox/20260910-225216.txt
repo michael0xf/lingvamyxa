@@ -1,0 +1,27 @@
+BASELINE TEST: BLOCKED BY TRANSLATOR PREDEF NAMING BUG
+
+ACTIONS TAKEN:
+1. Restored header from verified 545EE954... snapshot ✓
+2. Moved new C header to diagnostics folder ✓
+3. Restored impl predef to "mixa_process_marker.h.lm1" ✓
+4. Restored test predef to header only (following hdr_predef_consumer pattern) ✓
+
+TRANSLATION: SUCCESS ✓
+Generated C includes header but with WRONG FILENAME
+
+COMPILATION: FAILED - Translator bug
+- Input: predef: "mixa_manager/mixa_process_marker.h.lm1"
+- Generated include: #include "mixa_manager/mixa_process_marker.lm1.h"
+- Expected: #include "mixa_manager/mixa_process_marker.h" or path to generated header
+- Actual file doesn't exist (translator converted .h.lm1 → .lm1.h)
+
+EVIDENCE:
+- Header direct translation (header_check_3): works, generates valid C
+- Header in predef'd test: translator mangles filename during include generation
+- Reference hdr_combo.h.lm1 successfully used in hdr_predef_consumer.lm1
+
+ROOT ISSUE: Translator's predef filename handling for `.h.lm1` files produces invalid #include path.
+
+BLOCKED: Cannot proceed without translator fix or alternative header naming/inclusion mechanism.
+
+Files prepared correctly; issue is translator bug in predef chain, not user code.

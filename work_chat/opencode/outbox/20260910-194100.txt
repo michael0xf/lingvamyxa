@@ -1,0 +1,86 @@
+Ticket 20260910-194100: Runner Corrections - Stage Tracking & Negative Logs
+
+STATUS: COMPLETED
+
+ISSUES RESOLVED:
+
+1. Native Stage Tracking ✓
+   - Previously: catch block overwrote all failures with generic "caught-exception"
+   - Fix: Initialize $currentStage = "preflight" and $failureExitCode = 1 before try block
+   - Set $currentStage before each major stage (translation, compilation, execution)
+   - catch block now uses tracked $currentStage and $failureExitCode, NOT hardcoded values
+   - Result: FAILED summaries preserve native stage names (preflight, translation, compilation, execution)
+
+2. Negative Log Preservation ✓
+   - Previously: negative directory created but logs not saved (claimed but not implemented)
+   - Fix: Add Copy-Item $runSummaryLog to negative directory in catch block
+   - Negative case now saves run_summary.log with actual failure details
+   - Result: build/mixa/antigravity/highlight_restore/negative/run_summary.log exists on failure
+
+VERIFICATION EXECUTED:
+
+Test 1: Negative case (nonexistent translator) in CHILD process
+  Command:
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "mixa_manager\run_highlight_restore_selftest.ps1" -TranslatorPath "C:\nonexistent\translator.exe"
+  
+  Working directory: C:\Nyasha_Planet\lingvamyxa
+  
+  Exit code captured: 1 ✓
+  
+  Assertions:
+    ✓ Child exit code: 1 (nonzero, as required)
+    ✓ Negative run_summary.log EXISTS at: build/mixa/antigravity/highlight_restore/negative/run_summary.log
+    ✓ Status: FAILED
+    ✓ Stage: preflight (NATIVE stage, not "caught-exception")
+    ✓ Exit-Code: 1
+    ✓ Detail: "Translator not found: C:\nonexistent\translator.exe"
+
+  Negative run_summary.log content:
+    Status: FAILED
+    Failed-At: 2026-09-10T22:41:48.7086203Z
+    Stage: preflight
+    Exit-Code: 1
+    Translator: C:\nonexistent\translator.exe
+    Compiler-SHA256: unknown
+    TestSource-SHA256: unknown
+    Runner-SHA256: unknown
+    MixaHighlight-LM1-SHA256: unknown
+    MixaHighlight-H-SHA256: unknown
+    Detail: Translator not found: C:\nonexistent\translator.exe
+
+Test 2: Normal PASS case (final verification)
+  Command:
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "mixa_manager\run_highlight_restore_selftest.ps1"
+  
+  Working directory: C:\Nyasha_Planet\lingvamyxa
+  
+  Exit code: 0 ✓
+  
+  Assertions:
+    ✓ Test execution: SUCCESS (mixa_highlight_restore_selftest: scenarios=3 member_checks=8160 api_assertions=22 failures=0)
+    ✓ run_summary.log Status: SUCCESS
+    ✓ Run stages: Translation=SUCCESS, Compilation=SUCCESS, Execution=SUCCESS
+  
+  Runner hash verification:
+    Command: Get-FileHash -LiteralPath "mixa_manager\run_highlight_restore_selftest.ps1" -Algorithm SHA256
+    
+    Current file hash: 73834312C40EF391F2955443C92BC3D378B1887A8E2015F250570557E334137F
+    Recorded in run_summary.log Runner-SHA256: 73834312C40EF391F2955443C92BC3D378B1887A8E2015F250570557E334137F
+    
+    ✓ Hash match verified (no edits after final run)
+
+COMPLIANCE:
+✓ No production code edited
+✓ No shared runners modified
+✓ No Git commits
+✓ No PATH/compiler modifications
+✓ Stable compiler used (read-only, SHA256-verified)
+✓ Isolated build directory only
+✓ Native stage/exit-code tracking implemented
+✓ Negative logs saved to separate directory
+✓ Hash frozen after final run
+✓ All previous replies (20260910-190355, 20260910-190820, 20260910-193200, 20260910-193800) kept intact
+
+RUNNER ACCEPTANCE FINAL: Complete. All three requirements met and verified.
+
+Pointer bounds work (ticket 20260910-190355) now eligible for next agent turn.

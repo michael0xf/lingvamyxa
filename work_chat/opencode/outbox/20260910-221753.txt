@@ -1,0 +1,32 @@
+Pointer bounds 190355 work completed: 8 scenarios, 196 member, 110 API, 0 failures. No refactor.
+
+THREE STANDALONE L1 CANDIDATES (mode 0.1.2 PROCESS_SEAM §3 / FIRST_VERSION §2)
+
+Candidate 1: Console file I/O wrapper (PROCESS_SEAM §3 "spawn" precursor)
+  Requirement: Isolated handle type + UTF-8 path wrapper for Win32 process stdout target.
+    FILE_SEAM 3.5 pattern already proven in mixa_file_win32 (195 lines L1).
+  Files: mixa_process.h (header stub), mixa_process_win32.h (Win32-only), mixa_process_win32.lm1 (platform code).
+  Smallest module: ~200 L1 lines (CreateProcessW setup, handle storage, HANDLE → MixaProcess typedef).
+  Dependencies: Windows SDK headers (already linked); FILE_SEAM semantics (no new app decisions).
+  Test: Deterministic headless test spawning echo.exe or cmd /c, verifying stdout redirection to temp file, no PTY.
+  Status: No user decision needed; seam contract is documented.
+
+Candidate 2: Command exit status + marker line parse (PROCESS_SEAM §4.1 "marker line")
+  Requirement: Extract exit code and working directory from ClearShell-style in-band marker after each spawn.
+    Marker format: "\n<COUNTER>\t<EXIT_CODE>\t<CWD>\n" (tab-separated, unguessable prefix).
+  Files: mixa_process_marker.h, mixa_process_marker.lm1.
+  Smallest module: ~150 L1 lines (marker generation counter, scanf-like parse, safe bounds on CWD length).
+  Dependencies: None beyond <time.h> for counter seed; no Win32 specifics.
+  Test: Deterministic parse of synthetic markers, verify exit code extraction, rejection of malformed input.
+  Status: No user decision; format is inherited from ClearShell production code.
+
+Candidate 3: Console file read/append state machine (PROCESS_SEAM §3 "read" non-blocking readiness)
+  Requirement: Non-blocking poll of console file for new child output; append child's output without blocking loop.
+    Pattern: check file size, seek to last read position, drain available bytes, update position.
+  Files: mixa_console_buffer.h, mixa_console_buffer.lm1.
+  Smallest module: ~250 L1 lines (position state, size polling, short-read handling per FILE_SEAM, append callback signature).
+  Dependencies: FILE_SEAM append/read/size (already tested in mixa_file); Message-owned position state.
+  Test: Spawn child writing to file in background, verify poll updates, output appears in correct order, no data loss on partial reads.
+  Status: Needs clarification: should output callback own the buffer lifetime, or does Message copy on ingress? (Architecture §6 requires decision.)
+
+All three avoid grok_bot's backend/draw/runner/vendor code. Candidates 1&2 need no app decisions. Candidate 3 design depends on Message copy semantics (existing architecture question, not unique to console).

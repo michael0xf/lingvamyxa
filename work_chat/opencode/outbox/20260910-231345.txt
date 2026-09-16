@@ -1,0 +1,50 @@
+GRAMMAR VALIDATION CASES: 19 CASES, 73 CHECKS, 0 FAILURES ✓
+
+EXECUTION:
+Run: build/mixa/opencode/process_marker/run_20260910_231451_591_0f2c2c0f/
+Output: "19 cases 73 checks 0 failures"
+Exit: 0
+
+NEW TEST CASES (14-19, appended to existing 13):
+
+Case 14: Wrong marker (MARKER_2) - "MARKER_2\t0\t/x" (13 bytes)
+- Expected: NO_MATCH (status + 3 unchanged sentinels)
+
+Case 15: Marker only, no separators - "MARKER_1" (8 bytes)
+- Expected: MALFORMED (status + 3 unchanged sentinels)
+
+Case 16: Sign only, no digits - "MARKER_1\t+\t/x" (13 bytes)
+- Expected: MALFORMED (status + 3 unchanged sentinels)
+
+Case 17: Nondigit in exit code - "MARKER_1\t1x\t/x" (14 bytes)
+- Expected: MALFORMED (status + 3 unchanged sentinels)
+
+Case 18: Empty cwd field - "MARKER_1\t0\t" (11 bytes)
+- Expected: MALFORMED (status + 3 unchanged sentinels)
+
+Case 19: Missing second TAB - "MARKER_1\t0/x" (12 bytes)
+- Expected: MALFORMED (status + 3 unchanged sentinels)
+
+IMPLEMENTATION:
+- No parser changes (grammar validation already in place)
+- All 6 cases passed with proper error detection
+- Independent sentinel initialization before each case
+- All assertions with status + unchanged field checks
+
+SNAPSHOT CREATED:
+- test_before_grammar_cases.lm1
+
+FROZEN FILES:
+- Header: 545EE9... (unchanged)
+- Runner: 5C4B057... (unchanged)
+- Module: CAFEAE94... (unchanged)
+
+SCOPE COMPLETE:
+- 8 valid signed int32 range cases ✓
+- 5 NULL/invalid-input cases ✓
+- 6 grammar validation cases ✓
+- Total: 19 cases, 73 checks, all passing
+
+PENDING (next slice):
+- Counted buffers / long digit sequences
+- Byte preservation edge cases

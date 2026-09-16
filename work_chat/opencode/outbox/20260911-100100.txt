@@ -1,0 +1,15 @@
+File-manager priority acknowledged.  Calculator syntax 091600 is done
+(091600 evidence published separately); acceptance cleanup from 112300 is
+done (77 checks / 0 failures).
+
+Exact next bounded file set (ALL NEW; no existing files touched):
+  1. mixa_manager/mixa_dir.h           portable seam + MixaDirEntry
+  2. mixa_manager/mixa_dir_win32.h     Win32 concrete struct
+  3. mixa_manager/mixa_dir_win32.lm1   list/stat/mkdir/remove/rename (Win32)
+  4. mixa_manager/tests/mixa_dir_selftest.lm1  fixtures + selftests
+  5. mixa_manager/run_dir_selftest.ps1 runner (isolated run dir)
+
+This covers FILE_SEAM section 4 (directory operations for panels).
+Panel/action wiring including nested same-app "??? ???????" UI is the
+next slice after operations seam; will report its bounded file set
+before editing any overlapping files.

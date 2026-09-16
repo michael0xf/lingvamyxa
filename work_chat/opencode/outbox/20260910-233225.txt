@@ -1,0 +1,28 @@
+FINAL CLEANUP: 26 CASES, 102 CHECKS, 0 FAILURES ✓
+
+EXECUTION:
+Run: build/mixa/opencode/process_marker/run_20260910_233315_679_260987cd/
+Output: "26 cases 102 checks 0 failures"
+Exit: 0
+
+CLEANUP APPLIED:
+Removed 6 duplicate lines (3 if/failures blocks) from case 26 that redundantly checked:
+- rc != MIXA_PROCESS_MARKER_OK
+- result.cwd_offset != 11
+- result.cwd_length != 6
+
+These conditions already validated above and in guarded memcmp block. Removal eliminates uncounted assertions.
+
+FROZEN FILES (FINAL STATE):
+- Header (mixa_process_marker.h.lm1): 545EE9541278B1350F84C4E0B9B6056B5B1FEFE30BAF809CDE17C4EF24C40019
+- Module (mixa_process_marker.lm1): CAFEAE9488356ED9365E72A526840DD239129A2F1970D37A1E5E92758EF26032
+- Test (mixa_process_marker_selftest.lm1): 21D6A3A9E78D546C365F9521A29008F40EBCA978C607E0052C50445FA723BADF
+- Runner (run_process_marker_selftest.ps1): 5C4B057433CA928E97C1632FDC18B10C623628D00F9DE71198B3F446D990735E
+
+BASELINE VALIDATION COMPLETE:
+26 cases, 102 checks, 0 failures
+Coverage: NULL pointers, invalid inputs, grammar, counted buffers, long digits, leading zeros, UTF-8 preservation
+Parser: pure single-payload marker parsing, no integration/spawning
+All checks guarded, parser-returned offsets/lengths validated
+
+READY TO FREEZE.

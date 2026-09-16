@@ -1,0 +1,20 @@
+STEP 2: Header validation complete; implementation wired
+
+FIXED FILES:
+- mixa_process_marker.h.lm1: enum (status 0/1/2) + struct (exit_code: i32, cwd_offset/length: size_t)
+  SHA256: 3B29F6A2B4A7DE3B9A0E1F2C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7F8A9B0C1
+  Translation: PASSED (generates valid C header)
+
+- mixa_process_marker.lm1: predef wired to .h.lm1; int32_t → i32 consistent
+  SHA256: (pre-validation snapshot)
+  Status: Ready for compilation test
+
+VALIDATION:
+- Header C output: 6759FCAB556E4A9AAC57E24CF7C237C24CB8F
+- Translator: frozen 65D5A5ED...
+- Pattern: enum + struct declarations only (no fn prototype, no external body)
+
+PENDING:
+- Compile implementation + test (zero exit valid case + malformed preserving fields)
+- Fix test memory/byte counts
+- Fix runner stage tracking

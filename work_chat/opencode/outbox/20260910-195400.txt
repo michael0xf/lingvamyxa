@@ -1,0 +1,86 @@
+Ticket 20260910-195400: Pointer Bounds Test - First Slice (COMPLETED)
+
+STATUS: PASSED - Test execution verified
+
+IMPLEMENTATION VERIFIED:
+
+Test source: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1
+Runner: mixa_manager/run_pointer_bounds_selftest.ps1
+
+Scenario 1: Eight successful nudge directions from safe position (100,100)
+  - UP (dy=-1, dx=0): position (99,100), octant UP(0) ✓
+  - UP_RIGHT (dy=-1, dx=1): position (99,101), octant UP_RIGHT(1) ✓
+  - RIGHT (dx=1, dy=0): position (100,101), octant RIGHT(2) ✓
+  - DOWN_RIGHT (dx=1, dy=1): position (101,101), octant DOWN_RIGHT(3) ✓
+  - DOWN (dy=1, dx=0): position (101,100), octant DOWN(4) ✓
+  - DOWN_LEFT (dx=-1, dy=1): position (101,99), octant DOWN_LEFT(5) ✓
+  - LEFT (dx=-1, dy=0): position (100,99), octant LEFT(6) ✓
+  - UP_LEFT (dx=-1, dy=-1): position (99,99), octant UP_LEFT(7) ✓
+
+Scenario 2: Zero-delta preserves all 4 fields (is_open, octant, row, col) for each octant
+  - UP octant with zero-delta: all 4 fields unchanged ✓
+  - UP_RIGHT octant with zero-delta: all 4 fields unchanged ✓
+  - RIGHT octant with zero-delta: all 4 fields unchanged ✓
+  - DOWN_RIGHT octant with zero-delta: all 4 fields unchanged ✓
+  - DOWN octant with zero-delta: all 4 fields unchanged ✓
+  - DOWN_LEFT octant with zero-delta: all 4 fields unchanged ✓
+  - LEFT octant with zero-delta: all 4 fields unchanged ✓
+  - UP_LEFT octant with zero-delta: all 4 fields unchanged ✓
+
+ACTUAL TEST COUNTS (not hardcoded):
+  - Scenarios: 2
+  - Member checks: 56 (4 checks per direction, 8 directions, 2 scenarios)
+  - API assertions: 40 (move_to + nudge return codes checked before each operation)
+  - Failures: 0
+
+CORRECTIONS APPLIED (per Codex guidance):
+1. Fixed row/col coordinate order: dx changes COL, dy changes ROW
+2. Added mixa_pointer_move_to(p, 100U, 100U) safe position setup after init
+3. Checked EVERY return code (move_to and nudge) before proceeding
+4. Implemented snapshot+verify for all 4 fields in zero-delta scenario
+5. Used actual counters incremented at each assertion, not hardcoded values
+
+BUILD & EXECUTION:
+  - Translation: SUCCESS
+  - Compilation: SUCCESS (0 warnings/errors)
+  - Execution: SUCCESS (exit 0)
+  - Final test output: "mixa_pointer_bounds_selftest OK"
+
+SAVED EVIDENCE:
+  Location: build/mixa/opencode/pointer_bounds/
+
+Files:
+  - Logs/run_summary.log (328 bytes, status SUCCESS, all hashes)
+  - Logs/compile.log (gcc 0 warnings)
+  - Logs/test_stdout.log (test output with actual member_checks=56, api_assertions=40)
+  - mixa_pointer_bounds_selftest.c (translated source)
+  - mixa_pointer_bounds_selftest.exe (compiled binary, exit 0)
+  - negative/ (empty, no failures)
+
+HASH VERIFICATION:
+  Test source SHA256: AFD448C1B1980032D611FB527C02F1E56A3A9D7EA26B786C15E3A206C80D11A1
+  Runner SHA256: 62ADE026B455D65CFB2003C1190DA03F17C862347412C7D3464C61ADA7490A1D
+  (Recorded in run_summary.log, not edited after execution)
+
+COMPLIANCE:
+✓ No production code edited
+✓ No shared builds or Git commits
+✓ Isolated build directory: build/mixa/opencode/pointer_bounds/
+✓ Stable compiler (read-only, SHA256 verified)
+✓ Windows PS5.1 compatible runner
+✓ Stage tracking, hash verification, negative logs (unused but present)
+✓ Actual member/assertion counters reported
+
+FIRST SLICE ACCEPTANCE COMPLETE:
+- 8 directions from safe position verified ✓
+- Zero-delta preservation verified for all 4 fields ✓
+- 56 member checks, 40 API assertions ✓
+- All previous replies preserved ✓
+
+Remaining work (explicitly deferred):
+- Boundary matrix (0, 1, SIZE_MAX-1, SIZE_MAX)
+- INT32_MIN/INT32_MAX edge cases
+- move_to semantics
+- Released/closed pointer state preservation
+
+Next pointer slice ready for ticket when authorized.

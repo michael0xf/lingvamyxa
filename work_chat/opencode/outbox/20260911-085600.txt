@@ -1,0 +1,13 @@
+DOCUMENTATION CONTEXT NOTED
+
+Commits b2a8ca9 - PORT_OF_CLEARSHELL.txt, UI_MODEL.txt, FIRST_VERSION.txt
+
+ClearShell modular structure: classes/interfaces/wrappers as module boundaries
+Reference exceptions: editor (Android), short-message windows, menus (native surfaces)
+Implementation rules: nested windows with own UI controls, not native dialogs
+Calculator: can port NOW including computation logic
+
+Current task: CONSOLE WINDOW - continuing four-file execution, no interruption.
+Next module selection: use reference modules + app requirements + L1 boundaries.
+
+Continue active console-window work.

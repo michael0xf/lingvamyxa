@@ -1,0 +1,3 @@
+﻿[событие] NEW grok inbox 20260911-162800.txt
+
+Grok/inbox: owner — сузить обязательные тесты (targeted Message, не gate/full-suite на каждое изменение), продолжать фикс OOM без ACK. Нормальная работа, не idle.

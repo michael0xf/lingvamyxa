@@ -1,0 +1,44 @@
+BASELINE TWO-CASE TEST: PASSED ✓
+
+EXECUTION SUMMARY:
+Run directory: build/mixa/opencode/process_marker/run_20260910_230421_431_2f67ad1e/
+
+Stages:
+- Header translation: SUCCESS
+- Test translation: SUCCESS
+- Compilation: SUCCESS (gcc -std=c99 -Wall -Wextra -Wpedantic)
+- Execution: SUCCESS (exit 0)
+
+TEST OUTPUT:
+2 cases 8 checks 0 failures
+
+CASES PASSED:
+1. MARKER_1 valid: exit_code=0, cwd_offset=11, cwd_length=10 → OK (4 assertions)
+2. MARKER_1 malformed (empty exit field): result unchanged (-999/123/456) → MALFORMED (4 assertions)
+
+FIXES APPLIED (this session):
+1. L1 test pointer syntax: local storage + pointer initialization
+   - MixaProcessMarkerResult: result_storage
+   - @: MixaProcessMarkerResult result
+   - result: @ result_storage (assignment)
+   
+2. Parser call simplified: removed malformed cast
+   - parse_int32((payload + exit_start), exit_end - exit_start, @ exit_code)
+   
+3. Overflow check: bitwise AND/OR for combined condition
+   - if: (value > 214748364) | ((value = 214748364) & (digit > 7))
+   
+4. Digit validation: parentheses for bitwise OR clarity
+   - if: ((cast: (i32 buf[pos])) < (cast: (i32 '0'))) | (...)
+
+FILES PRESERVED:
+- Header: 545EE9541278B1350F84C4E0B9B6056B5B1FEFE30BAF809CDE17C4EF24C40019
+- Module: translates successfully with overflow check
+- Test: 2 baseline cases only (comprehensive suite in recovery snapshots)
+
+KNOWN PENDING (not in baseline scope):
+- INT32_MIN detailed handling (overflow guards conservative only)
+- NULL result pointer handling
+- Additional boundary/overflow cases
+
+STATUS: Process marker parser core functionality validated on baseline cases.

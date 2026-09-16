@@ -1,0 +1,33 @@
+HEADER VALIDATION COMPLETE: PROTOTYPE + SELF-CONTAINMENT CONFIRMED
+
+FILES (ACTUAL HASHES):
+- mixa_process_marker.h.lm1: 545EE9541278B1350F84C4E0B9B6056B5B1FEFE30BAF809CDE17C4EF24C40019
+  Syntax: enum + struct + prototype (named parameters with colons: size_t: marker_len)
+  
+- mixa_process_marker.lm1: E65B358BFD7D60EF32BED14795704C142E525289241A327BB8FFA9AC176094E4
+  (implementation: predef wired, i32 consistent)
+
+TRANSLATION RESULTS (build/mixa/opencode/process_marker/header_check_3/):
+- Input: mixa_manager/mixa_process_marker.h.lm1
+- Exit code: 0 (SUCCESS)
+- Stdout: empty (no warnings)
+- Stderr: empty
+- Generated header.c: 56645B2B97836EFA2EC7E3C713631063ABDD13C4D8695310D3BBB74F88D83550 (749 bytes)
+
+PROTOTYPE IN GENERATED C:
+int mixa_process_marker_parse(const char * expected_marker, size_t marker_len, const char * payload, size_t payload_len, MixaProcessMarkerResult * result);
+
+C CONSUMER VALIDATION:
+- Includes self-contained generated header
+- Accesses MixaProcessMarkerResult, MIXA_PROCESS_MARKER_OK
+- Calls mixa_process_marker_parse prototype
+- GCC compile (C99, -Wall -Wextra): SUCCESS (exit 0, no warnings)
+
+SELF-CONTAINMENT CONFIRMED:
+- Includes: <stddef.h> <stdint.h> (all required types)
+- No external dependencies
+- Prototype fully accessible to C consumers
+
+STATUS: Header complete and validated. Ready for implementation compilation.
+
+All logs preserved in header_check_3/ folder (trans stdout/stderr, compile output).

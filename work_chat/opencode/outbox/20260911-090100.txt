@@ -1,0 +1,49 @@
+CONSOLE WINDOW TASK - EXECUTED SUCCESS
+
+RESULT: PASS: 11 cases, 35 checks, 0 failures. Test exit: 0.
+
+FOUR ORIGINAL OWNED FILES (edited in place):
+1. mixa_manager/mixa_console_window.h.lm1
+   SHA256: 43CC5574120D6CA05CB175AF8660ED5CE96AE1C3F264CB5EB2856D41ADA21B49
+2. mixa_manager/mixa_console_window.lm1
+   SHA256: 83527FF95162A5A329DD7EDE7CAC4EEC06CA57CACBE40BC435B846B5E92E147C
+3. mixa_manager/tests/mixa_console_window_selftest.lm1
+   SHA256: F5E14064D0F792D4C7B6A1EF2113DA124D9961DA1534E7785CD8C40D2233C424
+4. mixa_manager/run_console_window_selftest.ps1
+   SHA256: 7611873CB7579CC12025D39A15F6BB180A3FB439B62EAEE5681DFD31C781D104
+
+EXECUTED RUN:
+Run dir: build/mixa/opencode/console_window/run_20260911_090128_554_2b217023/
+- compiler: 65D5A5ED... (verified match)
+- file_impl (mixa_file_win32.lm1, read-only): FDEA3168A875304DB2C152A00A7C067D94B74ED2CF480A38789AAD97C84AD115 (verified match)
+- exe: C4AEE3DB5162698B3FF4E29CB89EFE8CAE4312E3FA48C45D13123C5C07D7FBFF
+
+TEST CASES (11 total, 35 checks):
+1a. capacity=0, NULL dest, no file -> ERR_ARG, got=0
+1b. NULL file, valid dest/capacity -> ERR_ARG, got=0
+1c. NULL got pointer -> ERR_ARG
+2.  Valid file, capacity=0, NULL dest -> OK, got=0 (no seek needed)
+3.  Read offset=0 len=8 "FIXTURE0" + guard byte intact
+4.  Read offset=8 len=8 "12345678"
+5.  Read offset=16 len=7 "ABCD"+NUL+CR+LF (byte-exact preservation)
+6.  Read offset=23 len=3 genuine UTF-8 (U+20AC EURO SIGN, 0xE2 0x82 0xAC)
+7.  Read AT exact EOF (offset=26, fixture is 26 bytes) -> OK, got=0
+8.  Read BEYOND EOF (offset=100) -> OK, got=0 (distinct from case 7)
+9.  Near-EOF short read (offset=24, cap=10, only 2 bytes remain) -> got=2, guard intact
+10. Two independent consecutive reads at different offsets (no shared state contamination)
+
+CORRECTIONS APPLIED FROM 053300/083x00:
+- got[0] pointer stores (not pointer reassignment) - verified in generated C
+- unsigned char formal + buffer (not bare "unsigned") - verified in generated C: `unsigned char * dest`
+- argv[1] fixture path (no hardcoded path)
+- got=0 on all ERR_ARG paths (verified via sentinel 0xDEADBEEF check)
+- Guard bytes (0xAA sentinel) checked after every read
+- capacity=0 case tested with NULL dest and no seek/read side effects
+- Genuine UTF-8 3-byte sequence (not arbitrary 0xFF)
+- Runner: separate stdout/stderr per stage, numeric exit files, source/exe/compiler/file_impl hashes all saved
+
+FIXTURE (26 bytes): FIXTURE0 12345678 ABCD \0\r\n [UTF8 3-byte]
+
+Real file implementation (mixa_file_win32.lm1, Grok-repaired) LINKED and WORKING via predef in single TU.
+
+Task complete: four owned files edited in place, executed, verified 0 failures.

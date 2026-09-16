@@ -1,0 +1,49 @@
+CONSOLE WINDOW - ALL 4 DISCREPANCIES CLOSED - EXECUTED
+
+RESULT: PASS: 11 cases, 48 checks, 0 failures. Test exit: 0. Clean compile (no warnings).
+
+FIXES APPLIED:
+
+1. capacity0 seek-masking proof (case2b, NEW):
+   - Seek to offset 0, call capacity0 at DIFFERENT offset 50, then ordinary
+     mixa_file_read still returns "FIXT" from position 0 (proves no seek/read
+     side effect from capacity0 path). 5 new checks.
+
+2. Valid file + NULL dest + positive capacity (case2c, NEW):
+   - mixa_console_read_window(testfile, 5U, NULL, 8U, &got) -> ERR_ARG, got=0
+   - Exercises dest guard specifically (previous NULL cases only hit file==NULL).
+
+3. Byte assertions added:
+   - Case9 (near-EOF short read, offset24 cap10): now asserts buf[0]=0x82,
+     buf[1]=0xAC (split UTF8 tail bytes), plus existing guard check.
+   - Case4: added guard byte check (buf[8]==0xAA).
+   - Case7 (at EOF): added guard byte check (buf[0]==0xAA, proves no write).
+   - Case8 (beyond EOF): added guard byte check (buf[0]==0xAA, proves no write).
+   - Fixture comment corrected 24->26 bytes.
+   - Removed unused `sentinel` array (compiler warning eliminated; verified
+     compile_stderr.log is empty).
+
+4. Runner hash/evidence completeness:
+   - Added generated file hashes: header_gen (.h), module_gen (.c), test_gen (.c)
+   - Added fixture hash
+   - Added gcc_identity (version string)
+   - Added preflight status.txt: records "FAILED preflight: ..." BEFORE any
+     process launch if compiler/file-impl missing or hash-mismatched (never
+     invents a process exit code for checks that never ran a process)
+   - Added per-stage status.txt updates ("stage X: launching" / "FAILED stage
+     X exit=N" / "COMPLETED all stages exit=0")
+   - All hashes appended incrementally so partial evidence survives any
+     mid-run failure
+
+EXECUTED RUN: build/mixa/opencode/console_window/run_20260911_090548_325_bf381f3b/
+source_hashes.txt (12 entries) + status.txt = "COMPLETED all stages exit=0"
+
+Key hashes:
+- test_src:   140FE257ACF59DE876ED9E7F4C5227A57931B2E112C5447F755AD510605604CC
+- runner_src: E6C8F1858021B00FC1B8D111B8F8AB2625AF5824AA5F0043996D9AAE1C7A7C9E
+- header_src: 43CC5574120D6CA05CB175AF8660ED5CE96AE1C3F264CB5EB2856D41ADA21B49 (unchanged)
+- module_src: 83527FF95162A5A329DD7EDE7CAC4EEC06CA57CACBE40BC435B846B5E92E147C (unchanged)
+- exe: 1B4B3AFC012D5B827778FD74DBF8374069571BA38A21931828029F944414FFD4
+
+All 4 discrepancies closed in place, same four owned files, executed with real
+file implementation, evidence saved for every stage.

@@ -1,0 +1,40 @@
+FINAL SLICE COMPLETE: Scenario 8 released/closed/NULL pointer behavior
+
+STATUS: PASSED
+
+COVERAGE (8 scenarios):
+- Directions: 8-way nudge from safe position + zero-delta (Scenario 1-2)
+- Boundaries: underflow rejection (Scenario 3) + success (Scenario 4)
+- Ranges: SIZE_MAX limits (Scenario 5) + INT32 extremes (Scenario 6)
+- API: move_to displacement limits (Scenario 7)
+- State: released/closed + NULL pointer (Scenario 8)
+
+SCENARIO 8 CASES (5):
+1. Released pointer: open=0, octant=DOWN_RIGHT, row=0, col=0
+2. Nudge on released: ERR, all 4 fields unchanged
+3. move_to on released: ERR, all 4 fields unchanged
+4. Release again: idempotent, unchanged
+5. NULL pointer: init/nudge/move_to all ERR; release(NULL) safe no-op
+
+FINAL COUNTS:
+- Scenarios: 8 ✓
+- Member checks: 196 (+16 from Scenario 8)
+- API assertions: 110 (+6 from released/null ops)
+- Failures: 0 ✓
+
+FILE:
+Path: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1
+SHA256: E22DB51BA828F7DD81338C98175C344DC02C92D205D4CD8108580AEC71423951
+Byte count: 42979
+
+RUN SUMMARY:
+Status: SUCCESS
+Translator: stg/l1_baseline/build/l1trans/gen2/l1trans.exe (SHA256: 65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936)
+Compilation: SUCCESS (gcc exit 0)
+Execution: SUCCESS (exit 0)
+Test result: 8 scenarios, 196 member, 110 API, 0 failures
+
+BACKUP:
+recovery/mixa_pointer_bounds_selftest_7A8359041EC6BE80.lm1 (SHA256: 7A8359041EC6BE80B6A4655693FD28A62B0C0D4550A7E740D51D8035D88AA309)
+
+First comprehensive pointer bounds slice finished. Awaiting next ticket for additional coverage or acceptance review.

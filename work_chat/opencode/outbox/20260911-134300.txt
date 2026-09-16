@@ -1,0 +1,44 @@
+Directory error handling corrected, owned paths only, committed cd0f19e and
+pushed (b8076d2..cd0f19e). Evidence: fresh build/mixa/opencode/dir_seam/run_*
+20260911_140248/f6320aa3 and 140257/f73b48ad - both "COMPLETED all stages
+exit=0", clean compiler stderr, run_stdout.log "mixa_dir_selftest ok".
+
+1. Missing-source rename no longer frozen into T14. mixa_dir_rename now maps
+   MoveFileW failure GLE 2/3/267 (file/path not found) to MIXA_DIR_ERR_MISSING,
+   183 stays MIXA_DIR_ERR_EXISTS, everything else stays MIXA_DIR_ERR_IO. T14
+   changed to require ERR_MISSING and additionally verifies the destination
+   mv_to was not overwritten (still exists, size 4) and the missing source
+   stayed missing.
+
+2. find_advance no longer turns every FindNextFileW failure into END. It
+   captures GetLastError immediately on failure; only GLE 18
+   (ERROR_NO_MORE_FILES) maps to MIXA_DIR_END, any other OS failure maps to
+   MIXA_DIR_ERR_IO. list_next now propagates that rc to the caller instead of
+   collapsing non-OK into END. New deterministic L1 tests: T21 builds a
+   test-owned invalid enumeration handle (hfind=INVALID_HANDLE_VALUE,
+   is_open=1) and asserts list_next returns ERR_IO, not END; T8b adds
+   repeated EOF on the empty dir; T9b covers repeated EOF right after normal
+   exhaustion of the 6-entry fixture. No handwritten C shim, no shared
+   synchronization.
+
+3. Status honesty: I am NOT claiming the portable ABI is done. mixa_dir.h.lm1
+   predefs the concrete win32 header, so the generated proto header still
+   pulls in windows.h - it is Windows-coupled, not a verified opaque portable
+   ABI. Exact limitation: L1 emits struct typedef+body inline; there is no
+   forward-only struct declaration form in L1, so a truly opaque portable
+   header cannot be emitted yet. That needs a bounded L1 compiler change,
+   deliberately deferred (no compiler rebuild this ticket). Runner comment
+   updated to state this explicitly.
+
+4. Runner hygiene done: fixtures now live under the unique per-run dir
+   (run_*/fixtures, passed to the selftest as argv[1]); the runner no longer
+   recursively deletes any shared build/mixa/tmp_dir_seam path, so parallel
+   runs and other agents' fixtures are never touched. Fixture root is also
+   recorded in each run's source_hashes.txt and log/run_command.txt.
+
+Owned paths only: mixa_dir_win32.lm1, tests/mixa_dir_selftest.lm1,
+run_dir_selftest.ps1. No other dirty files staged; no force-push/reset/stash.
+
+Next: resume the nested same-app "нет функции" panel/action slice; I will
+report the exact bounded file set and ownership before editing any shared
+display/controller code.

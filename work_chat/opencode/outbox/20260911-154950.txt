@@ -1,0 +1,79 @@
+Audio playback seam / ClearShell "MP3" button (20260911-154950) is DONE:
+implemented, verified and pushed. Committed/pushed as 3ea8c95 (10 owned files,
+push 677221f..3ea8c95 main):
+
+- mixa_manager/mixa_audio_win32.h.lm1       concrete unit (MixaAudioWin32Ctx)
+- mixa_manager/mixa_audio.h.lm1             portable contract (types + prototypes)
+- mixa_manager/mixa_audio_win32.lm1         Windows/MCI implementation (all L1)
+- mixa_manager/mixa_audio.lm1               portable controller (state machine)
+- mixa_manager/tests/mixa_audio_selftest.lm1         deterministic fake-device selftest
+- mixa_manager/tests/mixa_audio_native_selftest.lm1  real MCI smoke test
+- mixa_manager/run_audio_selftest.ps1       fake runner (no audio libs)
+- mixa_manager/run_audio_native_selftest.ps1 native runner (-lwinmm, generates fixture)
+- mixa_manager/mixa_audio.txt               support matrix + usage note
+- mixa_manager/PORT_OF_CLEARSHELL.txt       new section 5.9 audio mapping
+
+Reference mapping (ClearShell.java ~198-280 and ~7634-8120, AudioServiceBinder.java):
+the binder owns its audio device, a playlist state machine (positions, mode,
+loop, next/prev with wrap) and an end-of-track callback. The port keeps the
+playlist/state machine in a PORTABLE controller (MixaAudio, one instance owns
+one device) behind a function-pointer device vtable, and on Windows rides the
+system MCI layer (winmm). End-of-track is not signalled to us (no MCINOTIFY in
+this slice); mixa_audio_poll() queries 'status mode' and advances instead -
+documented in mixa_audio.txt, not hidden. next/prev move ONE position and
+reset to the file start (the binder's internal one-second bump is not carried
+into the controller; the desktop buttons mean "skip"), wrap only when is_loop
+is set, and candidates are probed (missing files skipped as ERR_MISSING, dirs
+and unknown extensions as ERR_UNSUPPORTED).
+
+Common API (works with any device): create/set_list/start/play/stop/
+seek_to/position/duration/progress/is_playing/poll/cur_file/cur_state/pos/
+count/next_file/prev_file/play_next/play_prev/is_audio_path/destroy. Modes
+IDLE->LOADED->PLAYING->LOADED->ENDED. Status codes OK/END/ERR_ARG/ERR_STATE/
+ERR_MISSING/ERR_UNSUPPORTED/ERR_NOMEM/ERR_IO/ERR_BACKEND. Backend = win32 MCI:
+open "<path>" type waveaudio|mpegvideo alias mixa<N>, milliseconds time format,
+length/position/mode status, play/seek/stop/close. Support matrix (explicit):
+WAV guaranteed (waveaudio MCI driver); MP3 via mpegvideo MCI type and thus a
+system MP3 renderer - load fails honestly with ERR_BACKEND where none exists.
+
+Windows verification (isolated, pinned compiler SHA256
+65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936):
+- Fake-device selftest (deterministic, no audio libs, strict gcc flags):
+  last two runs SUCCESS, "audio seam selftest: 67 checks, 0 failures", exit 0;
+  build/mixa/opencode/audio_seam/run_20260911_180702_328_01428e86/ and
+  run_20260911_180726_825_2dbda126/ (and a final run at 181421).
+- Native selftest (REAL MCI through winmm): last two runs SUCCESS,
+  "audio native selftest: 23 checks, 0 failures", exit 0;
+  build/mixa/opencode/audio_native_seam/run_20260911_181247_495_fea8932c/ and
+  run_20260911_181302_890_97cd0c54/. It generates its own 8000 Hz 8-bit mono
+  ~8 s digital-silence WAV named "My Sound 8s.wav" (space in path exercises
+  MCI quoting) and asserts create, classification, ERR_MISSING on a missing
+  file, play reports playing, poll does not advance a playing track, duration
+  ~8000 ms, seek-to-3000 while playing, stop remembers position, resume,
+  destroy (no audible playback, no user files, no volume changes).
+- The fake selftest additionally covers next/prev wrap in both loop modes,
+  play_next/play_prev rewind, skip-on-failed-probe, END handling, stale
+  destroyed-handle behaviour and null-argument negatives.
+
+Honest remaining gaps: (1) main executable (run_mixa.ps1 pump loop) is NOT
+wired - next ticket attaches the "MP3" button to a MixaAudio instance built
+from mixa_audio_win32_table(), feeds it a directory listing and calls
+start/poll/play_next/play_prev/stop/progress from the UI loop; (2) loop UI
+state (is_loop) has no visible control yet; (3) other platform device
+adapters are documented gaps; (4) MCI end-of-track needs polled wakeup, no
+MCINOTIFY. No app-private threads, locks or scheduler; foreign ingress
+remains Message (not needed in this slice).
+
+L1 findings recorded (mixa_audio.txt + PORT_OF_CLEARSHELL 5.9): const pointers
+are `const: @(char name)` (name INSIDE the parens) for params and locals; casts
+of subscripts/array elements and casts inside conditions are miscompiled by
+l1trans (use the double-cast `(cast: (int) (cast: (unsigned char) x))` form or
+hoist into an int local); `(cast: unsigned) x` must not be used; in wide
+formatting %s is the narrow-string specifier and %ls the wide one (the "mp3"
+status length/position bug was exactly this). These are documented as tool
+limits to revisit when the baseline is promoted.
+
+Hygiene: explicit staging of the 10 owned paths only; dirty/untracked
+colleague files untouched (52 other working-tree entries left alone); shared
+compiler read-only; unique isolated build dirs under build/mixa/opencode/
+audio_seam/ and audio_native_seam/.

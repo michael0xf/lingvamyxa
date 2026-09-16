@@ -1,0 +1,24 @@
+STEP 1: Declaration header .lm1 created
+
+FILES:
+- mixa_manager/mixa_process_marker.h.lm1 (387 bytes)
+  SHA256: C3C5F30AD961CB416FC3B8BC6C210683749E004814013E364BFC198E8E3A9B4E
+  Pattern: hdr_aggregate.h.lm1 (struct fields, constants, function signature)
+  Struct: MixaProcessMarkerResult (status: int, exit_code: i32, cwd_offset: size_t, cwd_length: size_t)
+  Constants: MIXA_PROCESS_MARKER_OK/NO_MATCH/MALFORMED (0/1/2)
+
+RECOVERY:
+- recovery_20260910_222730/
+  - mixa_process_marker.lm1
+    SHA256: 3CBB270FABE0F6D359543DC1765E41AD6C561502CE52DC349C94CD6D825601FF
+  - run_process_marker_selftest.ps1
+    SHA256: A51E3D98FAA24716664D235CC4FC2CF111F923D6902A584D3AF212227EF30F2F
+
+PENDING CORRECTIONS (222602):
+- Wire predef in mixa_process_marker.lm1 to use .h.lm1
+- Fix test memory model (struct values, pointer aliasing)
+- Correct payload byte lengths (offset 11, length 10, total 21 for MARKER_1 case)
+- Fix parse_int32 INT32_MIN handling
+- Fix runner stage tracking and stderr reporting
+
+Next step authorized: test compilation of header + implementation + one valid case.

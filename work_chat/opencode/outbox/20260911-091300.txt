@@ -1,0 +1,71 @@
+CALCULATOR CONTRACT RECOVERED (ClearShell.java, correct location) - PROPOSAL ONLY, NO WRITES
+
+SOURCE: com/mtk/shell/ClearShell.java lines 736-953 (eval2), plus round UI 6229-6234/6456-6475.
+
+EXACT METHODS:
+- BigDecimal eval2(String str) throws ArithmeticException2 (line 736), anonymous parser
+- nextChar() (741), eat(int) (745) bool, notEat(int) (754) bool
+- parseExpression() (776): +/- only, DECIMAL128
+- parseTerm() (790): *, /, AND ^ (caret is here, not in parseFactor)
+- parseFactor() (812): unary +/- (recurse then .negate(DECIMAL128) for '-'), parens,
+  number literals, function names (reflection via Math.class.getMethod), trailing degree sign
+- newVariables() (891): HashMap reset with pi=Math.PI, e=Math.E, c=299792458 (exact)
+
+NUMERIC MODEL (confirmed from source, NOT simplified):
+- Literals: Double.parseDouble(substring) -> BigDecimal.valueOf(...) (inherits double precision)
+- Arithmetic (+,-,*,/,negate): MathContext.DECIMAL128
+- pow: BigDecimal.pow for integer exponents; falls back to Math.pow (double) for non-integer
+- Functions (sin/cos/sqrt/etc via reflection): ALWAYS go through double (x.doubleValue() ->
+  Math method -> new BigDecimal(result.toString())) - BigDecimal is cosmetic here, real
+  precision is only double.
+- Division-by-zero test: divisor rounded to `round` scale (2 or 20, a UI display setting,
+  NOT a fixed epsilon) via setScale(round, HALF_UP), compared to ZERO; actual division then
+  uses the UNROUNDED divisor. This is a genuine semantic fork tied to a UI toggle, not a
+  constant - flagging as reference oddity, not silently fixing.
+- mRound/mRound2/mRound20 MathContext fields exist but are UNUSED inside eval2; only the int
+  `round` scale is used (in val(), setScale HALF_UP). Vestigial/dead fields in reference.
+- Degree symbol ° is a PREFIX meaning toDegrees (837) but a POSTFIX after any factor meaning
+  toRadians (874) - same glyph, opposite meaning depending on position. Reference
+  inconsistency, will preserve exact reference behavior in ports rather than "fixing" it.
+
+WHAT EXISTS IN OUR L1/APP TODAY:
+- L1_spec.txt 1.4 confirms `double` and `float` are implemented type atoms (native C double
+  via translator) - already usable.
+- No BigDecimal/arbitrary-precision decimal type exists in L1 or any current .lm1 file
+  (checked mixa_manager/*.lm1: only C `double` used elsewhere for unrelated draw-mask code,
+  zero BigDecimal-equivalent usage).
+- NOT proposing to build a BigDecimal library. Given the reference itself funnels every
+  function call and every literal through IEEE double, and DECIMAL128 only wraps +,-,*,
+  simple pow, and negate, a faithful narrow first slice can use C `double` directly for
+  those same four ops without losing reference-observable precision for typical inputs,
+  while explicitly flagging (not hiding) that this is float64 not decimal128 - a real,
+  disclosed precision gap versus the reference for edge-case decimal rounding, since
+  DECIMAL128 (34 significant digits) is strictly wider than IEEE double (~15-17 digits).
+
+NARROW FIRST L1 SLICE PROPOSAL (no writes yet - awaiting ownership grant):
+Scope: parseExpression + parseTerm + parseFactor arithmetic ONLY (+,-,*,/,^,unary,parens,
+numeric literals). Excludes: variables, functions (sin/cos/sqrt/etc), degree symbol, UI
+round buttons - each flagged as separate later slices once this core is accepted.
+
+Proposed files (mixa_manager/, pending agreement):
+- mixa_calculator_eval.h.lm1 (prototype: mixa_calculator_eval(const char *expr, double *result,
+  int *err) -> int status)
+- mixa_calculator_eval.lm1 (recursive-descent: parse_expression/parse_term/parse_factor using
+  double, mirroring reference grammar exactly: ^ in term-level, unary in factor-level)
+- tests/mixa_calculator_eval_selftest.lm1
+- run_calculator_eval_selftest.ps1 (same isolated-run/hash/status pattern as console-window)
+
+REFERENCE-DERIVED TEST CASES (expression -> expected, from grammar not invented):
+- "2+3*4" -> 14 (precedence: term before expression)
+- "2^3^2" -> reference uses left-assoc pow via recursive parseTerm loop: verify against
+  actual eat('^') loop structure before asserting exact associativity (will confirm loop
+  shape in implementation, not guess)
+- "-5+3" -> -2 (unary in factor)
+- "(2+3)*4" -> 20 (parens in factor)
+- "10/0" -> division-by-zero error path (ArithmeticException2 equivalent -> err code, using
+  a fixed epsilon for THIS slice since UI round-scale coupling is out of scope; will document
+  as explicit intentional difference, not silent bug carry-over)
+- "1.5*2" -> 3.0
+
+Ownership NOT yet claimed for these 4 files. Awaiting explicit grant before any write.
+This is proposal-only per ticket instruction (no source/docs writes this turn).

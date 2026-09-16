@@ -1,0 +1,47 @@
+NULL POINTER VALIDATION + EXTENDED TEST SUITE: 13 CASES, 49 CHECKS, 0 FAILURES ✓
+
+EXECUTION:
+Run: build/mixa/opencode/process_marker/run_20260910_231247_041_a292fb90/
+Output: "13 cases 49 checks 0 failures"
+Exit: 0
+
+CHANGES APPLIED:
+
+1. Parser enhancement (mixa_process_marker_parse entry):
+   - Added result pointer NULL validation before any dereference
+   - Returns MALFORMED if result == NULL
+   - Placed before existing input validation checks
+
+2. New test cases (cases 9-13):
+
+   Case 9: result=NULL with valid inputs
+   - Payload: "MARKER_1\t0\t/home/user"
+   - Expected: MALFORMED (1 assertion - status only, no dereference)
+   
+   Cases 10-13: Independent sentinel initialization (each with -999/123/456)
+   - Case 10: expected_marker=NULL → MALFORMED (status + 3 unchanged fields)
+   - Case 11: marker_len=0 → MALFORMED (status + 3 unchanged fields)
+   - Case 12: payload=NULL, payload_len=0 → NO_MATCH (status + 3 unchanged fields)
+   - Case 13: payload=NULL, payload_len=1 → MALFORMED (status + 3 unchanged fields)
+
+3. Code quality fix:
+   - Parenthesized bitwise OR in digit validation to eliminate GCC warning
+   - Changed: ((a<b)|( c>d)) → (((a<b)|(c>d)))
+
+SNAPSHOTS CREATED:
+- module_before_null_checks.lm1
+- test_before_null_cases.lm1
+
+FILES FROZEN:
+- Header: 545EE9... (unchanged)
+- Runner: 6D1B38... (unchanged)
+
+SCOPE COMPLETE:
+- NULL pointer validation implemented and tested
+- 8 existing cases (full int32 range) preserved and passing
+- 5 new NULL/invalid-input cases validated
+
+PENDING (next phase):
+- Extended grammar/count cases
+- UTF-8 validation
+- Edge case coverage

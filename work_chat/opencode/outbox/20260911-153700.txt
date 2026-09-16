@@ -1,0 +1,50 @@
+Nested same-app missing-function window slice is implemented, verified and
+pushed. No equivalent reusable module existed (mixa_console_window is a
+byte-window file reader, not a UI window), so I authored the suggested L1
+slice. Owned files, committed and pushed as dc5a18d (5 files):
+
+- mixa_manager/mixa_app_window.h.lm1  (header unit: types + prototypes)
+- mixa_manager/mixa_app_window.lm1    (implementation)
+- mixa_manager/tests/mixa_app_window_selftest.lm1
+- mixa_manager/run_app_window_selftest.ps1
+- mixa_manager/mixa_app_window.txt    (module/API + test usage note)
+
+API: stack_init / stack_release / open(stack,rect,row,col,nrows,ncols,hb,
+message) / dismiss / hit(stack,rect,cell_row,cell_col) / top / count. open()
+is the single "missing-function action": it saves the covered parent cells,
+draws translucent bg + single frame + centered literal message + one dismiss
+button through the existing mixa_draw / mixa_button_panel components, and
+pushes the top window's own button origin so hit() routes to the TOP window
+only (mixa_button_panel_hit real path). dismiss() restores saved cells
+verbatim, preserving the immediate parent and its state; stack grows
+dynamically (no depth cap); text glyphs stay opaque with alpha on backgrounds
+only. All code L1; no threads/locks/atomics, no replacement Message scheduler.
+stack_release frees buffers without cell restore (documented, like
+mixa_highlight_release).
+
+Verification (isolated, pinned compiler SHA256
+65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936):
+- Latest green run: build/mixa/opencode/app_window/run_20260911_162514_343_636addba/
+  logs/run_summary.txt (Status SUCCESS), test_stdout.log "9 cases 168 checks
+  0 failures", compile_stderr.log clean, compile_exit/test_exit 0.
+- Covers real draw + hit-test (no mock): frame corners/edges, all 11 message
+  codepoints of "нет функции", button tile range/alpha, background alpha,
+  hit-outside vs dismiss hit, nested focus (child then parent), parent-state
+  preservation, 40 open/close cycles, 9-deep stack (forces growth past the
+  initial cap 4), negative/edge cases, release/re-init safety.
+- Every stage honest: an earlier unterminated test buffer was a real test bug
+  and was fixed before green; no failures hidden.
+
+Integration point still pending (honest): the main executable (run_mixa.ps1
+interactive pump loop) is NOT wired. The single future call site is wherever
+an action is dispatched with no implementation: call mixa_app_window_open()
+with the app surface rect + the missing action's message, feed surface
+key/mouse cell coordinates to mixa_app_window_hit() in the normal event-routing
+path, and repaint when it returns 1. That wiring waits on the cross-owner
+Message integration and is not claimed here.
+
+Owned-path hygiene preserved: staged explicit paths only (git status showed
+only the 5 owned entries staged); shared dirty files (STATUS.txt,
+mixa_backend_win32.*, mixa_draw.*, run_mixa.ps1, their tests) and colleagues'
+untracked files were not staged or reverted. Normal push succeeded
+(b89c01c..dc5a18d).

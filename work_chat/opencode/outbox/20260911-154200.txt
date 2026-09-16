@@ -1,0 +1,67 @@
+App launcher / shortcut seam (20260911-154200) is DONE: implemented, verified
+and pushed. Committed/pushed as cc6c44b (7 owned files, push 4a54542..cc6c44b):
+
+- mixa_manager/mixa_app.h.lm1          portable contract (types + prototypes)
+- mixa_manager/mixa_app_win32.h.lm1    concrete unit (struct MixaAppList + sizes)
+- mixa_manager/mixa_app_win32.lm1      Windows implementation (all L1)
+- mixa_manager/tests/mixa_app_selftest.lm1
+- mixa_manager/tests/mixa_app_fixture_invoke.c
+- mixa_manager/run_app_selftest.ps1    isolated runner (pinned compiler hash)
+- mixa_manager/mixa_app.txt            support matrix + usage note
+
+Reference mapping (ClearShell ClearShell.java App app() ~7564, Apps ~8201-8440):
+the reference resolves .lnk via IShellLinkW and re-launches shortcuts with
+target+arguments; the port replaces flattened target+args with an OPAQUE
+launch reference (the original .lnk/.url file itself) invoked through the
+native launcher contract (ShellExecuteExW, "open" verb, SEE_MASK_FLAG_NO_UI,
+SW_SHOWNORMAL). Inspection never executes a target: it reads attributes + a
+shell icon tag only (SHGetFileInfoW SHGFI_ICONLOCATION). Our own entry files
+are minimal: kind + label + icon tag + opaque launch ref (header
+mixa-app-link-v1, one value per line; no launcher-settings editor, no second
+set of args/working-dir).
+
+Support matrix (explicit, not "all formats"): real launch .lnk
+(SHELL_LINK), URL .url (URL_LINK), filesystem links are recognized but NOT
+launchers (FS_LINK, never interchanged), directories/unrelated files are
+UNSUPPORTED; registered/packaged app identities are RESERVED and a documented,
+unimplemented Windows gap (MIXA_APP_KIND_REGISTERED). Windows-only in this
+slice; other build adapters are documented gaps. One L1 limitation reported
+instead of silently escaping: COM IShellLinkW is not expressible in L1, hence
+the opaque-reference design (recorded in mixa_app.txt and PORT_OF_CLEARSHELL.txt).
+
+API (ports Windows types/headers out of the common header): inspect /
+entry_create / entry_read / entry_remove / invoke / list_open / list_next /
+list_close + kind/has_icon/label/icon_ref/launch_ref accessors. Status codes:
+OK, ERR_ARG, ERR_MISSING, ERR_IO (readable-but-corrupt entry), ERR_NOMEM,
+ERR_UNSUPPORTED, ERR_LAUNCH, END.
+
+Verification (isolated, pinned compiler SHA256
+65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936):
+- Last two runs SUCCESS, both "app seam selftest: 63 checks, 0 failures",
+  compile clean (-Wall -Wextra -Wpedantic, -lshell32), exit 0:
+  build/mixa/opencode/app_seam/run_20260911_171632_687_8eda649d/ and
+  run_20260911_171658_904_9fce5d55/ (logs/run_summary.txt).
+- Real deterministic fixtures: WScript.Shell-created .lnk files (including
+  Unicode+space "sp ace-файл.lnk"), .url INI, broken-target .lnk, junction
+  (mklink /J). Invocation tested ONLY against the shipped harmless fixture
+  exe that writes a marker then exits; marker asserted absent before any
+  invoke (inspect never executes) and present after. .url is never invoked
+  in tests (no browser). No Start Menu/desktop/user associations touched.
+- Covers: classification of every kind, label/ref/icon invariants (Unicode as
+  exact UTF-8 bytes), create/read/remove round trips, enumeration of *.link
+  entries + skip + END, empty and corrupt dirs, ERR_LAUNCH on broken target,
+  bounded marker poll, null-arg negatives throughout.
+
+Honest remaining gaps: (1) main executable (run_mixa.ps1 pump loop) is NOT
+wired - integration is collect/inspect launchers, manage our *.link entries,
+present through existing UI modules, route selection to mixa_app_invoke();
+(2) MIXA_APP_KIND_REGISTERED (Windows app package identities) unimplemented;
+(3) .url invoke implemented but not auto-tested. No app-private threads, locks
+or scheduler; foreign ingress remains Message (not needed in this slice).
+
+Hygiene: explicit staging of the 7 owned paths only; dirty/untracked
+colleague files untouched; shared compiler read-only; unique isolated build
+dirs under build/mixa/opencode/app_seam/. Clarifications 155100/155200
+(literal reuse of existing ClearShell behavior, no invented buttons/options)
+were honored and are already recorded in PORT_OF_CLEARSHELL.txt; no separate
+ACK reply needed per those notes.

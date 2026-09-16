@@ -1,0 +1,94 @@
+Ticket 20260910-220230: Scenario 5 SIZE_MAX Boundary Cases - COMPLETED
+
+STATUS: PASSED - expect_pos fixed + Scenario 5 added with 4 SIZE_MAX cases, test verified
+
+PART 1: expect_pos DIAGNOSTICS FIX
+Updated to properly display size_t values without truncation:
+  - Changed format from: "got=%u want=%u" with (cast: (unsigned) got/want)
+  - To: "got=%zu want=%zu" with direct size_t parameters (got, want)
+  - C99 %zu format specifier for portable size_t display
+  - Preserves size_t comparisons (already correct in if statement)
+
+PART 2: PRE-EDIT BACKUP
+Backup created before Scenario 5 addition:
+  - Location: build/mixa/opencode/pointer_bounds/recovery/
+  - File: mixa_pointer_bounds_selftest_B63EFD1929C33B8A.lm1
+  - Hash: B63EFD1929C33B8A853396DD8C64885CA5966F76D288B4F73457192E2B9827B6
+  - Prior backups preserved (not overwritten)
+
+PART 3: SCENARIO 5 - SIZE_MAX BOUNDARY CASES (4 cases)
+
+Setup:
+  - Define: size_t max_sz = (cast: (size_t) -1)
+  - Fixture method: Direct field assignment (p\row, p\col, p\octant set explicitly)
+  - Initial octant: MIXA_POINTER_UP_LEFT (before nudge)
+  - Note: dx affects COL, dy affects ROW
+
+Case 1: start(1, max_sz-1), delta(1,0) -> (1, max_sz), octant RIGHT
+  - Fixture: init(), then p\row=1, p\col=max_sz-1, p\octant=UP_LEFT
+  - Nudge: dx=1, dy=0 (increment col by 1)
+  - Expected: OK, position (1, max_sz), octant RIGHT, is_open=1
+  - Result: All 4 fields verified ✓
+
+Case 2: start(max_sz-1, 1), delta(0,1) -> (max_sz, 1), octant DOWN
+  - Fixture: init(), then p\row=max_sz-1, p\col=1, p\octant=UP_LEFT
+  - Nudge: dx=0, dy=1 (increment row by 1)
+  - Expected: OK, position (max_sz, 1), octant DOWN, is_open=1
+  - Result: All 4 fields verified ✓
+
+Case 3: start(max_sz, 1), delta(1,1) -> ERR (row overflow)
+  - Fixture: init(), then p\row=max_sz, p\col=1, p\octant=UP_LEFT
+  - Snapshot all 4 fields before nudge
+  - Nudge: dx=1, dy=1 (row already at max, would overflow on dy=1)
+  - Expected: MIXA_POINTER_ERR, all 4 fields unchanged
+  - Result: snapshot verified unchanged ✓
+
+Case 4: start(1, max_sz), delta(1,1) -> ERR (col overflow)
+  - Fixture: init(), then p\row=1, p\col=max_sz, p\octant=UP_LEFT
+  - Snapshot all 4 fields before nudge
+  - Nudge: dx=1, dy=1 (col already at max, would overflow on dx=1)
+  - Expected: MIXA_POINTER_ERR, all 4 fields unchanged
+  - Result: snapshot verified unchanged ✓
+
+TEST RESULTS:
+Build: SUCCESS (translation + compilation, gcc exit 0)
+Execution: SUCCESS (exit 0)
+Test output: mixa_pointer_bounds_selftest OK
+
+FINAL COUNTS (as expected):
+  Scenarios: 5 ✓
+  Member checks: 112 (was 96, +16 from 4 SIZE_MAX cases × 4 field checks) ✓
+  API assertions: 70 (was 62, +8 from 4 cases × 2 assertions: init + nudge) ✓
+  Failures: 0 ✓
+
+FILE STATE:
+  Path: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1
+  Byte count: 25213
+  SHA256: 02119FC7EEAFA38450E11BBAEC55663C75C84A199E6FB6FFC157F873868A944B
+  Verified in run_summary.log ✓
+
+BACKUP PROGRESSION:
+  Scenario 4 (B63EFD19...): Pre-edit backup for Scenario 5
+  Final (02119FC7...): After expect_pos fix and Scenario 5 addition
+
+IMPLEMENTATION DETAILS:
+- max_sz defined as: size_t max_sz = (cast: (size_t) -1)
+- Fixtures set via direct field assignment (not move_to)
+- All overflow cases properly snapshot all 4 fields (is_open, octant, row, col)
+- Successful cases verify all 4 fields directly (not snapshots)
+- expect_pos now uses %zu format with direct size_t parameters (portable)
+- Native exact Edit tool used only (no PowerShell regex/read-pipe-write)
+
+COMPLIANCE:
+✓ expect_pos fixed for size_t portability (%zu format)
+✓ Pre-edit backup created with hash naming
+✓ Prior backups preserved (not overwritten)
+✓ max_sz defined portably as (cast: (size_t) -1)
+✓ No production/Git/shared build edits
+✓ No runner or framework changes
+✓ Native exact Edit tool only
+✓ Actual counts verified: 112 member, 70 API
+✓ Final hash verified matches run_summary
+
+NEXT ACTION:
+Scenario 5 SIZE_MAX cases complete. Remaining work queued: INT32 extremes, move_to error conditions, released pointer state preservation.

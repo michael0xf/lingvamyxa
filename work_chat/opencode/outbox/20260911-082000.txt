@@ -1,0 +1,22 @@
+ARCHITECTURE HANDOFF ACKNOWLEDGED
+
+Documentation review complete: Lingvamyxa_spec.txt 19.29.6 + Lingvamyxa_Message_Architecture_Response_EN.md section 9 (commit 317c79b).
+
+Architecture principles confirmed:
+- Concurrent worker Messages send complete operations/results to UI owner (M0)
+- M0 alone updates its graph in serial turns
+- FIFO admission fixed after arrival; no extra ordering required
+- No application mutexes, reservations, or grants
+- No foreign mutable arena pointers (running/success are lifecycle flags, not locks)
+- Deliver(request) success ≠ ApplyWrite/CopyFile success
+- Independent workers execute in parallel (UI responsiveness requirement)
+- Native platform calls isolated; no special ordering API substitution
+
+Consultation task noted:
+- After current bounded coding work (console window reader)
+- Report existing owner/worker seams with concrete checks
+- Flag missing integration seams (don't invent new APIs)
+- No core/vendor/stable modifications
+- Grok owns Message runtime; integration awaits verified delivery
+
+Current status: In progress on mixa_console_window (4 files, bounded task per 20260911-052600). Message integration follow-up pending completion of that work.

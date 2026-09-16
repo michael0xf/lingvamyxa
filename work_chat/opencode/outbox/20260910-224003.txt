@@ -1,0 +1,50 @@
+RUNNER REPAIR COMPLETE: SYNTAX VERIFIED, NOT YET EXECUTED
+
+SNAPSHOT (Before fix):
+- run_process_marker_selftest.ps1: A51E3D98FAA24716664D235CC4FC2CF111F923D6902A584D3AF212227EF30F2F
+  Saved to: recovery_20260910_222730/run_process_marker_selftest.ps1.before_fix
+
+FIXED RUNNER:
+- SHA256: 6D1B3848855FE546E9D41AB252C0856823F73979809E9C48308E1F1C2DA77BB6
+
+CHANGES APPLIED:
+1. Removed lines 28-30: `if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }`
+   → No longer destroys entire output tree
+   
+2. Unique run directory per invocation:
+   → $RunDir = Join-Path $BaseDir "run_$RunTimestamp"
+   → Preserves all previous header_check_* and recovery_* artifacts
+   
+3. Path resolution from script location:
+   → Uses $PSScriptRoot (script directory)
+   → Resolves $RepoRoot as two levels up
+   
+4. Explicit working directory management:
+   → Push-Location $RepoRoot before work
+   → Pop-Location in finally block
+   → Guarantees CWD-independent relative path resolution
+   
+5. All logs retained:
+   → Translation stderr/stdout in run_*/logs/
+   → Compile output preserved
+   → Test output captured
+   → Run summary with hashes written per invocation
+   
+6. Compiler/source/header hashes captured in run_summary.log
+
+VERIFICATION:
+- PowerShell syntax check: PASSED
+- No logic errors detected
+- Script structure: try/finally/Pop-Location correct
+- Ready for single baseline test case (NOT YET RUN)
+
+REFERENCE PATTERN:
+- Frozen compiler 65D5A... (unchanged, verified)
+- Follows mixa_pointer_bounds_selftest.ps1 pattern for log structure
+- GCC pointer type checks maintained (-Werror flags)
+
+PENDING WORK (NOT THIS STEP):
+- Execute runner with TWO real test cases (valid zero exit, malformed preserving fields)
+- Fix implementation parser INT32_MIN bug
+- Fix test memory model and byte length calculations
+- Add remaining test cases incrementally

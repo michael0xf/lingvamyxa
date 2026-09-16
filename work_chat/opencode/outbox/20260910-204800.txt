@@ -1,0 +1,67 @@
+Ticket 20260910-204800: Scenario 3 Accuracy Corrections - COMPLETED
+
+STATUS: PASSED - All 5 corrections applied and verified
+
+CORRECTIONS APPLIED:
+
+1. ✓ ERR check: Changed all 4 cases from `rc = MIXA_POINTER_OK` (reject if OK) to `rc != MIXA_POINTER_ERR` (reject if not ERR)
+   - Properly validates that nudge returns MIXA_POINTER_ERR specifically, not just any non-zero value
+
+2. ✓ API assertions for cases 3&4: Added separate checks for init and move_to
+   - Case 3: assertions += 1 for init (line 379), assertions += 1 for move_to (line 383)
+   - Case 4: assertions += 1 for init (line 401), assertions += 1 for move_to (line 405)
+   - Result: API assertions increased from 48 → 50
+
+3. ✓ is_open snapshot: Added `int: snap_open_uf` variable in all 4 cases
+   - Each case now snapshots all 4 fields: p\octant, p\is_open, p\row, p\col
+   - Verifies is_open against snapshot (not constant 1)
+   - Labels clarified: "underflow-*-open" checks verify snapshot equality
+
+4. ✓ Axis comment corrections:
+   - Case 1: "row underflows (dy=-1 affects ROW)" — dx=unused, dy=-1
+   - Case 2: "row underflows (dx=0, dy=-1 affects ROW)" — dx=unused, dy=-1
+   - Case 3: "row underflows (dx=1 valid, dy=-1 affects ROW)" — dx=1 OK, dy=-1 underflows
+   - Case 4: "col underflows (dy=1 valid, dx=-1 affects COL)" — dy=1 OK, dx=-1 underflows
+
+5. ✓ Scenarios count: Changed `scenarios=2` to `scenarios=3` in printf (line 427)
+
+TEST RESULTS:
+Build: SUCCESS (translation + compilation, gcc exit 0)
+Execution: SUCCESS (exit 0)
+Test output: mixa_pointer_bounds_selftest OK
+
+FINAL COUNTS (as expected):
+  Scenarios reported: 3 ✓
+  Member checks: 80 (unchanged from previous) ✓
+  API assertions: 50 (was 48, +2 from separate init/move_to checks in cases 3&4) ✓
+  Failures: 0 ✓
+
+FILE STATE:
+  Path: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1
+  Byte count: 18202
+  SHA256: F8CF389E811865F1EB5DD2C87DB47CABFB9AA8CB783075E1ECF14A4BA1BCF078
+  Verified in run_summary.log ✓
+
+BACKUP VERIFICATION:
+  Recovery backup (pre-edits): build/mixa/opencode/pointer_bounds/recovery/mixa_pointer_bounds_selftest.lm1
+  Backup hash: 0E914963787EC5D404E7125E31345996DB7609760231504B21F9B3C1AF1063E8 (preserved, not overwritten)
+  Source progression: 0E914963... → A2891DD0... → F8CF389E... ✓
+
+IMPLEMENTATION DETAILS:
+- All 4 underflow cases now correctly check rc != MIXA_POINTER_ERR (not rc == OK)
+- All 4 fields snapshot and verified against snapshot (not constant values)
+- Cases 3&4 properly separate init and move_to with independent return code checks
+- All labels match test case intent (row/col underflow vs. valid axis)
+- Native exact Edit tool used only (no PowerShell regex/read-pipe-write)
+
+COMPLIANCE:
+✓ Backup preserved (not overwritten)
+✓ No production/Git/shared build edits
+✓ No runner or framework changes
+✓ Native exact Edit tool only
+✓ Actual member/assertion counts reported (80/50)
+✓ Final hash verified matches run_summary
+✓ Scenarios now correctly reported as 3
+
+NEXT ACTION:
+Scenario 3 corrections complete with exact accuracy. Larger boundary work (successful boundary positions, INT32 edges, move_to error cases, released state) remains queued for safe future increments.

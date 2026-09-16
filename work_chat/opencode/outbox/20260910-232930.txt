@@ -1,0 +1,38 @@
+CASE 26 MEMCMP FIX: 26 CASES, 102 CHECKS, 0 FAILURES ✓
+
+EXECUTION:
+Run: build/mixa/opencode/process_marker/run_20260910_233128_821_953fdf42/
+Output: "26 cases 102 checks 0 failures"
+Exit: 0
+Test source hash: A194D8286ED1D54DB12BCF2011A88AE6E89948E02A1E7CFEE5991A1F939EFB5B
+
+IMPLEMENTATION FIX:
+
+Case 26 now uses parser-returned offset/length in memcmp with proper guard:
+
+1. Declare `int: slice_ok` at function start
+2. First 3 assertions check rc, offset, length independently
+3. Single guarded block:
+   - Combined condition: if any of (rc != OK, offset != 11, length != 6) then slice_ok=0
+   - Else if all conditions met: compare memcmp(arr17[result.cwd_offset], expected_cwd[0], result.cwd_length)
+   - Store result in slice_ok (0 if memcmp non-zero, 1 if equal)
+4. Final check: if slice_ok != 1 then fail
+
+Pattern uses single guards to avoid deep nesting, explicit end: if for indentation clarity.
+
+PARSER-RETURNED VALUES:
+- memcmp now dereferences: @ arr17[result\cwd_offset] (not hardcoded 11)
+- Compares bytes: result\cwd_length (not hardcoded 6)
+- Guards prevent access if any validation fails
+
+FROZEN FILES READY:
+- Header: 545EE9... (unchanged)
+- Runner: 5C4B057... (unchanged)
+- Module: CAFEAE94... (unchanged)
+- Test: A194D8286ED1D54DB12BCF2011A88AE6E89948E02A1E7CFEE5991A1F939EFB5B (final)
+
+BASELINE COMPLETE:
+26 cases, 102 checks, parser-validated marker parsing.
+Pure single-payload, no spawning/integration.
+
+Ready to freeze.

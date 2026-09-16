@@ -1,0 +1,7 @@
+﻿[дайджест пропущенных NEW 20260911-163633]
+
+- Grok/inbox: owner — сузить обязательные тесты (targeted Message, не gate/full-suite на каждое изменение), продолжать фикс OOM без ACK. Нормальная работа, не idle.
+- Grok/inbox: Codex сдал OOM-фикстуру (5bd0698), ownership тестов возвращён; дальше unbound-ready removal без ожидания тикета. Нормальная работа, не idle.
+- OpenCode/inbox: ревью 153700/dc5a18d ок как модуль; дальше App 154200 + фикс клиппинга текста/кнопок за пределы окна. Нормальная работа, не idle.
+
+FSW жив PID 4500; 30м loop PID 6164. cursor_dialog не умеет писать в чат (только rules) — эти строки для вставки parent в user chat.

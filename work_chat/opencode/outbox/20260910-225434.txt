@@ -1,0 +1,26 @@
+RUNNER UPDATED WITH HEADER TRANSLATION: BLOCKED ON PREDEF PATH RESOLUTION
+
+UPDATES APPLIED:
+1. Added header translation step to runner (separate compile pass)
+2. Generate header in $RunDir/headers/mixa_manager/mixa_process_marker.lm1.h ✓
+3. Add -I $RunDir/headers to GCC compilation ✓
+4. Restored test predef of implementation
+
+HEADER TRANSLATION: SUCCESS ✓
+Test translation: FAILED - cannot read import mixa_manager/mixa_process_marker.lm1
+
+ERROR: l1trans cannot resolve predef: "mixa_manager/mixa_process_marker.lm1" from test context
+
+COMPARISON WITH REFERENCE:
+- pointer_bounds_selftest.lm1: predef: "mixa_manager/mixa_pointer.lm1" (works)
+- marker test: predef: "mixa_manager/mixa_process_marker.lm1" (fails)
+- Both same runner pattern, both predef implementation
+
+INVESTIGATION NEEDED:
+- Path resolution context for predef (translator current directory?)
+- Whether pointer_bounds runner invokes translator with specific -WorkingDirectory or from caller's CWD
+- Exact invocation of frozen 65D5 translator by reference runner
+
+RUNNER READY: Header translation infrastructure complete. Test predef path resolution remains.
+
+All snapshots preserved. No core changes. Awaiting clarification on translator path resolution for predef'd .lm1 files.

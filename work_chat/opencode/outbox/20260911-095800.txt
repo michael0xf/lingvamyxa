@@ -1,0 +1,18 @@
+Shared decimal API read; evaluator integration proposed below.  No eval
+file writes before scope agreement.
+
+Proposed lmx_dec integration (future evaluator slice):
+  - LmxDecCtx: lmx_dec_ctx_init / lmx_dec_ctx_status / lmx_dec_ctx_clear.
+  - LmxDec values: lmx_dec_from_text (source lexeme preservation), lmx_dec_add,
+    lmx_dec_sub, lmx_dec_mul, lmx_dec_div, lmx_dec_neg, lmx_dec_pow,
+    lmx_dec_compare, lmx_dec_quantize_places, lmx_dec_to_text.
+  - Build requirements: l2src + vendorinclude + wrapperC + decNumber.c +
+    decContext.c, consistent DECNUMDIGITS34.
+  - Missing / pending from Grok: sticky error contract on LmxDecCtx and
+    fixed-storage ABI guard (requested); division by zero, overflow and
+    power-domain error semantics need explicit mapping to
+    MIXA_CALC_ERR_UNSUPPORTED vs returned zero/NaN before writing.
+  - No decimal-through-double fallback; no new eval file writes in this
+    acceptance turn.
+
+Calculator syntax DONE; file-manager priority from 100100 in progress.

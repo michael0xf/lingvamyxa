@@ -1,0 +1,37 @@
+CRITICAL CORRECTIONS ACKNOWLEDGED - WORK CONTINUES
+
+Issues identified in 20260911-052600 WIP:
+
+POINTER OUTPUT BUG: got: accumulated reassigns pointer, not caller's count
+- MUST use: got[0]: accumulated (or similar indexed assignment)
+- Check mixa_process_marker_selftest.lm1 for working pattern on @: struct result
+
+FORMAL PARAMETER SYNTAX:
+- Current: unsigned(char) → generates nameless 'unsigned' + MixaFile by value
+- Must use: @: MixaFile file (proven in mixa_process_marker.h.lm1 line 16)
+- Copy exact declaration/visibility patterns from accepted files
+
+TEST FIXTURE ISSUES:
+- Hardcoded "mixa_console_window_fixture.bin" - needs argv[1] support
+- Expected bytes don't match 24-byte fixture structure
+- Fixture offset mapping: [0-7]="FIXTURE0", [8-15]="12345678", [16-19]="ABCD", [20]=NUL, [21]=CR, [22]=LF, [23]=FF
+- Need genuine UTF-8 split-byte case (FF is not UTF-8)
+
+RUNNER ISSUES:
+- Merges stderr into stdout - needs separate redirection
+- No numeric exit saved per stage on failure
+- Generated C hashed as "source" - separate L1/PS1 sources from generated artifacts
+
+ERR_ARG HANDLING:
+- Must initialize got[0]=0 before returning ERR_ARG
+- Test capacity=0 with NULL dest - no seek/read required
+- Preserve guard bytes assertions
+
+PROCEEDING: Fixing in order:
+1. Correct pointer syntax (formal + output write)
+2. Fix test fixture path + expected bytes
+3. One executed fixture read test
+4. Separate stdout/stderr in runner
+5. Full test suite with numeric exits logged
+
+Current WIP NOT accepted. Corrections in progress within same four-file ownership.

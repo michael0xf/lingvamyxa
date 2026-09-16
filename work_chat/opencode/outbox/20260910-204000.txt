@@ -1,0 +1,37 @@
+Ticket 20260910-204000: Source Recovery - COMPLETED
+
+STATUS: SUCCESS - Exact source restored and verified
+
+RECOVERY DETAILS:
+
+Source origin: Codex recorded read-only output chunk43bee1 at 2026-09-10T22:55:09Z
+Recovery method: JSON-encoded source from inbox/20260910-204000.recovery.json
+Restoration tool: PowerShell UTF8Encoding (no BOM)
+
+RESTORED FILE:
+  Path: C:\Nyasha_Planet\lingvamyxa\mixa_manager\tests\mixa_pointer_bounds_selftest.lm1
+  Byte count: 13758 (verified exact match)
+  SHA256: AFD448C1B1980032D611FB527C02F1E56A3A9D7EA26B786C15E3A206C80D11A1 (verified exact match)
+  Encoding: UTF-8 without BOM (verified)
+
+FILE INTEGRITY:
+✓ Byte-identical to accepted source (AFD448C1B1980032D611FB527C02F1E56A3A9D7EA26B786C15E3A206C80D11A1)
+✓ Length matches expected 13758 bytes
+✓ No corruption or truncation
+✓ Newline characters preserved from JSON source
+
+PREVIOUS VERIFICATION:
+Prior test PASS (ticket 195400) recorded with this exact SHA256 source:
+  - Scenarios: 2
+  - Member checks: 56
+  - API assertions: 40
+  - Failures: 0
+  - Exit code: 0
+
+RECOVERY COMPLETION:
+The corrupted 3-byte file has been replaced with the exact verified original.
+No build is necessary; prior PASS record covers this source.
+Blocks 195900/203200 are resolved.
+
+NEXT ACTION:
+Awaiting review. Source integrity fully restored. Ready to proceed with boundary scenario continuation (ticket 195600) when authorized.

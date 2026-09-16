@@ -1,0 +1,64 @@
+Ticket 20260910-194700: Pointer Bounds Test - First Slice (8 directions + zero-delta)
+
+STATUS: FRAMEWORK WORKING, API BEHAVIOR INVESTIGATION NEEDED
+
+WORK COMPLETED:
+
+1. Created test source: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1
+   - Implements 2 scenarios as specified:
+     * Scenario 1: Eight successful nudge directions from init (UP, UP_RIGHT, RIGHT, DOWN_RIGHT, DOWN, DOWN_LEFT, LEFT, UP_LEFT)
+     * Scenario 2: Zero-delta preservation for each of 8 octants
+   - Code: ~180 lines L1 source
+   - References: mixa_pointer.h (read-only), existing mixa_pointer_selftest.lm1 (read-only)
+
+2. Created runner: mixa_manager/run_pointer_bounds_selftest.ps1
+   - Pattern: derived from highlight_restore runner (proven stable)
+   - Features: stage tracking, negative logs, hash verification, PS5.1 compatible
+   - Code: ~160 lines PowerShell
+
+3. Build artifacts created and verified:
+   - Location: build/mixa/opencode/pointer_bounds/
+   - Translator: stable (65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936)
+   - Compilation: SUCCESS (gcc warnings on unused variables, non-fatal)
+   - Execution: RUNS (test harness executes, captures output)
+
+CURRENT ISSUE:
+
+Test expectations vs actual octant values do not match expected API behavior.
+
+Symptom: After nudging with non-zero (dx, dy), octant should change to match the direction.
+  Example: nudge(dx=-1, dy=1) should set octant to DOWN_LEFT(5)
+  Actual: octant remains at or returns to DOWN_RIGHT(3)
+
+Zero-delta preservation also doesn't work as expected:
+  After setting direction, nudge(dx=0, dy=0) should leave octant unchanged
+  Actual: octant reverts to DOWN_RIGHT(3) or has unexpected value
+
+Test execution shows the test harness is working (code compiles, runs, captures output).
+The existing mixa_pointer_selftest.lm1 PASSES (reference test OK).
+
+INVESTIGATION NEEDED:
+
+1. API semantics: Verify whether nudge() modifies octant immediately or requires additional setup
+2. Test construction: Ensure nudge() arguments (dx, dy) are used correctly per the API spec
+3. Reference comparison: Detailed analysis of existing mixa_pointer_selftest.lm1 vs my implementation
+
+PRESERVED EVIDENCE:
+
+Test source: mixa_manager/tests/mixa_pointer_bounds_selftest.lm1 (180 lines, accepted L1 syntax)
+Runner: mixa_manager/run_pointer_bounds_selftest.ps1 (160 lines, PS5.1 compatible)
+Build dir: build/mixa/opencode/pointer_bounds/ (exists with logs)
+Last run summary: C:\Nyasha_Planet\lingvamyxa\build\mixa\opencode\pointer_bounds\logs\run_summary.log
+
+RECOMMENDATION:
+
+Before continuing with boundary matrix or INT32 edge cases, resolve the basic 8-direction nudge behavior.
+This is a pure API understanding issue, not a framework or infrastructure problem.
+
+Remaining work (explicitly deferred per ticket):
+  - Boundary matrix (0, 1, SIZE_MAX-1, SIZE_MAX) with positive/negative deltas
+  - INT32_MIN/INT32_MAX nudge with representable coords
+  - move_to semantics (same position, valid moves, unrepresentable rejection)
+  - Release/closed pointer state preservation
+
+Next slice can proceed once current octant/zero-delta semantics are clarified.

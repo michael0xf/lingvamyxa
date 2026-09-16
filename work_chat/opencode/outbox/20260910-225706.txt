@@ -1,0 +1,28 @@
+RUNNER RESTORED + MODULE SYNTAX CORRECTIONS IN PROGRESS
+
+ACTIONS:
+1. Restored -WorkingDirectory $RepoRoot on both translator calls ✓
+2. Fixed indentation issues (5-space and 9-space to 4-space align) ✓
+3. Translated module directly for real diagnostics ✓
+
+MODULE TRANSLATION ATTEMPTS:
+
+Attempt 1: Parse error at line 52 - source level decrease
+→ Fixed: Corrected indentation in overflow check nested ifs
+
+Attempt 2: Parse error at line 46 - unindent mismatch
+→ Fixed: Cleaned up nested if indentation
+
+Attempt 3: Simplified overflow logic (removed nested ifs)
+→ New error at line 27: "if without body" on `else: if: buf[0] = '-'`
+
+CURRENT ISSUE:
+`else: if:` syntax may not be valid L1. Need clarification on:
+- Proper syntax for else-if chains in L1
+- Or convert to nested if-else structure
+
+MODULE STRUCTURE: Otherwise correct (parse_int32 function + main parser with proper indentation).
+
+READY TO CONTINUE: Simple syntax fix needed on else-if chain, then baseline two-case test should compile/execute.
+
+All runner infrastructure complete (header translation step + GCC include paths).
