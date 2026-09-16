@@ -9873,3 +9873,29 @@ of find/find_tree, whether the id names a record already REGISTERED at that poin
 -- which is exactly the create-lag that made the reverted
 self_or_find-by-lookup attempt fail. The tree given to it is read-only, and the
 answer is a table plus its greps and totals.
+
+AD STAGE BRANCH NOW CARRIES ITS PROBE, and the callers' migration is a coding
+ticket, recorded 2026-09-16 16:10 by the coordinator (lingvamyxa-08): d6/lock-ad is a0785a7c
+(849ef1b7 plus l2src/run_lock_ad_probe.ps1, the stage's own acceptance probe,
+which the design keeps authored on d6/lock-ad-red and merges onto an AD branch
+only to measure). Probe on this tip, verbatim: "AD probe: find=210 find_tree=8
+dest_from_src=8 self_or_find_fallback=2 id_marks=0 parent_field=0", AD RED --
+which is the probe's positive control until the migration lands. The full gate
+chain is running on this tip.
+
+grok_bot's second coding ticket is out: migrate the send family's 112 call sites
+so each fills the pair it can fill (from_msg for the turn's own record, to_msg
+from create's result or the answered letter, reply_to_msg where it answers), on
+its own branch grok/ad-pair-callers off d6/lock-ad, with the sites that CANNOT
+marked by reason in a comment; the runtime's fallbacks stay, and the answer must
+carry run_port_message GREEN and the probe's counters. Its first ticket (the
+inventory) is what makes this one mechanical: 112 sites counted, of which the
+inventory names per site what the pointer is and where it came from.
+
+FLAKE, state at this hour: 12 green runs of the instrumented runner loop and 91
+green runs of the instrumented reference binary under 32 CPU hogs, i.e. neither
+the runner context alone nor plain CPU saturation reproduces it here; 5c's one
+hit in 30 runs came from its q_alloc (poisoning) build, so the next attempt is to
+rebuild that configuration WITH the instrumented selftest and let it run. The
+diagnostic it prints names which of start_contexts' three refusals fired and what
+host_sync/exec/workers held at that moment.
