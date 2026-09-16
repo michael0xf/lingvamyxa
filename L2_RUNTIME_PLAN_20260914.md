@@ -7091,3 +7091,15 @@ change: the falsifier restores one original retain line from 7b3a8668
 at one site, not a comment, so what is put back is what the stage
 deleted (the probe counts either). The allowlist dry run over the
 pushed tip 6e2ea936 accepts all eight paths, 0 unmatched.
+b5's blocker on the lmx_root_record fix: the module is an L2-native
+unit (l2src/lmx_root_record.lm2 and .h.lm1, no .lm1 twin), built only
+by l2src/l2units_build.ps1's Build-L2RuntimeUnits (l2trans, checks,
+l1trans, gcc), which mixa_manager never calls; the six lists' consumers
+run l1trans on l2src\<name>.lm1 per entry, so a bare list entry fails
+earlier, not later. RULED: the shared lib lib_l2_runtime_support.ps1
+dot-sources l2src/l2units_build.ps1 and calls Build-L2RuntimeUnits for
+the twinless units before its l1trans loop (no copy of the function,
+the unit list and order from the l2src runner that builds them); the
+five runners with lists of their own stay as they are, recorded as
+lacking the step, a later ticket moves them onto the lib; the
+coordinator reads the diff before the seven are re-measured.
