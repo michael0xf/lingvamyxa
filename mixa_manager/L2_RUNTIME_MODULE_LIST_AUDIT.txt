@@ -782,3 +782,49 @@ the fixed import cap this whole mechanism existed to work around is
 genuinely gone from the current pin, and the real 22-import module
 needed no special-case translator at all once asked to use the one
 every other module already uses.
+
+--- app_controller: re-attempted the full mixa_app_fmpanel_l2.h.lm1
+    predef chain against the current pin (no code landed -- reverted;
+    this is the "next verdict" the ticket asked to follow, not a fix)
+
+Edited mixa_app_controller_l2.h.lm1: removed the opaque `include:
+"mixa_manager/mixa_app_fmpanel.h"`, added `predef: "mixa_manager/
+mixa_app_fmpanel_l2.h.lm1"` in its place -- the earlier draft's own
+approach, re-attempted. The import-table-full error did NOT return
+(confirmed: three header-translation additions later -- mixa_tiles_l2.
+h.lm1, mixa_highlight_l2.h.lm1, mixa_app_fmpanel_l2.h.lm1 itself, added
+to the runner's own Step 0 list to satisfy the new predef chain's own
+transitive closure -- l1trans never once printed that error), directly
+confirming this finding's own earlier claim that the old cap is gone.
+
+But it does not reach a working state either -- a DIFFERENT, genuine
+blocker, not anticipated by either of the ticket's own two branches:
+gcc: `headers/mixa_manager/mixa_tiles_l2.lm1.h:16:8: error:
+redefinition of struct MixaCell` and `:25:8: error: redefinition of
+struct MixaTextRect`, both conflicting with `mixa_core.h:17:16` and
+`:26:16` -- mixa_tiles_l2.h.lm1's own L2-declared MixaCell/MixaTextRect
+(reached transitively via the new app_fmpanel_l2 chain) now collides
+with the REAL mixa_core.h's own definitions (reached transitively via
+the EXISTING console_window.h.lm1 chain, already predef'd before this
+attempt) -- both landing in the same translation unit for the first
+time. mixa_tiles_l2.h.lm1's own header comment already names exactly
+this hazard as the reason it avoids including mixa_core.h/mixa_tiles.h
+directly: "doing so would redefine `struct MixaCell`/`struct
+MixaTextRect` a second time in the same translation unit". Resolving
+it means picking one canonical source for these two structs across
+app_controller's own combined chain (a real design decision -- which
+of console_window's real chain or fmpanel's L2 chain keeps the
+definition, and the other one made to reference it instead of
+redeclaring it), not a mechanical header-translation addition; not
+attempted here.
+
+Both edited files reverted to their prior, working (opaque-header)
+state before committing anything -- re-ran the runner cold after
+reverting to confirm: same UNEXPECTED_FAILURE, same mixa_app_
+controller.lm2:14:5 diagnostic as before, unchanged. ExpectVerdict
+entered into the gate table: unchanged (app_controller stays outside
+run_mixa_parity_gates.ps1, as it already was) -- UNEXPECTED_FAILURE,
+same reason as before, this attempt only replaces "why" with a more
+complete picture (the opaque header is not just avoiding the old
+import cap, it is also the only thing keeping MixaCell/MixaTextRect
+single-defined in this file today).
