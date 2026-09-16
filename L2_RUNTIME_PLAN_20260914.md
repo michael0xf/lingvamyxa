@@ -8364,3 +8364,23 @@ the route (hops up to the common ancestor, then the destination's
 remaining indices), and posts; the postman step per hop as ruled
 above). send_cap and the envelope's dest carry the destination's
 address string in place of the record pointer.
+The lead's corrections on the address impact (2026-09-16): the
+receiver-qualified reads of LmxMsg's path fields at ab2db782 are 49
+(lmx_message.h 3, lm1 23, lm2 23, exec.c 0, the three selftests 0),
+not the 94 he quoted while re-measuring (the bare word "path") nor
+the 1023 before it; path_n/path_seg call sites 29 (lmx_message_selftest
+16, exec selftest 9, send_local selftest 2, host selftest 2) plus two
+declarations; path_grow sites 23, of which only four are production
+callers (assign_path in each core, twice), the other 19 being the
+lmx_msg_path_storage module (.h.lm1, .lm1, .lm2) and its 15-check
+selftest, so deleting path/path_n/path_cap leaves that module with no
+production caller: a module deletion with the five reference
+populations (runner support lines, field references, generated-header
+includes, exported-symbol calls, prose precedent), checked in full
+before the section says a word; child_seq sites 7. The sixth ruling
+costs less than it looks: assign_path (lmx_message.lm1:1063-1087)
+already computes the index (p\child_seq + 1, stored at
+slot\path[p\path_n]; R0's path is [1]), so the arrays were a
+materialized cache of the parent walk and getAddress is the same
+computation unmaterialized. The section follows with
+lmx_msg_get_address and lmx_msg_send_to.
