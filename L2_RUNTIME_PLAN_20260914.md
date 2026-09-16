@@ -7598,3 +7598,16 @@ specific parent (unaffected, the shape the unlink case converted to),
 and exactly two genuine "zero means detached" readers, lm1:688 /
 lm2:731 plus exec.c:1192 (endp_try_retire's guard, which goes with
 refs): two sites, not twenty.
+e9's row at claude-0c/s6-2-gate-impact 83774da4: the allowlist check
+against the real stage tip e8d78076 passes (thirteen changed paths,
+all matched by the regex over the tree, 0 outside; the six mixa files
+and the baseline file arriving through b5's merge), land_s6_2.sh
+unchanged at 96f35613; the parent_msg-as-zero population is a set of
+one at 7b3a8668 (lmx_message_exec_selftest.c:6778, the
+family-boundary contract case the gate found; zero such readers in
+the L1 fixtures; the row carries the count and the command), which
+agrees with the lead's two genuine sites once exec.c:1192 (going with
+refs) is counted on the deletion side; the strengthening argument
+recorded ("one fewer" never said whose). Deliberately not yet in the
+row: the nine restated cases, settled_has/settled_n and the
+KIND_REJECTED result, until the two owed tripwires are shown.
