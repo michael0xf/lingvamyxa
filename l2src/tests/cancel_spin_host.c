@@ -93,6 +93,8 @@ static int turn_spin(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     out.kind = LMX_MSG_KIND_BYTES;
     out.n = 1;
     out.bytes = &marker;
+    out.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — no handle */
     c->send_st = lmx_msg_send(rt, who, c->sib, &out);
     (void)l2_m1(c->node);
     InterlockedIncrement(&c->done);
@@ -240,6 +242,8 @@ static int spin_boot(LmxMsgRuntime **rt_out, LmxMsgAddr *p_out, LmxMsgAddr *c_ou
     e.kind = LMX_MSG_KIND_BYTES;
     e.n = 1;
     e.bytes = &ini;
+    e.from_msg = lmx_msg_turn_self(rt);
+    /* AD pair: to_msg CANNOT — no handle */
     if (lmx_msg_send(rt, p, c, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {
         lmx_msg_runtime_delete(rt);
         return 1;

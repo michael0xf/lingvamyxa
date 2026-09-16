@@ -71,9 +71,13 @@ fn: main () int
     env\correlation: 0U
     env\reply_to: p
     env\number: 3
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     check(lmx_msg_send_graph(rt, p, child, env, original) = c.LMX_MSG_STAGED, "P stages a graph for C")
     check(lmx_msg_inbox_n(rt, child) = 0 && cm\blocks = c_blocks_before, "staging admits nothing and touches no recipient storage")
     check(lmx_msg_graph(pm) = original && lmx_owned_ranges_find(pm\ranges, (cast: (@: void) original)) != 0 && lmx_int_value_known(value) = 41, "the sender keeps its original in its own arena")
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     check(lmx_msg_send_graph(rt, p, child, env, 0) = c.LMX_MSG_INVALID, "no graph, no delivery")
 
     # --- a failed sending turn drops the delivery.
@@ -83,6 +87,8 @@ fn: main () int
 
     # --- a successful sending turn publishes; admission moves the delivery.
     env\id: 2U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     check(lmx_msg_send_graph(rt, p, child, env, original) = c.LMX_MSG_STAGED, "P stages the graph again")
     # S6-2 (the drain ruling): P's end-turn pushes; R0's round (the host's pump) admits.
     check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, child) = 1, "P's successful end-turn publishes it into C's inbox")

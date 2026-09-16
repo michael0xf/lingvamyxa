@@ -135,6 +135,8 @@ fn: turn_r_map (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
             return: 1
         env\kind: c.LMX_MSG_KIND_NUMBER
         env\number: 1
+        env\from_msg: c.lmx_msg_turn_self(rt)
+        # AD pair: to_msg CANNOT — no handle
         if: lmx_msg_send(rt, who, cell[0], env) != c.LMX_MSG_STAGED
             cell[2]: 2U
         ---

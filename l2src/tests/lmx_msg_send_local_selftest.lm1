@@ -44,6 +44,8 @@ unsigned: send_via_root_to 0U
 fn: send_via_root_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     if: ctx != 0
         return: 1
+    send_via_root_env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — id from configuration
     if: lmx_msg_send(rt, who, send_via_root_to, send_via_root_env) != c.LMX_MSG_STAGED
         return: 1
     ---
@@ -161,6 +163,8 @@ sub: send_copy_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; unsigned
     env\bytes: bytes
     env\n: 4U
     send_check(src\outbox = 0 && dst\inbox = 0 && other\inbox = 0, "clean endpoint queues")
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     send_check(lmx_msg_send(rt, from, to, env) = LMX_MSG_STAGED, "send staged")
     send_check(src\outbox != 0 && src\outbox = src\outbox_tail && src\outbox\dest_msg = dst, "staged destination is exact endpoint")
     send_check(dst\inbox = 0 && other\inbox = 0, "staging is not admission")
@@ -244,6 +248,8 @@ fn: main () int
     watched_owned: payload
     sibling_init: s\init
     sibling_state: s\state
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     send_check(lmx_msg_send_owned(rt, parent, child, env) = LMX_MSG_STAGED, "owned send staged")
     send_check(env\bytes = 0 && env\n = 0U && owned_frees = 0, "sender ownership consumed without freeing payload")
     send_check(p\outbox != 0 && p\outbox\dest_msg = d && p\outbox\bytes = payload && p\outbox\owned != 0 && d\inbox = 0, "owned staged pointer identity")

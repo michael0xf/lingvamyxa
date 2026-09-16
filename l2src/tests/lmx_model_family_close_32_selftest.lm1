@@ -75,6 +75,9 @@ fn: turn_worker (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         reply\reply_to: who
         reply\kind: c.LMX_MSG_KIND_NUMBER
         reply\number: effects
+        reply\from_msg: c.lmx_msg_turn_self(rt)
+        reply\reply_to_msg: c.lmx_msg_turn_self(rt)
+        # AD pair: to_msg CANNOT — no handle (letter id only; recv fills no reply_to_msg)
         st: lmx_msg_send(rt, who, got\reply_to, reply)
         lmx_msg_env_release(got)
         c.free((cast: (@: void) got))
@@ -130,6 +133,8 @@ fn: turn_p_stop_c (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 fn: turn_p_send_after_stop (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     if: ctx != 0
         return: 1
+    g_env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — id from configuration
     g_send_st: lmx_msg_send(rt, who, g_c, g_env)
     return: lmx_msg_end_turn(rt, who, 1)
 
@@ -187,6 +192,8 @@ fn: main () int
     env\reply_to: p
     # S6-2 (the drain ruling): a non-R0 end-turn only pushes; wherever this selftest
     # reads a delivery, the host (R0's lane) runs R0's round, lmx_msg_pump, first.
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_pump(rt) = c.LMX_MSG_OK, "P gives C an input")
     pst: map_in_own_turn(rt, p, c1)
     check(pst = c.LMX_MSG_OK, "P's own turn maps C onto its own context; G1, G2 and H stay unmapped")

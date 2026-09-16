@@ -78,6 +78,8 @@ fn: turn_post (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     reply\id: 12U
     reply\kind: c.LMX_MSG_KIND_NUMBER
     reply\number: 1
+    reply\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — id from configuration
     st: lmx_msg_send(rt, who, g_parent, reply)
     c.free((cast: (@: void) reply))
     if: st != c.LMX_MSG_STAGED

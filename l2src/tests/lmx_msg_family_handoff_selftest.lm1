@@ -197,6 +197,8 @@ unsigned: send_via_root_to 0U
 fn: send_via_root_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     if: ctx != 0
         return: 1
+    send_via_root_env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — id from configuration
     if: lmx_msg_send(rt, who, send_via_root_to, send_via_root_env) != c.LMX_MSG_STAGED
         return: 1
     ---

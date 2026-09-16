@@ -167,6 +167,8 @@ fn: main () int
     env\number: 0
     env\bytes: payload
     env\n: 4U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, parent, child, env)
     if: st != c.LMX_MSG_STAGED
         c.printf("send staging failed\n")
@@ -198,6 +200,8 @@ fn: main () int
         c.printf("correlation lost\n")
         fail: fail + 1
     lmx_msg_env_release(got)
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, parent, child, env)
     st: lmx_msg_end_turn(rt, parent, 0)
     st: lmx_msg_pump(rt)
@@ -205,6 +209,8 @@ fn: main () int
         c.printf("failed turn must discard outbox\n")
         fail: fail + 1
     env\id: 1U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, parent, child, env)
     st: lmx_msg_end_turn(rt, parent, 1)
     st: lmx_msg_pump(rt)
@@ -213,6 +219,8 @@ fn: main () int
         fail: fail + 1
     env\id: 2U
     env\correlation: 22U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, parent, child, env)
     st: lmx_msg_end_turn(rt, parent, 1)
     st: lmx_msg_pump(rt)
@@ -227,6 +235,8 @@ fn: main () int
         fail: fail + 1
     lmx_msg_env_release(got)
     env\id: 3U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, parent, child, env)
     st: lmx_msg_end_turn(rt, parent, 1)
     st: lmx_msg_pump(rt)
@@ -242,6 +252,8 @@ fn: main () int
     env\bytes: payload
     env\n: 4U
     env\reply_to: parent
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, parent, dropc, env)
     if: st != c.LMX_MSG_STAGED
         c.printf("drop-race send not staged\n")
@@ -277,6 +289,8 @@ fn: main () int
     env\number: 7
     env\bytes: 0
     env\n: 0U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, parent, child2, env)
     st: lmx_msg_stop(rt, parent, child2)
     st: lmx_msg_end_turn(rt, parent, 1)
@@ -323,6 +337,8 @@ fn: main () int
     env\kind: c.LMX_MSG_KIND_BYTES
     env\bytes: payload
     env\n: 4U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, req, mid, env)
     st: lmx_msg_end_turn(rt, req, 1)
     st: lmx_msg_pump(rt)
@@ -334,6 +350,8 @@ fn: main () int
     env\id: 42U
     env\correlation: 0U
     env\reply_to: req
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, req, mid, env)
     st: lmx_msg_end_turn(rt, req, 1)
     st: lmx_msg_pump(rt)
@@ -405,6 +423,8 @@ fn: main () int
     st: lmx_msg_pump(rt)
     env\id: 50U
     env\reply_to: parent
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, parent, mid, env)
     st: lmx_msg_end_turn(rt, parent, 1)
     st: lmx_msg_pump(rt)
@@ -439,6 +459,8 @@ fn: main () int
     env\reply_to: worker
     env\bytes: 0
     env\n: 0U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, worker, ui, env)
     st: lmx_msg_end_turn(rt, worker, 1)
     st: lmx_msg_pump(rt)
@@ -483,6 +505,8 @@ fn: main () int
     env\reply_to: parent
     env\bytes: payload
     env\n: 4U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, parent, w2, env)
     st: lmx_msg_end_turn(rt, parent, 1)
     st: lmx_msg_pump(rt)
@@ -494,6 +518,8 @@ fn: main () int
     env\reply_to: log
     env\bytes: 0
     env\n: 0U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, w2, log, env)
     st: lmx_msg_stop(rt, parent, w2)
     st: lmx_msg_end_turn(rt, parent, 1)
@@ -513,6 +539,8 @@ fn: main () int
     env\reply_to: parent
     env\bytes: payload
     env\n: 4U
+    env\from_msg: c.lmx_msg_turn_self(rt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rt, parent, w2, env)
     st: lmx_msg_end_turn(rt, parent, 1)
     st: lmx_msg_pump(rt)
@@ -855,6 +883,8 @@ fn: main () int
     env\number: 1
     env\correlation: 1U
     env\reply_to: lp5
+    env\from_msg: c.lmx_msg_turn_self(lrt5)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(lrt5, lp5, lc5, env)
     st: lmx_msg_end_turn(lrt5, lp5, 1)
     st: lmx_msg_pump(lrt5)
@@ -881,6 +911,8 @@ fn: main () int
     env\number: c.LMX_MSG_PROF_LIVE_R
     env\correlation: 99U
     env\reply_to: lp6
+    env\from_msg: c.lmx_msg_turn_self(lrt6)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(lrt6, lp6, lc6, env)
     st: lmx_msg_end_turn(lrt6, lp6, 1)
     st: lmx_msg_pump(lrt6)
@@ -909,6 +941,8 @@ fn: main () int
     env\number: c.LMX_MSG_PROF_LIVE_R
     env\correlation: 1U
     env\reply_to: lp7
+    env\from_msg: c.lmx_msg_turn_self(lrt7)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(lrt7, sib7, lc7, env)
     st: lmx_msg_end_turn(lrt7, sib7, 1)
     st: lmx_msg_pump(lrt7)
@@ -933,11 +967,15 @@ fn: main () int
     env\number: 0
     env\n: 4U
     env\bytes: payload
+    env\from_msg: c.lmx_msg_turn_self(trt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(trt, ta, tb, env)
     if: st != c.LMX_MSG_STAGED
         c.printf("teardown send a->b\n")
         fail: fail + 1
     ---
+    env\from_msg: c.lmx_msg_turn_self(trt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(trt, tb, ta, env)
     if: st != c.LMX_MSG_STAGED
         c.printf("teardown send b->a\n")
@@ -967,6 +1005,8 @@ fn: main () int
     env\kind: c.LMX_MSG_KIND_BYTES
     env\n: 4U
     env\bytes: payload
+    env\from_msg: c.lmx_msg_turn_self(rrt)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rrt, rp, rc, env)
     if: st != c.LMX_MSG_STAGED
         c.printf("ref send\n")
@@ -996,6 +1036,8 @@ fn: main () int
         c.printf("no handle to the destination\n")
         fail: fail + 1
     ---
+    env\from_msg: c.lmx_msg_turn_self(rrt)
+    # AD pair: to_msg unused — dest LmxMsg* arg supplies destination
     st: lmx_msg_send_cap(rrt, rp, rdest, env)
     if: st != c.LMX_MSG_STAGED
         c.printf("send_cap: st=%d\n", st)
@@ -1009,6 +1051,8 @@ fn: main () int
     st: lmx_msg_create(rrt2, 0U, payload, 4U, @ rp2)
     st: lmx_msg_end_turn(rrt2, rp2, 1)
     st: lmx_msg_pump(rrt2)
+    env\from_msg: c.lmx_msg_turn_self(rrt2)
+    # AD pair: to_msg unused — dest LmxMsg* arg supplies destination
     st: lmx_msg_send_cap(rrt2, rp2, rdest, env)
     if: st != c.LMX_MSG_INVALID
         c.printf("cross-runtime send_cap\n")
@@ -1061,6 +1105,8 @@ fn: main () int
         c.printf("the rolled-back child is still findable after its release\n")
         fail: fail + 1
     ---
+    env\from_msg: c.lmx_msg_turn_self(rrt3)
+    # AD pair: to_msg unused — dest LmxMsg* arg supplies destination
     st_cap: lmx_msg_send_cap(rrt3, rp3, held3, env)
     st_end: lmx_msg_end_turn(rrt3, rp3, 1)
     st: lmx_msg_pump(rrt3)
@@ -1078,6 +1124,8 @@ fn: main () int
         c.printf("sibling retired with child\n")
         fail: fail + 1
     ---
+    env\from_msg: c.lmx_msg_turn_self(rrt3)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(rrt3, rp3, rs3, env)
     if: st != c.LMX_MSG_STAGED
         c.printf("sibling send after retire\n")
@@ -1152,6 +1200,8 @@ fn: main () int
     env\kind: c.LMX_MSG_KIND_BYTES
     env\n: 4U
     env\bytes: payload
+    env\from_msg: c.lmx_msg_turn_self(lct)
+    # AD pair: to_msg CANNOT — no handle
     st: lmx_msg_send(lct, lcp, lcu, env)
     st: lmx_msg_end_turn(lct, lcp, 1)
     st: lmx_msg_pump(lct)
