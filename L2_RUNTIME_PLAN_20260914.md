@@ -7170,3 +7170,24 @@ is freed by the chain; the deletion of refs and slots is unchanged,
 only the handle's type and the settle's lines move. The stage
 continues under the reading; the restatements are the only code that
 would change.
+e9's R0P gate impact list on claude-0c/r0p-gate-impact 05d96cb0
+(l2src/R0P_GATE_IMPACT.txt, 146 lines, off 7b3a8668, read only): 1
+gate asserts R0's parentless state (scenario36 through
+liveness_33:372, live_query(R0) = INVALID "R0 has no parent to poll",
+a restatement under the stub; its :98 sibling untouched), 2 capture
+the poll's returned count and cannot move, 28 unaffected (27 after
+S6-2). The fact the list turns on, read in the source: poll_mark
+(lmx_message.lm1:2092-2105) increments n only when parent_gone
+answers non-zero, so n counts closing-requested Messages, not visited
+ones; folding R0 into the poll adds nothing while the stub answers as
+a live parent and one exactly when the stub is gone (the stage's new
+behaviour); the sweep at 2130 calls poll_kids(rt\root), never
+poll_mark(rt\root) (b5's open point confirmed). Every site keeping
+the poll's result read with its reason (335 overwritten unread; 379
+an exact zero on a targeted poll outside the sweep; 494 and
+exec_selftest 2064 lower bounds; 1807 and 3023 discarded); live_seq
+is per-Message; no runner pins a literal poll or liveness count. Two
+negatives recorded: the liveness gate asserts none of this; the
+lmx_msg_poll* hits are poll_abort/poll_escape. Correction under way on
+claude-0c/s6-2-gate-impact: family_release_17's slot pins are eleven
+check lines and seven n0 captures (grep -F), not six or three.
