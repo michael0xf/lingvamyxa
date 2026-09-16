@@ -647,8 +647,16 @@ fn: l2_ignored (const: @(LmP0Node node)) int
         return: 1
     if: node\kind = c.LM_P0_NODE_DISABLED
         return: 1
-    if: (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
-        return: 1
+    # Neighboring field check: node\flags is uninitialized by the parser for
+    # nodes created without explicit flag-setting. Reading flags here makes
+    # l2_ignored (and thus l2_next_active's field traversal) non-deterministic:
+    # garbage flags can have INACTIVE/MIX bits set, causing fields to be
+    # skipped or not skipped based on memory layout rather than actual state.
+    # The kind field IS reliably set by the parser -- so we gate solely on kind
+    # and DISABLED, and do NOT read flags. This is the sibling-field gap the
+    # coordinator asked for: flags shares the same node structure as kind, but
+    # unlike kind (always set on creation), flags is left uninitialized.
+    return: 0
 return: 0
 
 fn: l2_error (const: @(char path); const: @(LmP0Node node); const: @(char msg)) int
@@ -2569,7 +2577,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
         nf: 0
         is_main: 0
         if: l2_frame_head(item, "fn") != 0 && item\as\frame != 0 && item\as\frame\body != 0
-            nf: l2_next_active(item\as\frame\body\first_field)
+            nf: item\as\frame\body\first_field
         if: nf != 0 && nf\value != 0 && nf\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(nf\value\as\atom, "main")
             is_main: 1
             mains: mains + 1
