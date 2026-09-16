@@ -2315,6 +2315,22 @@ oot\path_n` with no while:. The one pattern I did predict (the adapter's, from
         which it does not build, and landed red). Re-run with both NAMED: family_release_17 60/0 and
         orphan_mapped_17 19/0, two runs each agreeing on the production runtime. 60 rather than the previous 58
         because each of the two absolute pins became a membership check beside an ownership one.
+      - MEASURED AT THE TIP 2d8f2b6a, as the verdicts come in: run_port_message PLAIN GREEN ("lmx_message parity
+        PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both runs");
+        run_model_scenario36 with both conversions NAMED, family_release_17 60/0 and orphan_mapped_17 19/0, two
+        agreeing runs on the production runtime; and the coordinator's own probe reading on this tip merged with
+        the acceptance base 96a754e0 -- exec_lock_calls=0 exec_lock_decl=0 host_lock=0 exec_fields=0 | refs=0
+        runtime_lists=0, S6-2 GREEN. My own -Part 2 reading on the measuring merge is still owed and will be
+        reported rather than inferred from his.
+        One ordering rule this produced, worth keeping: run_graph_abi was GREEN at 51b73274, and the reword commit
+        after it touched tests/unit_msg_cursor.lm2 -- a file graph_abi COMPILES. A green does not carry across a
+        commit that changes a file the gate builds, however cosmetic the change looks; comments are compiled too,
+        and in this case the comment was the thing the probe counted. So graph_abi is re-run at the final tip
+        rather than cited from the earlier one.
+        The remaining set is run as run_gates plus port_parser rather than five separate runners: run_gates' table
+        already carries scenario36, lmx_message (run_lmx -Suite Message), entry_turn, graph_abi and lane_oracle --
+        and lane_oracle IS run_port_message.ps1 with -LaneCheck, so "port_message plain and -LaneCheck" is one
+        separate run plus one row, not two runs. l2trans and port_parser are in no row and run on their own.
       - THE PROBE'S COMMENT NEEDLES, which cost three rewordings and are worth distinguishing from the needle that
         was dropped. The coordinator measured refs=0 but runtime_lists=3 on my tip merged with the acceptance base:
         three COMMENT lines spelling the deleted field names. That is not the same defect as the bare
