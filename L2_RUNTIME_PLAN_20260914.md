@@ -8804,3 +8804,14 @@ UAF kit (poisoning quarantine allocator and its runner), committed so
 the next agent finds it by grep rather than by luck"): the kit is now
 project tooling under l2src/tools, two new A paths for the landing's
 allowlist. The drain-in-R0's-round change and step 3 follow.
+SESSION CHANGE (2026-09-16, about 08:00): lingvamyxa-e9 (the gate and
+runner engineer) is no longer reachable; a session lingvamyxa-12
+appeared; the coordinator asked it to identify itself in five lines
+(role, scratchpad continuity, the branches claude-0c/land-s6-2
+502deb03, claude-0c/archive-timeout-2 53ba86bd,
+claude-0c/s6-2-gate-impact 97a9485b, the standing hold, the worktrees).
+Everything the engineer owns is on origin and in MEASURE_S6_2.md,
+land_s6_2.sh and GATE_ARCHIVE_HANG.txt, so the hand-over is by the
+docs; the two new allowlist A paths (l2src/tools/q_alloc.c,
+l2src/tools/uaf_run.sh) and the count 29 are re-stated to whoever
+takes the role.
