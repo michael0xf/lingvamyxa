@@ -8003,3 +8003,24 @@ later stage of the runner, with no child alive; e9 names the stage in
 the capture (the run dir's newest artefact, the script's sequence
 after line 76, the dump's main thread), and the bound fix covers
 every child step of the runner, not the archive alone.
+CORRECTED FACTS (the lead's second line, crossing the coordinator's
+hold): the c_scanners runner (powershell 7964 under cmd 20452, children
+of run_gates' 4520, started 00:46:05) WAS alive; the earlier "no child"
+came from a listing truncated by head. The 120 s bound DID fire:
+archive files at 00:46:15, evidence.json at 00:48:15 exactly,
+result=FAIL, then the throw at line 64; the runner did not exit after
+the throw and held the chain 29 minutes. The defect is therefore the
+runner not exiting after its own timeout throw, a different and worse
+defect than GATE_ARCHIVE_HANG.txt describes (the mitigation fires,
+records FAIL, and still holds the chain; a reader of evidence.json
+would conclude the gate reported). The lead killed 7964 only so
+run_gates records the row and continues; the live capture is lost.
+RULED: e9 reproduces the timeout path deterministically in a scratch
+tree at 2d8f2b6a (the archive replaced by a 200 s stub, or the wait
+set to 1000 ms), run as run_gates invokes it, captures the post-throw
+hang if it reproduces, names the mechanism, fixes so the step fails
+AND the runner exits, with a tripwire (the reproduction ends under
+130 s), on claude-0c/archive-timeout-2, merged into the stage before
+the landing. Watchdog rule from the lead's two instrument errors: no
+head/tail on a listing one then reasons from; times compared as epoch
+seconds.
