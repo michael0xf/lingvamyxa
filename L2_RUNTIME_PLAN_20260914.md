@@ -9756,3 +9756,31 @@ FOLLOW-UPS OPENED BY THE LANDING (each names its branch or its ticket):
   off the new integration head and its app_controller row re-verified (ticket 4);
 - the row-bounds branch claude-0c/gate-row-bounds 6c8034b4 is to be re-cut off
   the new integration head.
+
+AD FIRST FAMILY (a)(b) PUSHED, recorded 2026-09-16 14:55 by the coordinator (lingvamyxa-08):
+d6/lock-ad is 849ef1b7. LmxMsgEnv gains from_msg, to_msg and reply_to_msg -- the
+records the ids beside them name -- and every send path in both cores (send,
+send_graph, send_owned, send_address, send_cap) takes the sender and the
+destination from the envelope when the caller holds them, falling back to
+self_or_find + dest_from_src only when the pointer is 0; the id is checked
+against the record's own addr before the pointer is used. run_port_message GREEN
+(parity PASS, 121 methods redirected). The scan counts do not move yet: the
+callers migrate next, then find/find_tree/dest_from_src go.
+
+A TRIED AND REVERTED STEP, recorded so it is not retried: replacing
+self_or_find's find fallback by lmx_msg_live_lookup broke the reference run at
+its first create. A child's registration is a LETTER to the service, posted as
+create returns (lmx_message.lm1:1544-1562), so between create and the drain when
+R0's round runs it the id is NOT in the live set, while the tree walk still
+finds the record. The id lookup therefore serves only records whose
+registration has drained; every create-adjacent site needs the pair, which is
+what the family migration carries. The change was reverted unposted.
+
+ROW-BOUNDS RE-CUT AND ITS TRIPWIRE GREEN, recorded the same hour: the branch
+claude-0c/gate-row-bounds 6c8034b4 was cherry-picked onto the new integration
+head (36518364) as claude-0c/gate-row-bounds-2 76331f43 -- run_gates.ps1 and
+tripwire_gate_bounds.ps1, 2 files, clean. Its own falsifier passes:
+tripwire_gate_bounds PASS (all parts), with the control at d3bde8b5 hanging --
+"control (d3bde8b5): exited=False wall=40s selftest alive at window end=1",
+"fixed: exited=True wall=11s leftover=0 :: tripwire_hang FAIL timeout after 10s
+(row bound 10s)". The full gate chain on the re-cut branch is running.
