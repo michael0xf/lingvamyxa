@@ -22,25 +22,30 @@ is appended at line 101 only with -L2MessageRoot):
                                                              18 of them are port rows filed as unaffected)
   fixtures reading handoff_ready after a stop with no spin on it: 1 file (family_handoff), listed separately
 
-Citation, and one thing that did not resolve
-  The ticket cites "spec 12885-12891". Those lines are not this subject on any ref I can reach: at
-  origin/main (02175be1, 16213 lines) 12885-12891 is 19.29.7 Message Boundary; at baa8ec23 and
-  origin/d6/lock-s6 (both 15983 lines) they are the mailbox admission/dedup reliability profile;
-  Lingvamyxa_spec_history.txt is 6501 lines, L2_RUNTIME_PLAN_20260914.md 6518,
-  L2_CORE_AND_MESSAGE_MODEL_20260912.md 2108 and LOCK_REMOVAL_DESIGN.txt 1798 (absent at baa8ec23), so none
-  of them has a line 12885. Searched by the behaviour's words instead, the governing passages are, verbatim
-  from origin/main:
-    11634-11637  "the slot list served only the L1 delete loop and its address lookup and goes without
-                 replacement; the retire queue goes (a closed child's storage is its parent's settle write)"
-                 -- Mikhail's confirmed "da" on the runtime-level structures the L1 implementation kept
-                 under its executor's lock.
-    12748-12761  the release policy: the parent's dispose "releases the child's slot"; a successful orphan
-                 "is settled at its end-turn and reclaimed, arena and slot, by the settling lane at the
-                 root's next maintenance point".
+Citation (section and quoted phrase, never a bare line)
+  Spec line numbers drift: each verbatim entry Mikhail approves is appended and shifts everything below it.
+  The ticket's "spec 12885-12891" was 19.29.7's opening at the hour it was written, and by the next fetch
+  the paragraph meant had moved (the coordinator's rule from now, mine included: cite the section and a
+  quoted phrase with the commit read, so the reader re-finds it by grep after the file moves).
+  The three rulings this removal rests on, read at origin/main 077ee6fd (Lingvamyxa_spec.txt, 16213 lines):
+    refs      19.29.7 Message Boundary (heading at 12889), the phrase "there is no count of holders"
+              (12909): a capability is the target's mailbox handle, and a closing Message's mailbox is
+              settled into its parent with the rest of its storage, "so a late send lands in a mailbox the
+              parent owns and is refused there, on the parent's lane, with a status to the sender; there is
+              no count of holders" (agreed with Mikhail 2026-09-15, "davay tak"). No count of holders is
+              exactly LmxMsg.refs and endp_retain/endp_release going.
+    slots/n   19.28 Message Thread and Runtime Operators (Revision 2) (heading at 11480), the phrase "the
+              slot list served only the L1 delete loop and its address lookup and goes without replacement;
+              the retire queue goes (a closed child's storage is its parent's settle write)" (11635-11637)
+              -- Mikhail's confirmed "da" on the runtime-level structures the L1 implementation kept under
+              its executor's lock.
+    release   19.29.6 Running Message (L3 Thread) (heading at 12630), the phrase "reclaimed, arena and slot"
+              (12755): a successful orphan "is settled at its end-turn and reclaimed, arena and slot, by the
+              settling lane at the root's next maintenance point", with the parent's dispose that "releases
+              the child's slot". This is the accounting scenario36's rt\n pins currently express.
   The design says the same in LOCK_REMOVAL_DESIGN.txt (d6/lock-removal) 1244, 1249-1250 and 1277: slots and
   n are the runtime-wide allocation list through LmxMsg.alloc_next, and they "wait for S6, which removes
-  refs, because until then runtime_delete needs them". The line numbers are the only part that did not
-  resolve; the ruling itself is there.
+  refs, because until then runtime_delete needs them".
 
 Method
   Each gate's runner and the test files it builds, at baa8ec23; git grep over those for the removed names:
@@ -284,3 +289,9 @@ Falsify
   (3/0, 12/0, 15/8, 4/2, 2/1), and git grep -n 'handoff_ready' baa8ec23 -- 'l2src/*.ps1' is empty.
   Field greps must be run with -F and outside the Bash tool: a backslash pattern through it matches nothing
   and every rt\n row would read as clean.
+  (5) The three citations are by phrase, so they survive the spec's drift. On origin/main:
+    git show origin/main:Lingvamyxa_spec.txt | grep -n "there is no count of holders"
+    git show origin/main:Lingvamyxa_spec.txt | grep -n "the slot list served only the L1 delete loop"
+    git show origin/main:Lingvamyxa_spec.txt | grep -n "reclaimed, arena and slot"
+  each prints one line, at 12909, 11635 and 12755 at 077ee6fd, inside 19.29.7, 19.28 and 19.29.6. If a line
+  number has moved, the phrase and the section are still the citation; the number is not.
