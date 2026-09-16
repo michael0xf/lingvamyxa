@@ -8704,3 +8704,7 @@ service step complete, no build yet; the hour went to six edits per
 core plus the C side. Next: the step committed as partial, the first
 build, its first error line verbatim if red, then step 3 (the send
 through the service with the check and the refusal).
+Stage branch d6/lock-s6-2 4ffacf05 ("S6-2 step 3, PARTIAL: the
+unregister-and-free letter, the teardown sweep, the live set's
+free-partner, and the getAddress wrappers -- service step complete in
+both cores, not yet built"); the first build and its verdict follow.
