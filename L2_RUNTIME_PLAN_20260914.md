@@ -7994,3 +7994,12 @@ to the allowlist; the coordinator re-runs the six gates on the new
 tip's measuring merge. The lead's instrument note: a %TH:%TM:%TS
 string sort put 23:xx above 01:xx across midnight; -newermt is the
 sound form.
+Correction from the runner's text (the coordinator): the archive step
+is run_candidate_c_scanners.ps1 lines 51-72 (Start-Process with file
+redirection, WaitForExit(120000), a bare WaitForExit(), Expand-Archive)
+and the initial evidence object is written at line 76, so
+evidence.json's 00:48:15 places the block AFTER the archive, in a
+later stage of the runner, with no child alive; e9 names the stage in
+the capture (the run dir's newest artefact, the script's sequence
+after line 76, the dump's main thread), and the bound fix covers
+every child step of the runner, not the archive alone.
