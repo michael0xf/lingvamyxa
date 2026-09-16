@@ -1770,6 +1770,20 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         - The rest of the union base on that merge was green: self-build PASS 8 of 8 (tag selfbuild/8f290ad6, log
           line cbfbb930, landing branch d6/lock-s6-landing-8f290ad6 pushed), port_message plain and -LaneCheck both
           parity PASS with 103 methods in 45 s each. Nothing was pushed to integration.
+    - LANDED (2026-09-15): S6-1 is on integration/main-absorbs-core. Merge e6b94f04 of d6/lock-s6 53a0af86 onto
+      11f581e0, pushed as 11f581e0..7b3a8668 (the merge plus its SELF_BUILD_LOG line).
+      - Union base on that merge, every line the runner's own: self-build PASS 8 of 8 (pass 3 == pass 2) in 7 s,
+        tag selfbuild/e6b94f04, landing branch d6/lock-s6-landing-e6b94f04; gates GREEN 31 of 31 in 506 s;
+        run_port_message parity PASS 44 s and -LaneCheck parity PASS 43 s, 103 methods, no LANE FAIL line;
+        l2trans gen2 ok 276 s; run_port_parser ok 272 s; mixa backend table ok; mixa ingress fail_keep_runtime
+        path ok; lmx_cancel selected=Cancel ok.
+      - scenario36 run separately on the landed tree (land_base3.sh's EXTRA knows only lmx_cancel): core tests
+        PASS over all ten fixtures, two agreeing runs, production runtime -- scenario36 51/0, delivery 27/0,
+        checks_19_29_6 32/0, liveness_33 76/0, family_close_32 26/0, family_release_17 58/0, orphan_mapped_17
+        19/0, root_ingress_5b 11/0, root_record_5e 22/0, turn_arena_o1 24/0. The coordinator's rule from this:
+        scenario36 joins land_base3.sh's fixed base rather than staying a per-stage extra.
+      - Acceptance, all three legs measured: red at 695d54fc, green at baa8ec23 (probe -Part 1 all four counts 0),
+        falsifier one hold put back giving exec_lock_calls=2 and S6-1 RED.
       - Falsifier, the acceptance's third leg, measured on d6/lock-s6 at baa8ec23: from zero lock lines, one
           lock/unlock pair put back around a census site (lmx_message.lm1:1650) gave "exec_lock_calls=2
           exec_lock_decl=0 host_lock=0 exec_fields=0", "S6-1 RED", probe exit 1; the file was restored from git in
