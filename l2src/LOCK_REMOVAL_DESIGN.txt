@@ -1825,7 +1825,7 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       refused on the parent's lane with a status. Then nothing needs counting: the settle is the single lane that
       ends a record's life, and the pins above have nothing to guard against. The per-site replacement comes from
       b5's pre-read (sonnet/s6-2-preread), site by site, not by a blanket deletion.
-    - Gate impact, from e9 (claude-0c/s6-2-gate-impact 16335e9b; 92c7bc45 is superseded): six gates assert refs,
+    - Gate impact, from e9 (claude-0c/s6-2-gate-impact c28aa05a; 16335e9b and 92c7bc45 superseded): six gates assert refs,
       retain/release, the slots API or rt\n -- lane_oracle (the executor selftest's 31 rt\n reads and its six
       endp_ lines at 3172-3202), scenario36 (family_release_17's pins at 212, 303, 304 and orphan_mapped_17's at
       149), lmx_message (lmx_message_selftest.lm1 924/934/964/982), entry_turn (84), port_slots (the whole gate)
@@ -1846,7 +1846,7 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       - Green: -Part 2 prints 0 / 0 on that merge, with the union base green on it.
       - Falsifier: one retain put back on that merge, which must take refs above 0 and turn -Part 2 red.
       - Before landing, the gates whose fixtures this section names are run locally by name, never a proxy suite.
-    - Allowlist for the landing, built from e9's list (claude-0c/s6-2-gate-impact 16335e9b) rather than from a
+    - Allowlist for the landing, built from e9's list (claude-0c/s6-2-gate-impact c28aa05a) rather than from a
       grep of my own, and grouped by why each path is in it:
       - the removal itself: l2src/lmx_message.h, lmx_message.lm1, lmx_message.lm2, lmx_message_exec.c,
         lmx_message_exec.h;
@@ -1874,6 +1874,63 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         the endp_ block at 3172-3202);
       - the code shape graph_abi pins on its own cases: run_graph_abi.ps1 (531-533 and 538-539, the cases at 315
         and 325 with their checks at 468 and 510) with tests/unit_msg_adapter.lm2 and tests/unit_msg_cursor.lm2.
+    - The test side, from b5's inventory (sonnet/s6-2-test-inventory 7af872da,
+      l2src/LOCK_REMOVAL_S6_2_TEST_INVENTORY.txt, off 7b3a8668): 34 lines, split by fate rather than by count --
+      13 assertions deleted outright, 15 restated through Messages, turns and flag reads, and 6 lines in two whole
+      cases that go with their mechanism.
+      - The gap it found in e9's own method, and e9's own correction of it: e9 first grepped endp_retain,
+        endp_release, lmx_msg_slots, slots_n and slots_at, but not the accessor lmx_msg_endp_refs.
+        lmx_message_exec_selftest.c calls that getter 11 times (6017, 6027, 6030, 6157, 6172, 6204, 6215, 6217,
+        6619, 6622, 6624) across four cases, none inside the 6-line block at 3172-3202, and lmx_message_selftest.lm1
+        calls it 4 more times, which b5's own report did not carry either. e9 has since re-issued the list as
+        claude-0c/s6-2-gate-impact c28aa05a (16335e9b superseded; verified by me against that file, not taken from
+        the message): endp_refs is in its pattern set, lane_oracle's row now reads rt\n 31, endp_retain 1,
+        endp_release 5, endp_refs 11, lmx_message's adds endp_refs 4, and the family tree-wide in l2src at
+        baa8ec23 is endp_release 84, endp_retain 53, endp_refs 20, endp_try_retire 9 (the last core-side only, in
+        no test file). No gate's verdict moves and the 22-of-31 support table stands, so the allowlist above is
+        unaffected; what grows is the edit inside those two files.
+      - Why those 15 calls need more than deletion: each reads the count before and after an operation and asserts
+        it did not move (refs0 = lmx_msg_endp_refs(rti, d), then a check that it still equals refs0). Deleting the
+        accessor leaves the property with no expression, so each of the four cases gets its invariant restated in
+        S6-2's terms -- the destination still findable and in its expected state -- rather than dropped with the
+        retain/release pairs.
+      - Fates, per case: "exec mail-oom" (6010-6036) and "exec outbox-gone" (6156-6180) are restated -- drop the
+        refs comparison and the refs bound, keep the inbox-still-0 checks, and say the property directly (the
+        destination is still findable, and reached STOPPED) instead of through a count. "exec pin-oom"
+        (6183-6219) and "exec nself-pin" (6601-6630ish) are deleted whole, with the hook
+        dest_pin_fail_after_outbox (402-408) and the test-only global lmx_msg_test_fail_retain (exec.c:331,
+        consumed inside endp_retain at 349-350): the mechanism under test is the one being removed, so there is
+        nothing left to inject into. lmx_message_selftest.lm1's "ref admit" family (890-937) is deleted outright,
+        since 19.29.7 leaves no successor number to assert.
+      - The primary regression for the new behaviour is a restatement, not a new fixture: lmx_message_selftest.lm1
+        "retire retain" (951-984) is today the direct test of "another lane still holds through refs" -- a held
+        capability keeps a child's slot from retiring after the child is no longer findable, and the last release
+        retires it. Restated, it becomes the red-first check for redirect-and-refuse: after the create is rolled
+        back, a send through the handle the sender kept must be redirected to the parent's mailbox and refused
+        there with a status to the sender, in place of the refs and rt\n bookkeeping at 962, 978 and 983.
+      - The five numeric pins and their restatements: entry_turn:84 keeps its find-based half and drops the count;
+        family_release_17:212, 303 and 304 become membership checks (exactly R0, R, P5 and C5 findable after the
+        reclaim, the released ones not); orphan_mapped_17:149 becomes "P not findable, R's state otherwise
+        correct". lmx_msg_slots_selftest.lm1 is not restated: it goes with its module.
+      - mixa_manager, outside e9's l2src-only sweep and verified by me against the tree rather than transcribed:
+        six files name lmx_msg_slots in a build list and go with the module --
+        mixa_manager/lib_l2_runtime_support.ps1 (its shared $L2RuntimeNames at 95),
+        run_mixa_app_fmpanel_l2_parity.ps1 (293), run_mixa_app_path_l2_parity.ps1 (243),
+        run_mixa_composite_glyphs_l2_parity.ps1 (64 and 102), run_mixa_selection_l2_parity.ps1 (79 and 122),
+        run_mixa_tiles_l2_parity.ps1 (62 and 94). They are build inputs, not assertions, so they red at build if
+        the name stays, exactly like the 22 l2src runner lines.
+      - Whether that reds MY landing, measured rather than feared: it does not. I raised the alarm because
+        run_ingress_harness.ps1 -- which IS in my union base -- dot-sources lib_l2_runtime_support.ps1 at its
+        line 5, and that file holds the shared list. Reading further settles it: the list lives inside the
+        function Add-L2RuntimeSupport (opened at 84, list at 95, consumed at 99, extended with lmx_message at
+        112), the harness calls only Get-L1Pin (line 7) and never Add-L2RuntimeSupport, and run_mixa.ps1 does not
+        touch the lib at all. So neither of the union base's two mixa runners builds the module, and the six files
+        are edits I must make, not a landing risk.
+      - The coupling has two shapes, worth keeping straight for whoever edits next: the shared lib's own list,
+        consumed by eight callers of Add-L2RuntimeSupport (run_mixa_app_controller, app_panel, app_win32,
+        audio_mp3, backend_ctors_win32, backend_win32 and run_mixa_l2_parity, none of them in the union base),
+        and five runners that name lmx_msg_slots in lists of their own rather than through the lib (fmpanel,
+        app_path, composite_glyphs, selection, tiles).
     - The c_scanners corpus, checked in the runner rather than left as a worry: run_candidate_c_scanners.ps1
       builds its corpus by scanning the directory (316: Get-ChildItem tests -Recurse -Filter *.lm1), so deleting
       tests/lmx_msg_slots_selftest.lm1 does shrink it and the recorded case count moves. Its pass lines are
@@ -1919,6 +1976,45 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       - The refusal status uses the machinery already there: post_dead's relay carries a status envelope to the
         sender, and the refusal itself happens on the parent's lane under the parent's mailbox monitor. No lock,
         wait or signal is added, which is why this is new logic rather than a contradiction.
+    - Settle mechanics, since today's records are calloc'd in lmx_msg_slot_new and A1 (records from the arena) is a
+      later stage:
+      (1) Where a closed child's record and its mailbox live afterwards. release_slot already unbinds the child,
+          unlinks it from the family chain and clears its root-list place; under S6-2 it stops draining and
+          destroying the mailbox. The child's arena is moved into the parent's by the settle that already exists
+          (adopt_mark/dispose_mark through lmx_msg_storage_move_all), and the mailbox goes with it as the parent's
+          own settled data: its queues and its monitor are kept, and its owner cell is rewritten to the parent
+          under that mailbox's own monitor, so a late sender reaching the handle finds the parent's lane without
+          any count. The LmxMsg record itself stays allocated until its owner frees it (2), because the sender's
+          capability is the mailbox handle and 19.29.7's "not a graph reference into another Message's mutable
+          arena" (today 12922) means the handle must stay addressable while the parent lives.
+      (2) Who frees them and when. Never the closing child's own lane and never at its close: the parent frees the
+          settled child's record and mailbox with its own storage, at the parent's own release_slot, and R0's at
+          runtime_delete. That is precisely what keeps a sibling's handle valid with no holder count -- the memory
+          outlives every sender that could still address it, because the parent outlives them by construction.
+      (3) Reconciliation with 19.29.6, searched before asking rather than raised as a conflict. The sentence "a
+          successful orphan is settled at its end-turn and reclaimed, arena and slot, by the settling lane at the
+          root's next maintenance point" (today 12755) reads with the same paragraph's own definitions: an orphan
+          is "re-rooted at the runtime ... that root Message's child", and (i) defines a settle as "transfers the
+          child's logical arena to the parent without copying ... then releases the child's slot". So the settling
+          lane is R0's, the parent is R0, and "reclaimed, arena and slot" is that same two-part settle, not a free
+          while R0 lives; the storage becomes R0's and is freed at R0's close. The two sentences agree, and the
+          only thing they jointly require of S6-2 is the part (1) already states: the mailbox must not go with the
+          released slot. Held, not designed here: a FAILED orphan "keeps its handoff-safe arena under the separate
+          parent-loss/orphan-retention timeout ... and self-reclaims when it expires". "Self-reclaims" is the one
+          phrase in this area whose mechanics the text does not pin, so the orphan path's code waits while the
+          refs deletion proceeds on the normal path, and it is measured against the code before anything is
+          written there.
+      - The two-cycle balance, stated as what it is rather than as the coordinator phrased it to me, since I went
+        looking before writing it down: it is not an existing gate. It is stage A's own red criterion, defined in
+        this document (888 and 2049) as "the balance test's two-cycle live count (ld --wrap) with the record's
+        allocation counted as heap", red while any such record comes from malloc and green once the arena's blocks
+        are the only heap allocations. S6-2 does not move records into the arena -- that is A1 -- so S6-2 leaves
+        that criterion exactly where it stands, still red until A, and does not regress it: each cycle closes R0,
+        and closing R0 frees the settled subtree accumulated in it, so nothing S6-2 settles into a parent survives
+        the cycle. The existing --wrap runners (array_owned, msg_blocks, send_local, family_handoff, visit and the
+        rest) count module-level allocations and frees, which the settle does not change. Both halves of this are
+        reasoning from the documents and the runner list, not measurement: no build was possible while writing it,
+        and the balance numbers are measured when S6-2's code first runs.
     - Stop condition, as for every stage here: if settling the mailbox into the parent turns out to need a lock, a
       wait or a signal, the stage stops and the question goes to Mikhail through the coordinator.
       - Falsifier, the acceptance's third leg, measured on d6/lock-s6 at baa8ec23: from zero lock lines, one
