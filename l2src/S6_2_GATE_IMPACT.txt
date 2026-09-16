@@ -113,6 +113,35 @@ lane_oracle   run_port_message.ps1 -TranslatorPath <pin> -LaneCheck
     That is exactly why the fixtures using it had to carry a header warning that find cannot tell a
     retained record from a freed one. Ownership answers both questions at once -- which record, and whose
     it now is -- so a converted assertion says more than the count it replaces.
+
+  The conversion as it stands, and what makes its green believable (the lead, measured on his tree; green
+  baseline 4997d651, both runners exit 0 with parity PASS and -Suite Message):
+    Every runtime-counter pin in lmx_message_exec_selftest.c is restated on ownership -- nine cases, with
+    two file-scope helpers (settled_has, settled_n) replacing five copies of the same walk. The planted red
+    is green: a send through a settled capability returns KIND_REJECTED to the sender, answered on the
+    OWNER's round rather than at admission, because at Y3 the transport and pump go and an admission-time
+    refusal would be code that stage deletes.
+    Two tripwires, and the result that matters is not that they failed but that they failed DIFFERENTLY:
+      lm1:1449, the settled push in release_slot (lmx_msg_settled_push(m\parent_msg, m), inside the
+        parent_msg != 0 branch) deleted, verified +0 -1 before any build: run_port_message red with "not
+        settled into its parent"; restored, dirty=0.
+      lm1:1829, the owner's round (lmx_msg_drain_settled(rt, m), between the two pumps) deleted:
+        run_lmx -Suite Message red with exactly the planted case, "no refusal status for a send through a
+        settled capability"; restored, dirty=0.
+    One line kills ownership, a different line kills the answer to the sender, and each fires its own named
+    assertion. That is what distinguishes two halves of one mechanism from one mechanism carrying a
+    redundant check, and it is why these greens are recorded here rather than held at arm's length.
+    The mutation script's shape is worth borrowing and is recorded because every rule in it exists from a
+    broken earlier attempt: locate with grep -F, edit BY LINE NUMBER, refuse to run on an already-modified
+    file, verify +0 -1 before building, restore in a trap. The same scar exists in this project's history
+    from the other direction -- a sed mutation that matched nothing and was reported as a passing falsifier.
+
+  The parent_msg-as-zero class, final (the lead's own second correction, verified here at 7b3a8668):
+    lmx_message.lm1:688 is NOT a member and must not be converted. It sits in lmx_msg_handoff_supervision
+    (opened at 673) under the comment "A root has no parent to hand over from", so ch\parent_msg = 0 there
+    means IS A ROOT, not IS DETACHED -- and R0 still has no parent under S6-2, so the site is correct as it
+    stands. The class is therefore the one test site above (exec selftest 6778, converted) plus
+    endp_try_retire's own guard in exec.c, which goes with the whole function when refs goes.
     Corrections recorded rather than quietly replaced. An earlier version of this row stated a peer's
     "39 reads, 12 conditions, 10 captures" as measured fact; I had not reproduced it, an hour after
     correcting my own falsifier for counting fprintf text.
