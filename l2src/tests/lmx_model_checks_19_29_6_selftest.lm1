@@ -228,27 +228,25 @@ fn: main () int
 
     rt: lmx_msg_runtime_new()
     g_rt: rt
-    check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created")
-    if: rt = 0 || p = 0U
+    check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ p, @ pm) = c.LMX_MSG_OK, "P created")
+    if: rt = 0 || p = 0U || pm = 0
         return: 2
-    pm: lmx_msg_find(rt, p)
     # M0's template: one int cell at 0, in P's arena; M0 gets its own copy.
     chars: lmx_chars_new_owned(@ pm\blocks, @ pm\ranges)
     t0: lmx_node_new_owned(@ pm\blocks, @ pm\ranges)
     t0_cell: lmx_int_new_owned(@ pm\blocks, @ pm\ranges)
     check(chars != 0 && t0 != 0 && t0_cell != 0 && lmx_branch_open_owned(t0, 1U, @ pm\blocks, @ pm\ranges) = 0 && lmx_branch_store_known(t0, 0U, t0_cell) = 0, "owner template built")
     lmx_msg_set_graph(pm, t0)
-    check(lmx_msg_create_graph(rt, p, t0, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ owner) = c.LMX_MSG_OK, "M0 created from the template")
+    check(lmx_msg_create_graph(rt, p, t0, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ owner, @ om) = c.LMX_MSG_OK, "M0 created from the template")
     g_owner: owner
     k: 1
     while: k <= 4
-        check(lmx_msg_create(rt, p, @ ini, 1U, @ writers[k]) = c.LMX_MSG_OK, "writer created")
+        check(lmx_msg_create(rt, p, @ ini, 1U, @ writers[k], 0) = c.LMX_MSG_OK, "writer created")
         k: k + 1
     ---
-    check(lmx_msg_create(rt, p, @ ini, 1U, @ a) = c.LMX_MSG_OK && lmx_msg_create(rt, p, @ ini, 1U, @ b) = c.LMX_MSG_OK, "A and B created")
+    check(lmx_msg_create(rt, p, @ ini, 1U, @ a, 0) = c.LMX_MSG_OK && lmx_msg_create(rt, p, @ ini, 1U, @ b, 0) = c.LMX_MSG_OK, "A and B created")
     g_a: a
     check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P publishes its seven children")
-    om: lmx_msg_find(rt, owner)
     check(om != 0 && lmx_msg_graph(om) != 0 && lmx_msg_graph(om) != t0 && lmx_int_value_known(lmx_branch_child_known(lmx_msg_graph(om), 0U)) = 0, "M0 owns its own cell at 0")
 
     # Bind everything to the executor: one context per bound Message.

@@ -176,7 +176,7 @@ fn: cycle (@: LmxMsgRuntime rt) int
     g_r_ok: 0
     r0: lmx_msg_root_addr(rt)
     check(lmx_msg_turn_new_zero(16U) = 0 && lmx_msg_turn_copy_bytes("x", 1U) = 0, "outside any turn the turn arena allocates nothing")
-    check(lmx_msg_create(rt, 0U, @ ini, 1U, @ a) = c.LMX_MSG_OK, "A created as R0's child")
+    check(lmx_msg_create(rt, 0U, @ ini, 1U, @ a, 0) = c.LMX_MSG_OK, "A created as R0's child")
     an0: lmx_msg_adopted_n(rt, a)
     rn0: lmx_msg_adopted_n(rt, r0)
     check(lmx_msg_exec_bind(rt, a, turn_a_alloc, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && post(rt, a, 7U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "A bound and given one input")

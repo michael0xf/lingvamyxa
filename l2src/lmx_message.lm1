@@ -878,7 +878,7 @@ fn: lmx_msg_runtime_new () @: LmxMsgRuntime
         return: 0
     # Stage 5 (d1), spec 19.29.6 stage-5 clarification (i): creating the runtime
     # creates its root Message R0, address 1, the only Message without a parent.
-    if: lmx_msg_create_prepare(rt, 0U, 0, 0, 0, 0, 0, 0U, @ r0) != c.LMX_MSG_OK
+    if: lmx_msg_create_prepare(rt, 0U, 0, 0, 0, 0, 0, 0U, @ r0, 0) != c.LMX_MSG_OK
         c.lmx_msg_exec_detach(rt)
         c.lmx_msg_host_detach(rt)
         c.free((cast: (@: void) rt))

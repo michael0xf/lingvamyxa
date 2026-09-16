@@ -45,8 +45,8 @@ fn: main () int
     if: env = 0 || got = 0
         return: 2
     rt: lmx_msg_runtime_new()
-    check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "root P created")
-    check(lmx_msg_create(rt, p, @ ini, 1U, @ child) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "child C created and published")
+    check(rt != 0 && lmx_msg_create(rt, 0U, @ ini, 1U, @ p, 0) = c.LMX_MSG_OK, "root P created")
+    check(lmx_msg_create(rt, p, @ ini, 1U, @ child, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "child C created and published")
     pm: lmx_msg_find(rt, p)
     cm: lmx_msg_find(rt, child)
     if: pm = 0 || cm = 0

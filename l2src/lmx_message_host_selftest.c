@@ -106,7 +106,7 @@ static void *off_owner(void *arg)
     unsigned seg = 0;
     uchar b = 1;
     memset(&env, 0, sizeof(env));
-    if (lmx_msg_create(g_rt, 0, &b, 1, &a) != LMX_MSG_INVALID) {
+    if (lmx_msg_create(g_rt, 0, &b, 1, &a, 0) != LMX_MSG_INVALID) {
         *fail += 1;
     }
     /* AD pair: from_msg CANNOT — no handle; to_msg CANNOT — id from configuration */
@@ -173,11 +173,11 @@ int main(void) {
     if (g_rt == 0) {
         return 1;
     }
-    st = lmx_msg_create(g_rt, 0, init, 1, &parent);
+    st = lmx_msg_create(g_rt, 0, init, 1, &parent, 0);
     if (st != LMX_MSG_OK) {
         return 1;
     }
-    st = lmx_msg_create(g_rt, parent, init, 1, &child);
+    st = lmx_msg_create(g_rt, parent, init, 1, &child, 0);
     st = lmx_msg_end_turn(g_rt, parent, 1);
     g_dest = child;
 

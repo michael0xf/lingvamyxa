@@ -215,18 +215,18 @@ static int spin_boot(LmxMsgRuntime **rt_out, LmxMsgAddr *p_out, LmxMsgAddr *c_ou
     memset(ctx, 0, sizeof(*ctx));
     ctx->node = node;
     rt = lmx_msg_runtime_new();
-    if (rt == 0 || lmx_msg_create(rt, 0, &ini, 1, &p) != LMX_MSG_OK) {
+    if (rt == 0 || lmx_msg_create(rt, 0, &ini, 1, &p, 0) != LMX_MSG_OK) {
         return 1;
     }
-    if (lmx_msg_create(rt, p, &ini, 1, &sib) != LMX_MSG_OK || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {
+    if (lmx_msg_create(rt, p, &ini, 1, &sib, 0) != LMX_MSG_OK || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {
         lmx_msg_runtime_delete(rt);
         return 1;
     }
-    if (lmx_msg_create(rt, p, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {
+    if (lmx_msg_create(rt, p, &ini, 1, &c, 0) != LMX_MSG_OK || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {
         lmx_msg_runtime_delete(rt);
         return 1;
     }
-    if (lmx_msg_create(rt, c, &ini, 1, &g) != LMX_MSG_OK || lmx_msg_end_turn(rt, c, 1) != LMX_MSG_OK) {
+    if (lmx_msg_create(rt, c, &ini, 1, &g, 0) != LMX_MSG_OK || lmx_msg_end_turn(rt, c, 1) != LMX_MSG_OK) {
         lmx_msg_runtime_delete(rt);
         return 1;
     }
@@ -425,8 +425,8 @@ static int run_s4_guard_emergency_cancel(void) {
     HANDLE th;
     int got;
     rt = lmx_msg_runtime_new();
-    if (rt == 0 || lmx_msg_create(rt, 0, &ini, 1, &p) != LMX_MSG_OK
-        || lmx_msg_create(rt, p, &ini, 1, &c) != LMX_MSG_OK
+    if (rt == 0 || lmx_msg_create(rt, 0, &ini, 1, &p, 0) != LMX_MSG_OK
+        || lmx_msg_create(rt, p, &ini, 1, &c, 0) != LMX_MSG_OK
         || lmx_msg_end_turn(rt, p, 1) != LMX_MSG_OK) {
         return fail_rt(rt, "s4 guard emergency_cancel: boot");
     }

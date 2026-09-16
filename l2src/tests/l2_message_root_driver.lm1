@@ -20,7 +20,7 @@ prototype:
     fn: l2_for_array_m0 (@: Lmx node; int: z) int
     fn: __real_lmx_array_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
     fn: __real_lmx_msg_runtime_new () @: LmxMsgRuntime
-    fn: __real_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+    fn: __real_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; const: @(uchar init); size_t: n; @: LmxMsgAddr out; @@: LmxMsg out_msg) int
     fn: __real_lmx_msg_turn_self (@: LmxMsgRuntime rt) @: LmxMsg
     fn: __real_lmx_msg_set_graph (@: LmxMsg msg; @: Lmx unit) void
     fn: __real_lmx_msg_runtime_delete (@: LmxMsgRuntime rt) void
@@ -71,13 +71,13 @@ fn: __wrap_lmx_msg_runtime_new () @: LmxMsgRuntime
         return: 0
     return: c.__real_lmx_msg_runtime_new()
 
-fn: __wrap_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+fn: __wrap_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; const: @(uchar init); size_t: n; @: LmxMsgAddr out; @@: LmxMsg out_msg) int
     check(news = 1 && creates = 0 && binds = 0, "one process runtime before create")
     check(rt != 0 && parent = 0U && init = 0 && n = 0U && out != 0, "root uses existing creation contract")
     if: test_mode = 2
         creates: creates + 1
         return: LMX_MSG_NOMEM
-    int: result c.__real_lmx_msg_create(rt, parent, init, n, out)
+    int: result c.__real_lmx_msg_create(rt, parent, init, n, out, out_msg)
     creates: creates + 1
     return: result
 
