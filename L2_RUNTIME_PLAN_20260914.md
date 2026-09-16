@@ -9221,3 +9221,35 @@ record unlinked at epoch E once every busy lane shows an epoch after E), or
 Message-shaped (a running child is re-linked by a letter it applies in its own
 round, and the settled ancestor is freed only after that child's
 acknowledgement, so a walker's own chain never names a freeable record).
+
+S6-2, the lead's fixes at local 066fb5a1 (not pushed; a non-stopping sweep
+of the 28 rows running at 0e4dbf94), read by the coordinator 2026-09-16
+10:05: (1) orphan_children mints g\index from rt\root\child_seq as handoff
+does (0 when the counter would wrap; 0 is never minted), the case
+address_unique_under_r0 in family_release_17 scenario 4 (runner
+run_model_scenario36), falsifier the two minting lines as no-ops ->
+"FAIL R releases P4 at once: C4, re-rooted under R0, has an address no
+other R0 child has", restored 60/0; (2) address_of's fill runs
+`while: x != 0 && i >= 0` and returns -1 when `x != 0 || i != -1`, both
+cores; the premise comment corrected and the cross-lane read recorded for
+AD.  Drain cost so far: scenario36's ten selftests green one by one;
+family_release_17 and orphan_mapped_17 moved off om\settled onto
+gone_after_r0_round (pump, then find = 0 and the id absent from R0's live
+set; tripwire: release_slot not posting its unregister -> both red on the
+storage checks); lmx_message_selftest.lm1 69 pump lines after
+end_turn/fail on the host (R0's lane), run_lmx -Suite Message exit 0;
+send_local 4 sites, checks=122 failures=0.
+RULED (coordinator, same time): lmx_msg_pump is public (lmx_message.h:300)
+and its guard still admits any lane holding a turn (require_owner fails ->
+exec_holding_any != 0 passes), so a mapped child's turn calling it would
+run admit_one and the service's register/unregister off R0's lane -- the
+two-lane live-set write the end_turn comment names.  Every in-tree caller
+is on R0's lane (host_drain, drive, end_turn/fail when who = root, test
+mains and host helpers; exec.c has none), and the fallback served "every
+end_turn drains", which the drain ruling ended; at 7b3a8668 admit wrote
+no live set, so the hole is new with S6-2.  The fallback is deleted in
+both cores (pump requires the owner, the host, which runs R0's turns), an
+exec-selftest case has a mapped child's turn get LMX_MSG_INVALID from
+pump with R0's transport untouched, falsifier the fallback restored.
+Noted, not blocking: two orphans minted past a wrapped R0 counter share
+[1,0] (about 2^32 R0 children); the comment names it.
