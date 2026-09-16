@@ -6473,3 +6473,12 @@ unlock balance by name in the five transport-touching functions;
 set_orphan_until fixed as the pre-read recommended; the three test
 rewrites read in full, correct adaptations, not workarounds. No open
 items.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only, at S6-1's landed tip:
+the S6-2 pre-read, l2src/LOCK_REMOVAL_S6_2_PREREAD.txt on
+sonnet/s6-2-preread: for every retain/release site and every reader of
+slots/n, what the count protected (a sender's pin, a settle, a
+teardown) and the replacement by spec 12885-12891 (the parent's settle
+keeping the storage, the refusal on the parent's lane, R0's tree walk
+at runtime_delete); any site whose replacement would need a lock,
+wait, signal or a count flagged as a contradiction to stop on; counts
+at the top.
