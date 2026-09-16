@@ -7617,3 +7617,14 @@ lead corrects his own two-site figure: lm1:688 is a root test, not a
 detachment test, so the parent_msg-as-zero class is one site
 (selftest 6778), agreeing with e9's 83774da4; exec.c:1192 stays on
 the refs deletion's side.
+Design e6d3fc42: BOTH GATES GREEN on the stage's 4997d651, the first
+point at which S6-2's mechanism stands on its own: run_port_message
+exit 0 ("lmx_message parity PASS: executor selftest reports
+lmx_message_exec ok, reference and generated agree on both runs": the
+settled list, the owner's-round refusal, the capability with no
+holder count and the nine restated cases hold together, lm1 and lm2
+agreeing) and run_lmx -Suite Message exit 0 (the suite carrying the
+planted red). Not a checkpoint until the two tripwires are shown (a
+green never shown able to fail), which come next; the refs and
+slots deletion proper, the header, the lm1 fixtures, the module and
+the runner lines follow toward the tip.
