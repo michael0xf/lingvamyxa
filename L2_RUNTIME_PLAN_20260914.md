@@ -6858,3 +6858,29 @@ e9's isolation record is on claude-0c/archive-hang 97313476
 void rule with the codex-rotation covariate, and what the run does not
 establish: the lead's wti untested). Next: stages A and B inside wti
 under a short freeze on e9's "ready for wti".
+SECOND FREEZE WINDOW (2026-09-15, about five minutes, terms: no git
+command that writes anything in any worktree of the shared store,
+acknowledged by the lead and b5 before the stages): e9 ran stages A
+and B inside the lead's build/fable/wti at a3c8d970, the tree where
+both real hangs happened: A 200 of 200 (p50 208 / p99 254 / max 280
+ms), B 200 of 200 (p50 428 / p99 477 / max 481 ms), 0 hangs, no watch
+expired, every archive byte-identical (1401231 bytes), no session ref
+moved, no codex rotation, wti byte-identical at both ends (HEAD
+a3c8d970, status empty, nothing built or checked out; the zips went to
+e9's scratchpad via -ZipDir). Finding: wti archives at the same speed
+and spread as e9's tree; 1030 counted runs across both trees, 0 hangs.
+Not licensed: "the hang is fixed"; both hangs were inside
+run_candidate_c_scanners.ps1, and stage C in wti (the runner in situ)
+was deliberately not authorised (archive only in a lent tree), so the
+failing path stays untested there; the verdict stays "not reproduced"
+and the 120 s archive bound on integration (3f131768) stays the
+protection. Window lifted on e9's five lines. e9 adds the wti stages
+to GATE_ARCHIVE_HANG.txt and b5's per-case fates to
+S6_2_GATE_IMPACT.txt (with lmx_msg_test_fail_retain inside
+endp_retain's body, a fault-injection hook the removal takes with it,
+which neither list had; e9's list is at c28aa05a after b5's catch of
+the endp_refs accessor), then writes land_s6_2.sh on
+claude-0c/land-s6-2 (per-step timeouts, the allowlist by status from
+bb082d37 and 7af872da, the union base with scenario36, the probe
+-Part 2 on the measuring merge with 4189dea0, the named fixtures'
+gates by name; bash -n; not launched until the stage tip exists).
