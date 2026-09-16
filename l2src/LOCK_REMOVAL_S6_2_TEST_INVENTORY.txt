@@ -1,0 +1,193 @@
+LOCK_REMOVAL_S6_2_TEST_INVENTORY: every test and runner line in l2src/
+tests, l2src/run_*.ps1, gate.ps1 and mixa_manager's runners that asserts
+or pins a refs value, calls lmx_msg_endp_refs/retain/release, reads
+slots/n/alloc_next on any receiver, or pins a numeric side effect the
+slots list's deletion shifts, at integration 7b3a8668 (S6-1 landed);
+per line, today's value and its S6-2 fate (sonnet/s6-2-test-inventory,
+2026-09-15, doc-only, no builds -- e9 holds the machine for the cold
+gate; written under the git-freeze window, committed locally, pushed
+after the lift).
+
+Method: grep with the receiver ignored, per the ticket -- \slots and
+\alloc_next are unique field names (no collision risk); bare \n is not
+(a first pass matched dozens of unrelated files whose own structs use
+n for something else entirely, caught by inspecting the hits before
+trusting them, not assumed clean). Final patterns: `rt[A-Za-z0-9]*\n`/
+`\slots`/`\alloc_next` in .lm1 (word-boundary guarded, PowerShell --
+Bash under-matches a backslash field pattern here), `rt[A-Za-z0-9]*->n`
+/`->slots`/`->alloc_next` in .c, `lmx_msg_endp_refs\(`/`_retain\(`/
+`_release\(` everywhere, run against every file the ticket names.
+Numeric pins found by reading each hit's own surrounding assertion, not
+by pattern alone -- e9's own S6_2_GATE_IMPACT.txt already did this for
+owned_frees/watched_frees/block-frees counts (0 affected, not repeated
+here) and for the rt\n pins in family_release_17/orphan_mapped_17/
+entry_turn (cited below by their numbers, not re-derived).
+
+--- Counts
+
+Lines found: 34 (17 in lmx_message_exec_selftest.c -- e9's own 6-line
+  retain/release block at 3172-3202, plus 11 endp_refs getter calls
+  across 4 test cases, a gap in e9's own method, see below; 12 in
+  lmx_message_selftest.lm1; 5 rt\n pins across three model/entry-turn
+  tests, cross-checked against e9's own citation by number, not
+  re-counted).
+Assertion deleted outright (the property itself stops existing): 13
+  (the 6-line retain/release block at 3172-3202, and 7 lines across
+  lmx_message_selftest.lm1's own "ref admit"/"ref after admit"/"recv
+  dest_msg leak"/"discard dest_msg leak" case, 901-935).
+Restated through Messages/turns/flag reads: 15 (3 lines in "exec mail-
+  oom", 2 in "exec outbox-gone", 5 in lmx_message_selftest.lm1's own
+  "retire retain" case, and the 5 rt\n pins).
+Whole test case deleted (its own mechanism, not just its assertion,
+  goes): 6 lines across 2 cases, "exec pin-oom" and "exec nself-pin"
+  (both use lmx_msg_test_fail_retain, which lives inside endp_retain's
+  own body and has nothing left to inject into once endp_retain is
+  gone).
+Cross-check with e9's 16335e9b: agrees on every site e9 lists; adds one
+  e9's own method did not search for -- see "Gap found in e9's own
+  method" below, reported to e9 as well as recorded here, not silently
+  folded in.
+mixa_manager: 6 files name lmx_msg_slots as a support/build list only
+  (module to translate/link, not an assertion) -- goes with the module,
+  same shape as e9's own 22 l2src runner lines, not separately counted
+  in the totals above.
+gate.ps1 (repo root): 0 hits for any of these tokens.
+
+--- Gap found in e9's own method, reported for the record
+
+e9's S6_2_GATE_IMPACT.txt (16335e9b) greps for "endp_retain, endp_
+release, lmx_msg_slots, slots_n, slots_at" (its own Method section) --
+not lmx_msg_endp_refs. lmx_message_exec_selftest.c calls lmx_msg_endp_
+refs 11 times (6017, 6027, 6030, 6157, 6172, 6204, 6215, 6217, 6619,
+6622, 6624), none of them inside the 6-line retain/release block e9
+already found (3172-3202), all inside four separate test cases (named
+below). Since this file is what the lane_oracle and lmx_message gates
+build, both gates' own "needs a runner edit" note in e9's document
+(support-list only) is unaffected, but the file's own S6-2 edit is
+larger than e9's 6-line citation alone would suggest -- 11 more call
+sites across 4 test cases need their own fate, given below.
+
+--- lmx_message_exec_selftest.c
+
+3172-3202 (e9's own citation, restated with a fate): the `held`
+  retain/release block. A test-only pin-and-release around a mail node,
+  used to exercise the exec lock's own reentrancy shape at c063fd00 (now
+  moot: no lock). Fate: assertion deleted -- the block itself pins
+  nothing meaningful once retain/release are gone; if the scenario it
+  exercises (a mail node outliving a concurrent close) still needs
+  coverage, it is the redirect-and-refuse case named below, not this one.
+
+6010-6036, "exec mail-oom" (retain/refs at 6017/6027/6030): refs0 =
+  refs before a copy-allocation-OOM send; asserts refs unchanged and
+  inbox still 0 after the failed send. Fate: restated -- drop the refs
+  comparison, keep the inbox-still-0 check (already present), and add a
+  liveness check (the destination is still findable/not disposed) if
+  the inbox check alone does not already imply it; the property being
+  tested ("a failed send does not corrupt or prematurely settle the
+  destination") does not need a count.
+
+6156-6180, "exec outbox-gone" (refs at 6157/6172): refs0 before, refs1
+  after the destination stops mid-outbox-take; asserts `refs1 > refs0 +
+  1` is false (a loose upper bound, not equality) plus inbox still 0.
+  Fate: restated -- drop the refs bound, keep the inbox-0 check, add a
+  state check (the destination reached STOPPED, or is otherwise
+  observably settled) in its place; the bound was a proxy for "no
+  leaked extra retain," which restates as "no leaked extra anything,"
+  best expressed as the destination's own state/handoff_ready reaching
+  its expected value.
+
+6183-6219, "exec pin-oom" (refs at 6204/6215/6217, plus lmx_msg_test_
+  fail_retain at 6211 via the dest_pin_fail_after_outbox hook, 402-408):
+  injects a retain failure via the test-only global (declared exec.c:
+  331, consumed inside endp_retain itself, exec.c:349-350) and asserts
+  inbox and refs are unchanged afterward. Fate: whole case deleted, not
+  restated -- there is no "pin" step left to fail once endp_retain is
+  gone, so dest_pin_fail_after_outbox (402-408) and this test block both
+  go; nothing analogous survives, since the mechanism under test is the
+  one being removed.
+
+6601-6630ish, "exec nself-pin" (refs at 6619/6622/6624, lmx_msg_test_
+  fail_retain at 6620/6625/6630): same injection mechanism, on a
+  self-receive path. Fate: whole case deleted, same reason as pin-oom.
+
+--- lmx_message_selftest.lm1
+
+890-937, "ref admit"/"ref after admit"/"recv dest_msg leak"/"discard
+  dest_msg leak" (endp_refs at 901/911, retain at 924, release at 934,
+  numeric pins at 912 `r0 != 1 || r1 != 2` and at 918/935 `!= 1`): a
+  direct assertion that a destination's refs goes 1 -> 2 across a send
+  admission, back to 1 after recv, stays 1 across a held-capability
+  send-and-discard. Fate: assertion deleted outright -- 5.6's own
+  ruling is "there is no count of holders" at all, so there is no
+  successor number to assert; if send/recv/discard's own functional
+  correctness still needs a regression check here, it is inbox-count
+  and state-based, already covered by this file's other checks
+  (unaffected, not listed here).
+
+951-984, "retire retain" (retain at 964, release at 982, rt\n pins at
+  962/978/983 `n3: rrt3\n`, `rrt3\n != n3`, `rrt3\n != n3 - 1`): the
+  direct test of "another lane still holds through refs" -- a capability
+  held via retain keeps the child's slot from retiring even after the
+  child is no longer findable through the family tree (974), and
+  releasing the last hold retires it (n3 - 1). This is the design doc's
+  own named scenario (LOCK_REMOVAL_DESIGN.txt 1248-1250) and the direct
+  predecessor of the redirect-and-refuse behaviour LOCK_REMOVAL_S6_2_
+  PREREAD.txt (158952fd) already flagged as designed but not yet coded.
+  Fate: restated, not deleted -- this is the natural red-first check
+  for that behaviour: after 973 (`lmx_msg_end_turn` rolls back the
+  create), a send to the no-longer-findable child (via whatever handle
+  the sender kept) should be redirected to the parent's mailbox and
+  refused there, with a status to the sender -- replacing the refs/n
+  bookkeeping (962, 978, 983 and the retain/release pair) with a send-
+  and-check-the-refusal-status assertion. Recommend this case, restated,
+  becomes the S6-2 landing's own primary regression test for 5.6.
+
+--- rt\n pins (cross-checked against e9's own citation, not re-derived)
+
+lmx_entry_turn_selftest.lm1:84, `rt\n = 1 && ...`: asserts "R0 alone."
+  Fate: restated -- the property is R0 alone, checkable without a count
+  (e.g. R0 exists and has no siblings, or simply drop the count half of
+  the conjunction and keep the find-based half already in the same
+  line, per e9's own note that "rt\n is how it is currently read").
+
+lmx_model_family_release_17_selftest.lm1:212/303/304 (of 19 total rt\n
+  reads, per e9): `rt\n = n0 - 1`, `rt\n = n0 - 1`, `rt\n = n0 - 2 &&
+  rt\n = 4`. Fate: restated -- these pin "one slot fewer" and "the
+  root's next maintenance reclaims the successful orphan" as arithmetic
+  on a runtime-wide count; the property (a specific set of Messages, no
+  more no fewer, remain reachable/findable after settle/reclaim) is
+  restatable as a direct membership check (R0, R, P5, C5 findable; the
+  released ones not) instead of a count.
+
+lmx_model_orphan_mapped_17_selftest.lm1:149 (of 8 total, per e9): `rt\n
+  = n0 - 1`, "R releases P at once: P's slot goes." Fate: restated, same
+  shape -- P not findable, R's own state otherwise correct.
+
+lmx_msg_slots_selftest.lm1 (its own module's parity test, all 14 slots/
+  n/alloc_next reads e9 already cited): the whole file and its runner,
+  run_port_msg_slots.ps1, go with the module (e9's own "port_slots" row,
+  the gate goes entirely, not restated).
+
+--- mixa_manager (support lists only, not assertions)
+
+lib_l2_runtime_support.ps1:95, run_mixa_app_fmpanel_l2_parity.ps1:293,
+  run_mixa_app_path_l2_parity.ps1:243, run_mixa_composite_glyphs_l2_
+  parity.ps1:64/102, run_mixa_selection_l2_parity.ps1:79/122, run_mixa_
+  tiles_l2_parity.ps1:62/94: each names lmx_msg_slots as a module to
+  translate/link, same shape as e9's own 22 l2src runner lines. Not an
+  assertion; needs the name removed from each list when the module
+  goes, or each runner reds at build, not at a check.
+
+--- gate.ps1 (repo root)
+0 hits for endp_retain/release/refs, lmx_msg_slots, or rt\n/rt\slots/
+alloc_next on any receiver. Unaffected.
+
+--- Falsifier
+Every line above re-checked directly against 7b3a8668 by grep for its
+own named token with the receiver ignored (`lmx_msg_endp_refs\(` etc.
+for the API calls; the word-boundary-guarded field patterns above for
+\n/\slots/\alloc_next, run through PowerShell). The 11 endp_refs lines
+this document adds beyond e9's own 6-line retain/release citation are
+new findings, not carried over; e9's own cited counts (19, 8, 1, 6, 31)
+are restated here by number only, not re-grepped a second time, since
+this ticket asks the two lists to agree, not to duplicate the count.
