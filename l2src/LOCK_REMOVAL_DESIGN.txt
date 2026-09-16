@@ -2331,6 +2331,16 @@ oot\path_n` with no while:. The one pattern I did predict (the adapter's, from
         already carries scenario36, lmx_message (run_lmx -Suite Message), entry_turn, graph_abi and lane_oracle --
         and lane_oracle IS run_port_message.ps1 with -LaneCheck, so "port_message plain and -LaneCheck" is one
         separate run plus one row, not two runs. l2trans and port_parser are in no row and run on their own.
+      - TEMPORARY WORKTREES REGISTERED ON THE SHARED REPO, to be removed at landing so they are not left as debris
+        for whoever reads `git worktree list` next: build/fable/wbase62, cut at the parent 8dc450fc to measure
+        port_message's red cold before claiming the settled list was neutral on it; and build/fable/wmeas62, cut at
+        2d8f2b6a and merged with the acceptance base 96a754e0 for my own probe -Part 2 reading. Both are mine, both
+        are detached, and neither is pushed. The measuring merge is deliberately never pushed: it exists to be
+        measured, and a merge commit that reaches a branch would put the acceptance instrument into the stage's own
+        history.
+        Worth noting for the sequencing: the probe is grep-only, so that measurement runs in its own worktree
+        WITHOUT the build directories or the pin, concurrently with a gate. Every other runner needs both, so gates
+        run strictly one at a time -- two at once would corrupt each other's evidence and the pin check.
       - THE PROBE'S COMMENT NEEDLES, which cost three rewordings and are worth distinguishing from the needle that
         was dropped. The coordinator measured refs=0 but runtime_lists=3 on my tip merged with the acceptance base:
         three COMMENT lines spelling the deleted field names. That is not the same defect as the bare
