@@ -9949,3 +9949,38 @@ every thread's backtrace while the process still spins (the 300 s watchdog is th
 window). The refusal face (start_contexts with LMX_MSG_INVALID) is the same
 machinery and the same case family; both are now hunting with the diagnostic
 build that names the refusal.
+
+THE FLAKE'S REFUSAL NAMED, 2026-09-16 16:39 by the coordinator (lingvamyxa-08): the UAF kit
+(5c's q_alloc recipe) run on a selftest instrumented with two diagnostics caught
+run 30 of 40 with, verbatim:
+
+  own_turn REFUSED child=2 st=2 owner=1 live=0 workers=0 host_sync=...25f8 exec=...0848 rt=...1ec8
+  exec dispose-in-turn turn=2 dispose=0 g=0000000000000000 c=0000000000000000 kids=0
+  q_alloc sweep: 4502 quarantined blocks, 0 stale writes
+
+owner=1 DISPROVES the earlier reading (a host that stopped being the owner):
+the host is the owner, contexts_live is 0, and both host_sync and exec are
+intact and non-null. The refusal is a FOURTH path -- lmx_msg_exec_start_contexts
+reaches its launch loop and launch_ctx_thread_rec refuses with LMX_MSG_INVALID
+from one of exactly two conditions (l2src/lmx_message_exec.c):
+
+    r = bind_rec_locked(m);
+    if (r == 0 || __atomic_load_n(&e->stopping, __ATOMIC_RELAXED) != 0)
+        return LMX_MSG_INVALID;
+
+i.e. either the address the walk just called launchable no longer resolves to a
+record, or a stop is in progress. A diagnostic added at that site (printing
+which condition and the address) is in the flake tree and a kit run carries it.
+Memory is ruled out on every face: 0 stale writes in all captured failures.
+
+TWO FACES, ONE MACHINERY: the same kit hung run 18 at "reading: child timer: C's
+own round closes it past its deadline" with the watchdog firing at 300 s -- a wait
+that never ends, which is what a worker that failed to launch leaves behind. So
+the hang and the refusal are the same defect seen from two sides.
+
+AND A SHAPE, not just a binary: the kit's 40 runs take 70 s on an idle machine
+and took 371 s while another hunt ran, and the two failures landed on EVEN runs
+-- the ones whose stderr goes through a PIPE into a slow perl reader. With the
+machine idle, a second 40-run pass was 40 of 40 clean; under contention the same
+binary failed. So the trigger is contention plus the piped-stderr shape, which is
+why 107 sequential and 96 parallel direct runs never reproduced it.
