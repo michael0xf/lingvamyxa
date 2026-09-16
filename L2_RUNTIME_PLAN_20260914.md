@@ -10017,3 +10017,20 @@ lookup).  Its consequence for the tests: the q_alloc kit stops being a hunt and
 becomes the regression detector to run AFTER AD's (d) and (a) land.  And it
 gives the stage a concrete first target: every reader of r->wait and r->msg from
 a lane other than the record's own.
+
+AD (d)'s FIRST CONCRETE OBJECT, recorded 2026-09-16 16:43: 5c's independent confirmation of the
+flake's root cause adds the population the stage must fix -- 8 readers of
+r->wait, 6 readers of r->msg, and the one writer bind_wait_retire_locked (which
+frees the wait record), all reachable from lanes other than the record's own.
+The two paths agreed statement by statement (its kit: the check at :1880 and the
+use at :1894 in its tree; the coordinator's symbolized crash: the use at :1901 in
+the flake tree -- same statement, different commits). The point that matters for
+the plan: the design's (d) already covers this shape -- the epoch grace exists
+precisely so a record may be freed while an observer still holds it -- so the
+flake's fix lives INSIDE (d) and needs no new decision; the q_alloc kit stops
+being a hunt and becomes (d)'s regression detector.
+
+Two stage-5 claims are now closed: the l2trans non-determinism was a TRIGGER (the
+stray file only shifted the layout that exposed the executor race), and nothing
+about f1379551 needs pushing (origin/main is newer; the 156 files are already
+there).
