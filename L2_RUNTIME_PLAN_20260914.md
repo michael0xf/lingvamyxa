@@ -6905,3 +6905,35 @@ removed in the same commit as a mechanical edit, each remaining check
 reading the post-admission value, and any check that only tested the
 staging itself is deleted with the property named. For the lead's Y
 section.
+The lead's S6-2 section at d6/lock-removal 005e3896 carries the settle
+mechanics: (1) release_slot stops draining and destroying the mailbox;
+the child's arena moves into the parent's by the existing settle
+(adopt_mark/dispose_mark through storage_move_all) and the mailbox
+goes with it as the parent's settled data, queues and monitor kept,
+the owner cell rewritten to the parent under that mailbox's own
+monitor, the LmxMsg record staying allocated (12922 "not a graph
+reference into another Message's mutable arena"); (2) the parent
+frees them with its own storage; (3) 19.29.6 reconciled by the same
+paragraph's definitions (an orphan is re-rooted as R0's child; a
+settle "transfers the child's logical arena to the parent without
+copying ... then releases the child's slot"), so "reclaimed, arena and
+slot, at the root's next maintenance point" is that settle with R0 as
+the parent, not a free while R0 lives; held: the FAILED orphan's
+"self-reclaims when it expires" (mechanics unpinned; that path's code
+waits). Also: the test side per case from b5's 7af872da (four exec
+selftest cases: two restated, two deleted with the fault-injection
+hook lmx_msg_test_fail_retain inside endp_retain; the "ref admit"
+family deleted; "retire retain" restated as the redirect-and-refuse
+red-first check), e9's list at c28aa05a (endp_refs in the pattern
+set), 44 allowlist paths plus 14 test-side, 56 in the union, plus six
+mixa_manager files naming lmx_msg_slots in build lists (not a landing
+risk: the union base's mixa runners never call Add-L2RuntimeSupport);
+the two-cycle balance is stage A's red criterion, not an existing
+gate, and S6-2 leaves it as it stands. COORDINATOR'S REVIEW: accepted
+with one correction to (2), from 19.29.7 "settled into its parent with
+the rest of its storage": a parent's close settles its settled records
+and mailboxes upward with the rest of its storage (owner cell
+rewritten at each settle, recursively), and only R0's runtime_delete
+frees anything; otherwise a handle held by an uncle or an ancestor
+dangles at the parent's close. Code go-ahead given: d6/lock-s6-2 off
+7b3a8668, red-first, the green on the measuring merge with 4189dea0.
