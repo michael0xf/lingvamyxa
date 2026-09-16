@@ -2094,6 +2094,36 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         what post_dead's relay carries for a dead worker, so reusing it would conflate "the worker died" with
         "your send was refused". If the coordinator or Mikhail prefers another kind, only the fixture's constant
         and the emitter change.
+      - WRITTEN (the admission refusal itself, the mechanism S6-2 owed). The hook is lmx_msg_admit_one, and it is
+        the right hook for a reason I checked rather than assumed: lmx_msg_send_cap stores the record pointer in
+        the envelope (lmx_message.lm1:2768, node\dest_msg: dest), so a capability send reaches the settled record
+        directly instead of resolving an address that no longer resolves. Today that record's state lands in the
+        same disjunction as DEAD and STOPPED and is dropped silently with GONE; S6-2 splits RELEASED out of it,
+        because a settled destination is the one case that earns a status -- its storage, mailbox included, is its
+        owner's now, and the sender reached it through a handle that WAS valid when taken.
+        lmx_msg_post_rejected is modelled on post_dead, the same shape of unsolicited notice: calloc the envelope,
+        kind LMX_MSG_KIND_REJECTED, from the settled target, to the original sender, pushed on R0's transport under
+        R0's mailbox monitor. Placed before admit_one in both files so no prototype entry is needed (q_push at
+        lm1:537 / lm2:573 and ingress_root at lm1:890 / lm2:947 are both earlier). It joins the hold-order check in
+        run_port_message.ps1, which now pins six methods rather than five.
+      - Two things in it that are mine and are stated as such rather than left in the diff:
+        (1) A DEVIATION from "refused on the parent's lane" as (1) and the coordinator's ruling both word it. The
+            owner is identified by parent_msg exactly as ruled, but the refusal envelope is queued on R0's
+            transport under R0's monitor -- post_dead's path -- and NOT under the owner's own mailbox monitor.
+            Reasons: the transport queue is R0's, so R0's monitor is the one that orders a write to it; pump leaves
+            R0's monitor before calling admit_one, so this is sequential and never nested; and taking the owner's
+            monitor as well would add a second hold in a stage whose whole purpose is removing them. The sentence
+            "refused on the parent's lane" is satisfied in the sense that matters -- the refusal is decided by
+            following the owner cell, not by a count of holders -- and not in the literal sense of running under
+            the owner's monitor. Flagged to the coordinator rather than smoothed, since he ruled on the wording.
+        (2) A refusal is never itself refused: a REJECTED envelope meeting a settled record is dropped without
+            posting another. Without that guard the transport could feed itself, since pump drains what admit_one
+            posts. It also terminates on its own if the sender has settled too (post_rejected's self_or_find finds
+            nothing and queues nothing), but the guard states the intent instead of relying on that.
+      - Falsifier, already planted and waiting: lmx_message_selftest.lm1:982-987 sends through a handle taken before
+        the rollback and requires the sender's next recv to carry KIND_REJECTED. That case is the S6-2 red measured
+        earlier; it is the one thing that turns green by mechanism rather than by restatement, which is why it was
+        planted before the code.
       - MEASURED RED on d6/lock-s6-2 at 7b3a8668: the "retire retain" case of lmx_message_selftest.lm1 restated
         (handle taken before the rollback, send through it, publish, read the sender's inbox), and run_lmx -Suite
         Message fails at gen2 lmx_message_selftest with exactly one line -- "no refusal status for a send through a
