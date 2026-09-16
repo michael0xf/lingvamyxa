@@ -8254,3 +8254,14 @@ the whole send path is Messages and may be optimized as such later.
 For S6-2 nothing changes: the service is R0, the resolution in its
 drain is the seed; postmen are a later optimization within the same
 paradigm, not a stage item.
+e9: the chain at 53ba86bd's content is GREEN 30 of 30 in 658 s with
+the marker rule active (c_scanners PASS 30 s, "candidate scanner
+parity cases=130 freed=4316 PASS", the gate that hung healthy under
+the fix; the header's "dirty=2" is the two runner files committed
+after the launch with no edit between); the 30-row listing "name:
+marker found N times" reads exactly 1 for every row (lane_oracle
+through l2_message_root), no zero; no marker drifted, nothing
+loosened, the rule strictly stricter on the tip, and the green itself
+is independent evidence since a row printing nothing would have read
+"FAIL exit=0 no marker line" and stopped the chain. The branch holds
+at 53ba86bd for the lead's reworked tip.
