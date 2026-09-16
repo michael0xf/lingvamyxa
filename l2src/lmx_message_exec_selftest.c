@@ -569,6 +569,29 @@ static int turn_send_once(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return lmx_msg_end_turn(rt, who, 1);
 }
 
+/* S6-2 (the admit-gate restatement): turn_send_once with the send's status KEPT.
+ * The restated case must assert that each send returned STAGED while the
+ * destination's monitor was held, and turn_send_once discards that status and is
+ * shared with other cases, so this copy records it instead of changing that one.
+ * send_ui_st is written BEFORE done is incremented: the host reads the status only
+ * after seeing done, so it never reads a status that has not been published. */
+static int turn_send_to_held(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    LmxMsgEnv e;
+    uchar b = 1;
+    memset(&e, 0, sizeof(e));
+    (void)lmx_msg_recv(rt, who, &e);
+    lmx_msg_env_release(&e);
+    memset(&e, 0, sizeof(e));
+    e.kind = LMX_MSG_KIND_BYTES;
+    e.n = 1;
+    e.bytes = &b;
+    e.id = 7U;
+    c->send_ui_st = lmx_msg_send(rt, who, g_mail_dest, &e);
+    InterlockedIncrement(&c->done);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
 static int turn_recv_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
     LmxMsgEnv got;
@@ -6053,101 +6076,90 @@ int main(int argc, char **argv) {
         }
         rti = lmx_msg_runtime_new();
         {
-            LmxMsgAddr p = 0, a = 0, b = 0, d = 0, eaddr = 0;
+            /* S6-2, RESTATED (contention removed by design): under the S6 (b) ruling only
+             * R0's lane admits into an inbox, so a sender never takes the destination's
+             * monitor and there is no admission on a sender's lane left to park with the
+             * gate hook (which stays in "exec mail-gate"). What the case asserts
+             * instead: the host holds d's monitor for the whole window, A and B both
+             * send to d and end their turns (a sender that took d's monitor would block
+             * here and never count done), then R0's round admits both letters.
+             * Order: contexts start only AFTER the input drain, and nothing drains while
+             * d is held -- the host's critical section is reentrant, so a drain on the
+             * host inside the window would admit into d and prove nothing. */
+            LmxMsgAddr p = 0, a = 0, b = 0, d = 0;
+            LmxMsg *dm = 0;
+            int in_held = -1;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             memset(&any_ctx, 0, sizeof(any_ctx));
-            g_mail_entered = CreateEventA(0, 1, 0, 0);
-            g_mail_go = CreateEventA(0, 1, 0, 0);
-            if (rti == 0 || g_mail_entered == 0 || g_mail_go == 0
+            ui_ctx.send_ui_st = -1;
+            any_ctx.send_ui_st = -1;
+            if (rti == 0
                 || lmx_msg_create(rti, 0, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, &ini, 1, &a) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, &ini, 1, &b) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, &ini, 1, &d) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, &ini, 1, &eaddr) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, a, turn_send_once, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, b, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                || lmx_msg_exec_bind(rti, a, turn_send_to_held, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, b, turn_send_to_held, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || (dm = lmx_msg_find(rti, d)) == 0) {
                 fprintf(stderr, "exec admit-gate create\n");
-                if (g_mail_entered != 0) {
-                    CloseHandle(g_mail_entered);
-                }
-                if (g_mail_go != 0) {
-                    CloseHandle(g_mail_go);
-                }
                 if (rti != 0) {
                     lmx_msg_runtime_delete(rti);
                 }
                 return 1;
             }
-            Sleep(20);
-            g_mail_gate_addr = d;
             g_mail_dest = d;
-            InterlockedExchange(&g_mail_in_send, 0);
-            InterlockedExchange(&g_mail_gate_any, 1);
-            InterlockedExchange(&g_mail_gate_armed, 1);
-            ResetEvent(g_mail_entered);
-            ResetEvent(g_mail_go);
-            lmx_msg_test_mail_locked = mail_gate_hook;
             if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_drain(rti) != LMX_MSG_OK
-                || WaitForSingleObject(g_mail_entered, 2000) != WAIT_OBJECT_0) {
-                fprintf(stderr, "exec admit-gate enter\n");
-                lmx_msg_test_mail_locked = 0;
-                InterlockedExchange(&g_mail_gate_armed, 0);
-                SetEvent(g_mail_go);
-                lmx_msg_exec_stop(rti);
-                CloseHandle(g_mail_entered);
-                CloseHandle(g_mail_go);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            g_mail_dest = eaddr;
-            if (lmx_msg_host_post(rti, b, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, b, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec admit-gate post B\n");
-                lmx_msg_test_mail_locked = 0;
-                SetEvent(g_mail_go);
-                lmx_msg_exec_stop(rti);
-                CloseHandle(g_mail_entered);
-                CloseHandle(g_mail_go);
+                fprintf(stderr, "exec admit-gate post\n");
+                g_mail_dest = 0;
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_mail_lock(dm);
+            if (lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                lmx_msg_mail_unlock(dm);
+                fprintf(stderr, "exec admit-gate start\n");
+                g_mail_dest = 0;
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
             dl = GetTickCount() + 2000;
-            while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+            while ((InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0
+                    || InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0)
+                && GetTickCount() < dl) {
                 Sleep(10);
             }
-            if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
-                fprintf(stderr, "exec admit-gate B blocked doneA=%ld doneB=%ld\n",
+            in_held = lmx_msg_inbox_n(rti, d);
+            if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
+                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
+                || ui_ctx.send_ui_st != LMX_MSG_STAGED
+                || any_ctx.send_ui_st != LMX_MSG_STAGED
+                || in_held != 0) {
+                lmx_msg_mail_unlock(dm);
+                fprintf(stderr, "exec admit-gate held doneA=%ld doneB=%ld stA=%d stB=%d inbox=%d\n",
                     (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
-                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
-                lmx_msg_test_mail_locked = 0;
-                SetEvent(g_mail_go);
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
+                    ui_ctx.send_ui_st, any_ctx.send_ui_st, in_held);
+                g_mail_dest = 0;
                 lmx_msg_exec_stop(rti);
-                CloseHandle(g_mail_entered);
-                CloseHandle(g_mail_go);
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            SetEvent(g_mail_go);
-            dl = GetTickCount() + 2000;
-            while (InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
-                Sleep(10);
-            }
-            lmx_msg_test_mail_locked = 0;
-            g_mail_gate_addr = 0;
+            lmx_msg_mail_unlock(dm);
+            (void)lmx_msg_host_drain(rti);
             g_mail_dest = 0;
-            lmx_msg_exec_stop(rti);
-            CloseHandle(g_mail_entered);
-            CloseHandle(g_mail_go);
-            if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1) {
-                fprintf(stderr, "exec admit-gate A stuck\n");
+            if (lmx_msg_inbox_n(rti, d) != 2) {
+                fprintf(stderr, "exec admit-gate after R0 round inbox=%d\n", lmx_msg_inbox_n(rti, d));
+                lmx_msg_exec_stop(rti);
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            fprintf(stderr, "exec wait: dest A mail during admit does not block B end_turn\n");
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: senders end their turns while dest's monitor is held; R0's round admits both\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
@@ -6469,6 +6481,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
+            r0_round(rti);
             {
                 LmxMsgEnv d1;
                 LmxMsgEnv d2;
@@ -7078,7 +7091,12 @@ int main(int argc, char **argv) {
             memset(&sent, 0, sizeof(sent));
             sent.kind = LMX_MSG_KIND_NUMBER;
             sent.number = 41;
+            /* S6-2 (the drain ruling): c's end_turn only pushes, so the letter reaches r's
+             * inbox in R0's round. The round here is lmx_msg_pump -- the transport half
+             * only -- and NOT r0_round: host_drain would also forward the pending INGRESS
+             * that this case exists to keep in front of the letter. */
             if (lmx_msg_send(rti, c, r, &sent) != LMX_MSG_STAGED || lmx_msg_end_turn(rti, c, 1) != LMX_MSG_OK
+                || lmx_msg_pump(rti) != LMX_MSG_OK
                 || lmx_msg_inbox_n(rti, r) != 2) {
                 fprintf(stderr, "exec ingress recv behind r=%d\n", lmx_msg_inbox_n(rti, r));
                 lmx_msg_runtime_delete(rti);
