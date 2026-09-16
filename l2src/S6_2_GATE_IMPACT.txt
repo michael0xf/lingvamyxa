@@ -90,10 +90,18 @@ lane_oracle   run_port_message.ps1 -TranslatorPath <pin> -LaneCheck
 
 scenario36    run_model_scenario36.ps1
   builds (its -Tests default): the eleven model selftests, of which two read the slot count
-  asserts: tests/lmx_model_family_release_17_selftest.lm1 reads rt\n 19 times and pins it as arithmetic --
-    212 "the runtime holds one slot fewer: C1's slot retired, not retained" (rt\n = n0 - 1), 303
-    (rt\n = n0 - 1), 304 (rt\n = n0 - 2 && rt\n = 4, "the root's next maintenance reclaims the successful
-    orphan: R0, R, P5 and C5 remain");
+  asserts: tests/lmx_model_family_release_17_selftest.lm1 reads rt\n on 19 lines, with SEVEN n0: captures
+    (209, 219, 245, 267, 290, 320, 334) and eleven check lines that pin the count: 212, 222, 248, 270, 303,
+    304, 321, 342, 344, 345, 346. Two of them pin an ABSOLUTE value rather than a delta, and those are the
+    ones a restatement cannot express as "one fewer": 270 (rt\n = n0 - 2 && rt\n = 6, "R0, R, P4, C4, P5
+    and C5 remain") and 344 (rt\n = 3, after the host's drive).
+    An earlier version of this row named only 212, 303 and 304 -- the three whose text says "slot" outright.
+    The lead found the omission by RUNNING the stage's intermediate state (58 checks, 10 failures across
+    six of these lines, because the settle keeps the mailbox and endp_try_retire then refuses every
+    retirement) and named six; grepping with grep -F for the field then showed eleven check lines and seven
+    captures. Both misses have the same cause: a text-led pass reads the wording, and 222 ("one slot
+    fewer: P1's slot retired"), 248, 321, 342, 344-346 read the same counter in different words. Count the
+    field, not the sentence.
     tests/lmx_model_orphan_mapped_17_selftest.lm1 reads it 8 times, pinned at 149 (rt\n = n0 - 1, "R
     releases P at once: P's slot goes").
   These are the spec's own release accounting (12748-12761) expressed as slot counts, so they need a
