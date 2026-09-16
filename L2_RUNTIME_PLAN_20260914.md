@@ -7434,3 +7434,28 @@ deletes the transport lane, so an admission-time refusal is code Y3
 would rewrite into this; and no foreign-lane read of parent_msg is
 needed for the refusal. The planted red (lmx_message_selftest.lm1
 982-987) stays the falsifier.
+b5's four mixa_manager commits on sonnet/mixa-module-list: 3377b944
+app_window's duplicate symbols (mixa_draw.lm1 predefs
+mixa_text_rect.lm1 directly and mixa_buttons.lm1 through
+mixa_tiles.lm1, so draw.o and buttons.o each embed a copy of
+mixa_rect_open and kin; pre-existing, masked twice; the fix a new
+table field L2LinkAllowMultipleDefinition adding
+-Wl,--allow-multiple-definition to app_window's L2 link only:
+UNEXPECTED_FAILURE to PARITY_FAILURE, the L2 trace stopping silently
+after check 15 of 162, a new finding); 78688a15 app_win32.lm2:463
+through the file's own accepted form (the size-1 array passed bare,
+as at :292/:302): the failure moves to :510:37, the same shape;
+d365a491 the app_controller design note (fmpanel_close needs the full
+fmpanel header chain, MixaAppFmPanel embedding MixaHighlight by value,
+which with the controller's six other headers overflows l1trans's
+16-file import-table cap; open: l2trans needs an L2-recognized
+callable frame a plain #include never supplies); 90c36eb3 the five
+own-list runners onto Add-L2RuntimeSupport (app_path, fmpanel,
+selection, tiles: UNEXPECTED_FAILURE on root_record to PASS;
+composite_glyphs unchanged on ten pre-existing "subscripted value"
+compile errors). Coordinator's note on 3377b944: the linker flag
+masks a real duplication in the port's predef structure; accepted as
+interim with the finding recorded (the real fix deduplicates the
+predef'd definitions on the L2 side). Next for b5: :510 and any
+same-shape sites in one commit; the parity trace stop after check 15;
+composite_glyphs' errors diagnosed.
