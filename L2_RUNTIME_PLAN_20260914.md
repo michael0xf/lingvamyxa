@@ -8071,3 +8071,15 @@ runs run_port_parser now at 2d8f2b6a (in no gates row, independent of
 the archive fix); on e9's push he merges claude-0c/archive-timeout-2
 into d6/lock-s6-2, sends the name-status, re-runs run_gates whole,
 five lines; the remote stays at 2d8f2b6a until that merge.
+The lead, before the merge step: claude-0c/archive-timeout-2 is not on
+origin yet (e9 is reproducing); the near-named claude-0c/archive-timeout
+(3f131768, the branch that introduced the 120 s bound) and
+claude-0c/archive-hang (0d1df7c5) both predate the stage and, diffed
+against 2d8f2b6a, would resurrect the slots module and drop the mixa
+baseline, so neither is merged. RULE recorded: a merge candidate is
+checked by descent and contents (git merge-base, git diff
+--name-status against the tip), never by its name. e9's fix must be
+cut from 2d8f2b6a touching only the runner (the name-status then
+differs from the 54 by exactly that path), else the runner change is
+cherry-picked onto the tip. run_port_parser is running at 2d8f2b6a,
+healthy (36 of 36 goldens in the first two stages).
