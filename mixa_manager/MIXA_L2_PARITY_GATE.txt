@@ -142,3 +142,20 @@ PASS 12.8s, selection PASS 13.2s, tiles PASS 13.7s) --
 "mixa parity gates: 10 of 10 as expected (total 164.4s)"
 
 Both runs exit 0. Falsifier met both times.
+
+--- 2026-09-16: audio_mp3 enters the gate (commit 4014bec8), 11 rows
+
+audio_mp3's scratch second-translator mechanism retired (see
+L2_RUNTIME_MODULE_LIST_AUDIT.txt's own entry) -- re-measured cold at
+PASS, 23.1s. Added to run_mixa_parity_gates.ps1's own table with a
+dated comment naming commit 4014bec8, Expect = "PASS", TimeoutSec = 60.
+
+Run 1 (180.0s wall): OK on all eleven (the same ten as above, plus
+audio_mp3 PASS 23.8s) -- "mixa parity gates: 11 of 11 as expected
+(total 179.7s)"
+
+Run 2 (179.7s wall): OK on all eleven again (audio_mp3 PASS 23.8s,
+same as run 1) -- "mixa parity gates: 11 of 11 as expected (total
+179.3s)"
+
+Both runs exit 0.

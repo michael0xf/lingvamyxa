@@ -52,6 +52,10 @@ $Gates = @(
     @{ Script = "run_mixa_composite_glyphs_l2_parity.ps1"; Args = @(); Expect = "PASS"; TimeoutSec = 45 }
     @{ Script = "run_mixa_selection_l2_parity.ps1"; Args = @(); Expect = "PASS"; TimeoutSec = 45 }
     @{ Script = "run_mixa_tiles_l2_parity.ps1"; Args = @(); Expect = "PASS"; TimeoutSec = 45 }
+    # 2026-09-16, commit 4014bec8: audio_mp3's scratch second-translator
+    # mechanism retired (l1trans's old fixed import cap it worked around
+    # is gone from the current pin); re-measured cold at PASS, 23.1s.
+    @{ Script = "run_mixa_audio_mp3_l2_parity.ps1"; Args = @(); Expect = "PASS"; TimeoutSec = 60 }
 )
 
 function Get-Verdict([string]$LogPath) {
