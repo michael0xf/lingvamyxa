@@ -7103,3 +7103,16 @@ the unit list and order from the l2src runner that builds them); the
 five runners with lists of their own stay as they are, recorded as
 lacking the step, a later ticket moves them onto the lib; the
 coordinator reads the diff before the seven are re-measured.
+e9: MEASURE_S6_2.md amended at claude-0c/land-s6-2 96f35613: the
+falsifier restores the original call the stage deleted, from the base
+by line ("if: c.lmx_msg_endp_retain(src) = 0", lmx_message.lm1:1237
+at 7b3a8668, to be re-found by git grep if a base renumbers), re-proven
+on the red tree (342 to 343, numstat "1 0", checkout back to 342); the
+file states it is a text restoration for a grep probe that builds
+nothing, not for any compiling step. R0P early correction by e9: the
+lmx_msg_poll* hits in the runners are poll_abort/poll_escape (the L2
+checkpoint helpers in lmx_poll_stub.c), not the liveness poll, and the
+seven live_query sites in lmx_message_selftest.lm1 are ordinary child
+queries; liveness_33:372 stays the one parentless assertion (b5's
+reading confirmed); the numeric channel that can move under the R0P
+ruling is live_seq and the poll mark, since R0 joins the same poll.
