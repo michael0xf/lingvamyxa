@@ -8062,3 +8062,12 @@ rows not run; not cited as the stage's verdict. 4520 and 20452 gone,
 by Win32_Process. core.zip's presence or absence in that run dir is
 the one artefact deciding "archive completed" independently of JSON
 (the lead reports it).
+Three independent readings agree (the lead): core.zip absent from the
+run dir, source/ present but empty (Expand-Archive never ran), and the
+timeout branch's evidence.json; 4520 and 20452 gone by Win32_Process;
+the run dir's order: evidence.json 00:48:15, then the archive files
+and l2trans.current.* at 00:46:13-15, source/ at 00:46:05. The lead
+runs run_port_parser now at 2d8f2b6a (in no gates row, independent of
+the archive fix); on e9's push he merges claude-0c/archive-timeout-2
+into d6/lock-s6-2, sends the name-status, re-runs run_gates whole,
+five lines; the remote stays at 2d8f2b6a until that merge.
