@@ -6884,3 +6884,24 @@ claude-0c/land-s6-2 (per-step timeouts, the allowlist by status from
 bb082d37 and 7af872da, the union base with scenario36, the probe
 -Part 2 on the measuring merge with 4189dea0, the named fixtures'
 gates by name; bash -n; not launched until the stage tip exists).
+b5's Y3 transport inventory landed on sonnet/y3-transport-inventory
+703aaa8b (l2src/LOCK_REMOVAL_Y3_TRANSPORT_INVENTORY.txt, off 7b3a8668):
+5 production sites, all in lmx_message.lm1 (host_drain's ingress
+re-stage, end_turn's outbox relay, post_dead's status-envelope push,
+pump's pop and relay, runtime_delete's teardown), none in exec.c or
+host.c; 61 fixture calls to lmx_msg_pump( across 7 files (30 in
+lmx_message_selftest.lm1, 26 in lmx_message_exec_selftest.c, 5
+scattered; a first grep under l2src/tests alone undercounted at 4, the
+selftests live directly under l2src); numeric pins shifted by the
+deletion: 0 forced. Open point named by b5: whether lmx_msg_pump stays
+public as a permanent no-op (then the 61 calls and their inbox_n
+checks need no edit, admission being immediate) or goes. RULED (the
+coordinator, 2026-09-15, on "cut defensive complexity" and "every
+touched field needs an LMX owner or a deletion"): pump goes with the
+queue at Y3; a public no-op is scaffolding with no owner in the model
+(the OS message pump of 19.28.R2.2 is a descendant L3 Thread filling
+an inbox, a different thing with the same word); the 61 calls are
+removed in the same commit as a mechanical edit, each remaining check
+reading the post-admission value, and any check that only tested the
+staging itself is deleted with the property named. For the lead's Y
+section.
