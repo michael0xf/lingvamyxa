@@ -7006,3 +7006,18 @@ paths from bb082d37's bullet, dry-run 0 unmatched; widens to the
 lead's 56 (005e3896's test-side bullet added, the six mixa files
 included), which the lead sends verbatim; not launched before the
 stage tip and the coordinator's word.
+S6-2 RED (the lead, d6/lock-s6-2 b78f743e, design 90c6cbbe): the
+"retire retain" case of lmx_message_selftest.lm1 restated as
+redirect-and-refuse: the handle taken before the rollback, the send
+through it after the child is unfindable, end_turn publishes, the
+sender's inbox read for the refusal status (kind
+LMX_MSG_KIND_REJECTED, 7, declared and unused before; the lead's
+choice, recorded as such since the spec names no kind; renaming is one
+constant); the refs pin, the release and both rt\n assertions gone
+with the dead n3 local; no pump call (end_turn ends with pump today,
+so the check converts at Y3). Measured: run_lmx -Suite Message fails
+at gen2 lmx_message_selftest with exactly one line, "no refusal status
+for a send through a settled capability", the .lm1 translated without
+parse error and the case's other checks silent, so the red is the
+missing refusal, not a broken fixture. Coordinator read the diff (20
+insertions, 16 deletions, one file) and accepted it.
