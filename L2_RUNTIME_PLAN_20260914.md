@@ -8839,3 +8839,7 @@ cut for; nothing in flight). Told: the two tool files are new A paths,
 and the drain moves into R0's round, so the chain on the building tip
 is the first measurement of the reshaped fixtures under the marker
 rule.
+The engineer's read-only dry run at 108b51f0: 8 paths changed since
+2d8f2b6a, exactly the two l2src/tools files outside the allowlist;
+the widening today is those two A paths, the module deletion's D and
+M paths added when that step lands, from the lead's name-status.
