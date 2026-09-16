@@ -8403,3 +8403,19 @@ down to the child whose index follows the prefix; otherwise hand up to
 its parent; no such child (or no parent above R0), the letter falls
 off with a refusal status to the sender. No search, no route, no
 extra fields in the letter.
+e9's pre-measurement of the path_storage module deletion at 2d8f2b6a:
+the module exports one name, lmx_msg_path_grow, with four production
+call sites (lmx_message.lm1:1085, :1095; lmx_message.lm2:1144, :1154,
+all on slot\path and slot\path_cap: they go with the fields, in or
+before the module's deletion); the generated-header include
+(lmx_message.h:15) and the lm2 predef (lmx_message.lm2:6) are present
+again; allowlist shape: 25 runners naming the module once each in
+$names lists (M), run_lmx.ps1 (6) and run_msg_mail_chain.ps1 (2) M,
+the four core files and run_gates.ps1 M, the module's six files plus
+LMX_MSG_PATH_STORAGE.txt D; six mixa_manager files name it
+(lib_l2_runtime_support.ps1:95, app_fmpanel:293, app_path:242, tiles,
+selection, composite_glyphs), ungated; the gate count after the
+port_path_storage row goes: 29 with the switch, derived from the
+table. DECIDED: b5 prepares sonnet/s6-2-mixa-lists-2 off 7b3a8668 with
+the six edits, the lead merges it into the stage; the preconditions
+go to the lead for the section's five populations.
