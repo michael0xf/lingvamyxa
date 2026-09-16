@@ -237,3 +237,58 @@ fixed here.
 git show <this commit> --stat prints lib_l2_runtime_support.ps1 and
 this audit file only -- no change to any of the five runners' own list
 files, and no new/changed list-entry string anywhere.
+
+--- After (commit 4b527e1a, the same seven re-measured cold, one at a
+    time, none past three minutes, 2026-09-15)
+
+Runner                                        | Before (pre-4b527e1a)      | After (post-4b527e1a)
+run_mixa_app_controller_l2_parity.ps1         | UNEXPECTED_FAILURE         | UNEXPECTED_FAILURE (unchanged)
+run_mixa_app_panel_l2_parity.ps1              | UNEXPECTED_FAILURE (link)  | PASS
+run_mixa_app_win32_l2_parity.ps1              | UNEXPECTED_FAILURE         | UNEXPECTED_FAILURE (unchanged)
+run_mixa_audio_mp3_l2_parity.ps1              | THROW (missing artifact)   | THROW (unchanged)
+run_mixa_backend_ctors_win32_l2_parity.ps1    | EXPECTED_CORE_BARRIER      | EXPECTED_CORE_BARRIER (unchanged)
+run_mixa_backend_win32_l2_parity.ps1          | EXPECTED_CORE_BARRIER      | EXPECTED_CORE_BARRIER (unchanged)
+run_mixa_l2_parity.ps1 -Module app_window     | UNEXPECTED_FAILURE (link)  | UNEXPECTED_FAILURE (different link)
+
+run_mixa_app_controller_l2_parity.ps1: unchanged, own-module failure,
+  the fix touches nothing this runner's own code path reaches (it never
+  calls Add-L2RuntimeSupport); oracle 9 CHK lines PASS, same "l2trans
+  error: mixa_manager\mixa_app_controller.lm2:14:5: unsupported body,
+  frame=mixa_app_fmpanel_close" both times.
+run_mixa_app_panel_l2_parity.ps1: fixed, not just "past link" -- full
+  PASS. Translation, build, and link all succeed now that
+  Add-L2RuntimeSupport compiles and links lmx_root_record's own object
+  through Build-L2RuntimeUnits; the L2 trace is byte-identical to the
+  oracle's own (31 CHK lines PASS, "mixa app panel parity harness ok").
+run_mixa_app_win32_l2_parity.ps1: unchanged, own-module failure, same
+  "l2trans error: mixa_manager\mixa_app_win32.lm2:463:50: address of an
+  Array element needs an explicit adapter" both times; oracle 58 checks,
+  0 failures both times.
+run_mixa_audio_mp3_l2_parity.ps1: unchanged, this runner never calls
+  Add-L2RuntimeSupport, same missing-artifact throw (ticket
+  20260912-084943) both times.
+run_mixa_backend_ctors_win32_l2_parity.ps1: unchanged, own-module
+  failure, same "incompatible entry signature" both times; oracle 7
+  checks PASS both times.
+run_mixa_backend_win32_l2_parity.ps1: unchanged, own-module failure,
+  same "unsupported own array declaration" both times; oracle 43 CHK
+  lines PASS both times.
+run_mixa_l2_parity.ps1 -Module app_window: past the lmx_root_record
+  link failure (translation now exits 0, no stderr; oracle 162 checks
+  PASS), but still UNEXPECTED_FAILURE -- a DIFFERENT, pre-existing link
+  error this ticket's own earlier before/after cycle already named and
+  explicitly did not chase: `multiple definition of mixa_rect_open/
+  _release/mixa_cell_at/_at_const/mixa_rect_fill/_put_text/_dump'
+  between mixa_draw.o and mixa_buttons.o, unrelated to lmx_root_record.
+  A finding, not fixed here -- this is the "further red" 6f's own
+  ticket named as its own possible, separate outcome.
+
+Net: matches the ticket's own expected move exactly for app_panel
+(PASS, better than merely "past link") and for the dispatcher (past the
+lmx_root_record failure onto a different, already-documented,
+pre-existing duplicate-symbol issue). The other five runners are
+unchanged for reasons already established (own-module failures, an
+unrelated missing artifact, or already-documented core barriers) --
+none of them call Add-L2RuntimeSupport's now-extended runtime object
+set in a way this fix could touch, or already reached their own
+independent failure before any list is consulted.
