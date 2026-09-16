@@ -2235,6 +2235,19 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           addition; the arrays and the module; the fixtures.
       - THE STRING-ADDRESS CHAIN [DEMOTED TO THE SERVICE'S SECOND ENTRY by the settled shape above, not withdrawn:
         send by string address is an addition to the service, not its main path], in the order the code takes it:
+        * S6-2 WRITES THE INTERFACE ONLY; THE CHAIN WAITS FOR ITS STAGE (ruled 2026-09-16 as option (iii), on
+          Mikhail's fourteenth line, "сейчас должна быть заглушка"; code 1763827c). The drain ruling left no event
+          that makes a holder look at a hop letter: readiness ignores internal kinds, and a non-R0 end_turn only
+          pushes. THE BOOTSTRAP EXECUTOR CANNOT RUN THE ROUND OF A MESSAGE WITH NO BOUND TURN, which is why the
+          chain waits for the stage whose executor runs every holder's round, rather than being written against an
+          executor that cannot carry it. The model's answer for that stage is (i): each L3 Thread's infinite
+          non-blocking loop checks its mail every round, so a hop letter is looked at in the holder's own round and
+          forwarded through its outbox; (ii), R0 deciding hops by reading other Messages' links, is excluded by the
+          no-cross-lane-read rule. (i) goes to Mikhail for confirmation when that stage opens, not now.
+          In the code today: lmx_msg_send_address (the default body: require_turn, delegate to service_of(sender))
+          and lmx_msg_service_send_address (R0's body: KIND_REJECTED to the sender, LMX_MSG_UNDELIVERABLE = 9
+          returned, no walk of any other Message's links). Everything below this bullet is the chain as it will be
+          written in that stage, kept as its design.
         * LmxMsg.index (unsigned): the record's index at its parent, written where assign_path writes the array's
           last element today, and rewritten on a parent change. path, path_n and path_cap go with the arrays.
         * lmx_msg_get_address: walk parent_msg up to R0, collecting indices, and return the address as a string of
