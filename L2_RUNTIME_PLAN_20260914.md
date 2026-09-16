@@ -8724,3 +8724,14 @@ not the two the compiler reached first. The lead's own wrapper note: his
 invocation ended in echo/tee, so the harness printed "exit code 0"
 while the gate's exit.txt said 1, the shape e9's bounded-runner work
 exists to stop. Nothing pushed past 4ffacf05.
+The lead's diagnosis of the red: the failing step is compile_lmx_message
+(the lm1-derived C), so lm2 is unmeasured, not clean; three forward
+uses, not two (post_unregister, post_register and live_sweep all
+defined below their callers; -Werror stopped at the first); lm1's
+26-entry forward-declaration block gains the three names (verified
+against their definitions in name, arity and fn/sub); lm2 has no such
+block (zero fn:/sub: forward lines against 29 in lm1), so there the
+three functions move above their earliest caller (after
+msg_teardown_free, before msg_runtime_delete, their callees all
+above that boundary), the insert and the delete landed together and
+the definitions counted to one each before the re-run.
