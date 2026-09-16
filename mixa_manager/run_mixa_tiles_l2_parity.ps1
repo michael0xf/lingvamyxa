@@ -78,47 +78,13 @@ $hdrOut = Join-Path $HeaderDir "mixa_tiles_l2.lm1.h"
 $hdrExit = Invoke-Cmd $L1Trans "mixa_manager\mixa_tiles_l2.h.lm1 `"$hdrOut`"" $hdrLog1 $hdrLog2
 Pop-Location
 if ($hdrExit -ne 0) { throw "header translation failed: see $hdrLog2" }
-foreach ($unit in $CoreHeaderUnits) {
-    $unitOut = Join-Path $CoreHeaderDir ($unit -replace '\.h\.lm1$', '.lm1.h')
-    $unitOutLog = Join-Path $RunDir (($unit -replace '[^A-Za-z0-9_.-]', '_') + ".stdout.log")
-    $unitErrLog = Join-Path $RunDir (($unit -replace '[^A-Za-z0-9_.-]', '_') + ".stderr.log")
-    Push-Location $StageRoot
-    $unitExit = Invoke-Cmd $L1Trans "l2src\$unit `"$unitOut`"" $unitOutLog $unitErrLog
-    Pop-Location
-    if ($unitExit -ne 0) { Get-Content $unitErrLog; throw "core header translation failed: $unit" }
-}
 
-# Generated library wrappers execute through a real, freshly built Message runtime.
-$CoreImplUnits = @(
-    "lmx_msg_blocks.lm1", "lmx_owned_ranges.lm1", "lmx_msg_storage.lm1",
-    "lmx_msg_path_storage.lm1", "lmx_msg_slots.lm1", "lmx_msg_mail_chain.lm1",
-    "lmx_msg_visit.lm1", "lmx_msg_liveness.lm1",
-    "lmx_chars_owned.lm1", "lmx_array_owned.lm1", "lmx_array_ref_owned.lm1",
-    "lmx_branch_owned.lm1", "lmx_value_owned.lm1", "lmx_msg_history_owned.lm1",
-    "lmx_msg_roots_stale.lm1", "lmx_graph_copy_owned.lm1",
-    "lmx_message_graph_copy.lm1", "lmx_message.lm1"
-)
-$CoreRuntimeObjects = @()
-foreach ($unit in $CoreImplUnits) {
-    $stem = $unit -replace '\.lm1$', ''
-    $generatedC = Join-Path $RunDir ("runtime_" + $stem + ".c")
-    $generatedO = Join-Path $RunDir ("runtime_" + $stem + ".o")
-    Push-Location $L1Root
-    $unitExit = Invoke-Cmd $L1Trans "l2src\$unit `"$generatedC`"" (Join-Path $RunDir "runtime_$stem.translate.stdout.log") (Join-Path $RunDir "runtime_$stem.translate.stderr.log")
-    Pop-Location
-    if ($unitExit -ne 0) { throw "core runtime translation failed: $unit" }
-    $compileExit = Invoke-Cmd "gcc" "$GccStd -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$generatedC`" -o `"$generatedO`"" (Join-Path $RunDir "runtime_$stem.compile.stdout.log") (Join-Path $RunDir "runtime_$stem.compile.stderr.log")
-    if ($compileExit -ne 0) { throw "core runtime compile failed: $unit" }
-    $CoreRuntimeObjects += $generatedO
-}
-foreach ($native in @("lmx_message_host.c", "lmx_message_exec.c")) {
-    $stem = $native -replace '\.c$', ''
-    $nativeO = Join-Path $RunDir ("runtime_" + $stem + "_native.o")
-    $nativePath = Join-Path $L1Root "l2src\$native"
-    $compileExit = Invoke-Cmd "gcc" "$GccStd -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$nativePath`" -o `"$nativeO`"" (Join-Path $RunDir "runtime_$stem.native.stdout.log") (Join-Path $RunDir "runtime_$stem.native.stderr.log")
-    if ($compileExit -ne 0) { throw "core native runtime compile failed: $native" }
-    $CoreRuntimeObjects += $nativeO
-}
+# Generated library wrappers execute through a real, freshly built
+# Message runtime -- built by the shared lib_l2_runtime_support.ps1,
+# including the L2-native units (e.g. lmx_root_record) a bare .lm1 list
+# can't cover.
+$InvokeCmdRef = { param($e, $a, $o, $er) Invoke-Cmd $e $a $o $er }
+$L2Rt = Add-L2RuntimeSupport -L1Trans $L1Trans -L1Root $L1Root -RunDir $RunDir -InvokeCmd $InvokeCmdRef
 
 # ---- Step 0.5: ABI parity gate. ----
 $abiRealExe = Join-Path $RunDir "abi_probe_real.exe"
@@ -285,7 +251,7 @@ if ($TilesExit -ne 0 -and $KnownBarrier) {
         $l2TilesO = Join-Path $RunDir "mixa_tiles_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2tiles_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2tiles_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$l2TilesC`" -o `"$l2TilesO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -I `"$($L2Rt.HeaderRoot)`" -c `"$l2TilesC`" -o `"$l2TilesO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
@@ -294,8 +260,7 @@ if ($TilesExit -ne 0 -and $KnownBarrier) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2tiles_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2tiles_link_stderr.log"
-            $runtimeObjectArgs = ($CoreRuntimeObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$HeaderRoot`" `"$harnessO`" `"$l2TilesO`" `"$textRectO`" $runtimeObjectArgs -o `"$l2Exe`"" $l2olLog1 $l2olLog2
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$HeaderRoot`" `"$harnessO`" `"$l2TilesO`" `"$textRectO`" $($L2Rt.ObjList) -o `"$l2Exe`"" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"

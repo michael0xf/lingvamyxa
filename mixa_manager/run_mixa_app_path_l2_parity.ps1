@@ -55,6 +55,7 @@ function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$er
     & cmd /c "$exe $argsStr > `"$outLog`" 2> `"$errLog`""
     return $LASTEXITCODE
 }
+$InvokeCmdRef = { param($e, $a, $o, $er) Invoke-Cmd $e $a $o $er }
 
 # ---- Step 0: translate the L2 header unit. ----
 Push-Location $RepoRoot
@@ -229,51 +230,17 @@ if ($ApExit -ne 0 -and $KnownBarrier) {
         $l2ApO = Join-Path $RunDir "mixa_app_path_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2ap_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2ap_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RunDir`" -I `"$RepoRoot`" -I `"$L1Root`" -I `"$RunDir\headers`" -c `"$l2ApC`" -o `"$l2ApO`"" $l2occLog1 $l2occLog2
+        $L2Rt = Add-L2RuntimeSupport -L1Trans $L2L1Trans -L1Root $L1Root -RunDir $RunDir -InvokeCmd $InvokeCmdRef
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RunDir`" -I `"$RepoRoot`" -I `"$L1Root`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -c `"$l2ApC`" -o `"$l2ApO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
             $ExitCode = 1
         } else {
-            $runtimeDir = Join-Path $RunDir "message_runtime"
-            New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
-            $runtimeNames = @(
-                "lmx_msg_blocks", "lmx_owned_ranges", "lmx_msg_storage", "lmx_msg_liveness",
-                "lmx_msg_history_owned", "lmx_msg_roots_stale", "lmx_msg_path_storage",
-                "lmx_msg_slots", "lmx_msg_mail_chain", "lmx_msg_visit",
-                "lmx_branch_owned", "lmx_value_owned", "lmx_chars_owned", "lmx_array_owned",
-                "lmx_array_ref_owned", "lmx_graph_copy_owned", "lmx_message_graph_copy"
-            )
-            $runtimeSources = @()
-            Push-Location $L1Root
-            try {
-                foreach ($runtimeName in $runtimeNames) {
-                    $runtimeC = Join-Path $runtimeDir ($runtimeName + ".c")
-                    & $L2L1Trans ("l2src\" + $runtimeName + ".lm1") $runtimeC
-                    if ($LASTEXITCODE -ne 0) { throw "failed to translate Message runtime source $runtimeName" }
-                    $runtimeSources += $runtimeC
-                }
-                $messageC = Join-Path $runtimeDir "lmx_message.c"
-                & $L2L1Trans "l2src\lmx_message.lm1" $messageC
-                if ($LASTEXITCODE -ne 0) { throw "failed to translate Message runtime source lmx_message" }
-                $runtimeSources += $messageC
-            } finally {
-                Pop-Location
-            }
-            $runtimeSources += (Join-Path $L1Root "l2src\lmx_message_host.c")
-            $runtimeSources += (Join-Path $L1Root "l2src\lmx_message_exec.c")
-            $runtimeObjects = @()
-            foreach ($runtimeSource in $runtimeSources) {
-                $runtimeObject = Join-Path $runtimeDir (([IO.Path]::GetFileNameWithoutExtension($runtimeSource)) + ".o")
-                $runtimeCompileExit = Invoke-Cmd "gcc" "$GccStd -I `"$RunDir`" -I `"$L1Root`" -I `"$L1Root\lm1\build`" -c `"$runtimeSource`" -o `"$runtimeObject`"" (Join-Path $runtimeDir (([IO.Path]::GetFileName($runtimeSource)) + ".stdout.log")) (Join-Path $runtimeDir (([IO.Path]::GetFileName($runtimeSource)) + ".stderr.log"))
-                if ($runtimeCompileExit -ne 0) { throw "failed to compile Message runtime source $runtimeSource" }
-                $runtimeObjects += $runtimeObject
-            }
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2ap_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2ap_link_stderr.log"
-            $runtimeObjectArgs = ($runtimeObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2ApO`" $runtimeObjectArgs -o `"$l2Exe`"" $l2olLog1 $l2olLog2
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2ApO`" $($L2Rt.ObjList) -o `"$l2Exe`"" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"

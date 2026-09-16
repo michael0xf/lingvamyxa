@@ -467,3 +467,69 @@ whose own unsupported-body guard needs an L2-recognized callable frame
 for mixa_app_fmpanel_close specifically, which a plain #include never
 supplies. That gap -- l2trans needing what l1trans does not -- is the
 open question a real fix would have to resolve, not addressed here.
+
+--- Migrate the five own-list runners onto lib_l2_runtime_support.ps1
+
+fmpanel, app_path, composite_glyphs, selection, and tiles each carried
+their own copy of the 17-name lmx_* runtime-object build (the same
+copy-pasted shape this whole audit's own earlier sections trace to
+each own missing lmx_root_record coverage), instead of calling
+Add-L2RuntimeSupport like the other 7 runners already do. Each now
+dot-sources lib_l2_runtime_support.ps1 (already present in all five)
+and calls Add-L2RuntimeSupport in place of its own header-translate +
+module-translate + compile loop, using the returned ObjList/HeaderRoot
+at the link and compile steps that used to reference its own
+$CoreRuntimeObjects/$runtimeObjectArgs. app_path and fmpanel used a
+second, separate L1 translator ($L2L1Trans, gen3) for their own
+runtime-object build (distinct from $L1Trans/gen2 used everywhere
+else in those two files) -- Add-L2RuntimeSupport is called with
+-L1Trans $L2L1Trans there specifically, to preserve that existing
+choice unchanged; composite_glyphs/selection/tiles never had a gen3
+split and are called with -L1Trans $L1Trans, matching their own
+existing convention.
+
+composite_glyphs/selection/tiles additionally stage a COPY of the raw
+l2src/*.h.lm1 predef SOURCES into a build-local tree ($StageCoreDir)
+before translating their own generated .lm1 output -- confirmed
+directly (first attempt at this migration dropped that staging on the
+theory that only the runtime-OBJECT build needed the list, which broke
+composite_glyphs with `l1trans error: cannot read import l2src/
+lmx_array_owned.h.lm1`) to be a SEPARATE need from the runtime-object
+build: l1trans's own translation of the generated .lm1 (not the
+compile step) reads these raw .h.lm1 sources relative to the staged
+tree's own root. That staging step is kept as-is in all three; only
+the OBJECT-building duplicate ($CoreImplUnits + the two native-C
+compiles) was replaced.
+
+Before/after, each measured cold, one at a time, none past three
+minutes (fmpanel/app_path/selection/tiles all show the identical
+lmx_root_record undefined-reference pattern before, confirmed by grep
+on each one's own link stderr):
+
+run_mixa_app_fmpanel_l2_parity.ps1: UNEXPECTED_FAILURE (link,
+  undefined reference to lmx_root_record_orphan_retain/_new/_set_clock
+  etc.) -> PASS.
+run_mixa_app_path_l2_parity.ps1: UNEXPECTED_FAILURE (link, same
+  lmx_root_record undefined references) -> PASS.
+run_mixa_composite_glyphs_l2_parity.ps1: UNEXPECTED_FAILURE ->
+  UNEXPECTED_FAILURE, unchanged -- NOT lmx_root_record. Confirmed by
+  measuring the true pre-migration state directly (git checkout --,
+  re-run, compare): both before and after fail at the SAME earlier
+  stage, compiling the module's own generated C (mixa_composite_
+  glyphs_l2.c:7483 and 9 other sites, "subscripted value is neither
+  array nor pointer nor vector" on `cell -> fg[0]`/`bg[0]`/`alpha[0]`),
+  identical line numbers and error count (10) both times -- a
+  pre-existing, unrelated compile defect in the module's own generated
+  code, never reaching the runtime-object link step this migration
+  touches. A finding, not fixed here (out of this ticket's own scope,
+  which is the list migration only).
+run_mixa_selection_l2_parity.ps1: UNEXPECTED_FAILURE (link, same
+  lmx_root_record undefined references) -> PASS (all nine scenarios).
+run_mixa_tiles_l2_parity.ps1: UNEXPECTED_FAILURE (link, same
+  lmx_root_record undefined references) -> PASS.
+
+Net: 4 of 5 fixed outright (the same lmx_root_record gap this whole
+audit traces throughout); the fifth (composite_glyphs) is unchanged,
+its own pre-existing failure sitting upstream of where this fix could
+reach it -- consistent with this audit's own repeated finding that a
+masking failure hides what's underneath until removed.
