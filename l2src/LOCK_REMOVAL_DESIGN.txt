@@ -1837,6 +1837,19 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       line 84 pairs rt\n = 1 with find(1U) != 0 && find(2U) = 0; the executor selftest pairs on1 = on0 - 1 with
       find(p) != 0. What each pin asserts is "the record was reclaimed", which the tree walk says without a
       runtime-wide counter.
+    - Measured consequence of doing the settle first, recorded before it can look like a surprise at landing time:
+      with the mailbox no longer drained at release_slot and parent_msg no longer cleared, lmx_msg_endp_try_retire
+      refuses every retirement -- its guard requires both mailboxes empty AND parent_msg 0 AND no children -- so a
+      settled record never leaves rt->slots and rt\n never decrements. run_model_scenario36 therefore has
+      family_release_17 at "58 checks, 10 failures", every one of them an rt\n pin ("the runtime holds one slot
+      fewer", "one slot fewer: P1's slot retired", "two slots fewer ...", "past its deadline the drive reclaims the
+      failed orphan"). These are exactly the assertions this section already lists for restatement, and
+      endp_try_retire and rt\n are exactly what the stage deletes, so the red clears when the deletion and the
+      restatements land; it is not a defect to fix separately. Until the stage is complete, "scenario36 green" is
+      not a checkpoint for this branch, and I say so rather than leave a red standing unexplained.
+      The half that could have been a real surprise was measured and is clean: run_msg_family_handoff stays at
+      "checks=67 failures=0 watched_frees=4", so not draining the mailbox did not move that runner's block-free
+      count -- the numeric side effect I went looking for is not there.
     - Counting method, so two honest counts are not read later as a contradiction in the code: my numbers are
       CALL sites (git grep -o of "lmx_msg_endp_retain(" and its siblings), which at 7b3a8668 give 51 / 82 / 16 over
       l2src and 52 / 82 / 16 over the whole tree; e9's 53 / 84 / 20 come from a pattern that also catches the field
