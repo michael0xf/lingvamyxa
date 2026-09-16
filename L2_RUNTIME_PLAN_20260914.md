@@ -8600,3 +8600,30 @@ claim with its evidence named by file and line before the first
 build. Steps 3 to 5 (the send through the service, get_address and
 the chain, the arrays and the module, the fixtures) follow; no
 measurement until the lead names a building tip.
+SECOND GAP named by the lead, ruled: registration is written (a letter
+pushed before create_prepare returns the address, FIFO, so no send
+overtakes it; the worst case a false refusal that cannot occur).
+Removal: release_slot runs on the releasing lane (the parent's
+dispose or the Message's own end-turn), so it can neither write R0's
+live set (a cross-lane write) nor post an unregister letter and free
+at once (the record freed while still in the set: a send in that
+window would pass the check into freed memory, worse than refs).
+RULED (the coordinator, the lead's proposal plus one addition; an
+implementation detail inside the model, not a question for Mikhail):
+(1) the record is freed by its service: release_slot keeps unbind,
+unlink, the drain of both mailboxes, the free of init and path and
+the RELEASED state, then posts an unregister-and-free letter with the
+record pointer to its service, which removes the entry and calls
+slot_free in that order on its own lane (R0 as its own service does
+both directly at runtime_delete); the record outlives its release
+until the service's next drain and the fixtures' watched free moves
+one hop, still exactly once; (2) the window between the release and
+that free is closed by the RELEASED state written under the mailbox
+monitor, which admit_one refuses under the same monitor; (3) since
+malloc reuses addresses, the handle carries the record pointer AND its
+id (LmxMsgAddr, monotonic, never reused, kept through stage AD for
+this), the live set stores both and is_live requires equality of both.
+Rejected alternatives (the lead's): the releasing lane writing under
+R0's monitor (the special monitor Mikhail refused), deferring to
+teardown (the settled-list leak again), a per-record flag (refs with
+one bit).
