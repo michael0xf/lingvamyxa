@@ -2136,6 +2136,37 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         the rollback and requires the sender's next recv to carry KIND_REJECTED. That case is the S6-2 red measured
         earlier; it is the one thing that turns green by mechanism rather than by restatement, which is why it was
         planted before the code.
+      - MEASURED, after the owner's-round refusal was written and the red did NOT clear -- and the way it was found
+        is the point. Two runs failed identically with one line and no numbers, and I caught myself about to guess a
+        third time; the fixture was capturing st three times and overwriting it, so the red could not say which
+        step failed. Giving it its numbers took one edit and settled in one run what reading had not settled in
+        three: "send_cap=3 end_turn=0 recv=8 kind=1". Decoded against lmx_message.h: STAGED is 1 and NOMEM is 3, so
+        send_cap returned NOMEM and NOTHING WAS EVER STAGED; recv returned EMPTY (8) with the envelope untouched
+        (kind 1, the BYTES it went in with). The refusal machinery was never reached at all.
+        The cause, read off the code once the number pointed at it: send_cap gates staging on
+        c.lmx_msg_endp_retain(dest) (lmx_message.lm1, the capability send), and endp_retain returns 0 when refs < 1
+        (lmx_message_exec.c:347-374). A settled record's refs are already 0 -- release_slot ends with
+        endp_release, and try_retire refuses to free it because parent_msg is kept -- so a capability send to a
+        settled target cannot stage. The handle is valid, the mailbox is there, and a HOLDER COUNT refuses the send
+        before the spec's mechanism can answer it.
+        So the planted red cannot go green while a capability carries a holder count, which is the sentence the
+        whole stage rests on: "there is no count of holders" (19.29.7). It is not an obstacle to the refusal, it IS
+        the thing S6-2 deletes, and it is the first honest confirmation that the deletion is load-bearing rather
+        than tidying.
+      - ORDER, decided here rather than drifted into: the refs deletion is 54 sites in lm1, 55 in lm2, ~25 in
+        exec.c with the field itself, 5 in the header, 17 in the executor selftest and 6 in the message selftest.
+        Landing that in one sweep gives a diff whose reds cannot be attributed to a cause, which is the failure
+        this document has already recorded twice. It goes in two steps, and the first is a genuine subset rather
+        than a patch: the holder count carried for a CAPABILITY -- send_cap's retain of dest, copy_free's release
+        of dest_msg, copy_dup's retain of it. Those three are exactly "a count of holders for a capability", they
+        are what the planted red is blocked on, and removing them alone keeps that red attributable. The pins
+        across unlocked windows (host_post, host_drain, end_turn, recv, fail, drive_one, inbox_n, orphan_sweep)
+        follow in the second step, where what they guard -- "the record cannot be freed under me" -- is answered
+        by the settle: nothing frees a record any more except R0's teardown.
+      - Also added, and permanent rather than diagnostic scaffolding: the fixture now asserts in its own right that
+        the rolled-back child is on its parent's settled list with state RELEASED, before it asks for the refusal.
+        That splits a future red in two -- settle never happened, versus the owner's round never answered -- and it
+        is the settled-list restatement for this file, which the other fixtures are getting anyway.
       - MEASURED RED on d6/lock-s6-2 at 7b3a8668: the "retire retain" case of lmx_message_selftest.lm1 restated
         (handle taken before the rollback, send through it, publish, read the sender's inbox), and run_lmx -Suite
         Message fails at gen2 lmx_message_selftest with exactly one line -- "no refusal status for a send through a
