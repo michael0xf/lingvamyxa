@@ -292,3 +292,50 @@ unrelated missing artifact, or already-documented core barriers) --
 none of them call Add-L2RuntimeSupport's now-extended runtime object
 set in a way this fix could touch, or already reached their own
 independent failure before any list is consulted.
+
+--- Diagnosis, no fix: app_controller and app_win32's UNEXPECTED_FAILURE
+    (both at 7b3a8668; neither's own .lm2 has ever been touched by any
+    other commit -- each has exactly one commit in its own git log, its
+    own initial L2 port)
+
+run_mixa_app_controller_l2_parity.ps1 -- first failure:
+  mixa_manager/mixa_app_controller.lm2:14:5 (translation, l2trans):
+  `mixa_app_fmpanel_close(c\fmpanel)`. l2trans error "unsupported
+  body", detail "frame=mixa_app_fmpanel_close" -- l2trans.lm1:653
+  prints this detail whenever the node the generic fallback guard
+  rejects (l2trans.lm1:8893-8894's own comment: "the unsupported-body
+  guard, which runs before the statement is dispatched") is a call
+  frame; it fires here because mixa_app_controller.lm2's own header
+  (mixa_manager/mixa_app_controller_l2.h.lm1) never gives l2trans an L2
+  declaration for mixa_app_fmpanel_close -- MixaAppFmPanel and its own
+  functions are pulled in ONLY via the real, opaque `#include
+  "mixa_manager/mixa_app_fmpanel.h"` (a plain C header), by that
+  header's OWN already-written design comment (lines 18-34, written at
+  the port's own commit 12aa8b44): an earlier draft that DID predef the
+  L2 chain for app_fmpanel_l2 (plus help_l2/cmdline_l2/cmdline_
+  dispatch_l2/app_path_l2) hit `l1trans error: ...mixa_app_fmpanel_l2.
+  h.lm1:0:0: import path table full`, reproduced directly by that
+  draft's own author, not guessed -- so the accepted header keeps
+  fmpanel genuinely opaque on purpose. Names no field or function any
+  of S3, M, S5, or S6-1 deleted (mixa_app_fmpanel_close is a mixa_
+  manager UI-panel function, never touched by any of those four
+  stages -- git log on this .lm2 shows only its own 12aa8b44 port
+  commit, predating and untouched by all four). A pre-existing,
+  already-documented consequence of this module's own header design,
+  not a regression.
+run_mixa_app_win32_l2_parity.ps1 -- first failure:
+  mixa_manager/mixa_app_win32.lm2:463:50 (translation, l2trans):
+  `st: mixa_app_read_file_utf8(entry_path_utf8, @ dslot[0], @
+  lslot[0])`, the `@ dslot[0]` address-of. l2trans error "address of an
+  Array element needs an explicit adapter", detail "atom=@" --
+  l2trans.lm1:10075, whose own comment (lines 10071-10074) states the
+  rule directly: "An address prefix in flat-field position... except an
+  own Array element: its storage address is not an L2 `@` form (spec
+  11.3.1, 12.2)". dslot/lslot are this function's own local `[]:`
+  (own Array) declarations (lines 456-457) -- a deliberate, spec-cited
+  L2 language restriction (own-Array-element address-of needs an
+  adapter this call site does not use), not a deleted symbol. Names no
+  field or function any of S3, M, S5, or S6-1 deleted -- dslot/lslot
+  are local mixa_manager variables, unconnected to the runtime/executor
+  internals those four stages touched (git log on this .lm2 shows only
+  its own 29539c99 port commit, likewise untouched by all four).
