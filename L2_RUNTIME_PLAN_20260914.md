@@ -7832,3 +7832,14 @@ of $NG " matches land_base3's; the header (21-24) states why the count
 is 30 and not 31; the reconciliation matched independently (30
 literal rows, the append at 101, the count printed at 159 after it).
 Holding for the registry group's name-status and the word to launch.
+b5 on sonnet/mixa-module-list: 8e094e98 app_controller's fmpanel calls
+through prototype: blocks (eight, not nine: the design note listed
+eight names under a "nine", re-verified twice; kept alongside the
+real #include, which supplies the plain forward declaration gcc needs,
+not instead of it): the failure moves from :14:5 (fmpanel_close) past
+every fmpanel call to :16:5, frame mixa_file_close, the same class of
+gap (no L2-visible declaration) on another function, outside the
+ticket; 3a5de42c enters app_controller as gate row 12 with
+Expect=UNEXPECTED_FAILURE; the gate cold twice "12 of 12 as expected"
+(197.9 s, 201.0 s), exit 0. All twelve mixa L2 parity runners are now
+gated on expected verdicts. Holding for the merge after S6-2 lands.
