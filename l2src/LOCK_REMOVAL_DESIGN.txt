@@ -1772,6 +1772,14 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           parity PASS with 103 methods in 45 s each. Nothing was pushed to integration.
     - LANDED (2026-09-15): S6-1 is on integration/main-absorbs-core. Merge e6b94f04 of d6/lock-s6 53a0af86 onto
       11f581e0, pushed as 11f581e0..7b3a8668 (the merge plus its SELF_BUILD_LOG line).
+      - main carries it too: a3c8d970, the merge of 7b3a8668 into main a749cb3a (12 files, +383 -900), made on a
+        detached HEAD in my own worktree. The shared checkout's local main is 1007 behind and was never reset --
+        a reset there shows other sessions' pushes as reverts, which is why the rule exists.
+      - e9's cold record on the tip, as measured and with its own correction: self-build PASS 8 of 8 in 9 s and
+        gate.ps1 exit 0 in 301 s, 27 steps, 0 FAIL, on a tree with no build/ beforehand. It refused to read 301 s
+        as agreement with the landing's 506 s, because gate.ps1 is not run_gates.ps1's 31-gate chain; the
+        like-for-like band is its own prior cold gate.ps1 records, 298/324/296/291/304 s, and 301 s sits inside
+        it. Two numbers that do not compare are worth more said than smoothed.
       - Union base on that merge, every line the runner's own: self-build PASS 8 of 8 (pass 3 == pass 2) in 7 s,
         tag selfbuild/e6b94f04, landing branch d6/lock-s6-landing-e6b94f04; gates GREEN 31 of 31 in 506 s;
         run_port_message parity PASS 44 s and -LaneCheck parity PASS 43 s, 103 methods, no LANE FAIL line;
@@ -1873,6 +1881,44 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       the numbers into the evidence -- and no literal 130 appears anywhere in the file. So the count changes in the
       evidence and no assertion compares it: the gate stays green on the deletion. Recorded as measured, since a
       deletion's numeric side effects have bitten this project twice and the cheap check settles it either way.
+    - Per site, from b5's pre-read (sonnet/s6-2-preread 158952fd, l2src/LOCK_REMOVAL_S6_2_PREREAD.txt, taken off
+      7b3a8668 and cross-read against e9's 16335e9b; 24 sites, 0 contradictions):
+      - 21 functions call retain/release (5 in exec.c: drive_walk_list, drive_walk_roots, test_stage,
+        unbind_slot_locked, exec_bind_mode; 16 in lm1: copy_free, copy_dup, host_post, host_drain, send,
+        send_graph, send_owned, release_slot, orphan_sweep, end_turn, admit_one, recv, fail, drive_one, inbox_n,
+        send_cap), and 3 read slots/n/alloc_next (create_prepare, endp_try_retire, runtime_delete).
+      - 23 of the 24 need no replacement at all, only deletion: every one of them is read-only on the retained
+        record, and what the count bought was "the storage cannot be freed under me". Once the close settles a
+        child's storage into its parent's arena instead of freeing it, a stale reference stays safe to read (the
+        blocks do not move), so there is nothing left to count.
+      - admit_one is the one site that WRITES through the retained pointer, and its write is already ordered under
+        the destination's own mailbox monitor -- the one lock the model keeps and which S6-2 does not touch. refs
+        only kept the memory alive long enough to reach that monitor, so the monitor alone covers it afterwards.
+      - The slots/n readers go with the list: create_prepare's append has nothing left to serve once
+        endp_try_retire (which the refs deletion removes) and runtime_delete are the only other readers. On
+        runtime_delete, b5 caught a wording of mine that this document had already corrected once, and it is worth
+        keeping straight: the delete loop goes WITHOUT replacement, not "it walks R0's tree instead". Spec 19.28
+        says the slot list "served only the L1 delete loop and its address lookup and goes without replacement",
+        and the close is R0's own closing end-turn (this document at 5.1, where the earlier "runtime_delete walks
+        R0's tree" wording was withdrawn as contradicting it). Once every Message's storage settles into its
+        parent's arena at its close, teardown has nothing left over for a final sweep to catch.
+    - The one piece of NEW BEHAVIOUR, designed but not coded at 7b3a8668, and its red-first check. Today's code,
+      read rather than assumed:
+      - lmx_msg_dest_from_src resolves the target in the sender's own subtree, then its parent by address, then
+        R0's whole tree; lmx_msg_send refuses on the SOURCE's state (DEAD, STOPPED) and, for the destination,
+        only retains and stages, returning STAGED. The closed destination is caught later, in admit_one, which
+        frees the copy and returns GONE to the pump. So today a send to a closed sibling returns STAGED to the
+        sender and is then dropped at admission, with no status reaching the sender.
+      - 19.29.7 requires the other shape: the capability is the target's mailbox handle, that mailbox is settled
+        into the parent at the close, so the late send lands in a mailbox the parent owns and "is refused there,
+        on the parent's lane, with a status to the sender".
+      - Red-first check, to be written before the code: a turn sends to a sibling that has closed and settled;
+        the check asserts the sender receives a refusal status for that send. At 7b3a8668 it fails -- the send
+        returns STAGED and no status arrives (the drop is silent at admission) -- and it passes once the redirect
+        and refusal are coded. Both halves are named so the red is a measurement, not a formality.
+      - The refusal status uses the machinery already there: post_dead's relay carries a status envelope to the
+        sender, and the refusal itself happens on the parent's lane under the parent's mailbox monitor. No lock,
+        wait or signal is added, which is why this is new logic rather than a contradiction.
     - Stop condition, as for every stage here: if settling the mailbox into the parent turns out to need a lock, a
       wait or a signal, the stage stops and the question goes to Mikhail through the coordinator.
       - Falsifier, the acceptance's third leg, measured on d6/lock-s6 at baa8ec23: from zero lock lines, one
