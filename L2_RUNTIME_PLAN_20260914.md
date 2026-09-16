@@ -8265,3 +8265,14 @@ loosened, the rule strictly stricter on the tip, and the green itself
 is independent evidence since a row printing nothing would have read
 "FAIL exit=0 no marker line" and stopped the chain. The branch holds
 at 53ba86bd for the lead's reworked tip.
+
+STALE ENTRIES CORRECTED (e9's finding, 2026-09-16): the spec map's 5.6
+(l2src/LOCK_REMOVAL_SPEC_MAP.txt) recorded the withdrawn 2026-09-15
+wording as ANSWERED and in the spec; annotated WITHDRAWN with Mikhail's
+answer and the four respec commits, the proposal kept as history. The
+plan's earlier ruling "5.6 is settled in Mikhail's agreed wording
+(Lingvamyxa_spec.txt 12885-12891, 'давай так')" is superseded by the
+2026-09-16 entries above (and its line range had moved; the phrase
+form survives, the range does not). e9 sweeps the map's by-line
+citations against the current spec and reports the moved ranges; the
+coordinator edits the map.

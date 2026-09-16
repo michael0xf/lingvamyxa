@@ -560,9 +560,16 @@ SUMMARY, by class:
 
   5.6 (added after the lead's exec.c inventory, 39435ed2: 35 of its 41 silent 5.1 lines are address
       resolution, a tree walk from rt->root under the lock, replaced by a capability the caller already
-      holds, 19.28.R2.2 11447.) ANSWERED by Mikhail, 2026-09-15, "давай так" to the proposal below, now in
-      spec 19.29.7 and the model's section 27. The original question: what is a capability held by a
-      non-parent worth after its target closes?
+      holds, 19.28.R2.2 11447.) WITHDRAWN 2026-09-16: the 2026-09-15 "давай так" wording below (the
+      target's mailbox handle, the mailbox settled into the parent for late senders) was removed from
+      spec 19.29.7 by Mikhail ("У вас проблема без id найти Message?", spec 9f744435) and replaced by
+      his answer: a capability is the target's id; a closed Message's slot and arena are freed by the
+      release chain (19.29.6 stands in full); a late send resolves the id at the mail service, which
+      is a role handed down the chain, R0 today, holding a sorted address list as its own data with
+      membership in bounded time, and is refused with a status when the address is absent (spec
+      774c8d34, 42fd9199, 238a8eb1; phrases "found by its id", "mail service", "passes itself as the
+      mail service", "postman"). The proposal below is kept as history only. The original question:
+      what is a capability held by a non-parent worth after its target closes?
       The spec says nothing about a send to a released Message (R2.4, R2.5 and 19.29.7 name no
       undeliverable case). Proposed: a capability is the target's mailbox handle, and a closing
       Message's mailbox is settled into its parent with the rest of its storage (the parent's settle
