@@ -8735,3 +8735,13 @@ three functions move above their earliest caller (after
 msg_teardown_free, before msg_runtime_delete, their callees all
 above that boundary), the insert and the delete landed together and
 the definitions counted to one each before the re-run.
+The lead: no re-run yet; lm2's move landed its insert but the delete
+of the old copies failed ("string not found": the anchor was built
+from memory of his own text, carrying a comment header that belonged
+to the new copy; the third reconstructed anchor to fail), so lm2 held
+two definitions of msg_live_sweep, msg_post_unregister and
+msg_post_register (defs=2 ends=2 each); a re-run in that state would
+have measured a duplicate-definition error, so he did not run it; the
+stale block is printed verbatim at its measured boundaries and
+deleted from that text; then defs=1 ends=1 for the three, the gate
+re-run, both verdicts.
