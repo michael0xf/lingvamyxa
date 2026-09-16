@@ -7717,3 +7717,13 @@ chain, a design call, ticketed as a note for the mixa L2 port design;
 reverted, app_controller stays outside the gate. Design c01fba37 (the
 lead): step two written, every endp_ call and the refs field gone,
 the pair-deletion error caught four times by the survivor grep.
+Stage branch d6/lock-s6-2 95de9bf4: THE HOLDER COUNT IS DELETED (refs,
+its three functions endp_retain/endp_release/endp_refs, and every
+pin); design 7cfe92d7: step two measured, run_port_message green with
+the count entirely deleted. Coordinator's check at the tip:
+lmx_message.lm1 has 0 lmx_msg_endp_retain( calls and 0 \refs lines.
+Remaining toward the tip: the slot list's fields (rt\slots, rt\n,
+alloc_next) with runtime_delete walking the settled list, the lm1
+fixtures' seventeen pins with their captures and the loop wait, the
+module's seven files, run_gates.ps1's port_slots row, the 22 runner
+support lines, then the probe -Part 2 at 0/0 on the measuring merge.
