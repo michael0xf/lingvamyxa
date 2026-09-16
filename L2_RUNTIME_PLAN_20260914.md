@@ -7520,3 +7520,31 @@ into the settled mailbox, drain_settled in end_turn between the two
 pumps, send_cap/copy_free/copy_dup without retain or release); the
 lead's five lines with the planted red's verdict and the tripwire
 follow.
+S6-2 MECHANISM GREEN (the lead, on 3ce188dd plus the capability step):
+the settled-list assertion silent (the rolled-back child on its
+parent's settled list, RELEASED) and the planted red's refusal
+diagnostic absent: the send through a settled capability comes back
+to the sender as REJECTED end to end (delivered into the settled
+mailbox at admission, answered in the owner's round, carried back
+through R0's transport). Caught in the same run: copy_free's release
+of dest_msg pairs with three retains left in place (send, send_graph,
+send_owned at lmx_message.lm1:1233, 1288, 1349), so a plain send's
+count rose and never fell ("recv dest_msg leak", "discard dest_msg
+leak" fired). The coherent step, taken: no carried destination is
+counted for any send; the three retains go in both files; the three
+count-reading pins get their fate with the endp_refs sites. METHOD
+RULE recorded: before removing one side of a pair, grep the partner
+and count its sites; the fixtures caught it in one run, the argument
+for restating fixtures rather than deleting them. Next: the two
+tripwires, the window pins, the rest, the header, the tip.
+b5: 53d77171 the merge preview on sonnet/mixa-module-list's tip:
+run_mixa.ps1 SUCCESS exit 0 (every suite ok) and run_ingress_harness.ps1
+exit 0 all ok; nothing blocks the merge after S6-2 lands. The
+flag-retirement note: the seven duplicated functions come from
+mixa_text_rect.lm1 predef'd full-body twice (mixa_draw.lm1 directly,
+mixa_buttons.lm1 through mixa_tiles.lm1); the fix is one chain to a
+header-only prototype (mixa_tiles_l2.h.lm1's convention for
+mixa_cell_at) plus mixa_text_rect as app_window's explicit L2Dep; a
+later ticket since it edits an accepted oracle .lm1. Next for b5: a
+proposal for gating the thirteen mixa L2 parity runners
+(MIXA_L2_PARITY_GATE.txt), doc-only.
