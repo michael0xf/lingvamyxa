@@ -9003,3 +9003,20 @@ is why the chain waits for its stage; (i) goes to Mikhail for
 confirmation when that stage opens. Steps 4a (path_n/path_seg callers
 onto get_address) and 5 proceed without dependence on it; the cold
 repeats of b9a148f2 read 3 of 3 PASS so far.
+
+S6-2 STAGE, step 4 pushed 2026-09-16 08:23 as d6/lock-s6-2 1763827c (four
+files, 121 insertions: lmx_message.h, .lm1, .lm2, the exec selftest).
+Checked by the coordinator against the (iii) ruling from the diff: the
+common API's second entry lmx_msg_send_address requires the sender's
+turn, finds the sender by its handle and delegates to
+lmx_msg_service_of(sender); R0's body lmx_msg_service_send_address
+posts KIND_REJECTED to the sender and returns the new status
+LMX_MSG_UNDELIVERABLE (9); no route is computed, no other Message's
+links are read (Mikhail's "НЕТ!!! ЗАЧЕМ?!!!" line holds); the selftest
+"send-address" sends to a real get_address result and asserts the
+refusal, the empty inbox of the addressee and the corr. The lead's
+tripwire (R0's body returning STAGED -> exit 1, then restored, cmp
+identical) is recorded in the commit. Still to come before the tip:
+step 5 (path/path_n/path_cap, the path_storage module with its five
+reference populations, b5's 18f5701d, the fixtures, the probe -Part 2);
+the coordinator measures only the tip the lead names as building.
