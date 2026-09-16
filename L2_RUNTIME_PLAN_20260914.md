@@ -7134,3 +7134,11 @@ FAILED-orphan path whose "self-reclaims when it expires" mechanics
 are held; its restatement (the orphan not findable after the
 deadline) is measured at the tip, not assumed to clear with the
 deletion.
+b5's commit (1) on sonnet/mixa-module-list 4b527e1a: Add-L2RuntimeSupport
+dot-sources l2src/l2units_build.ps1 and calls Build-L2RuntimeUnits
+(the runtime-profile .lm2 units without an .lm1 twin: lmx_root_record
+today, confirmed the only one) before its unchanged l1trans loop, the
+objects seeding $L2RuntimeObjs; $L2RuntimeNames untouched; the five
+own-list runners recorded as a later ticket. Read by the coordinator
+against run_port_message.ps1's shape and accepted; (2) the seven
+re-measured and (3) the two own-module first failures follow.
