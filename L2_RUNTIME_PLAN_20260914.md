@@ -8911,3 +8911,16 @@ asserting something did not happen by the deadline is read per site
 (a drain would change its meaning); WaitForSingleObject waits are
 restructured into poll-and-drain only where the gate shows one
 blocking. Counts by category in the five lines at the tip.
+The lead's classification of the post-spawn Sleep loops by the
+assertion after each: 7 positive-done sites convert (rtf 2431, rtr
+2619, rtb 3313, rti 6117/6818/6842/7518), 8 r0_round with the spawn
+site; 4 left with a reason (three standalone Sleep delays on no
+condition, 5928/6081/7513; 7141, a GetTickCount delay asserting
+g_ingress_root_turns is still 0, which a drain could change); 1 the
+dangerous shape (5970 waits for any_ctx then asserts ui_ctx.done is
+still 0); 3 still being read (5990, 6134, 3313's second Sleep);
+identical loop texts recur, so the insertions go bottom-up by line
+number and are verified by count, not by text anchors. The
+coordinator's falsifier corrected: "spawn child done p=1 c=1" is
+printed only in the failure branch; a pass is the line's ABSENCE
+with the selftest proceeding to the next case.
