@@ -157,8 +157,12 @@ fn: family_has_block (@: LmxMsg m; @: void base) int
 # its own end_turn's work is done, and the observer polls that instead
 # (family_release_17's pattern: running/success reads, never a wait). The
 # same text in every migrated test that waits on a Message's own thread.
+# S6-2 (the drain ruling): no worker drains the transport; the driver thread is
+# R0's lane, so each wait below runs R0's round (lmx_msg_pump) every round, and
+# send_via_root runs it after the root child's entry turn.
 fn: yield_until_stopped (@: LmxMsgRuntime rt; unsigned: who) int
     while: lmx_msg_state(rt, who) != c.LMX_MSG_STATE_STOPPED
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     return: 1
 
@@ -169,6 +173,7 @@ fn: yield_until_stopped (@: LmxMsgRuntime rt; unsigned: who) int
 # family_release_17, orphan_mapped_17 and scenario36 already do.
 fn: yield_until_handoff_ready (@: LmxMsgRuntime rt; unsigned: who) int
     while: lmx_msg_handoff_ready(rt, who) = 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     return: 1
 
@@ -178,6 +183,7 @@ fn: yield_until_success (@: LmxMsgRuntime rt; unsigned: who) int
     if: m = 0
         return: 0
     while: c.lmx_msg_success_load(m) = 0
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     return: 1
 
@@ -198,8 +204,11 @@ fn: send_via_root_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 
 fn: send_via_root (@: LmxMsgRuntime rt; unsigned: root; unsigned: to; @: LmxMsgEnv env) int
     send_via_root_to: to
+    int: st
     send_via_root_env: env
-    return: c.lmx_msg_run_entry_turn(rt, root, send_via_root_turn, 0)
+    st: c.lmx_msg_run_entry_turn(rt, root, send_via_root_turn, 0)
+    lmx_msg_pump(rt)
+    return: st
 
 # parent's own final end_turn (below) is an ordinary turn on a Message
 # that is not R0's direct child, so it needs the same real-thread wake.

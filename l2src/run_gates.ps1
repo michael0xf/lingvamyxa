@@ -27,7 +27,7 @@
 #     callbacks=2 at each requested level and checks the module's imports.
 #   port_mail_chain: not exact; run_msg_mail_chain pins checks=26 at each level
 #     and requires no imports.
-#   port_path_storage: deleted at S6-2 step 5 with the lmx_msg_path_storage module.
+#   port_path_storage: deleted at S6-2 step 5 with the path-array growth module.
 #     SPEC 19.29.7: a Message's address field reduces to its index at its parent and
 #     the full address is composed by walking the parent links (lmx_msg_get_address),
 #     so the path arrays -- the module's only production callers -- went with it.

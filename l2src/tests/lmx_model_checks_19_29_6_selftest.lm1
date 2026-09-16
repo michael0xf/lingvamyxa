@@ -184,6 +184,9 @@ fn: wait_until (@: LmxMsgRuntime rt; int: want_owner_turns; int: want_rendezvous
     deadline: c.GetTickCount() + ms
     ok: 0
     while: ok = 0 && c.GetTickCount() < deadline
+        # S6-2 (the drain ruling): the writers' deltas reach M0 in R0's round, and
+        # the host is R0's lane; no worker drains.
+        lmx_msg_pump(rt)
         # Each counter has one writer; the host only reads them.
         if: g_owner_turns >= want_owner_turns && g_turns_a + g_turns_b >= want_rendezvous
             ok: 1
@@ -271,6 +274,8 @@ fn: main () int
     env\id: 41U
     check(lmx_msg_send(rt, p, b, env) = c.LMX_MSG_STAGED, "input for B staged")
     check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P publishes the inputs")
+    # S6-2 (the drain ruling): P's end-turn pushes; R0's round (the host's pump) admits.
+    lmx_msg_pump(rt)
     check(lmx_msg_inbox_n(rt, owner) = 0 && lmx_msg_inbox_n(rt, writers[1]) = 1 && lmx_msg_inbox_n(rt, a) = 1, "inputs admitted; nothing has run yet")
     check(lmx_msg_exec_start_contexts(rt) = c.LMX_MSG_OK, "contexts started: one per bound Message")
 

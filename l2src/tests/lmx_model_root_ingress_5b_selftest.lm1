@@ -142,7 +142,11 @@ fn: main () int
     check(lmx_msg_exec_bind(rt, d, turn_post, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_host_post(rt, d, env) = c.LMX_MSG_STAGED && lmx_msg_host_drain(rt) = c.LMX_MSG_OK && map_child_in_own_turn(rt, r, d) = c.LMX_MSG_OK, "D bound, given an input and mapped onto its own context by R's own turn")
     c.free((cast: (@: void) env))
     c.printf("reading: D's reply in R's mailbox, published by D's end-turn after its post and drain attempt\n")
+    # S6-2 (the drain ruling): D's end-turn only pushes; the host (R0's lane) runs
+    # R0's round. lmx_msg_pump, not host_drain: the worker's post must stay pending
+    # in the root's mailbox for (3)'s checks below.
     while: lmx_msg_inbox_n(rt, r) < 1
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(g_posted != 0, "D's turn posted to C from its worker thread")
