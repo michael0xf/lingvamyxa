@@ -1,6 +1,5 @@
 /* Overlapping Message turns. Mutex not held during turn_fn. */
 #include "l2src/lmx_message_exec.h"
-#include "l2src/lmx_msg_slots.lm1.h"
 #include "l2src/lmx_msg_mail_chain.lm1.h"
 #include "l2src/lmx_msg_visit.lm1.h"
 #include "l2src/lmx_msg_liveness.lm1.h"
@@ -1273,14 +1272,40 @@ static int ctx_visit_count(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
 
 
 
-/* D1 allocation enumeration. Not the scheduler. Delegates to
- * Codex lmx_msg_slots; the lane catch-up must not use these. */
+/* D1 allocation enumeration. Not the scheduler; the lane catch-up must not use
+ * these. S6-2: the lmx_msg_slots module they delegated to is deleted, so the
+ * enumeration is R0's own child chain -- the records the registry listed for this
+ * purpose. The SIGNATURES are deliberately unchanged: tests/l2_and_foreign_call_-
+ * own_local.lm2 is a TRANSLATOR fixture that merely uses these as its subject (a C
+ * call on the right of && boxing an own int), it is compiled and never executed,
+ * and run_l2trans.ps1 asserts on the emitted call text. Deleting them to follow the
+ * module would have dropped that coverage for a reason that has nothing to do with
+ * it -- the same trap as unit_msg_cursor, which the slot list was also merely the
+ * subject of. */
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt) {
-    return lmx_msg_slots_n(rt);
+    LmxMsg *m;
+    int n = 0;
+    if (rt == 0 || rt->root == 0) {
+        return 0;
+    }
+    for (m = rt->root->first_child; m != 0; m = m->next_sibling) {
+        n += 1;
+    }
+    return n;
 }
 
 LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i) {
-    return lmx_msg_slots_at(rt, i);
+    LmxMsg *m;
+    if (rt == 0 || i < 0 || rt->root == 0) {
+        return 0;
+    }
+    for (m = rt->root->first_child; m != 0 && i > 0; m = m->next_sibling) {
+        i -= 1;
+    }
+    if (m == 0) {
+        return 0;
+    }
+    return m->addr;
 }
 
 #if defined(LMX_MSG_EXEC_TEST)

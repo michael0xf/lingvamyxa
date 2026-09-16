@@ -1,18 +1,27 @@
 # A const cursor over Message records: the const LmxMsg activation local, the
-# LmxMsgAddr result, and a walk along the four approved adapter fields. The
-# slots module port is what needs these; this pins them on their own.
+# LmxMsgAddr result, and a walk along the approved adapter fields.
+#
+# S6-2 deleted the runtime's slot list (rt\slots, rt\n, alloc_next), which is what
+# this unit used to walk. The case is NOT about the slot list: it pins translator
+# behaviour that happens to use a record walk as its subject -- a const pointee as
+# an activation local rather than a file scope or an address slot, adapter fields
+# read directly rather than resolved by name at run time, an unsigned LmxMsgAddr
+# surviving into the signature and into the temp a call result lands in, and a
+# count that reads a cached field rather than traversing. So it is re-pointed at
+# fields that survive -- R0's own child chain -- instead of being deleted with the
+# module, which would have dropped that coverage silently.
 fn: count (const: @(LmxMsgRuntime rt)) int
-    if: rt = 0
+    if: rt = 0 || rt\root = 0
         return: 0
-    return: rt\n
+    return: rt\root\path_n
 end: count
 fn: at (const: @(LmxMsgRuntime rt); int: i) LmxMsgAddr
     const: @(LmxMsg m)
-    if: rt = 0 || i < 0
+    if: rt = 0 || i < 0 || rt\root = 0
         return: 0U
-    m: rt\slots
+    m: rt\root\first_child
     while: m != 0 && i > 0
-        m: m\alloc_next
+        m: m\next_sibling
         i: i - 1
     if: m = 0
         return: 0U

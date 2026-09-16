@@ -56,7 +56,9 @@ int lmx_msg_exec_dispose_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr c
 int lmx_msg_exec_adopt_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c);
 int lmx_msg_exec_dispose_mark_msg(LmxMsgRuntime *rt, LmxMsg *p, LmxMsg *c);
 int lmx_msg_exec_reclaim_mark(LmxMsgRuntime *rt, LmxMsg *m);
-/* D1 allocation walk of rt->slots. */
+/* D1 allocation walk. S6-2: rt->slots is deleted; what is walked now is R0's own
+ * storage -- its settled records and its tree -- by lmx_msg_teardown_drain and
+ * lmx_msg_teardown_free. */
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt);
 LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i);
 #if defined(LMX_MSG_EXEC_TEST)

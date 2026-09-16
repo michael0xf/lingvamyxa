@@ -1,7 +1,14 @@
+# S6-2 deleted rt\n with the runtime's slot list. This unit is NOT about the slot
+# count: it pins the const LmxMsgRuntime formal and a named field read reaching C
+# as itself, with the slot count merely its subject -- the same trap as
+# unit_msg_cursor. So it is re-pointed at a field that survives rather than deleted
+# with the module, which would have dropped that coverage silently.
+# The function keeps its name for this pass: renaming is a second change, and I do
+# not yet know which graph_abi assertions key on emitted method names.
 fn: slots_n (const: @(LmxMsgRuntime rt)) int
-    if: rt = 0
+    if: rt = 0 || rt\root = 0
         return: 0
-    return: rt\n
+    return: rt\root\path_n
 end: slots_n
 fn: move_heads (@@: LmxMsgBlock db; @@: LmxOwnedRange dr; @@: LmxMsgBlock sb; @@: LmxOwnedRange sr) int
     if: db = 0 || dr = 0 || sb = 0 || sr = 0

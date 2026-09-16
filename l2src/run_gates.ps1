@@ -29,10 +29,21 @@
 #     and requires no imports.
 #   port_path_storage: not exact; run_msg_path_storage builds O0 and O2, requires
 #     exactly the realloc import and pins 541/543 checks with allocations=11.
-#   port_slots: not exact; run_msg_slots builds O0 and O2, requires no imports,
-#     pins checks=278. port_slots' reference build compiles the same selftest
-#     against the L1 module, so it covers run_msg_slots' compile; run_msg_slots
-#     stays opt-in (6f, after 6cb55982 broke both unnoticed).
+#   port_slots: deleted at S6-2 with the lmx_msg_slots module itself. SPEC 19.28
+#     Revision 2: the slot list "served only the L1 delete loop and its address
+#     lookup and goes without replacement" -- the lookup is the family walk, and
+#     the delete loop is R0's own storage, walked by teardown.
+#     COUNT, settled (0c and the coordinator): three numbers, all correct, counting
+#     different things. The $gates array held 30 literal rows and holds 29 after
+#     this one goes; the -L2MessageRoot branch appends l2_message_root BEFORE the
+#     "gates GREEN:" line prints $gates.Count, and both landing scripts pass that
+#     switch. So a landing reported 31/31 and will now report 30/30, while the array
+#     itself reads 30 and now 29. Written out because "the gate count" named two
+#     populations and nobody had said which -- the confusion that has cost this
+#     stage a count five times.
+#     Cited by switch name and printed marker, not by line number: the first draft
+#     of this note said "line 101" and "line 159", and deleting the port_slots row
+#     moved both within the minute.
 #   port_storage: not exact; run_msg_storage builds O0 and O2, checks the
 #     module imports, pins checks=77.
 #   port_owned_ranges: not exact; run_owned_ranges builds O0 and O2, requires no
@@ -91,7 +102,6 @@ $gates = @(
     @('port_mail_chain', 'run_port_msg_mail_chain.ps1', '', 'lmx_msg_mail_chain parity PASS'),
     @('port_path_storage', 'run_port_msg_path_storage.ps1', '', 'lmx_msg_path_storage parity PASS'),
     @('port_roots_stale', 'run_port_msg_roots_stale.ps1', '', 'lmx_msg_roots_stale parity PASS'),
-    @('port_slots', 'run_port_msg_slots.ps1', '', 'lmx_msg_slots parity PASS'),
     @('port_storage', 'run_port_msg_storage.ps1', '', 'lmx_msg_storage parity PASS'),
     @('port_visit', 'run_port_msg_visit.ps1', '', 'lmx_msg_visit parity PASS'),
     @('port_owned_ranges', 'run_port_owned_ranges.ps1', '', 'lmx_owned_ranges parity PASS'),

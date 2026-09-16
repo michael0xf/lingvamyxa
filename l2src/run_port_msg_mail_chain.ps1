@@ -7,7 +7,8 @@
 # The generated half is a LIBRARY UNIT (7d7ec87c): no entry, module-unique
 # internals, public wrappers carrying the source signatures. No splice.
 #
-# Like lmx_msg_slots and unlike storage/blocks/ranges, this module can EXPORT
+# Unlike storage/blocks/ranges, this module can EXPORT
+# (lmx_msg_slots was the other such module until S6-2 deleted it)
 # THE REAL SYMBOLS: nothing in the runtime calls the mailbox chain operations
 # while a unit graph is being built. The only non-test callers are the mailbox
 # wrappers in lmx_message_exec.c, reached on send/take, never from
@@ -71,7 +72,7 @@ $ev = [ordered]@{ stamp = $stamp; baseline = $baseline; translator = $l1trans; t
 # 1. Support objects: the runtime set the graph gate links. The handwritten
 #    lmx_msg_mail_chain is built too, but kept OUT of the parity link.
 # ---------------------------------------------------------------------------
-$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
 $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
 foreach ($name in $names) {
     Step "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $out "header_$name.log")) (Join-Path $out "header_$name.log")

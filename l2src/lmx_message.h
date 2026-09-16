@@ -173,7 +173,6 @@ typedef struct LmxMsg {
      * still running when its parent was settled. */
     int orphan;
     int disposed;
-    struct LmxMsg *alloc_next;
     /* S6-2 (SPEC 19.29.7): a closing Message is "settled into its parent with the
      * rest of its storage", so the owner must be able to ENUMERATE what it now
      * owns -- the runtime-wide slot list was the only container that could, and
@@ -205,8 +204,10 @@ typedef struct LmxMsg {
 
 struct LmxMsgRuntime {
     LmxMsg *root;
-    LmxMsg *slots;
-    int n;
+    /* S6-2 (19.28 Revision 2): the slot list "served only the L1 delete loop and
+     * its address lookup and goes without replacement". The lookup is the family
+     * walk (lmx_msg_find -> find_tree from rt->root), and the delete loop is R0's
+     * own storage -- its settled records and its tree -- walked by teardown. */
     LmxMsgCopy *transport;
     LmxMsgCopy *transport_tail;
     void *host_sync;

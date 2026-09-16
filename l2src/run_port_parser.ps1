@@ -124,7 +124,7 @@ $rtHeaderNames = @(
     "lmx_graph_copy_owned", "lmx_message_graph_copy", "lmx_msg_blocks",
     "lmx_msg_history_owned", "lmx_msg_liveness", "lmx_msg_mail_chain",
     "lmx_msg_path_storage", "lmx_msg_roots_stale",
-    "lmx_msg_slots", "lmx_msg_storage", "lmx_msg_visit", "lmx_owned_ranges",
+    "lmx_msg_storage", "lmx_msg_visit", "lmx_owned_ranges",
     "lmx_value_owned"
 )
 foreach ($n in $rtHeaderNames) {

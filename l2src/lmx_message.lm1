@@ -15,6 +15,8 @@ prototype:
     fn: lmx_msg_root_release (@: LmxMsg m; @: void p) int
     fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
     fn: lmx_msg_drain_settled (@: LmxMsgRuntime rt; @: LmxMsg owner) int
+    sub: lmx_msg_teardown_drain (@: LmxMsg m)
+    sub: lmx_msg_teardown_free (@: LmxMsg m)
     fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
     fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     fn: lmx_msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
@@ -975,12 +977,74 @@ fn: lmx_msg_host_drain (@: LmxMsgRuntime rt) int
     c.lmx_msg_mail_unlock(root)
 return: lmx_msg_pump(rt)
 
-sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
-    @: LmxMsg m
+# S6-2: R0's teardown frees R0's STORAGE -- its settled records, recursively, and
+# whatever is still attached to its tree -- and not a runtime-wide registry walk,
+# which 5.1 forbids. The registry could enumerate every record because it was the
+# runtime's; the settled list enumerates what an owner owns, which is the same
+# reachability for teardown and a different claim about who is responsible.
+# Two passes, in the order the old walk used and for the same reason: every mailbox
+# is drained first, because slot_free destroys the monitor; the transport teardown
+# runs between them under R0's monitor; only then is anything freed.
+sub: lmx_msg_teardown_drain (@: LmxMsg m)
+    @: LmxMsg s
     @: LmxMsg nxt
-    @: LmxMsg root
     @: LmxMsgCopy inb 0
     @: LmxMsgCopy outb 0
+    if: m = 0
+        return
+    c.lmx_msg_mail_inbox_take(m, @ inb)
+    lmx_msg_copy_free(inb)
+    c.lmx_msg_mail_outbox_take(m, @ outb)
+    lmx_msg_copy_free(outb)
+    s: m\settled
+    while: s != 0
+        nxt: s\settled_next
+        lmx_msg_teardown_drain(s)
+        s: nxt
+    ---
+    s: m\first_child
+    while: s != 0
+        nxt: s\next_sibling
+        lmx_msg_teardown_drain(s)
+        s: nxt
+    ---
+end: lmx_msg_teardown_drain
+
+# Bottom-up: a record's settled records and children are freed before it, so every
+# link is read before the record holding it is freed.
+sub: lmx_msg_teardown_free (@: LmxMsg m)
+    @: LmxMsg s
+    @: LmxMsg nxt
+    if: m = 0
+        return
+    s: m\settled
+    m\settled: 0
+    while: s != 0
+        nxt: s\settled_next
+        lmx_msg_teardown_free(s)
+        s: nxt
+    ---
+    s: m\first_child
+    m\first_child: 0
+    m\last_child: 0
+    while: s != 0
+        nxt: s\next_sibling
+        lmx_msg_teardown_free(s)
+        s: nxt
+    ---
+    if: m\init != 0
+        c.free((cast: (@: void) m\init))
+    ---
+    m\init: 0
+    if: m\path != 0
+        c.free((cast: (@: void) m\path))
+    ---
+    m\path: 0
+    c.lmx_msg_slot_free(m)
+end: lmx_msg_teardown_free
+
+sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
+    @: LmxMsg root
     if: rt = 0
         return
     if: c.lmx_msg_host_is_owner(rt) = 0
@@ -989,37 +1053,17 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     c.lmx_msg_exec_stop(rt)
     c.lmx_msg_exec_drop_binds(rt)
     c.lmx_msg_exec_set_no_retire(rt, 1)
-    m: rt\slots
-    while: m != 0
-        nxt: m\alloc_next
-        c.lmx_msg_mail_inbox_take(m, @ inb)
-        lmx_msg_copy_free(inb)
-        c.lmx_msg_mail_outbox_take(m, @ outb)
-        lmx_msg_copy_free(outb)
-        m: nxt
-    ---
+    lmx_msg_teardown_drain(rt\root)
     # S6 (a): the teardown of the relay queue runs under R0's monitor too, and it
-    # runs before the slot walk below in which slot_free destroys that monitor.
+    # runs before the free below in which slot_free destroys that monitor.
     root: lmx_msg_ingress_root(rt)
     c.lmx_msg_mail_lock(root)
     lmx_msg_copy_free(rt\transport)
     rt\transport: 0
     rt\transport_tail: 0
     c.lmx_msg_mail_unlock(root)
-    m: rt\slots
-    while: m != 0
-        nxt: m\alloc_next
-        if: m\init != 0
-            c.free((cast: (@: void) m\init))
-        ---
-        if: m\path != 0
-            c.free((cast: (@: void) m\path))
-        ---
-        c.lmx_msg_slot_free(m)
-        m: nxt
-    ---
-    rt\slots: 0
-    rt\n: 0
+    lmx_msg_teardown_free(rt\root)
+    rt\root: 0
     c.lmx_msg_exec_set_no_retire(rt, 0)
     c.lmx_msg_exec_detach(rt)
     c.lmx_msg_host_detach(rt)
@@ -1157,9 +1201,9 @@ fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: Lmx sour
     ---
     slot\init_n: n
     slot\init: initp
-    slot\alloc_next: rt\slots
-    rt\slots: slot
-    rt\n: rt\n + 1
+    # S6-2: no runtime-wide registry. A record is reachable through its family and,
+    # once it closes, through its owner's settled list -- which is what teardown
+    # walks and what a late sender follows.
     # S5: top = 0 with no parent means no root exists yet; this is R0.
     if: parent = 0U && top = 0
         rt\root: slot
