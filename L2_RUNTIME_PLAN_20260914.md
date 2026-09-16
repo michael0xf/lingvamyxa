@@ -7058,3 +7058,19 @@ never meet a RELEASED record on the chain; any site reading
 parent_msg == 0 as "released" converts to the state, named in the
 lead's five lines. The stage push d6/lock-s6-2 6e2ea936 (the merge of
 b5's 4409805c) is on origin; e9 re-runs the allowlist dry run on it.
+b5's mixa module-list audit on sonnet/mixa-module-list f7382804
+(mixa_manager/L2_RUNTIME_MODULE_LIST_AUDIT.txt plus the fix commit):
+19 module names across the six lists, 18 exist at 7b3a8668, 1 stale:
+lmx_msg_sched_ready, deleted by f391fb27 (core stage 3c-2, the S3
+wake/readiness family, 2026-09-14), whose sweep missed
+mixa_manager's lists; removed. Re-measured cold, all seven: five
+unchanged (app_controller and app_win32 UNEXPECTED_FAILURE in their
+own modules; backend_ctors_win32 and backend_win32
+EXPECTED_CORE_BARRIER; audio_mp3 THROW, list-independent); two moved
+from a THROW before any build to UNEXPECTED_FAILURE at link
+(app_panel, the run_mixa_l2_parity dispatcher): the stale name masked
+a second gap, lmx_root_record (R0's policy-record module, stage 5 (e))
+absent from all six lists, so nothing compiles or links it. A finding,
+not chased on that branch. Next for b5: add lmx_root_record to the
+lists, re-measure the seven, then diagnose the two own-module
+translation failures.
