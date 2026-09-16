@@ -1522,7 +1522,9 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         the UAF kit's 165 clean runs over the executor selftest; the model scenario36 set.
       - Falsifier: one hold put back (a lock/unlock pair around one census site) turns exec_lock_calls >= 1.
     - Ruled (the coordinator, 2026-09-15): 5.6 is not open. The spec carries Mikhail's agreed wording at
-      Lingvamyxa_spec.txt 12885-12891: a capability is the target's mailbox handle; a closing Message's mailbox is
+      Lingvamyxa_spec.txt, 19.29.7, the sentence carrying "there is no count of holders" (origin/main 077ee6fd,
+      today line 12909; the coordinator's correction -- his own "12885-12891" was a line at an earlier main, and a
+      bare line rots as the spec grows): a capability is the target's mailbox handle; a closing Message's mailbox is
       settled into its parent with the rest of its storage, so a late send lands in a mailbox the parent owns and
       is refused there, on the parent's lane, with a status to the sender; there is no count of holders. (d) is
       designed on that and not put to Mikhail:
@@ -1580,11 +1582,12 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       behaviour's own words before any ruling or question, and cite the lines; only a search shown empty goes on.
     - RULED (the spec, read at origin/main; the coordinator relayed Mikhail, 2026-09-15). No executor ever closes
       another Message's idle descendants.
-      - Spec 13147-13161, the child liveness poll: "each non-root Message periodically checks its parent. If the
+      - Spec, the section headed "Child liveness poll (abrupt-parent fallback)" (origin/main 077ee6fd, today line
+        13177): "each non-root Message periodically checks its parent. If the
         parent is absent, DEAD, STOPPED, RELEASED, or sustained-nonresponsive while in a handler, the child requests
         its own orderly close (same end_turn path as stop)", and "Normal parent close already requests children
         close at the parent's end_turn. Poll is only the fallback when the parent died abruptly", the child then
-        closing "at its own end_turn without waiting for the poll timeout". 13161 adds that a child's observation of
+        closing "at its own end_turn without waiting for the poll timeout". The same section adds that a child's observation of
         its parent's liveness is not access to the parent's protected data.
       - So a launched Message (bound, its loop running) closes itself: it polls its parent, and at its own end_turn
         it requests the close of its own direct children. The cascade runs one level per lane, which is why H is
@@ -1609,15 +1612,23 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       parent is stopped and gone): in both unlaunched cases the creator's lane still exists at the close.
     - STOPPED again (2026-09-15), this time by the search the new rule asks for, which came back NOT empty and
       contradicts the ruling above. The unbound close is a mechanism the spec keeps, not an invention of the
-      prototype. Lingvamyxa_spec.txt on origin/main, 12766-12771, verbatim: "An unbound closing Message has no
+      prototype. CITATION RULE (the coordinator, 2026-09-15, and proved on my own citations): cite the spec by a
+      unique phrase plus the commit, never by a bare line, because the spec grows with every verbatim entry --
+      checked against origin/main 077ee6fd, my "13147-13161" now lands on I/O-failure and yield text and my
+      "12766-12771" on the orphan paragraph. Pick a phrase that fits one physical line: the file is hard-wrapped,
+      which is why "nothing else steps it" cannot be grepped at all (it spans 12775/12776), and check the phrase is
+      unique ("requests its own orderly close" occurs three times, at 11528, 13180 and 13237).
+      Lingvamyxa_spec.txt, the sentence carrying "written by the maintaining lane" (origin/main 077ee6fd, today
+      line 12778), verbatim: "An unbound closing Message has no
       handler and no lane, so its close is end-turn bookkeeping written by the maintaining lane (the host's drive
       today, the root's maintenance later), not a step, and it leaves the Message stopped and handoff-safe so that
       its parent's dispose or adopt can settle it; a Message that nothing could ever settle would be the retention
       rule (1) forbids (clarified 2026-09-14)."
-      - The two sentences govern two different Messages and do not replace one another: 13166-13177 (the poll) is
-        for a Message that HAS a lane; 12766-12771 is for one with no lane and no handler, whose close is written
+      - The two sentences govern two different Messages and do not replace one another: the "Child liveness poll"
+        section is for a Message that HAS a lane; the "written by the maintaining lane" sentence is for one with no
+        lane and no handler, whose close is written
         by the maintaining lane. The spec moves that work from drive to R0's maintenance later; it does not delete
-        it. 12762-12765 adds "nothing else steps it (no ancestor rule, no maintenance step, no authority of a
+        it. The clause carrying "no ancestor rule" (today 12776) adds "nothing else steps it (no ancestor rule, no maintenance step, no authority of a
         stopped Message)", which is also why the owning-executor candidate was wrong.
       - Measured after deleting the branch as ruled, on d6/lock-s6 (the deletion is saved as a patch and the tree
         restored, so the rest of (a) proceeds on a green base):
@@ -1627,14 +1638,14 @@ S6. The lock deleted (L4, L7, L8 and what remains).
           turn's last step on the Message's own lane; exec_unbound_close held the only other write;
         - lmx_msg_settle_child_msg (lmx_message.lm1:1568) refuses unless "child\handoff_ready != 0".
         So a Message that never ran a turn can never become handoff-safe and can never be settled by its creator's
-        lane -- precisely the state 12771 forbids. The ruling's second branch (an unlaunched Message settled on the
+        lane -- precisely the state the "nothing that could ever settle" clause forbids. The ruling's second branch (an unlaunched Message settled on the
         creator's lane) is not expressible in the code as it stands, and no fixture edit makes it so.
       - The conversion set is also wider than the four fixtures, and every extra one is an unbound close: the
         executor selftest's close-path case (cc) and its ingress-close case at 7320 (the cancelled R0 itself,
         closed by drive after the drain), lmx_message_selftest.lm1:489, and lmx_msg_family_handoff_selftest.lm1:350
         (handoff_ready read after exec_unbind + drive).
       - d6's reading, sent to the coordinator for Mikhail: unbound_held and the TLS impersonation are the spelling
-        of 12766-12771's bookkeeping, so (a) keeps the mechanism and deletes only what S6 is about, the exec lock.
+        of that maintaining-lane bookkeeping, so (a) keeps the mechanism and deletes only what S6 is about, the exec lock.
         If the impersonation is what is objected to, the honest S6-1 change writes that bookkeeping without
         borrowing the identity, rather than removing the close.
     - RESOLVED (2026-09-15, the coordinator on d6's measurement): the mechanism stays; S6-1 does the spec's "later"
@@ -1649,7 +1660,7 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         the refutation is a measurement, not an argument: implemented literally, port_message did not go red, it
         HUNG at the executor selftest's close-path case (the 300 s watchdog). That fixture binds uc after its close
         is requested (stop, end_turn, pump set closing, then exec_bind + start_contexts) precisely so the closing
-        Message runs its closing turn on its own context, which is spec 12762-12765: "a child on its own context
+        Message runs its closing turn on its own context, which is the spec's own "no ancestor rule" clause: "a child on its own context
         runs its closing turn there".
       - unbound_held stays, as an atomic cell with one writer, R0's maintenance: __atomic_store_n around the close,
         __atomic_load_n in exec_bind_mode, no lock, refusing a bind only while the cell names that exact address.
@@ -1676,7 +1687,8 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         queue changes observable behaviour and stays Y3's with its own acceptance, as LOCK_REMOVAL_FIELDS rows
         140-141 already say ("the queue DEL", proposed, S5/Y3). What S6 owes is only that the queue stop resting
         on the executor lock.
-      - Why the monitor is the right owner: spec 11551 names "the mailbox's admission lock" as the one cross-lane
+      - Why the monitor is the right owner: the spec's sentence "admission lock is the one cross-lane
+        synchronization the model permits" (origin/main 077ee6fd, today line 11570) names "the mailbox's admission lock" as the one cross-lane
         synchronization the model permits, and the queue is R0's own relay hop (root's inbox -> host_drain ->
         transport -> pump -> the destination's inbox), which is what FIELDS' MBOX tag on those two rows means.
       - The five sites, in lm1 and lm2 alike: host_drain's re-stage loop, end_turn's outbox relay, post_dead's
@@ -1718,7 +1730,8 @@ S6. The lock deleted (L4, L7, L8 and what remains).
             the monitor belongs to one mailbox, not to the runtime.
           - the release-tree case is narrowed, on the coordinator's decision: its second thread read the parent's
             family chain inside the unlink window, which meant something only while a lock existed to wait on, and
-            a cross-lane read of that chain is what the one-writer rule forbids (spec 11543-11553). The host's own
+            a cross-lane read of that chain is what the one-writer rule forbids (the spec's "one arena, one lane,
+            one writer", origin/main 077ee6fd, today line 11560). The host's own
             lane now asserts release_slot's result after end_turn returns. Coverage lost: the interleaving claim,
             replaced by the rule itself. Not taken to Mikhail: it tested the removed mechanism and asks the model
             nothing.
