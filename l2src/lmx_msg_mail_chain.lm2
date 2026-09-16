@@ -14,7 +14,8 @@ predef: "l2src/lmx_msg_mail_chain.h.lm1"
 #
 # Library unit: no entry. The operations carry the ABI names because nothing
 # in the runtime calls them while a unit graph is built -- the only callers are
-# the mailbox wrappers in lmx_message_exec.c -- so, like lmx_msg_slots, the
+# the mailbox wrappers in lmx_message_exec.c -- so, as lmx_msg_slots did before
+# S6-2 deleted it, the
 # generated wrappers can be the real symbols. run_port_msg_mail_chain.ps1 links
 # the unmodified selftest WITHOUT the handwritten object, which makes the
 # generated code the only definition the test can reach.

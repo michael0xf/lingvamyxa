@@ -113,7 +113,7 @@ try {
     # Message support objects: the set run_lmx.ps1's Exec suite links (the
     # shorter list in run_l2trans.ps1 predates the liveness/history/stale
     # modules that lmx_message_exec.c now includes).
-    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
     $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
     foreach ($name in $names) {
         Stage "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $run "header_$name.log")) (Join-Path $run "header_$name.log")
@@ -468,7 +468,7 @@ try {
                     if ($case.stem -eq 'unit_msg_adapter') {
                         if ($text -notmatch 'const: @\(LmxMsgRuntime l2_p\d+_0\)') { throw 'the const LmxMsgRuntime formal did not survive' }
                         if ($text -notmatch '@@: LmxMsgBlock l2_p\d+_0; @@: LmxOwnedRange l2_p\d+_1') { throw 'the storage head formals did not survive' }
-                        if ($text -notmatch 'return: l2_p\d+_0\\n') { throw 'the staged runtime field read was not emitted' }
+                        if ($text -notmatch 'return: l2_p\d+_0\\root\\live_n') { throw 'the staged runtime field read was not emitted' }
                         if ($text -match 'strcmp|lmx_name') { throw 'a foreign field was resolved by name at run time' }
                     }
                     if ($case.stem -eq 'unit_prefix_load_arg') {
@@ -527,16 +527,23 @@ try {
                         if ($text -match '(?m)^const: @\(LmxMsg') { throw 'the cursor is a file scope' }
                         if ($walk.Value -match 'l2_s\d+_\d+') { throw 'the cursor was lowered as an address slot' }
                         # The walk reads the approved adapter fields directly,
-                        # by field, never by name at run time.
-                        if ($walk.Value -notmatch 'm: l2_p1_0\\slots') { throw 'the walk does not start at the owner slot head' }
-                        if ($walk.Value -notmatch 'm: m\\alloc_next') { throw 'the walk does not advance along alloc_next' }
+                        # by field, never by name at run time. S6-2 re-pointed the
+                        # unit from the deleted slot list onto R0's child chain: the
+                        # slot list was only ever this case's SUBJECT, and what it
+                        # pins -- a const pointee activation local that is neither a
+                        # file scope nor an address slot, direct field reads, an
+                        # unsigned address surviving into signature and temp, and a
+                        # cached count rather than a traversal -- is unchanged.
+                        # These patterns were read off the emitted L1, not predicted.
+                        if ($walk.Value -notmatch 'm: l2_p1_0\\root\\first_child') { throw 'the walk does not start at the root child head' }
+                        if ($walk.Value -notmatch 'm: m\\next_sibling') { throw 'the walk does not advance along next_sibling' }
                         if ($walk.Value -notmatch 'return: m\\addr') { throw 'the walk does not return the record address' }
                         if ($text -match 'strcmp|lmx_name') { throw 'a foreign field was resolved by name at run time' }
                         # The count is the cached field, not a traversal.
                         $count = [regex]::Match($text, '(?ms)^fn: l2_m0 \(.*?end: l2_m0')
                         if (-not $count.Success) { throw 'the count method was not emitted' }
-                        if ($count.Value -notmatch 'return: l2_p0_0\\n') { throw 'the count does not return the cached field' }
-                        if ($count.Value -match 'while:|alloc_next') { throw 'the count traverses the list' }
+                        if ($count.Value -notmatch 'return: l2_p0_0\\root\\live_n') { throw 'the count does not return the cached field' }
+                        if ($count.Value -match 'while:|next_sibling') { throw 'the count traverses the list' }
                     }
                     if ($case.stem -eq 'unit_msg_storage_calls') {
                         # Each operation is called as itself, on two head
@@ -893,8 +900,8 @@ try {
             # restore a closed list here if he wants the earlier validation back.
             # bad_alloc_door retired at 7d7ec87c, which admits malloc, calloc,
             # realloc and free by name. The guard that matters is still in place
-            # and is stronger: unit_ptr_grow and run_port_msg_path_storage.ps1
-            # both assert that the PRIVATE placement-path buffer reaches no arena
+            # and is stronger: unit_ptr_grow asserts (and run_port_msg_path_storage.ps1
+            # did, until S6-2 step 5 deleted that module) that the PRIVATE placement-path buffer reaches no arena
             # or graph allocator, which is a property of the module rather than of
             # the language. Reported to Codex.
             # msg_bad_ret (a by-value return `LmxMsgQueue` refused as "incompatible

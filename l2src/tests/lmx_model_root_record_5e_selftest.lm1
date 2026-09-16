@@ -184,7 +184,10 @@ fn: main () int
     st: lmx_msg_root_turn(rt, turn_map_child, (cast: (@: void) map_cell))
     check(st = c.LMX_MSG_OK && (cast: (int) map_cell[1]) = c.LMX_MSG_OK, "R0's turn mapped D onto its own context")
     c.printf("reading: D's reply in R0's mailbox, published by D's end-turn on its worker\n")
+    # S6-2 (the drain ruling): D's end-turn only pushes; the host (R0's lane) runs
+    # R0's round (lmx_msg_pump, what that end-turn used to call) while it waits.
     while: lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) < 1
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     ---
     check(g_worker_done != 0 && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 1, "D's turn ran on its worker and its reply reached R0")

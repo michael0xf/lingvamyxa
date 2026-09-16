@@ -27,6 +27,8 @@ fn: yield_until_success (@: LmxMsgRuntime rt; unsigned: who) int
     if: m = 0
         return: 0
     while: c.lmx_msg_success_load(m) = 0
+        # S6-2 (the drain ruling): no worker drains; the driver thread is R0's lane.
+        lmx_msg_pump(rt)
         c.SwitchToThread()
     return: 1
 
@@ -51,8 +53,12 @@ fn: send_via_root_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 # inbox, synchronously, before any context is started.
 fn: send_via_root (@: LmxMsgRuntime rt; unsigned: root; unsigned: to; @: LmxMsgEnv env) int
     send_via_root_to: to
+    int: st
     send_via_root_env: env
-    return: c.lmx_msg_run_entry_turn(rt, root, send_via_root_turn, 0)
+    st: c.lmx_msg_run_entry_turn(rt, root, send_via_root_turn, 0)
+    # S6-2 (the drain ruling): root's end-turn only pushes; R0's round admits.
+    lmx_msg_pump(rt)
+    return: st
 
 sub: send_check (int: ok; const: @(char label))
     send_checks: send_checks + 1
@@ -101,7 +107,8 @@ end: send_init_case
 fn: send_query_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
     @: LmxMsg source
     @: LmxMsgEnv wake
-    unsigned: segment 0U
+    c.array: [16]: unsigned addr
+    int: addr_n 0
     int: st
     source: (cast: (@: LmxMsg) ctx)
     wake: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
@@ -111,8 +118,11 @@ fn: send_query_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
     send_check(lmx_msg_turn_self(rt) = source, "real self-turn callback context")
     send_check(lmx_msg_state(rt, who) = source\state, "self state query")
     send_check(lmx_msg_inbox_n(rt, who) = 0, "self empty inbox query")
-    send_check(lmx_msg_path_n(rt, who) = source\path_n, "self path length query")
-    send_check(lmx_msg_path_seg(rt, who, 0, @ segment) = LMX_MSG_OK && segment = source\path[0], "self path segment query")
+    # S6-2: the path accessors went with the arrays; the address is composed by
+    # the walk, and its last index is the record's own index at its parent.
+    addr_n: lmx_msg_get_address(rt, who, addr, 16)
+    send_check(addr_n >= 2 && addr_n <= 16, "self address length query")
+    send_check(addr_n >= 2 && addr_n <= 16 && addr[0] = 1U && addr[addr_n - 1] = source\index, "self address index query")
     send_check(lmx_msg_child_n(rt, who) = 0 && lmx_msg_child_at(rt, who, 0) = 0U, "self empty child queries")
     send_init_case(rt, who, source)
     st: lmx_msg_end_turn(rt, who, 1)
@@ -157,7 +167,8 @@ sub: send_copy_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; unsigned
     send_check(env\bytes = bytes && env\n = 4U && src\outbox\bytes != bytes, "copy send retains caller buffer")
     bytes[0]: 99
     send_check(src\outbox\bytes[0] = 17, "caller mutation does not change staged copy")
-    send_check(lmx_msg_end_turn(rt, from, 1) = LMX_MSG_OK, "commit sender turn")
+    # S6-2 (the drain ruling): a non-R0 end-turn only pushes; the host runs R0's round.
+    send_check(lmx_msg_end_turn(rt, from, 1) = LMX_MSG_OK && lmx_msg_pump(rt) = LMX_MSG_OK, "commit sender turn")
     send_check(src\outbox = 0 && src\outbox_tail = 0 && dst\inbox != 0 && dst\inbox = dst\inbox_tail, "one admitted envelope and empty sender outbox")
     send_check(lmx_msg_recv(rt, to, got) = LMX_MSG_OK, "receive at intended destination")
     send_check(got\id = id && got\correlation = id + 100U && got\reply_to = 0U && got\kind = LMX_MSG_KIND_BYTES && got\number = 37, "envelope fields unchanged")
@@ -236,7 +247,7 @@ fn: main () int
     send_check(lmx_msg_send_owned(rt, parent, child, env) = LMX_MSG_STAGED, "owned send staged")
     send_check(env\bytes = 0 && env\n = 0U && owned_frees = 0, "sender ownership consumed without freeing payload")
     send_check(p\outbox != 0 && p\outbox\dest_msg = d && p\outbox\bytes = payload && p\outbox\owned != 0 && d\inbox = 0, "owned staged pointer identity")
-    send_check(lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "commit owned send")
+    send_check(lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK && lmx_msg_pump(rt) = LMX_MSG_OK, "commit owned send")
     send_check(p\outbox = 0 && d\inbox != 0 && d\inbox\bytes = payload && d\inbox\owned != 0 && owned_frees = 0, "admission retains original payload address")
     send_check(lmx_msg_recv(rt, child, got) = LMX_MSG_OK && got\bytes = payload && got\n = 4U && got\id = 15U && got\correlation = 115U, "receiver obtains original buffer")
     send_check(got\bytes[0] = 23 && got\bytes[1] = 0 && got\bytes[2] = 255 && got\bytes[3] = 47 && owned_frees = 0, "owned bytes intact")
