@@ -9076,3 +9076,21 @@ reported); (b) b5 writes the AD pre-read on sonnet/ad-preread at
 1763827c (l2src/AD_PREREAD.md: the address-bearing fields by grep, the
 LmxMsgAddr site counts per unit against the plan's 436, each field's
 fate with the spec phrase; counts reproduced from a clean checkout).
+
+ENGINEER'S CORRECTIONS 2026-09-16 08:38, accepted by the coordinator:
+(1) no re-cut is pushed onto claude-0c/land-s6-2 or archive-timeout-2
+(a re-cut is not a descendant of either; pushing it would overwrite
+history): the widening, the row form, the "30 of 30" -> 29 prose and the
+expired A comments go on land-s6-2 as fast-forward commits on 502deb03;
+the re-cut of 53ba86bd onto the lead's building tip goes to the NEW
+branch claude-0c/archive-timeout-3, its first commit message naming
+"= <tip> + 53ba86bd re-cut".  The landing candidate is archive-timeout-3
+(descent: it contains the tip; content: the every-row marker rule and
+the c_scanners whole-runner bound), and the engineer runs the chain cold
+once on it after the lead reports the tip's chain green.  (2) The
+coordinator's allowlist falsifier pointed the wrong way (an extra
+allowlist entry is unused; the dry run checks diff paths against the
+allowlist): the mutation that can fail is removing an entry the diff
+needs (l2src/tools/uaf_run.sh), the dry run naming exactly that path
+OUTSIDE with count 1, then 0 after the restore.  No check for unused
+entries.  The engineer holds until ls-remote shows a push of the stage.
