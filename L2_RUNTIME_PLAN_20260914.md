@@ -8335,3 +8335,22 @@ yet (node\dest_msg dangles until the capability is the path); the
 tip the coordinator measures must build. The coordinator's falsifier
 "postman for one step prints 1" was wrong: the phrase is in section
 2's record comment and in 19.29.7, so it prints 2.
+
+MIKHAIL, 2026-09-16, verbatim (sixth line): Адресные массивы здесь кажется можно оптимиировать применительно к тому адресу который лежит в самом Message. Так как фактически это просто индекс у родителя. Адрес доставки можно писать и полностью пока -- он просто будет отваливаться на несуществующих узлах. Можете сразу закодить более-менее умно? Entered in the
+spec (section 2's record: the field is `unsigned index`, the index at
+the parent; 19.29.7) and the model. RULED for S6-2's code, "more or
+less smart" as asked: the record's address field is its index at its
+parent (one unsigned; path, path_n and path_cap go now, in S6-2, not
+in AD; the scalar LmxMsgAddr id and its 436 signature sites stay for
+AD); a Message composes its full address by walking its parent links
+up to R0 (ancestors outlive descendants, so the walk reads stable
+links; a reparent in flight makes the letter fall off, as Mikhail
+says); a letter carries the destination address in full plus a route
+computed once by the sender from its own composed address: the count
+of hops up to the common ancestor and the position in the destination
+path; the postman step is O(1): while hops-up remain, hand to the
+parent and decrement; else hand to the child whose index is the next
+of the destination path and advance; when no live child has that
+index, refuse with KIND_REJECTED on the hop's own lane (the letter
+falls off). Stage AD shrinks to retiring the scalar id where the
+composed address serves and converting the signatures.

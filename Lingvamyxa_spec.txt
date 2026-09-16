@@ -1056,11 +1056,13 @@ same day):
                                                 its last turn and nothing native uses its arena:
                                                 the arena may be attached (19.29.7, 19.29.8) */
         Lmx *root;                           /* the root of its graph; its arena is reached from it */
-        struct { size_t len; unsigned *idx; } addr;
-                                             /* the hierarchical address a.b.c.d..., one field, an
-                                                unbounded count of indices with its length and no
-                                                other fields around it; recomposed from the parent's
-                                                address and the child's index at a parent change;
+        unsigned index;                      /* its index at its parent: the whole of what the
+                                                hierarchical address a.b.c.d... adds at this level;
+                                                the full address is composed by walking the parent
+                                                links, and a letter carries the destination address
+                                                in full (Mikhail, 2026-09-16: the address arrays are
+                                                optimized to the index at the parent); the address
+                                                changes with the parent at a parent change;
                                                 delivery is hop by hop through parents' inboxes, every
                                                 L3 Thread a postman for one step deciding by address
                                                 (Mikhail, 2026-09-16, verbatim in 19.29.7) */
@@ -12937,7 +12939,11 @@ parent's address and its index; delivery goes through the parent's inbox,
 hop by hop along the chain, every L3 Thread a postman for one step that
 decides by the address whether to hand the Message to its parent or to one
 of its children; a mail service may exist beside this but is not required
-for delivery (Mikhail, 2026-09-16, verbatim: "В исходном коде Message-у присваивался адрес a.b.c.d... Мы его убрали вчера вместе со всем остальным-- бывает. Мое последнее объяснение можно считать верным-- никто не мешает дрежать почтовый сревис, но надо вернуть строку адреса в виде неограниченного числом индексов, только не плодить вокруг нее больше полей, поле строки которое соержит len и uint*.  При смене родителя ментть и адрес -- составлять из адреса родителя и индекса. Доставку сделать через inbox родителя -- то есть передавать по цепочке и каждый L3 Thread сделать почтальоном наодин шаг -- он уже по адресу решает отдавать Message своему родителю или ребенку. Сделайте пожалуйста так.Это понятно?"). Written and optimized within Messages
+for delivery. The Message's own address field reduces to its index at its
+parent, since that is all the address adds at each level; the full address
+is composed by walking the parent links when needed, and a letter carries
+its destination address in full and simply falls off at a node that does
+not exist (Mikhail, 2026-09-16, verbatim: "Адресные массивы здесь кажется можно оптимиировать применительно к тому адресу который лежит в самом Message. Так как фактически это просто индекс у родителя. Адрес доставки можно писать и полностью пока -- он просто будет отваливаться на несуществующих узлах. Можете сразу закодить более-менее умно?"; and: "В исходном коде Message-у присваивался адрес a.b.c.d... Мы его убрали вчера вместе со всем остальным-- бывает. Мое последнее объяснение можно считать верным-- никто не мешает дрежать почтовый сревис, но надо вернуть строку адреса в виде неограниченного числом индексов, только не плодить вокруг нее больше полей, поле строки которое соержит len и uint*.  При смене родителя ментть и адрес -- составлять из адреса родителя и индекса. Доставку сделать через inbox родителя -- то есть передавать по цепочке и каждый L3 Thread сделать почтальоном наодин шаг -- он уже по адресу решает отдавать Message своему родителю или ребенку. Сделайте пожалуйста так.Это понятно?"). Written and optimized within Messages
 (Mikhail, 2026-09-16, verbatim: ""Отправка — письмо R0:" -- это может быть _любой_ Message которого R0 передаёт по цепочке при создании L1 Thread. В том числе проверку наличия по списку доступных может делать сам почтовый сервис, а конкретно доставку -- специальный почтальон, список почтальонов может держать почтовый сервис  и так далее -- вы можете _всё_ написать и всё оптимизировать в этой парадигме"; and earlier the same day: "Не плодите постоянно лишних сущностей. Так как все Message порождаются из root Message (по цепочке)то он может при merge передавать себя как почтовый сервис. В чем проблема?"). The delivered storage must be independently
 transferable: a running sender cannot also keep using it through mutable aliases.
 An explicit copy, merge, materialization or transport/codec contract may allocate
