@@ -6937,3 +6937,14 @@ rewritten at each settle, recursively), and only R0's runtime_delete
 frees anything; otherwise a handle held by an uncle or an ancestor
 dangles at the parent's close. Code go-ahead given: d6/lock-s6-2 off
 7b3a8668, red-first, the green on the measuring merge with 4189dea0.
+e9: claude-0c/archive-hang 0d1df7c5 (the wti stages and the -ZipDir
+rule for a lent tree) and claude-0c/s6-2-gate-impact a4b13d58 (b5's
+per-case fates cited; lmx_msg_test_fail_retain inside endp_retain's
+body, exec.c 347-353 at baa8ec23, goes with the API, its five setters
+in the selftest with it; lmx_msg_test_fail_post_dead at exec.c:332 is
+outside endp_retain and stays). land_s6_2.sh is blocked on
+land_base3.sh, which is committed nowhere (the lead's scratchpad
+only); RULED: landing scripts are project artefacts, the lead commits
+land_base3.sh exactly as it ran S6-1 as l2src/land_base3.sh on
+d6/lock-removal and pushes; e9 takes its shape, per-step timeouts and
+probe assertion from that file, never inferred.
