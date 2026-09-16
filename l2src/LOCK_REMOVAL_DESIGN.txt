@@ -2210,6 +2210,27 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         exit 0, which is the suite carrying the planted red. Neither is a checkpoint yet: a green that has never
         been shown able to fail is exactly the shape this document distrusts, so the two tripwires come before any
         of it is reported as done.
+      - TRIPWIRE 1 PASSED, so the settled-list assertions are evidence rather than decoration: deleting exactly one
+        line of the core -- lmx_message.lm1:1449, `lmx_msg_settled_push(m\parent_msg, m)` in release_slot --
+        turned run_port_message red with "not settled into its parent", and the tree restored to dirty=0. The
+        script is written so the proof cannot be faked or half-done: it locates the line with grep -F but EDITS BY
+        LINE NUMBER (a backslash pattern is silently under-matched through this shell, which is how an earlier
+        tripwire of mine mutated the wrong thing and proved nothing); it refuses to run if the file is already
+        modified, since a tripwire on top of unrelated edits says nothing about the line it deletes; it verifies
+        the mutation is exactly +0 -1 BEFORE building; and the restore is a trap, so it runs even if the gate
+        hangs or the timeout fires. Kept at l2src/tripwire_s6_2.sh's scratch path for tripwire 2 and for the
+        stage's later steps.
+      - The refs deletion's step two, inventoried in the files that tripwire could not be touching (lm1 and lm2
+        deliberately not read while a mutation was live in them -- their line numbers would have been shifted and
+        one site missing, which is the wrong-inventory failure this document keeps recording):
+          * lmx_message_exec.c defines three of the four functions (endp_retain 347, endp_release 379,
+            endp_try_retire 1175; endp_refs is L1-side) and calls them 7 / 10 / 0 / 3 times;
+          * the field itself is touched at 11 lines there, and all but two are INSIDE those three functions --
+            the exceptions are slot_new's `m->refs = 1` (498) and try_retire's guard (1189), which is also the one
+            genuine parent_msg-as-zero reader, so both go with the functions rather than separately;
+          * lmx_message.h carries the field (157) and four declarations (316, 317, 319, 320).
+        So on the C side the deletion is three function bodies plus two lines, not a scatter of call sites -- the
+        scatter is all in lm1/lm2, and that half is inventoried when the tree is quiet.
       - A SECOND POPULATION, found by the gate and then measured rather than left as a remark. The family-boundary
         contract case asserted `km->parent_msg != 0` as its proof that an unbound child "left its family"; S6-2
         keeps parent_msg as the owner cell on purpose, so it fired by design. It now reads `!= pm` -- the cell must
