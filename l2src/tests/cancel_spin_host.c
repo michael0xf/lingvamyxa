@@ -262,6 +262,7 @@ static int check_aftermath(LmxMsgRuntime *rt, LmxMsgAddr p, LmxMsgAddr c, LmxMsg
     LmxMsg *gm;
     LmxMsgEnv e;
     uchar ini = 1;
+    /* AD: keep tree walk — registration not drained */
     gm = lmx_msg_find(rt, g);
     if (lmx_msg_state(rt, c) != LMX_MSG_STATE_STOPPED) {
         fprintf(stderr, "%s child state=%d hit=%d after=%d\n", tag, lmx_msg_state(rt, c),

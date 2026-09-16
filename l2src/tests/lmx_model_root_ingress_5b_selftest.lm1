@@ -158,7 +158,7 @@ fn: main () int
 
     # exec_stop's own rounds read the worker count until D's worker has left.
     lmx_msg_exec_stop(rt)
-    check(lmx_msg_find(rt, r) != 0 && lmx_msg_running_load(lmx_msg_find(rt, r)) != 0, "the root runs on")
+    check(lmx_msg_live_lookup(rt\root, r) != 0 && lmx_msg_running_load(lmx_msg_live_lookup(rt\root, r)) != 0, "the root runs on")
     lmx_msg_runtime_delete(rt)
     c.printf("root ingress 5b: %d checks, %d failures\n", checks, failures)
     if: failures != 0

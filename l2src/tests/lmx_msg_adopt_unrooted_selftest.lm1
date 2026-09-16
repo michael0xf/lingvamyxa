@@ -97,6 +97,7 @@ fn: main () int
     rt: lmx_msg_runtime_new()
     probe_check(rt != 0, "create host fixture")
     probe_check(lmx_msg_create(rt, 0U, @ initial, 1U, @ receiver, 0) = LMX_MSG_OK, "create receiver Message")
+    # AD: keep tree walk — registration not drained
     recipient: lmx_msg_find(rt, receiver)
     probe_check(recipient != 0, "resolve receiver fixture")
     probe_adopt_unrooted(recipient, 1)

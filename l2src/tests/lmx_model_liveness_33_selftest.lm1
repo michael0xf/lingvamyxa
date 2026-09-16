@@ -388,7 +388,9 @@ fn: main () int
     g_sink: s
     check(lmx_msg_live_query(rt, lmx_msg_root_addr(rt)) = c.LMX_MSG_INVALID, "R0 has no parent to poll")
     check(lmx_msg_create(rt, p, @ ini, 1U, @ c1, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "child C created and published")
+    # AD: keep tree walk — registration not drained
     pm: lmx_msg_find(rt, p)
+    # AD: keep tree walk — registration not drained
     cm: lmx_msg_find(rt, c1)
     if: pm = 0 || cm = 0
         return: 2
@@ -461,7 +463,9 @@ fn: main () int
     check(p_turn(rt, p, 4U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK && g_st2 = c.LMX_MSG_OK, "children D and E created and published at 3000")
     d: g_d
     e: g_e
+    # AD: keep tree walk — registration not drained
     dm: lmx_msg_find(rt, d)
+    # AD: keep tree walk — registration not drained
     em: lmx_msg_find(rt, e)
     if: dm = 0 || em = 0
         return: 2
@@ -515,6 +519,7 @@ fn: main () int
     # Pump admits one envelope per lock hold (lmx_msg_pump): a mapped child may take a turn between two envelopes of one publication, and a stop landing first makes the later input GONE.
     check(p_turn(rt, p, 7U) = c.LMX_MSG_OK && g_st1 = c.LMX_MSG_OK && g_st2 = c.LMX_MSG_STAGED && g_st3 = c.LMX_MSG_STAGED, "P creates X and publishes one input and X's stop in the same end-turn")
     x: g_x
+    # AD: keep tree walk — registration not drained
     xm: lmx_msg_find(rt, x)
     check(xm != 0 && xm\closing != 0 && lmx_msg_inbox_n(rt, x) = 1 && lmx_msg_state(rt, x) = c.LMX_MSG_STATE_RUNNING, "X, not yet mapped, holds the input and its closing flag")
     check(lmx_msg_exec_bind(rt, x, turn_child_plain, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "X bound")
@@ -554,6 +559,7 @@ fn: main () int
     check(root_maps(rt, z) = c.LMX_MSG_OK, "R0's own turn maps Z onto its own context")
     k: k + 1
     wait_reports(rt, k, "Z's query")
+    # AD: keep tree walk — registration not drained
     zm: lmx_msg_find(rt, z)
     check(zm != 0 && zm\live_query_id != 0U, "Z's turn polls its parent R0: a query is outstanding")
     check(lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 1, "the query reaches R0's mailbox")

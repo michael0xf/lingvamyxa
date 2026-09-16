@@ -50,9 +50,10 @@ fn: gone_after_r0_round (@: LmxMsgRuntime rt; LmxMsgAddr: owner; LmxMsgAddr: who
     @: LmxMsg r0
     int: i 0
     lmx_msg_pump(rt)
+    # AD: keep tree walk — registration not drained
     if: lmx_msg_find(rt, who) != 0
         return: 0
-    r0: lmx_msg_find(rt, lmx_msg_root_addr(rt))
+    r0: lmx_msg_live_lookup(rt\root, lmx_msg_root_addr(rt))
     if: r0 = 0
         return: 0
     while: i < r0\live_n
@@ -176,7 +177,8 @@ fn: main () int
     check(lmx_msg_state(rt, p) = c.LMX_MSG_STATE_STOPPED, "P ran its closing turn: stopped, C's close requested")
     # C has no thread until R0 maps it after P's release: the checks on C up to
     # that map point are deterministic.
-    cm: lmx_msg_find(rt, cc)
+    cm: lmx_msg_live_lookup(rt\root, cc)
+    # AD: keep tree walk — registration not drained
     check(lmx_msg_dispose_child(rt, r, p) = c.LMX_MSG_OK && lmx_msg_find(rt, p) = 0 && lmx_msg_find(rt, cc) != 0 && lmx_msg_child_n(rt, r) = 0 && gone_after_r0_round(rt, r, p) != 0 && lmx_msg_exec_is_bound(rt, cc) != 0, "R releases P at once: P becomes R's storage, C is re-rooted at the runtime, still bound")
     check(cm != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_handoff_ready(rt, cc) = 0, "the release does not wait for C: when it returns C is not settled, success 0")
     st: root_maps(rt, cc)
@@ -185,9 +187,9 @@ fn: main () int
     while: cm != 0 && (lmx_msg_handoff_ready(rt, cc) = 0 || lmx_msg_running_load(cm) != 0)
         c.SwitchToThread()
     ---
-    check(cm != 0 && cm\orphan != 0 && cm\parent_msg = lmx_msg_find(rt, lmx_msg_root_addr(rt)) && lmx_msg_handoff_ready(rt, cc) != 0 && lmx_msg_running_load(cm) = 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_find(rt, cc) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), cc) = 0, "C's turn ended failed on its context: a settled orphan re-rooted under R0, not yet R0's storage")
-    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, cc) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), cc) = 0 && cm\orphan_until = 5100U, "the first drive's sweep gives the mapped failed orphan its deadline, 5100, and keeps it")
-    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, cc) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), cc) = 0, "within the retention window the orphan is retained")
+    check(cm != 0 && cm\orphan != 0 && cm\parent_msg = lmx_msg_live_lookup(rt\root, lmx_msg_root_addr(rt)) && lmx_msg_handoff_ready(rt, cc) != 0 && lmx_msg_running_load(cm) = 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_live_lookup(rt\root, cc) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), cc) = 0, "C's turn ended failed on its context: a settled orphan re-rooted under R0, not yet R0's storage")
+    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_live_lookup(rt\root, cc) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), cc) = 0 && cm\orphan_until = 5100U, "the first drive's sweep gives the mapped failed orphan its deadline, 5100, and keeps it")
+    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_live_lookup(rt\root, cc) != 0 && gone_after_r0_round(rt, lmx_msg_root_addr(rt), cc) = 0, "within the retention window the orphan is retained")
     check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK, "clock 5100")
     c.printf("reading: the slot count after the host's drives at 5100\n")
     st: lmx_msg_drive(rt, 5100U, 0U)
@@ -196,11 +198,12 @@ fn: main () int
     # assertion that follows carries what that means, which is that it became R0's
     # storage. A wait and the assertion after it must not share a predicate, or the
     # case passes vacuously.
+    # AD: keep tree walk — registration not drained
     while: lmx_msg_find(rt, cc) != 0
         c.SwitchToThread()
         st: lmx_msg_drive(rt, 5100U, 0U)
     ---
-    check(st = c.LMX_MSG_OK && gone_after_r0_round(rt, lmx_msg_root_addr(rt), cc) != 0 && lmx_msg_find(rt, r) != 0, "past its deadline the drive reclaims the failed orphan through release_slot: it is R0's storage now, and only R0 and R are still on the tree")
+    check(st = c.LMX_MSG_OK && gone_after_r0_round(rt, lmx_msg_root_addr(rt), cc) != 0 && lmx_msg_live_lookup(rt\root, r) != 0, "past its deadline the drive reclaims the failed orphan through release_slot: it is R0's storage now, and only R0 and R are still on the tree")
     c.printf("reading: the worker count after the reclaim's unbind\n")
     while: lmx_msg_exec_workers(rt) != 0
         st: lmx_msg_drive(rt, 5100U, 0U)
@@ -208,7 +211,7 @@ fn: main () int
     ---
     check(lmx_msg_exec_workers(rt) = 0, "the orphan's context worker left after the reclaim's unbind")
     lmx_msg_exec_stop(rt)
-    check(lmx_msg_find(rt, r) != 0 && lmx_msg_running_load(lmx_msg_find(rt, r)) != 0, "the root runs on")
+    check(lmx_msg_live_lookup(rt\root, r) != 0 && lmx_msg_running_load(lmx_msg_live_lookup(rt\root, r)) != 0, "the root runs on")
     lmx_msg_runtime_delete(rt)
     c.printf("orphan mapped 17: %d checks, %d failures\n", checks, failures)
     if: failures != 0

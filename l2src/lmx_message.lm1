@@ -25,6 +25,7 @@ prototype:
     sub: lmx_msg_teardown_drain (@: LmxMsg m)
     sub: lmx_msg_teardown_free (@: LmxMsg m)
     fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
+    # AD: keep tree walk — owner-scoped walk
     fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     fn: lmx_msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     fn: lmx_msg_child_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
@@ -571,6 +572,7 @@ fn: lmx_msg_find_tree (@: LmxMsg m; LmxMsgAddr: addr) @: LmxMsg
         return: m
     ch: m\first_child
     while: ch != 0
+        # AD: keep tree walk — owner-scoped walk
         f: lmx_msg_find_tree(ch, addr)
         if: f != 0
             return: f
@@ -582,6 +584,7 @@ return: 0
 fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     if: rt = 0 || addr = 0U
         return: 0
+# AD: keep tree walk — owner-scoped walk
 return: lmx_msg_find_tree(rt\root, addr)
 
 fn: lmx_msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @: LmxMsg
@@ -589,6 +592,7 @@ fn: lmx_msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @
     if: to = 0U
         return: 0
     if: src != 0
+        # AD: keep tree walk — owner-scoped walk
         d: lmx_msg_find_tree(src, to)
         if: d != 0
             return: d
@@ -597,6 +601,7 @@ fn: lmx_msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @
             return: c.lmx_msg_parent_load(src)
         ---
     ---
+# AD: keep tree walk — owner-scoped walk
 return: lmx_msg_find(rt, to)
 
 fn: lmx_msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
@@ -605,6 +610,7 @@ fn: lmx_msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     if: m != 0 && m\addr = addr && m\state != c.LMX_MSG_STATE_RELEASED
         return: m
     ---
+# AD: keep tree walk — owner-scoped walk
 return: lmx_msg_find(rt, addr)
 
 fn: lmx_msg_turn_slot (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
@@ -2131,6 +2137,7 @@ fn: lmx_msg_maintenance_close_ok (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         return: 0
     if: c.lmx_msg_exec_is_bound(rt, who) != 0
         return: 0
+        # AD: keep tree walk — registration not drained
     m: lmx_msg_find(rt, who)
     if: m = 0
         return: 0

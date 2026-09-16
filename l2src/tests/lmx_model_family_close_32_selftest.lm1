@@ -173,9 +173,13 @@ fn: main () int
     check(lmx_msg_create(rt, p, @ ini, 1U, @ c1, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "C created and published")
     check(lmx_msg_create(rt, c1, @ ini, 1U, @ g1, 0) = c.LMX_MSG_OK && lmx_msg_create(rt, c1, @ ini, 1U, @ g2, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, c1, 1) = c.LMX_MSG_OK, "G1 and G2 created by C and published")
     check(lmx_msg_create(rt, g1, @ ini, 1U, @ h, 0) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, g1, 1) = c.LMX_MSG_OK, "H created by G1 and published")
+    # AD: keep tree walk — registration not drained
     cm: lmx_msg_find(rt, c1)
+    # AD: keep tree walk — registration not drained
     g1m: lmx_msg_find(rt, g1)
+    # AD: keep tree walk — registration not drained
     g2m: lmx_msg_find(rt, g2)
+    # AD: keep tree walk — registration not drained
     hm: lmx_msg_find(rt, h)
     if: cm = 0 || g1m = 0 || g2m = 0 || hm = 0
         return: 2

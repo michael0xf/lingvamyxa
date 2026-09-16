@@ -33,6 +33,7 @@ int main(void)
         fprintf(stderr, "generated char_index create\n");
         return 1;
     }
+    /* AD: keep tree walk — registration not drained */
     ma = lmx_msg_find(rt, a);
     if (ma == 0) {
         fprintf(stderr, "generated char_index find\n");

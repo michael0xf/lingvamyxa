@@ -23,7 +23,7 @@ int: owned_frees 0
 # the mail alone only proves the turn started, not that it finished.
 fn: yield_until_success (@: LmxMsgRuntime rt; unsigned: who) int
     @: LmxMsg m
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_live_lookup(rt\root, who)
     if: m = 0
         return: 0
     while: c.lmx_msg_success_load(m) = 0
@@ -146,8 +146,10 @@ sub: send_copy_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; unsigned
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     send_check(env != 0 && got != 0, "allocate envelope fixture")
-    src: lmx_msg_find(rt, from)
+    src: lmx_msg_live_lookup(rt\root, from)
+    # AD: keep tree walk — registration not drained
     dst: lmx_msg_find(rt, to)
+    # AD: keep tree walk — registration not drained
     other: lmx_msg_find(rt, untouched)
     send_check(src != 0 && dst != 0 && other != 0, "find fixture endpoints")
     other_init: other\init
@@ -217,10 +219,15 @@ fn: main () int
     send_check(lmx_msg_end_turn(rt, root, 1) = LMX_MSG_OK, "commit branches")
     send_check(lmx_msg_create(rt, parent, @ initial, 1U, @ child, 0) = LMX_MSG_OK && lmx_msg_create(rt, parent, @ initial, 1U, @ sibling, 0) = LMX_MSG_OK && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "create direct child and sibling")
     send_check(lmx_msg_create(rt, cousin_parent, @ initial, 1U, @ cousin, 0) = LMX_MSG_OK && lmx_msg_end_turn(rt, cousin_parent, 1) = LMX_MSG_OK, "create unrelated branch recipient")
+    # AD: keep tree walk — registration not drained
     p: lmx_msg_find(rt, parent)
+    # AD: keep tree walk — registration not drained
     d: lmx_msg_find(rt, child)
+    # AD: keep tree walk — registration not drained
     s: lmx_msg_find(rt, sibling)
+    # AD: keep tree walk — registration not drained
     q: lmx_msg_find(rt, cousin_parent)
+    # AD: keep tree walk — registration not drained
     t: lmx_msg_find(rt, cousin)
     send_check(p != 0 && d != 0 && s != 0 && q != 0 && t != 0, "resolve participants")
     send_check(d\parent_msg = p && s\parent_msg = p && t\parent_msg = q && q != p && p\parent_msg = q\parent_msg, "fixture family relations")
