@@ -2248,6 +2248,25 @@ S6. The lock deleted (L4, L7, L8 and what remains).
         rest) count module-level allocations and frees, which the settle does not change. Both halves of this are
         reasoning from the documents and the runner list, not measurement: no build was possible while writing it,
         and the balance numbers are measured when S6-2's code first runs.
+    - Restatement progress in lmx_message_exec_selftest.c, measured case by case on the gate rather than claimed in
+      a batch (each line here is a run of run_port_message that got further than the one before):
+        (1) 2855, the rolled-back child: rtb->n != n0 - 1 -> off the tree, on its parent's settled list with state
+            RELEASED, unbound. PASSES (ctx_bind_rollback prints, the new diagnostic never fires). This is the
+            positive evidence that the settled list is populated and not merely written -- the thing I said I
+            would not take on faith.
+        (2) the failed-branch dispose: rtq->n != qn0 - 2 ("both slots freed") -> both records on R's settled list,
+            RELEASED, off the tree, adoption unchanged in direction. PASSES ("exec wait: dispose settles a failed
+            branch bottom-up" prints).
+        (3) the mapped orphan: three counter uses, and they do NOT all convert the same way, which is the point
+            worth recording. The capture goes; the release assertion (on1 != on0 - 1, "P's slot is freed") becomes
+            P on R0's settled list; and `while (rto->n != on0 - 2)` becomes `while (lmx_msg_find(rto, oc) != 0)` --
+            a WAIT, not a measurement, exactly as orphan_mapped_17:163 must become. The trap in that third one:
+            the assertion that follows the loop tested find(oc) != 0, which after the change is the condition the
+            loop just exited on and therefore asserts nothing at all. It now carries the real property (the orphan
+            on R0's settled list, RELEASED, no binds). A loop condition and the assertion after it cannot be
+            converted to the same predicate, or the case passes vacuously.
+      The counter sites remaining in that file at e0b38ffb: 29 with a runtime receiver, in five more cases (the
+      held-capability pair at 3220/3227, the ctx rollback at 3338, and the exec-maintain group at 7120-7443).
     - Stop condition, as for every stage here: if settling the mailbox into the parent turns out to need a lock, a
       wait or a signal, the stage stops and the question goes to Mikhail through the coordinator.
       - Falsifier, the acceptance's third leg, measured on d6/lock-s6 at baa8ec23: from zero lock lines, one
