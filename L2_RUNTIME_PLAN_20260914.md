@@ -7638,3 +7638,21 @@ per-runner breakdown in MIXA_L2_PARITY_GATE.txt; app_controller and
 audio_mp3 outside until diagnosed. Joins the union base as its own
 step after run_mixa.ps1 from the R0P landing on (e9 adds it to that
 landing script); the branch merges to main after S6-2 lands.
+S6-2 MECHANISM CHECKPOINT (the lead's five lines): d6/lock-s6-2
+4997d651, run_port_message exit 0 (parity PASS, both runs agree) and
+run_lmx -Suite Message exit 0; TRIPWIRE 1: lmx_message.lm1:1449 (the
+settled push in release_slot) deleted, run_port_message red with "not
+settled into its parent", tree restored dirty=0; TRIPWIRE 2:
+lmx_message.lm1:1829 (drain_settled in end_turn) deleted, run_lmx
+-Suite Message red with exactly the planted case "no refusal status
+for a send through a settled capability", restored dirty=0; two
+one-line breaks, two different named assertions, so the two halves do
+separate work. The tripwire script locates by grep -F but edits by
+line number (a backslash pattern under-matches through this shell),
+refuses a modified file, verifies +0 -1 before building, restores in
+a trap; the coordinator asked for it committed to l2src as an A path.
+Next: the window pins (exec.c's three function bodies called 7/10/0/3
+times, slot_new's refs = 1, try_retire's guard; then the lm1/lm2
+scatter; what they guarded, "the record cannot be freed under me",
+is what the settle answers since nothing frees a record but R0's
+teardown), then the rest.
