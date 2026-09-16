@@ -380,3 +380,40 @@ Oracle trace completes all 162 checks ("mixa app window parity harness
 ok checks=162"); the L2 trace stops silently after check 15 ("CHK open
 too small got=1 want=1 PASS", no crash message in stdout or stderr) --
 a real, further divergence, a new finding, not chased here.
+
+--- Fix: app_win32's mixa_app_win32.lm2:463 `@ dslot[0]` through the
+    explicit adapter (spec 11.3.1, 12.2), one site
+
+Cause: l1trans's own l2trans is stricter than l1trans about own-Array
+element addressing. `@ dslot[0]`/`@ lslot[0]` is exactly what the real,
+accepted oracle mixa_app_win32.lm1:464 already writes (the L2 port is a
+faithful copy of that line); l1trans accepts it (oracle: 58 checks, 0
+failures) but l2trans's own l2_check_fields (l2trans.lm1:10072-10075)
+rejects `@` directly in front of a resolved own-array-index pattern,
+per 12.2's own rule: "A raw element-storage pointer is a different
+value, obtained through an explicit low-level adapter when admitted."
+The admitted adapter, confirmed from this SAME file's own already-
+passing code (mixa_app_win32.lm2:292 `mixa_app_utf8_to_wide(path_utf8,
+wslot)`, :302 `c.WriteFile(hfile, text, (cast: (ulong) n), wrote, 0)`
+-- both pass a size-1 own-array BARE, no `@`, no index, as a call
+actual): l2trans's own l2_check_actual_fields sets l2_decay_ok while
+checking a call actual, and a bare own-array name in that position
+decays to its backing pointer (l2trans.lm1:9965's own comment) -- for
+a size-1 array that IS the element-0 address `@ dslot[0]` meant, with
+no L2-visible `@`.
+
+Fix, one site only, per the ticket: mixa_app_win32.lm2:463 changed from
+`mixa_app_read_file_utf8(entry_path_utf8, @ dslot[0], @ lslot[0])` to
+`mixa_app_read_file_utf8(entry_path_utf8, dslot, lslot)`. dslot is
+`[]: (@: char) dslot 1` (decays to char**, matches the callee's `@@:
+char data_out`); lslot is `[]: size_t lslot 1` (decays to size_t*,
+matches `@: size_t len_out`).
+
+Before: UNEXPECTED_FAILURE -- mixa_app_win32.lm2:463:50, "address of an
+Array element needs an explicit adapter", atom=@.
+After: UNEXPECTED_FAILURE -- translation gets past line 463, fails on
+the SAME diagnostic at a second, later, structurally identical site,
+mixa_app_win32.lm2:510:37 (`mixa_app_entry_to_text(out, @ tslot[0])`,
+tslot declared `[]: (@: char) tslot 1`, the same shape as dslot) -- the
+identical bare-name adapter fix would apply there too, but the ticket
+named one site; a further finding, not fixed in this commit.
