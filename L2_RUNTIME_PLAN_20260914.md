@@ -7317,3 +7317,27 @@ the fixture at surviving fields, recorded in e9's row once the
 concrete field choice is sent (whether the emitted shapes still
 satisfy "not an address slot" and "cached, not a traversal" is a fact
 about l2trans output).
+S6-2, the settled list written and measured (the lead's five lines;
+design 8bb832a2 (2a)(2b)(2c), bee89af4): cells LmxMsg.settled (the
+owner's head) and LmxMsg.settled_next (the per-record link replacing
+alloc_next) in lmx_message.h, the push and the upward move in
+lmx_message.lm1 and .lm2, inside release_slot rather than at its three
+call sites, while parent_msg still names the owner; writers the
+settling lane only; readers the owner and runtime_delete (a late
+sender follows parent_msg under the mailbox monitor); the upward
+recursion bottom-up in 19.29.8's order. Landed on the branch before
+any deletion, so the container is exercised against a tree that still
+frees everything. Measured: run_port_message red at "rolled-back
+bound child not retired n=4 bind=0", identical on the parent 8dc450fc
+cold, so the list is neutral and the red is the settle's (end_turn's
+rollback releases an uncommitted INACTIVE child through release_slot,
+the settle keeps parent_msg, endp_try_retire refuses); port_message
+joins scenario36 as red by the settle until the deletion and the
+restatements land. Not yet proven: the list populated by an
+assertion; next the lead restates that very check (the rolled-back
+child on its parent's settled list and off its child list), then the
+executor selftest's per-site split (e9's unit: 39 reads of ->n and 16
+endp_ lines, against the earlier "31 rt\n reads"), then the deletion.
+b5: 3377b944 (app_window's duplicate-symbol link fixed) and 78688a15
+(app_win32.lm2:463 through the explicit own-array adapter) pushed;
+five lines follow.
