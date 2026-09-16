@@ -79,16 +79,37 @@ lane_oracle   run_port_message.ps1 -TranslatorPath <pin> -LaneCheck
   builds: lmx_message_exec_selftest.c (L1 reference and L2 port), tests/lmx_exec_crash_report.c
   asserts: lmx_message_exec_selftest.c reads the runtime's slot count 35 times as ->n and calls the refs
     API 17 times --
-    (The 35, measured here at 7b3a8668: grep -c -E -e '->n([^A-Za-z0-9_]|$)' gives 39 lines naming a field
-    spelled ->n, of which four are a DIFFERENT field and must not be touched by this stage -- fresh->n and
-    block->n, pb->n, cb->n, an envelope's byte count and a block's length. By receiver: rti 16, rtb 11,
-    rto 4, rtq 3, rt 1. A plain grep -F -e '->n' gives 55 and is useless here: it swallows ->next and
-    ->number. The split by role -- captures, conditions, and the fprintf diagnostics that PRINT the counter
-    and so change with the assertions -- is NOT yet settled: the lead's count and mine disagree on this
-    file (his 36/32/eleven fprintf against my 39/35/seven) and two of his line citations land on other text
-    here, so one of us is measuring a different tree. Name the commit as well as the population. An earlier
-    version of this row stated his 39/12/10 as measured fact, which was my error: I recorded a peer's
-    number without reproducing it.)
+    (Two commits, because this figure moves as the stage converts, and a count without its commit is what
+    made three people disagree about this one file. Measured with
+    grep -c -E -e '\brt[a-z]*->n([^A-Za-z0-9_]|$)' for the runtime's counter and
+    grep -c -E -e '->n([^A-Za-z0-9_]|$)' for every field spelled ->n:
+      7b3a8668, the landed base:            35 runtime reads, 39 field reads
+      18c35299, the stage's working base:   32 runtime reads, 36 field reads
+    18c35299 is the lead's first restatement (the rolled-back child's check at 2855 rewritten as ownership
+    and state) and he converts from there, so it is the number a converter should work against; the base
+    figure stands beside it so a reader of the landed tree can reproduce what they see.
+    Four of the field reads are a DIFFERENT field at both commits and must not be touched by this stage:
+    fresh->n, block->n, pb->n and cb->n, an envelope's byte count and a block's length. By receiver at the
+    base: rti 16, rtb 11, rto 4, rtq 3, rt 1. A plain grep -F -e '->n' gives 55 and is useless here -- it
+    swallows ->next and ->number -- and the pattern must be passed with -e, since one beginning with ->
+    is taken as an option.
+    The split by role -- captures, conditions, and the fprintf diagnostics that PRINT the counter and so
+    change with the assertions or print a field that no longer exists -- is the lead's to confirm per site
+    while converting, and is deliberately not fixed here.
+    The diagnostics that print the counter are a real population an assertion-only pass misses -- they
+    change with the assertions or print a field that no longer exists -- and the measured figure at the
+    base is 7 fprintf lines naming it.
+    Corrections recorded rather than quietly replaced. An earlier version of this row stated a peer's
+    "39 reads, 12 conditions, 10 captures" as measured fact; I had not reproduced it, an hour after
+    correcting my own falsifier for counting fprintf text.
+    And the ordering constraint is NARROWER than it was first put, in his words and withdrawn by him:
+    "n0 is declared once for the whole exec_selftest_main" is false at both commits -- six declarations, at
+    2480, 2834, 7066, 7276, 7358 and 7399 -- and "the six cases are non-separable" does not follow. What
+    survives is the one compiler fact behind it: removing the declaration at 2834 broke the build at 3182,
+    so that block reaches past 3182 and covers later cases capturing into it. The binding rule for a
+    converter is therefore local, not global -- do not delete the declaration your case shares with a case
+    three hundred lines below -- and the cases may still be converted one at a time.
+    Name the commit as well as the population.)
     endp_retain at 3172 (if (held == 0 || lmx_msg_endp_retain(held) == 0)), endp_release at 3178, 3187,
     3192, 3198 and 3202, and the accessor endp_refs 11 times at 6017, 6027, 6030, 6157, 6172, 6204, 6215,
     6217, 6619, 6622 and 6624, across four cases and none of them inside the 3172-3202 block: they read the
