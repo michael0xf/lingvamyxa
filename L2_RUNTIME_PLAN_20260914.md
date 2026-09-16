@@ -7341,3 +7341,23 @@ endp_ lines, against the earlier "31 rt\n reads"), then the deletion.
 b5: 3377b944 (app_window's duplicate-symbol link fixed) and 78688a15
 (app_win32.lm2:463 through the explicit own-array adapter) pushed;
 five lines follow.
+The executor selftest split (the lead, unit named): lines containing
+the field in lmx_message_exec_selftest.c: 52 contain '->n' as a
+string (the superset with ->next and ->number), 36 contain the field,
+32 of those with a runtime receiver (rti 16, rtb 8, rto 4, rtq 3, rt
+1) are the stage's work; the other 4 (fresh->n, block->n, pb->n,
+cb->n) are an envelope's byte count and a block's length, untouched
+(counting them gave the earlier 39). By role over the 32: 9 captures,
+1 loop condition (3152), about 10 in an if, about 11 inside fprintf
+diagnostics, 1 comment (the if/fprintf halves provisional, confirmed
+while converting). Two consequences found by the build: the eleven
+diagnostics print the counter and convert with their assertions (the
+population an assertion-only pass cannot see, like
+orphan_mapped_17:163); n0 is declared once for the whole
+exec_selftest_main and five later cases capture into it, so the
+shared capture stays until the last case converts, written in. The
+first restatement is written: the rolled-back child at 2855 asserts
+ownership and state (off the tree, on its parent's settled list,
+RELEASED, unbound), the positive evidence the list is populated; the
+gate re-runs, and the assertion is tripwired (the push removed must
+fail exactly that line) before it is trusted.
